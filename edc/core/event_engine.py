@@ -852,27 +852,6 @@ class EventEngine:
             if not isinstance(body_id, int) or not isinstance(name_loc, str) or not name_loc.strip():
                 return self.state, msgs
 
-    def _surface_distance_m(
-        self,
-        lat1_deg: float,
-        lon1_deg: float,
-        lat2_deg: float,
-        lon2_deg: float,
-        radius_m: float,
-    ) -> float:
-        """
-        Great-circle distance between two lat/lon points on a sphere (meters).
-        """
-        lat1 = math.radians(lat1_deg)
-        lon1 = math.radians(lon1_deg)
-        lat2 = math.radians(lat2_deg)
-        lon2 = math.radians(lon2_deg)
-        dlat = lat2 - lat1
-        dlon = lon2 - lon1
-        a = math.sin(dlat / 2.0) ** 2 + math.cos(lat1) * math.cos(lat2) * (math.sin(dlon / 2.0) ** 2)
-        c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(max(0.0, 1.0 - a)))
-        return float(radius_m) * c
-
             # Genus is the first word in the localized name (e.g., "Stratum Tectonicas - Lime")
             genus = self._norm_text(name_loc.strip().split(" ", 1)[0].strip())
             if not genus:
@@ -1007,3 +986,24 @@ class EventEngine:
                 break
 
         return self.state, msgs
+
+    def _surface_distance_m(
+        self,
+        lat1_deg: float,
+        lon1_deg: float,
+        lat2_deg: float,
+        lon2_deg: float,
+        radius_m: float,
+    ) -> float:
+        """
+        Great-circle distance between two lat/lon points on a sphere (meters).
+        """
+        lat1 = math.radians(lat1_deg)
+        lon1 = math.radians(lon1_deg)
+        lat2 = math.radians(lat2_deg)
+        lon2 = math.radians(lon2_deg)
+        dlat = lat2 - lat1
+        dlon = lon2 - lon1
+        a = math.sin(dlat / 2.0) ** 2 + math.cos(lat1) * math.cos(lat2) * (math.sin(dlon / 2.0) ** 2)
+        c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(max(0.0, 1.0 - a)))
+        return float(radius_m) * c
