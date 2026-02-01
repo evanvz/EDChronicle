@@ -54,6 +54,13 @@ class GameState:
     jump_star_class: Optional[str] = None
     star_class: Optional[str] = None
 
+    # Live position from Status.json (Odyssey/SRV/surface)
+    surface_timestamp: Optional[str] = None
+    surface_body_name: Optional[str] = None
+    surface_lat: Optional[float] = None
+    surface_lon: Optional[float] = None
+    surface_radius_m: Optional[float] = None
+
     # Jump bookkeeping (used by handler split)
     pending_system: Optional[str] = None
     last_jump_type: Optional[str] = None

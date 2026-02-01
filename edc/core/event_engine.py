@@ -1,4 +1,5 @@
 import logging
+import math
 from typing import Any, Dict, List, Tuple
 from .state import GameState
 from .planet_values import PlanetValueTable
@@ -557,6 +558,78 @@ class EventEngine:
             rec["BioGenuses"] = self.state.bio_genuses.get(body, rec.get("BioGenuses", []))
             self.state.bodies[body] = rec
 
+        elif name == "Status":
+            # Live telemetry from Status.json (lat/lon/radius) - used for CCR distance tracking.
+            self.state.surface_timestamp = event.get("timestamp")
+            self.state.surface_body_name = self._norm_text(event.get("BodyName")) or event.get("BodyName")
+
+            try:
+                self.state.surface_lat = float(event.get("Latitude")) if event.get("Latitude") is not None else None
+            except Exception:
+                self.state.surface_lat = None
+            try:
+                self.state.surface_lon = float(event.get("Longitude")) if event.get("Longitude") is not None else None
+            except Exception:
+                self.state.surface_lon = None
+            try:
+                self.state.surface_radius_m = float(event.get("PlanetRadius")) if event.get("PlanetRadius") is not None else None
+            except Exception:
+                self.state.surface_radius_m = None
+
+            # Update CCR remaining for any active exo targets on this body (best-effort).
+            try:
+                lat = self.state.surface_lat
+                lon = self.state.surface_lon
+                R = self.state.surface_radius_m
+                body_nm = self._norm_text(self.state.surface_body_name or "")
+                if (
+                    isinstance(lat, float)
+                    and isinstance(lon, float)
+                    and isinstance(R, float)
+                    and R > 0
+                    and body_nm
+                    and isinstance(self.state.exo, dict)
+                ):
+                    for _k, rec in self.state.exo.items():
+                        if not isinstance(rec, dict):
+                            continue
+                        if rec.get("Complete"):
+                            continue
+                        req = rec.get("CCRRequiredM")
+                        pts = rec.get("SamplePoints") or []
+                        if not isinstance(req, int) or req <= 0:
+                            continue
+                        if not isinstance(pts, list) or not pts:
+                            continue
+
+                        # Only update if body seems to match current status body.
+                        rec_body_id = rec.get("BodyID")
+                        rec_body_name = ""
+                        if isinstance(rec_body_id, int):
+                            rec_body_name = self._norm_text(self.state.body_id_to_name.get(rec_body_id, "") or "")
+                        if rec_body_name and rec_body_name != body_nm:
+                            continue
+
+                        # Compute min distance from current position to any saved sample point.
+                        dmin = None
+                        for p in pts:
+                            if not (isinstance(p, dict) and "lat" in p and "lon" in p):
+                                continue
+                            try:
+                                plat = float(p["lat"])
+                                plon = float(p["lon"])
+                            except Exception:
+                                continue
+                            d = self._surface_distance_m(lat, lon, plat, plon, R)
+                            if dmin is None or d < dmin:
+                                dmin = d
+                        if dmin is None:
+                            continue
+                        rec["CCRDistanceM"] = int(round(dmin))
+                        rec["CCRRemainingM"] = int(max(0, req - rec["CCRDistanceM"]))
+            except Exception:
+                pass
+
         elif name == "SAASignalsFound":
             # DSS-confirmed: includes Biological count and (most importantly) confirmed Genuses list
             body = self._norm_text(event.get("BodyName"))
@@ -688,6 +761,22 @@ class EventEngine:
                 if val is not None:
                     rec["BaseValue"] = val
 
+            # CCR (minimum distance between samples) comes from exo_values.json per species. :contentReference[oaicite:1]{index=1}
+            # We store sample positions from Status.json at the time of sampling.
+            try:
+                if "CCRRequiredM" not in rec or not isinstance(rec.get("CCRRequiredM"), int):
+                    if self.exo_values and hasattr(self.exo_values, "by_species"):
+                        exo_rec = self.exo_values.by_species.get(species)
+                        if exo_rec is None and isinstance(species, str) and " - " in species:
+                            exo_rec = self.exo_values.by_species.get(species.split(" - ", 1)[0].strip())
+                        ccr = getattr(exo_rec, "ccr_m", None) if exo_rec is not None else None
+                        if isinstance(ccr, int) and ccr > 0:
+                            rec["CCRRequiredM"] = ccr
+                if "SamplePoints" not in rec or not isinstance(rec.get("SamplePoints"), list):
+                    rec["SamplePoints"] = []
+            except Exception:
+                pass
+
             # Your real process is:
             # - Log = 1/3
             # - Sample + Sample = 2/3 and 3/3
@@ -699,6 +788,49 @@ class EventEngine:
             elif st == "sample":
                 # Each Sample advances progress by 1 (0→1→2→3). If "Log" was missed, first sample becomes 1/3.
                 progress = min(3, max(progress, 0) + 1)
+
+                # Record sampling position (best-effort) for CCR.
+                try:
+                    lat = self.state.surface_lat
+                    lon = self.state.surface_lon
+                    R = self.state.surface_radius_m
+                    if isinstance(lat, float) and isinstance(lon, float) and isinstance(R, float) and R > 0:
+                        rec["SamplePoints"].append(
+                            {
+                                "t": self.state.surface_timestamp,
+                                "lat": lat,
+                                "lon": lon,
+                            }
+                        )
+                        # Keep only last 3 sample points (game requires 3).
+                        if len(rec["SamplePoints"]) > 3:
+                            rec["SamplePoints"] = rec["SamplePoints"][-3:]
+
+                        # After adding, compute min distance from this new point to previous points.
+                        req = rec.get("CCRRequiredM")
+                        pts = rec.get("SamplePoints") or []
+                        if isinstance(req, int) and req > 0 and isinstance(pts, list) and len(pts) >= 2:
+                            # Compare newest to all earlier points
+                            newest = pts[-1]
+                            dmin = None
+                            for p in pts[:-1]:
+                                try:
+                                    d = self._surface_distance_m(
+                                        float(newest["lat"]),
+                                        float(newest["lon"]),
+                                        float(p["lat"]),
+                                        float(p["lon"]),
+                                        R,
+                                    )
+                                except Exception:
+                                    continue
+                                if dmin is None or d < dmin:
+                                    dmin = d
+                            if dmin is not None:
+                                rec["CCRDistanceM"] = int(round(dmin))
+                                rec["CCRRemainingM"] = int(max(0, req - rec["CCRDistanceM"]))
+                except Exception:
+                    pass
             elif st == "analyse":
                 # Analyse confirms completion (treat as 3/3 to keep UI consistent).
                 progress = max(progress, 3)
@@ -707,6 +839,20 @@ class EventEngine:
             rec["Complete"] = (progress >= 3) or (st == "analyse")
 
             self.state.exo[key] = rec
+
+    def _surface_distance_m(self, lat1_deg: float, lon1_deg: float, lat2_deg: float, lon2_deg: float, radius_m: float) -> float:
+        """
+        Great-circle distance between two lat/lon points on a sphere (meters).
+        """
+        lat1 = math.radians(lat1_deg)
+        lon1 = math.radians(lon1_deg)
+        lat2 = math.radians(lat2_deg)
+        lon2 = math.radians(lon2_deg)
+        dlat = lat2 - lat1
+        dlon = lon2 - lon1
+        a = math.sin(dlat / 2.0) ** 2 + math.cos(lat1) * math.cos(lat2) * (math.sin(dlon / 2.0) ** 2)
+        c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(max(0.0, 1.0 - a)))
+        return float(radius_m) * c
 
         elif name == "CodexEntry":
             # CodexEntry is NOT sampling progress, but it's a useful early hint.

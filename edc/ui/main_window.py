@@ -28,6 +28,7 @@ from pathlib import Path
 from edc.core.state import GameState
 from edc.core.event_engine import EventEngine
 from edc.core.journal_watcher import JournalWatcher
+from edc.core.status_watcher import StatusWatcher
 from edc.core.planet_values import PlanetValueTable
 from edc.core.exo_values import ExoValueTable
 from edc.core.external_intel import ExternalIntel
@@ -71,6 +72,8 @@ class MainWindow(QMainWindow):
 
         self.thread: QThread | None = None
         self.watcher: JournalWatcher | None = None
+        self.status_thread: QThread | None = None
+        self.status_watcher: StatusWatcher | None = None
 
         root = QWidget()
         self.setCentralWidget(root)
@@ -545,6 +548,23 @@ class MainWindow(QMainWindow):
         self.status.setText(f"Status: watching {journal_path}")
         self._append(f"Started watching: {journal_path}")
 
+        # Status.json watcher (for live lat/lon + CCR)
+        try:
+            status_path = journal_path / "Status.json"
+            self.status_thread = QThread()
+            self.status_watcher = StatusWatcher(status_path)
+            self.status_watcher.moveToThread(self.status_thread)
+
+            self.status_thread.started.connect(self.status_watcher.run)
+            self.status_watcher.error.connect(self._on_error)
+            # Don't spam the UI status bar with status.json messages; keep it quiet.
+            self.status_watcher.event_received.connect(self._on_event)
+
+            self.status_thread.start()
+            self._append(f"Started watching status: {status_path}")
+        except Exception:
+            pass
+
     def stop_watching(self):
         if self.watcher:
             self.watcher.stop()
@@ -553,8 +573,17 @@ class MainWindow(QMainWindow):
             self.thread.quit()
             self.thread.wait(1500)
 
+        if self.status_watcher:
+            self.status_watcher.stop()
+
+        if self.status_thread:
+            self.status_thread.quit()
+            self.status_thread.wait(1500)
+
         self.thread = None
         self.watcher = None
+        self.status_thread = None
+        self.status_watcher = None
         self.status.setText("Status: stopped")
 
     def closeEvent(self, event):
@@ -1709,7 +1738,27 @@ class MainWindow(QMainWindow):
 
             prog_txt = f"{samples}/3" if status != "CODEX" else "0/3"
             var_txt = _variant_color(rec.get("Variant") or "")
-            rows.append((samples, status, body_txt, genus, species, var_txt, pot_txt, base_txt, prog_txt, status))
+            # CCR UI hint (only when we have a requirement + not complete)
+            status_txt = str(status)
+            try:
+                if status != "COMPLETE":
+                    req = rec.get("CCRRequiredM")
+                    rem = rec.get("CCRRemainingM")
+                    dist = rec.get("CCRDistanceM")
+                    if isinstance(req, int) and req > 0:
+                        if isinstance(rem, int) and rem > 0:
+                            # Example: ACTIVE • CCR 120/500m (need 380m)
+                            if isinstance(dist, int) and dist >= 0:
+                                status_txt = f"{status} • CCR {dist}/{req}m (need {rem}m)"
+                            else:
+                                status_txt = f"{status} • CCR need {rem}m / {req}m"
+                        else:
+                            # No remaining => OK to sample
+                            status_txt = f"{status} • CCR OK ({req}m)"
+            except Exception:
+                status_txt = str(status)
+
+            rows.append((samples, status, body_txt, genus, species, var_txt, pot_txt, base_txt, prog_txt, status_txt))
             scanned_species += 1
 
             gk = str(genus or "").strip()
