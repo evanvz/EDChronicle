@@ -138,7 +138,7 @@ class EventEngine:
         if isinstance(credits_now, int):
             self.state.credits = credits_now
 
-        elif name == "Location":
+        if name == "Location":
             # Happens on login; great for HUD
             new_sys = event.get("StarSystem", self.state.system)
             if new_sys and new_sys != self.state.system:
@@ -840,7 +840,26 @@ class EventEngine:
 
             self.state.exo[key] = rec
 
-    def _surface_distance_m(self, lat1_deg: float, lon1_deg: float, lat2_deg: float, lon2_deg: float, radius_m: float) -> float:
+        elif name == "CodexEntry":
+            # CodexEntry is NOT sampling progress, but it's a useful early hint.
+            # We create a placeholder entry so the UI can show genus you discovered.
+            body_id = event.get("BodyID")
+            name_loc = event.get("Name_Localised") or ""
+            entry_id = event.get("EntryID")
+            v = event.get("VoucherAmount")
+            if isinstance(v, int) and v > 0:
+                self.state.session_codex_collected += v
+            if not isinstance(body_id, int) or not isinstance(name_loc, str) or not name_loc.strip():
+                return self.state, msgs
+
+    def _surface_distance_m(
+        self,
+        lat1_deg: float,
+        lon1_deg: float,
+        lat2_deg: float,
+        lon2_deg: float,
+        radius_m: float,
+    ) -> float:
         """
         Great-circle distance between two lat/lon points on a sphere (meters).
         """
@@ -853,18 +872,6 @@ class EventEngine:
         a = math.sin(dlat / 2.0) ** 2 + math.cos(lat1) * math.cos(lat2) * (math.sin(dlon / 2.0) ** 2)
         c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(max(0.0, 1.0 - a)))
         return float(radius_m) * c
-
-        elif name == "CodexEntry":
-            # CodexEntry is NOT sampling progress, but it's a useful early hint.
-            # We create a placeholder entry so the UI can show genus you discovered.
-            body_id = event.get("BodyID")
-            name_loc = event.get("Name_Localised") or ""
-            entry_id = event.get("EntryID")
-            v = event.get("VoucherAmount")
-            if isinstance(v, int) and v > 0:
-                self.state.session_codex_collected += v
-            if not isinstance(body_id, int) or not isinstance(name_loc, str) or not name_loc.strip():
-                return self.state, msgs
 
             # Genus is the first word in the localized name (e.g., "Stratum Tectonicas - Lime")
             genus = self._norm_text(name_loc.strip().split(" ", 1)[0].strip())
