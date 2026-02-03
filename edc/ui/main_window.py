@@ -1946,7 +1946,19 @@ class MainWindow(QMainWindow):
 
         shown = rows[:80]
         self.exo_table.setRowCount(len(shown))
-        for r, (_samples, _status, body_txt, genus, species, var_txt, pot_txt, base_txt, prog_txt, ccr_txt, status_txt) in enumerate(shown):
+
+        for r, row in enumerate(shown):
+            # Backward/variant row shapes:
+            # - Old shape (10): samples,status,body,genus,species,variant,potential,base,progress,status_txt
+            # - New shape (11): samples,status,body,genus,species,variant,potential,base,progress,ccr_txt,status_txt
+            if not isinstance(row, (list, tuple)):
+                continue
+            if len(row) == 10:
+                _samples, _status, body_txt, genus, species, var_txt, pot_txt, base_txt, prog_txt, status_txt = row
+                ccr_txt = ""
+            else:
+                _samples, _status, body_txt, genus, species, var_txt, pot_txt, base_txt, prog_txt, ccr_txt, status_txt = row[:11]
+
             self.exo_table.setItem(r, 0, QTableWidgetItem(str(body_txt)))
             self.exo_table.setItem(r, 1, QTableWidgetItem(str(genus)))
             self.exo_table.setItem(r, 2, QTableWidgetItem(str(species)))
