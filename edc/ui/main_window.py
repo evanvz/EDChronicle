@@ -145,9 +145,9 @@ class MainWindow(QMainWindow):
 
         # Exobiology
         self.exo_table = QTableWidget()
-        self.exo_table.setColumnCount(8)
+        self.exo_table.setColumnCount(9)
         self.exo_table.setHorizontalHeaderLabels(
-            ["Body", "Genus", "Species", "Variant", "Potential", "Base Value", "Samples", "Status"]
+            ["Body", "Genus", "Species", "Variant", "Potential", "Base Value", "Samples", "CCR", "Status"]
         )
         self.exo_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.exo_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -161,7 +161,8 @@ class MainWindow(QMainWindow):
         self.exo_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)  # Potential
         self.exo_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)  # Base Value
         self.exo_table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)  # Samples
-        self.exo_table.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)  # Status
+        self.exo_table.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)  # CCR
+        self.exo_table.horizontalHeader().setSectionResizeMode(8, QHeaderView.ResizeMode.ResizeToContents)  # Status
         self.exo_table.setMinimumHeight(200)
         self.exo_action = QLabel("")
         self.exo_action.setWordWrap(True)
@@ -1738,27 +1739,21 @@ class MainWindow(QMainWindow):
 
             prog_txt = f"{samples}/3" if status != "CODEX" else "0/3"
             var_txt = _variant_color(rec.get("Variant") or "")
-            # CCR UI hint (only when we have a requirement + not complete)
-            status_txt = str(status)
-            try:
-                if status != "COMPLETE":
-                    req = rec.get("CCRRequiredM")
-                    rem = rec.get("CCRRemainingM")
-                    dist = rec.get("CCRDistanceM")
-                    if isinstance(req, int) and req > 0:
-                        if isinstance(rem, int) and rem > 0:
-                            # Example: ACTIVE • CCR 120/500m (need 380m)
-                            if isinstance(dist, int) and dist >= 0:
-                                status_txt = f"{status} • CCR {dist}/{req}m (need {rem}m)"
-                            else:
-                                status_txt = f"{status} • CCR need {rem}m / {req}m"
-                        else:
-                            # No remaining => OK to sample
-                            status_txt = f"{status} • CCR OK ({req}m)"
-            except Exception:
-                status_txt = str(status)
 
-            rows.append((samples, status, body_txt, genus, species, var_txt, pot_txt, base_txt, prog_txt, status_txt))
+            # CCR column (show dist/required meters, e.g. 120/250m)
+            status_txt = str(status)
+            ccr_txt = ""
+            try:
+                req = rec.get("CCRRequiredM")
+                dist = rec.get("CCRDistanceM")
+                if isinstance(req, int) and req > 0:
+                    if not isinstance(dist, int) or dist < 0:
+                        dist = 0
+                    ccr_txt = f"{dist}/{req}m"
+            except Exception:
+                ccr_txt = ""
+
+            rows.append((samples, status, body_txt, genus, species, var_txt, pot_txt, base_txt, prog_txt, ccr_txt, status_txt))
             scanned_species += 1
 
             gk = str(genus or "").strip()
@@ -1951,7 +1946,7 @@ class MainWindow(QMainWindow):
 
         shown = rows[:80]
         self.exo_table.setRowCount(len(shown))
-        for r, (_samples, _status, body_txt, genus, species, var_txt, pot_txt, base_txt, prog_txt, status_txt) in enumerate(shown):
+        for r, (_samples, _status, body_txt, genus, species, var_txt, pot_txt, base_txt, prog_txt, ccr_txt, status_txt) in enumerate(shown):
             self.exo_table.setItem(r, 0, QTableWidgetItem(str(body_txt)))
             self.exo_table.setItem(r, 1, QTableWidgetItem(str(genus)))
             self.exo_table.setItem(r, 2, QTableWidgetItem(str(species)))
@@ -1959,7 +1954,8 @@ class MainWindow(QMainWindow):
             self.exo_table.setItem(r, 4, QTableWidgetItem(str(pot_txt)))
             self.exo_table.setItem(r, 5, QTableWidgetItem(str(base_txt)))
             self.exo_table.setItem(r, 6, QTableWidgetItem(str(prog_txt)))
-            self.exo_table.setItem(r, 7, QTableWidgetItem(str(status_txt)))
+            self.exo_table.setItem(r, 7, QTableWidgetItem(str(ccr_txt)))
+            self.exo_table.setItem(r, 8, QTableWidgetItem(str(status_txt)))
 
         if has_bio_targets:
             self.exo_action.setText(
