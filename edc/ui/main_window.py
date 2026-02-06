@@ -1753,7 +1753,19 @@ class MainWindow(QMainWindow):
             except Exception:
                 ccr_txt = ""
 
-            rows.append((samples, status, body_txt, genus, species, var_txt, pot_txt, base_txt, prog_txt, ccr_txt, status_txt))
+            # CCR column (dist/required) for real ScanOrganic-derived rows
+            ccr_txt = ""
+            try:
+                req = rec.get("CCRRequiredM")
+                dist = rec.get("CCRDistanceM")
+                if isinstance(req, int) and req > 0:
+                    if not isinstance(dist, int) or dist < 0:
+                        dist = 0
+                    ccr_txt = f"{dist}/{req}m"
+            except Exception:
+                ccr_txt = ""
+
+            rows.append((samples, status, body_txt, genus, species, var_txt, pot_txt, base_txt, prog_txt, ccr_txt, status))
             scanned_species += 1
 
             gk = str(genus or "").strip()
