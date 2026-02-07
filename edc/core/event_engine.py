@@ -806,6 +806,14 @@ class EventEngine:
                         if len(rec["SamplePoints"]) > 3:
                             rec["SamplePoints"] = rec["SamplePoints"][-3:]
 
+                    # --- CCR INITIALISATION (first sample) ---
+                    # Ensure CCR is visible immediately after first sample
+                    if len(rec["SamplePoints"]) == 1:
+                        req = rec.get("CCRRequiredM")
+                        if isinstance(req, int) and req > 0:
+                            rec["CCRDistanceM"] = 0
+                            rec["CCRRemainingM"] = req
+
                         # After adding, compute min distance from this new point to previous points.
                         req = rec.get("CCRRequiredM")
                         pts = rec.get("SamplePoints") or []
