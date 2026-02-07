@@ -699,6 +699,7 @@ class EventEngine:
         elif name == "ScanOrganic":
             # Journal Manual: ScanType Log/Sample/Analyse + Genus + Species + Body (ID)
             scan_type = (event.get("ScanType") or "").strip()
+            st = scan_type.lower()
             genus = self._norm_text(event.get("Genus_Localised") or event.get("Genus")) or "Unknown Genus"
             species = self._norm_text(event.get("Species_Localised") or event.get("Species")) or "Unknown Species"
             variant = self._norm_text(event.get("Variant_Localised") or event.get("Variant") or "")
@@ -726,6 +727,7 @@ class EventEngine:
             rec = self.state.exo.get(key, {})
             if not isinstance(rec, dict):
                 rec = {}
+            progress = int(rec.get("Samples", 0) or 0)
 
             # Migrate any legacy per-variant keys into the new per-species key.
             legacy_prefix = f"{key}|"
@@ -781,10 +783,52 @@ class EventEngine:
             # - Log = 1/3
             # - Sample + Sample = 2/3 and 3/3
             # - Analyse confirms completion
-            progress = int(rec.get("Samples", 0) or 0)
-            st = scan_type.lower()
             if st == "log":
                 progress = max(progress, 1)
+
+                # CCR init on first log
+                try:
+                    lat = self.state.surface_lat
+                    lon = self.state.surface_lon
+                    R = self.state.surface_radius_m
+                    if isinstance(lat, float) and isinstance(lon, float) and isinstance(R, float) and R > 0:
+                        rec["SamplePoints"] = [{
+                            "t": self.state.surface_timestamp,
+                            "lat": lat,
+                            "lon": lon,
+                        }]
+                        req = rec.get("CCRRequiredM")
+                        if isinstance(req, int) and req > 0:
+                            rec["CCRDistanceM"] = 0
+                            rec["CCRRemainingM"] = req
+                except Exception:
+                    pass
+
+                # CCR INITIALISATION (first scan defines origin)
+                try:
+                    lat = self.state.surface_lat
+                    lon = self.state.surface_lon
+                    R = self.state.surface_radius_m
+
+                    if (
+                        isinstance(lat, float)
+                        and isinstance(lon, float)
+                        and isinstance(R, float)
+                        and R > 0
+                    ):
+                        rec["SamplePoints"] = [{
+                            "t": self.state.surface_timestamp,
+                            "lat": lat,
+                            "lon": lon,
+                        }]
+
+                        req = rec.get("CCRRequiredM")
+                        if isinstance(req, int) and req > 0:
+                            rec["CCRDistanceM"] = 0
+                            rec["CCRRemainingM"] = req
+                except Exception:
+                    pass
+
             elif st == "sample":
                 # Each Sample advances progress by 1 (0→1→2→3). If "Log" was missed, first sample becomes 1/3.
                 progress = min(3, max(progress, 0) + 1)
@@ -844,7 +888,7 @@ class EventEngine:
                 progress = max(progress, 3)
 
             rec["Samples"] = progress
-            rec["Complete"] = (progress >= 3) or (st == "analyse")
+            rec["Complete"] = (progress >= 3)
 
             self.state.exo[key] = rec
 
