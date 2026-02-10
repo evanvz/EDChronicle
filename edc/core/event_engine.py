@@ -576,6 +576,56 @@ class EventEngine:
             except Exception:
                 self.state.surface_radius_m = None
 
+            # CCR baseline-after-Status:
+            # If ScanOrganic(Log) occurred before we had Status lat/lon, we defer baseline until the
+            # first Status event that has valid surface coordinates.
+            try:
+                lat = self.state.surface_lat
+                lon = self.state.surface_lon
+                R = self.state.surface_radius_m
+                body_nm = self._norm_text(self.state.surface_body_name or "")
+
+                if (
+                    isinstance(lat, float)
+                    and isinstance(lon, float)
+                    and isinstance(R, float)
+                    and R > 0
+                    and body_nm
+                    and isinstance(self.state.exo, dict)
+                ):
+                    for _k, rec in self.state.exo.items():
+                        if not isinstance(rec, dict):
+                            continue
+                        if rec.get("Complete"):
+                            continue
+                        if not rec.get("CCRPendingBaseline"):
+                            continue
+
+                        # Only apply to records that match current body (best-effort).
+                        rec_body_id = rec.get("BodyID")
+                        rec_body_name = ""
+                        if isinstance(rec_body_id, int):
+                            rec_body_name = self._norm_text(self.state.body_id_to_name.get(rec_body_id, "") or "")
+                        if rec_body_name and rec_body_name != body_nm:
+                            continue
+
+                        # Initialize baseline point now.
+                        pts = rec.get("SamplePoints")
+                        if not isinstance(pts, list):
+                            pts = []
+                        if len(pts) == 0:
+                            pts.append({"t": self.state.surface_timestamp, "lat": lat, "lon": lon})
+                            rec["SamplePoints"] = pts
+
+                            req = rec.get("CCRRequiredM")
+                            if isinstance(req, int) and req > 0:
+                                rec["CCRDistanceM"] = 0
+                                rec["CCRRemainingM"] = req
+
+                        rec["CCRPendingBaseline"] = False
+            except Exception:
+                pass
+
             # Update CCR remaining for any active exo targets on this body (best-effort).
             try:
                 lat = self.state.surface_lat
@@ -786,48 +836,12 @@ class EventEngine:
             if st == "log":
                 progress = max(progress, 1)
 
-                # CCR init on first log
-                try:
-                    lat = self.state.surface_lat
-                    lon = self.state.surface_lon
-                    R = self.state.surface_radius_m
-                    if isinstance(lat, float) and isinstance(lon, float) and isinstance(R, float) and R > 0:
-                        rec["SamplePoints"] = [{
-                            "t": self.state.surface_timestamp,
-                            "lat": lat,
-                            "lon": lon,
-                        }]
-                        req = rec.get("CCRRequiredM")
-                        if isinstance(req, int) and req > 0:
-                            rec["CCRDistanceM"] = 0
-                            rec["CCRRemainingM"] = req
-                except Exception:
-                    pass
+                # CCR baseline must be initialised AFTER Status provides lat/lon
+                rec["CCRPendingBaseline"] = True
 
-                # CCR INITIALISATION (first scan defines origin)
-                try:
-                    lat = self.state.surface_lat
-                    lon = self.state.surface_lon
-                    R = self.state.surface_radius_m
-
-                    if (
-                        isinstance(lat, float)
-                        and isinstance(lon, float)
-                        and isinstance(R, float)
-                        and R > 0
-                    ):
-                        rec["SamplePoints"] = [{
-                            "t": self.state.surface_timestamp,
-                            "lat": lat,
-                            "lon": lon,
-                        }]
-
-                        req = rec.get("CCRRequiredM")
-                        if isinstance(req, int) and req > 0:
-                            rec["CCRDistanceM"] = 0
-                            rec["CCRRemainingM"] = req
-                except Exception:
-                    pass
+                # Ensure clean state (do not assume location exists yet)
+                rec.pop("CCRDistanceM", None)
+                rec.pop("CCRRemainingM", None)
 
             elif st == "sample":
                 # Each Sample advances progress by 1 (0→1→2→3). If "Log" was missed, first sample becomes 1/3.
@@ -838,49 +852,46 @@ class EventEngine:
                     lat = self.state.surface_lat
                     lon = self.state.surface_lon
                     R = self.state.surface_radius_m
-                    if isinstance(lat, float) and isinstance(lon, float) and isinstance(R, float) and R > 0:
-                        rec["SamplePoints"].append(
-                            {
-                                "t": self.state.surface_timestamp,
-                                "lat": lat,
-                                "lon": lon,
-                            }
-                        )
-                        # Keep only last 3 sample points (game requires 3).
-                        if len(rec["SamplePoints"]) > 3:
-                            rec["SamplePoints"] = rec["SamplePoints"][-3:]
+                    pts = rec.get("SamplePoints")
+                    if not isinstance(pts, list):
+                        pts = []
 
-                    # --- CCR INITIALISATION (first sample) ---
-                    # Ensure CCR is visible immediately after first sample
-                    if len(rec["SamplePoints"]) == 1:
+                    if isinstance(lat, float) and isinstance(lon, float) and isinstance(R, float) and R > 0:
+                        pts.append({"t": self.state.surface_timestamp, "lat": lat, "lon": lon})
+                        if len(pts) > 3:
+                            pts = pts[-3:]
+                        rec["SamplePoints"] = pts
+
+                    # If we still haven't got a baseline from Status, consider first sample as baseline (fallback).
+                    if rec.get("CCRPendingBaseline") and len(pts) >= 1:
+                        rec["CCRPendingBaseline"] = False
                         req = rec.get("CCRRequiredM")
                         if isinstance(req, int) and req > 0:
                             rec["CCRDistanceM"] = 0
                             rec["CCRRemainingM"] = req
 
-                        # After adding, compute min distance from this new point to previous points.
-                        req = rec.get("CCRRequiredM")
-                        pts = rec.get("SamplePoints") or []
-                        if isinstance(req, int) and req > 0 and isinstance(pts, list) and len(pts) >= 2:
-                            # Compare newest to all earlier points
-                            newest = pts[-1]
-                            dmin = None
-                            for p in pts[:-1]:
-                                try:
-                                    d = self._surface_distance_m(
-                                        float(newest["lat"]),
-                                        float(newest["lon"]),
-                                        float(p["lat"]),
-                                        float(p["lon"]),
-                                        R,
-                                    )
-                                except Exception:
-                                    continue
-                                if dmin is None or d < dmin:
-                                    dmin = d
-                            if dmin is not None:
-                                rec["CCRDistanceM"] = int(round(dmin))
-                                rec["CCRRemainingM"] = int(max(0, req - rec["CCRDistanceM"]))
+                    # After adding, compute min distance from newest point to all previous points.
+                    req = rec.get("CCRRequiredM")
+                    if isinstance(req, int) and req > 0 and isinstance(pts, list) and len(pts) >= 2:
+                        newest = pts[-1]
+                        dmin = None
+                        for p in pts[:-1]:
+                            try:
+                                d = self._surface_distance_m(
+                                    float(newest["lat"]),
+                                    float(newest["lon"]),
+                                    float(p["lat"]),
+                                    float(p["lon"]),
+                                    R,
+                                )
+                            except Exception:
+                                continue
+                            if dmin is None or d < dmin:
+                                dmin = d
+                        if dmin is not None:
+                            rec["CCRDistanceM"] = int(round(dmin))
+                            rec["CCRRemainingM"] = int(max(0, req - rec["CCRDistanceM"]))
+
                 except Exception:
                     pass
             elif st == "analyse":

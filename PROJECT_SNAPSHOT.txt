@@ -1,3 +1,21 @@
+Snapshot updated: review : PROJECT_SNAPSHOT.txt
+Authoritative project context
+
+Project: EDHelper
+
+Description:
+EDHelper monitors Elite Dangerous journal events and provides:
+- System overview information (government, economy, security, population)
+- Exploration intelligence (high-value bodies, scan status)
+- Exobiology tracking and valuation
+- PowerPlay context and advisory actions
+- Inventory and material awareness
+- External points-of-interest and farming hints
+
+All information is derived exclusively from journal events and static reference data.
+
+Authoritative files and structure:
+
 EDHelper/
 │
 ├─ main.py                     # entrypoint (intentionally minimal)
@@ -38,3 +56,35 @@ EDHelper/
    ├─ settings.json
    ├─ external_pois.json
    ├─ elite_farming_locations.json
+
+File responsibilities:
+
+- event_engine.py:
+  Orchestrates journal events, invokes handlers, mutates state.
+  Owns CCR lifecycle and progression logic.
+
+- status_watcher.py:
+  Reads Status.json and provides live lat/lon and surface position.
+
+- state.py:
+  Stores in-memory and persistent exploration and exobiology state,
+  including CCR tracking values.
+
+- handlers/*.py:
+  Stateless logic invoked by event_engine only.
+  Must not mutate state directly.
+
+- main_window.py:
+  UI rendering and formatting only.
+  No CCR calculation or state mutation.
+
+Runtime data files:
+
+- exo_values.json
+- planet_values.json
+- settings/settings.json
+- Journal files
+- Status.json
+
+Authority rule:
+The latest uploaded version of any file listed above replaces all prior versions unless explicitly stated otherwise.
