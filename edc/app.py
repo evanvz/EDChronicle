@@ -10,10 +10,15 @@ from edc.ui.main_window import MainWindow
 def parse_args():
     parser = argparse.ArgumentParser(description="EDC Application")
     parser.add_argument('--settings', action='store_true', help='Display current settings')
+    parser.add_argument('--verbose', action='store_true', help='Enable verbose output')
     return parser.parse_args()
 
 def run():
     args = parse_args()
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
     if args.settings:
         cfg_store = ConfigStore(default_app_dir())
         cfg = cfg_store.load()
