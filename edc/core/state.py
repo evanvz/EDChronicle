@@ -36,7 +36,6 @@ class GameState:
     bodies: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     system_body_count: Optional[int] = None
     body_id_to_name: Dict[int, str] = field(default_factory=dict)
-    body_values: Dict[str, Any] = field(default_factory=dict) 
     exo: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     bio_signals: Dict[str, int] = field(default_factory=dict)          # BodyName -> biological count
     bio_genuses: Dict[str, List[str]] = field(default_factory=dict)    # BodyName -> confirmed genera list
