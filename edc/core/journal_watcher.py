@@ -82,6 +82,10 @@ class JournalWatcher(QObject):
         self._fp.seek(0, 2)
         self.status.emit(f"Tailing: {path.name}")
 
+    def _is_distance_valid(self, lat: float, lon: float, radius: float) -> bool:
+        # Implement distance validation logic here
+        return True  # Placeholder for actual validation logic
+
     def _bootstrap_newest_system(self, max_bytes: int = 256 * 1024, max_events: int = 800) -> None:
         if not self._fp or not self._current_file:
             return

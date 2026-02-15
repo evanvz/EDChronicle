@@ -564,17 +564,20 @@ class EventEngine:
             self.state.surface_body_name = self._norm_text(event.get("BodyName")) or event.get("BodyName")
 
             try:
-                self.state.surface_lat = float(event.get("Latitude")) if event.get("Latitude") is not None else None
+                if event.get("Latitude") is not None:
+                    self.state.surface_lat = float(event.get("Latitude"))
             except Exception:
-                self.state.surface_lat = None
+                pass
             try:
-                self.state.surface_lon = float(event.get("Longitude")) if event.get("Longitude") is not None else None
+                if event.get("Longitude") is not None:
+                   self.state.surface_lon = float(event.get("Longitude"))
             except Exception:
-                self.state.surface_lon = None
+                pass
             try:
-                self.state.surface_radius_m = float(event.get("PlanetRadius")) if event.get("PlanetRadius") is not None else None
+                if event.get("PlanetRadius") is not None:
+                    self.state.surface_radius_m = float(event.get("PlanetRadius"))
             except Exception:
-                self.state.surface_radius_m = None
+                pass
 
             # CCR baseline-after-Status:
             # If ScanOrganic(Log) occurred before we had Status lat/lon, we defer baseline until the
@@ -900,6 +903,9 @@ class EventEngine:
 
             rec["Samples"] = progress
             rec["Complete"] = (progress >= 3)
+            if rec["Complete"]:
+                rec["CCRDistanceM"] = None
+                rec["CCRRemainingM"] = None
 
             self.state.exo[key] = rec
 

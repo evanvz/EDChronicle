@@ -12,6 +12,7 @@ class ExoSpeciesValue:
     species: str
     genus: str
     base_value: int
+    ccr_m: int | None = None
 
 class ExoValueTable:
     def __init__(self, by_species: Dict[str, ExoSpeciesValue]):
@@ -30,8 +31,9 @@ class ExoValueTable:
                             continue
                         bv = rec.get("base_value")
                         gn = rec.get("genus") or ""
+                        ccr = rec.get("ccr_m")
                         if isinstance(bv, int) and gn:
-                            out[name] = ExoSpeciesValue(species=name, genus=gn, base_value=bv)
+                            out[name] = ExoSpeciesValue(species=name, genus=gn, base_value=bv, ccr_m=ccr)
                     if out:
                         log.info("Loaded exo values from %s (%d species)", p, len(out))
                         return ExoValueTable(out)
