@@ -6,8 +6,7 @@ from typing import Any, Dict, Optional, Tuple
 
 log = logging.getLogger("edc.planet_values")
 
-def _norm(s: str) -> str:
-    return "".join(ch.lower() for ch in (s or "") if ch.isalnum())
+from edc.utils.normalization import _norm
 
 
 @dataclass(frozen=True)
@@ -20,6 +19,19 @@ class PlanetValueRow:
     fss_fd_dss: Optional[int]
 
 class PlanetValueTable:
+    def estimate_base_value(self, event: Dict[str, Any]) -> Optional[int]:
+        planet_class = event.get("PlanetClass")
+        terraformable = event.get("Terraformable", False)
+
+        pt = self._canonical_type(planet_class)
+        if not pt:
+            return None
+
+        row = self._rows.get((pt, terraformable))
+        if not row:
+            return None
+
+        return row.fss
     """
     Uses planet_values.json as an estimator table.
     We normalize journal PlanetClass strings to match rows.
