@@ -6,7 +6,8 @@ from typing import Any, Dict, Optional, Tuple
 
 log = logging.getLogger("edc.planet_values")
 
-from edc.utils.normalization import _norm
+def _norm(s: str) -> str:
+    return "".join(ch.lower() for ch in (s or "") if ch.isalnum())
 
 
 @dataclass(frozen=True)

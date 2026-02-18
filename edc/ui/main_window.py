@@ -1010,10 +1010,14 @@ class MainWindow(QMainWindow):
                     phen += 1
                 if s.get("Category") == "Megaship":
                     mega += 1
+                if s.get("Category") == "TouristBeacon":
+                    tour += 1
             if phen:
                 lines.append(f"✨ Action: Stellar phenomena discovered ({phen})")
             if mega:
                 lines.append(f"🚢 Action: Megaship signals discovered ({mega})")
+            if tour:
+                lines.append(f"✨ Action: Tourist Beacon discovered ({tour})")
         except Exception:
             pass
 
@@ -2152,7 +2156,7 @@ class MainWindow(QMainWindow):
                 out_lines = []
 
                 # Categorize
-                cat_order = ["Phenomena", "Megaship", "Station", "USS", "Other"]
+                cat_order = ["Phenomena", "Megaship", "TouristBeacon", "Station", "USS", "Other"]
                 cats = {k: [] for k in cat_order}
                 cat_counts = {k: 0 for k in cat_order}
                 uss_counts = {}
@@ -2472,7 +2476,6 @@ class MainWindow(QMainWindow):
             if min_100k < 0:
                 min_100k = 0
             min_value = min_100k * 100_000
-            fss_value = max(300_000, int(min_value * 0.20))
 
             exo_m = int(getattr(self.cfg, "exo_high_value_m", 2) or 2)
             exo_min = exo_m * 1_000_000
@@ -2505,7 +2508,7 @@ class MainWindow(QMainWindow):
             if tf and not mapped:
                 tf_unmapped += 1
 
-            if isinstance(est, int) and est >= fss_value and not mapped:
+            if isinstance(est, int) and est >= min_value and not mapped:
                 hv_unmapped += 1
 
             if isinstance(bio, int) and bio > 0 and not gen:

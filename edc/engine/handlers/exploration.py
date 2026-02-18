@@ -168,7 +168,7 @@ def handle(engine, name: str | None, event: Dict[str, Any], msgs: List[str]) -> 
         try:
             if engine.planet_values and isinstance(body_name, str) and body_name.strip():
                 val = engine.planet_values.estimate_base_value(event)
-                engine.state.body_values[body_name] = val
+                engine.state.bodies[body_name]["EstimatedValue"] = val
         except Exception:
             pass
         return True
