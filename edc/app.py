@@ -6,6 +6,7 @@ import logging
 from edc.config import ConfigStore, default_app_dir
 from edc.utils.log import setup_logging
 from edc.ui.main_window import MainWindow
+from qt_material import apply_stylesheet
 
 def parse_args():
     parser = argparse.ArgumentParser(description="EDC Application")
@@ -38,6 +39,136 @@ def run():
     cfg = cfg_store.load()
 
     app = QApplication([])
+
+    # ====================================
+    # Apply qt-material Base Dark Theme
+    # ====================================
+    apply_stylesheet(app, theme='dark_dark.xml')
+
+    # ====================================
+    # Elite-Themed Styling Overlay
+    # ====================================
+    app.setStyle("Fusion")
+
+    app.setStyleSheet(app.styleSheet() + """
+    QMainWindow {
+        background-color: #0A0A0A;
+    }
+
+    /* ============================= */
+    /* GLOBAL TEXT COLOR FIX        */
+    /* ============================= */
+
+    QWidget {
+        color: #E6E6E6;
+    }
+
+    QListWidget {
+        background-color: #111111;
+        border: none;
+        color: #E6E6E6;
+        font-size: 13px;
+    }
+
+    QListWidget::item {
+        padding: 12px;
+        border-radius: 0px;
+    }
+
+    QListWidget::item:selected {
+        background-color: #FF8C00;
+        color: #000000;
+    }
+
+    QListWidget::item:hover {
+        background-color: #1F1F1F;
+    }
+
+    QPushButton {
+        background-color: #FF8C00;
+        border-radius: 6px;
+        padding: 6px 12px;
+        color: #000000;
+    }
+
+    QPushButton:hover {
+        background-color: #FFA733;
+    }
+
+    QTableWidget {
+        background-color: #101010;
+        gridline-color: #2A2A2A;
+        color: #E6E6E6;
+        alternate-background-color: #141414;
+        selection-background-color: #FF8C00;
+        selection-color: #000000;
+    }
+
+    QTableWidget::item {
+        color: #E6E6E6;
+    }
+
+    QTableView {
+        background-color: #101010;
+        alternate-background-color: #141414;
+        selection-background-color: #FF8C00;
+        selection-color: #000000;
+    }
+
+    QListWidget {
+        alternate-background-color: #141414;
+        selection-background-color: #FF8C00;
+        selection-color: #000000;
+    }
+
+    QHeaderView::section {
+        background-color: #151515;
+        border: none;
+        padding: 6px;
+        color: #E6E6E6;
+    }
+
+    QTextEdit {
+        background-color: #101010;
+        border: 1px solid #2A2A2A;
+        border-radius: 4px;
+        color: #E6E6E6;
+    }
+
+    QLineEdit, QComboBox, QSpinBox {
+        background-color: #101010;
+        color: #E6E6E6;
+        border: 1px solid #2A2A2A;
+        border-radius: 4px;
+        padding: 4px;
+    }
+
+    QSplitter::handle {
+        background-color: #1E1E1E;
+        width: 3px;
+        height: 3px;
+    }
+
+    QSplitter::handle:hover {
+        background-color: #FF8C00;
+    }
+
+    QLabel {
+        font-size: 12px;
+    }
+
+    QLabel a {
+        color: #6EC1FF;
+        text-decoration: none;
+        font-weight: 500;
+    }
+
+    QLabel a:hover {
+        color: #FF8C00;
+        text-decoration: underline;
+    }
+
+    """)
     win = MainWindow(cfg_store, cfg)
     win.show()
     app.exec()

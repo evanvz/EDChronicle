@@ -9,7 +9,6 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QSlider,
     QHBoxLayout,
-    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
@@ -20,9 +19,12 @@ from PyQt6.QtWidgets import (
     QListWidgetItem,
     QFileDialog,
     QSplitter,
+    QStackedWidget,
+    QGraphicsOpacityEffect,
+    QFrame
 )
-from PyQt6.QtCore import QThread, Qt, QTimer
-from PyQt6.QtGui import QTextCursor
+from PyQt6.QtCore import QThread, Qt, QTimer, QSettings, QPropertyAnimation, QEasingCurve, QSize
+from PyQt6.QtGui import QTextCursor, QColor
 from pathlib import Path
 
 from edc.core.state import GameState
@@ -40,6 +42,44 @@ from typing import Any, Dict, List, Optional
 log = logging.getLogger("edc.ui.main")
 
 class MainWindow(QMainWindow):
+
+    def resizeEvent(self, event):
+        try:
+            if hasattr(self, "expl_outer_split"):
+                total_width = self.width()
+
+                # Dynamic biasing
+                if total_width > 1600:
+                    left_ratio = 0.65
+                elif total_width > 1200:
+                    left_ratio = 0.55
+                else:
+                    left_ratio = 0.50
+
+                left_size = int(total_width * left_ratio)
+                right_size = total_width - left_size
+
+                self.expl_outer_split.setSizes([left_size, right_size])
+            # Vertical bias (Signals vs Materials)
+            if hasattr(self, "expl_right_split"):
+                total_height = self.height()
+
+                if total_height > 1000:
+                    top_ratio = 0.70
+                elif total_height > 800:
+                    top_ratio = 0.60
+                else:
+                    top_ratio = 0.50
+
+                top_size = int(total_height * top_ratio)
+                bottom_size = total_height - top_size
+
+                self.expl_right_split.setSizes([top_size, bottom_size])
+        except Exception:
+            pass
+
+        super().resizeEvent(event)
+
     def __init__(self, cfg_store, cfg):
         super().__init__()
         self.cfg_store = cfg_store
@@ -80,6 +120,17 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
         layout = QVBoxLayout(root)
 
+        # ===============================
+        # Elite Header Bar
+        # ===============================
+        self.header_bar = QLabel("ELITE DANGEROUS COMMAND COMPANION")
+        self.header_bar.setStyleSheet("""
+            font-size: 18px;
+            font-weight: bold;
+            color: #FF8C00;
+            padding: 12px;
+        """)
+        layout.addWidget(self.header_bar)
         self.hud = QLabel("Not connected")
         self.status = QLabel("Status: idle")
 
@@ -88,6 +139,13 @@ class MainWindow(QMainWindow):
         self.overview_actions.setTextFormat(Qt.TextFormat.RichText)
         self.overview_actions.setOpenExternalLinks(False)
         self.overview_actions.linkActivated.connect(self._on_overview_action_link)
+
+        # Subtle fade animation for Overview updates
+        self._overview_opacity = QGraphicsOpacityEffect(self.overview_actions)
+        self.overview_actions.setGraphicsEffect(self._overview_opacity)
+        self._overview_opacity.setOpacity(1.0)
+        self._last_overview_html = ""
+        self._last_overview_lines = set()
 
         self.system_card = QTextEdit()
         self.system_card.setReadOnly(True)
@@ -244,9 +302,24 @@ class MainWindow(QMainWindow):
         btn_row.addStretch(1)
         layout.addLayout(btn_row)
 
-        tabs = QTabWidget()
-        tabs.setTabPosition(QTabWidget.TabPosition.West)
-        self.tabs = tabs
+        # === ELITE SIDEBAR LAYOUT ===
+        main_layout = QHBoxLayout()
+        layout.addLayout(main_layout)
+
+        # Sidebar
+        self.sidebar = QListWidget()
+        self.sidebar.setFrameShape(QFrame.Shape.NoFrame)
+        self.sidebar.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.sidebar.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.sidebar.setFixedWidth(200)
+        self.sidebar.setIconSize(QSize(20, 20))
+        self.sidebar.setSpacing(4)
+
+        # Stacked content
+        self.stack = QStackedWidget()
+
+        main_layout.addWidget(self.sidebar)
+        main_layout.addWidget(self.stack, 1)
 
         # Overview tab (System Card)
         tab_overview = QWidget()
@@ -275,20 +348,60 @@ class MainWindow(QMainWindow):
         split.setStretchFactor(0, 1)
         split.setStretchFactor(1, 2)
         ov.addWidget(split)
-        self.tab_overview_idx = tabs.addTab(tab_overview, "Overview")
+
+        self.stack.addWidget(tab_overview)
+        self.sidebar.addItem("Overview")
 
         # Exploration tab
         tab_explore = QWidget()
         ex = QVBoxLayout(tab_explore)
-        ex.addWidget(QLabel("Exploration (scans → instant estimate)"))
-        ex.addWidget(self.exploration_action)
-        ex.addWidget(self.exploration_table)
-        ex.addWidget(QLabel("System signals (FSS)"))
-        ex.addWidget(self.system_signals_box)
-        ex.addWidget(QLabel("Materials shortlist (landable + Geo signals)"))
-        ex.addWidget(self.materials_box)
-        ex.addWidget(self.exploration_hint)
-        self.tab_explore_idx = tabs.addTab(tab_explore, "Exploration")
+        ex.setContentsMargins(0, 0, 0, 0)
+
+        # ===== HEADER STRIP =====
+        header_panel = QWidget()
+        header_layout = QVBoxLayout(header_panel)
+        header_layout.setContentsMargins(8, 8, 8, 4)
+        header_layout.addWidget(QLabel("Exploration (scans → instant estimate)"))
+        header_layout.addWidget(self.exploration_action)
+
+        ex.addWidget(header_panel, 0)
+
+        # ===== RIGHT VERTICAL SPLIT =====
+        self.expl_right_split = QSplitter(Qt.Orientation.Vertical)
+
+        signals_panel = QWidget()
+        signals_layout = QVBoxLayout(signals_panel)
+        signals_layout.setContentsMargins(8, 8, 8, 8)
+        signals_layout.addWidget(QLabel("System signals (FSS)"))
+        signals_layout.addWidget(self.system_signals_box)
+
+        materials_panel = QWidget()
+        materials_layout = QVBoxLayout(materials_panel)
+        materials_layout.setContentsMargins(8, 8, 8, 8)
+        materials_layout.addWidget(QLabel("Materials shortlist (landable + Geo signals)"))
+        materials_layout.addWidget(self.materials_box)
+
+        self.expl_right_split.addWidget(signals_panel)
+        self.expl_right_split.addWidget(materials_panel)
+        self.expl_right_split.setStretchFactor(0, 1)
+        self.expl_right_split.setStretchFactor(1, 1)
+        self.expl_right_split.setChildrenCollapsible(False)
+
+        # ===== MAIN HORIZONTAL SPLIT =====
+        self.expl_outer_split = QSplitter(Qt.Orientation.Horizontal)
+        self.expl_outer_split.addWidget(self.exploration_table)
+        self.expl_outer_split.addWidget(self.expl_right_split)
+        self.expl_outer_split.setStretchFactor(0, 1)
+        self.expl_outer_split.setStretchFactor(1, 1)
+        self.expl_outer_split.setChildrenCollapsible(False)
+
+        ex.addWidget(self.expl_outer_split, 1)
+
+        # ===== FOOTER =====
+        ex.addWidget(self.exploration_hint, 0)
+
+        self.stack.addWidget(tab_explore)
+        self.sidebar.addItem("Exploration")
 
         # Exobiology tab
         tab_exo = QWidget()
@@ -296,7 +409,8 @@ class MainWindow(QMainWindow):
         xb.addWidget(QLabel("Exobiology"))
         xb.addWidget(self.exo_action)
         xb.addWidget(self.exo_table, 1)
-        self.tab_exo_idx = tabs.addTab(tab_exo, "Exobiology")
+        self.stack.addWidget(tab_exo)
+        self.sidebar.addItem("Exobiology")
 
         # PowerPlay tab
         tab_pp = QWidget()
@@ -306,7 +420,8 @@ class MainWindow(QMainWindow):
         pp.addWidget(self.pp_actions)
         pp.addWidget(QLabel("Conflict progress (if present)"))
         pp.addWidget(self.pp_progress, 1)
-        self.tab_pp_idx = tabs.addTab(tab_pp, "PowerPlay")
+        self.stack.addWidget(tab_pp)
+        self.sidebar.addItem("PowerPlay")
 
         # Combat tab (stub)
         tab_combat = QWidget()
@@ -314,7 +429,8 @@ class MainWindow(QMainWindow):
         cb.addWidget(QLabel("Combat"))
         cb.addWidget(self.combat_hint)
         cb.addWidget(self.combat_table, 1)
-        self.tab_combat_idx = tabs.addTab(tab_combat, "Combat")
+        self.stack.addWidget(tab_combat)
+        self.sidebar.addItem("Combat")
 
         # Intel tab (external / advisory)
         tab_intel = QWidget()
@@ -322,7 +438,8 @@ class MainWindow(QMainWindow):
         it.addWidget(QLabel("Intel (External, advisory only)"))
         it.addWidget(self.intel_summary)
         it.addWidget(self.intel_box, 1)
-        self.tab_intel_idx = tabs.addTab(tab_intel, "Intel")
+        self.stack.addWidget(tab_intel)
+        self.sidebar.addItem("Intel")
 
         # Odyssey tab (ShipLocker inventory; journal-derived)
         self.ody_summary = QLabel("")
@@ -351,7 +468,8 @@ class MainWindow(QMainWindow):
         oy.addWidget(self.ody_filter)
         oy.addWidget(self.ody_summary)
         oy.addWidget(self.ody_table, 1)
-        self.tab_ody_idx = tabs.addTab(tab_ody, "Odyssey")
+        self.stack.addWidget(tab_ody)
+        self.sidebar.addItem("Odyssey")
 
         # Materials tab (journal-derived inventory snapshot)
         self.inv_summary = QLabel("")
@@ -389,7 +507,8 @@ class MainWindow(QMainWindow):
 
         mt.addWidget(self.inv_summary)
         mt.addWidget(self.inv_table, 1)
-        self.tab_materials_idx = tabs.addTab(tab_mats, "Materials")
+        self.stack.addWidget(tab_mats)
+        self.sidebar.addItem("Materials")
 
         # Settings tab
         tab_settings = QWidget()
@@ -418,16 +537,16 @@ class MainWindow(QMainWindow):
         st.addLayout(row3)
 
         st.addStretch(1)
-        self.tab_settings_idx = tabs.addTab(tab_settings, "Settings")
+        self.stack.addWidget(tab_settings)
+        self.sidebar.addItem("Settings")
 
         # Log tab
         tab_log = QWidget()
         lg = QVBoxLayout(tab_log)
         lg.addWidget(QLabel("Log"))
         lg.addWidget(self.log_box)
-        self.tab_log_idx = tabs.addTab(tab_log, "Log")
-
-        layout.addWidget(tabs)
+        self.stack.addWidget(tab_log)
+        self.sidebar.addItem("Log")
 
         btn_start.clicked.connect(self.start_watching)
         btn_stop.clicked.connect(self.stop_watching)
@@ -446,6 +565,9 @@ class MainWindow(QMainWindow):
         self._hud_refresh_timer.setSingleShot(True)
         self._hud_refresh_timer.timeout.connect(self._do_hud_refresh)
 
+        # Sidebar navigation
+        self.sidebar.currentRowChanged.connect(self.stack.setCurrentIndex)
+        self.sidebar.setCurrentRow(0)
         self._refresh_hud()
         self._auto_start_if_configured()
 
@@ -503,18 +625,21 @@ class MainWindow(QMainWindow):
         self.status.setText("Status: settings saved")
 
     def _on_overview_action_link(self, link: str):
-        # Jump to the relevant tab (no auto-scroll / no selection)
         try:
-            if link == "exploration":
-                self.tabs.setCurrentIndex(self.tab_explore_idx)
-            elif link == "exobiology":
-                self.tabs.setCurrentIndex(self.tab_exo_idx)
-            elif link == "powerplay":
-                self.tabs.setCurrentIndex(self.tab_pp_idx)
-            elif link == "intel":
-                self.tabs.setCurrentIndex(self.tab_intel_idx)
-            elif link == "materials":
-                self.tabs.setCurrentIndex(self.tab_materials_idx)
+            mapping = {
+                "exploration": 1,
+                "exobiology": 2,
+                "powerplay": 3,
+                "combat": 4,
+                "intel": 5,
+                "odyssey": 6,
+                "materials": 7,
+                "settings": 8,
+                "log": 9,
+            }
+            idx = mapping.get(link)
+            if idx is not None:
+                self.sidebar.setCurrentRow(idx)
         except Exception:
             pass
 
@@ -1004,6 +1129,7 @@ class MainWindow(QMainWindow):
             sigs = getattr(self.state, "system_signals", None) or []
             phen = 0
             mega = 0
+            tour = 0
             for s in sigs:
                 if not isinstance(s, dict):
                     continue
@@ -1128,36 +1254,61 @@ class MainWindow(QMainWindow):
 
         # Mirror only the action lines into Overview (clickable links to tabs)
         try:
-            html_lines = []
+            contact_lines = []
+            action_lines = []
+            intel_lines = []
+            poi_lines = []
+            seen = set()
             has_pp_action = False
             # PP enemy scan alerts (Overview only)
+            # Contact Alert
             try:
                 cur = getattr(self.state, "current_contact_alert", "") or ""
                 if isinstance(cur, str) and cur.strip():
                     safe = cur.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                    html_lines.append(safe)
+                    contact_lines.append(safe)
             except Exception:
                 pass
             for ln in lines:
                 if not isinstance(ln, str):
                     continue
-                if ln.startswith("🌍 Action:"):
-                    html_lines.append(f'<a href="exploration">{ln}</a>')
-                elif ln.startswith("🔬 Action:"):
-                    html_lines.append(f'<a href="exobiology">{ln}</a>')
-                elif ln.startswith("🔎 Action:") or ln.startswith("🪨 Action:") or ln.startswith("⛏️ Action:") or ln.startswith("✨ Action:"):
-                    html_lines.append(f'<a href="exploration">{ln}</a>')
-                elif ln.startswith("🧩 Action:"):
-                    html_lines.append(f'<a href="exploration">{ln}</a>')
-                elif ln.startswith("📌 Intel:"):
-                    html_lines.append(f'<a href="intel">{ln}</a>')
-                elif ln.startswith("🧰 Action:"):
-                    html_lines.append(f'<a href="materials">{ln}</a>')
-                elif ln.startswith("⛏️ Intel:"):
-                    html_lines.append(f'<a href="intel">{ln}</a>')
+                if ln in seen:
+                    continue
+                seen.add(ln)
+
+                if "Action:" in ln:
+                    if ln.startswith("🧰"):
+                        action_lines.append(f'<a href="materials"><span style="color:#FF8C00;">➤</span> {ln}</a>')
+                    elif ln.startswith("🔬"):
+                        action_lines.append(f'<a href="exobiology"><span style="color:#FF8C00;">➤</span> {ln}</a>')
+                    else:
+                        action_lines.append(f'<a href="exploration"><span style="color:#FF8C00;">➤</span> {ln}</a>')
+                elif ln.startswith("📌 Intel:") or ln.startswith("⛏️ Intel:"):
+                    intel_lines.append(f'<a href="intel">{ln}</a>')
+                elif ln.startswith("📌 POI:") or ln.startswith("⛏️ Farming:"):
+                    poi_lines.append(ln)
             if getattr(self, "_pp_action_text", ""):
-                html_lines.append(f'<a href="powerplay">🛡️ {self._pp_action_text}</a>')
-            self.overview_actions.setText("<br>".join(html_lines))
+                action_lines.append(f'<a href="powerplay">🛡️ {self._pp_action_text}</a>')
+
+            final_lines = []
+
+            if contact_lines:
+                final_lines.append('<span style="color:#FF8C00; font-weight:700; font-size:13px;">CONTACT</span>')
+                final_lines.extend(contact_lines)
+
+            if action_lines:
+                final_lines.append('<span style="color:#FF8C00; font-weight:700; font-size:13px;">ACTIONS</span>')
+                final_lines.extend(action_lines)
+
+            if intel_lines:
+                final_lines.append('<span style="color:#FF8C00; font-weight:700; font-size:13px;">INTEL</span>')
+                final_lines.extend(intel_lines)
+
+            if poi_lines:
+                final_lines.append('<span style="color:#FF8C00; font-weight:700; font-size:13px;">POI</span>')
+                final_lines.extend(poi_lines)
+
+            self._animate_overview_update("<br>".join(final_lines))
         except Exception:
             pass
 
@@ -1168,7 +1319,9 @@ class MainWindow(QMainWindow):
                 continue
             if ln.startswith("🌍 Action:") or ln.startswith("🔬 Action:") or ln.startswith("🧬 Action:") or ln.startswith("🛡️") or ln.startswith("🔎 Action:") or ln.startswith("🪨 Action:") or ln.startswith("⛏️ Action:") or ln.startswith("✨ Action:") or ln.startswith("🧩 Action:") or ln.startswith("📌 Intel:"):                continue
             hud_lines.append(ln)
-        self.hud.setText("\n".join(hud_lines) if hud_lines else "Not connected")
+        # Suppress Action lines from HUD (they belong in Overview panel)
+        clean_lines = [ln for ln in lines if "Action:" not in ln]
+        self.hud.setText("\n".join(clean_lines) if clean_lines else "Not connected")
         self._refresh_system_card()
         self._refresh_exploration()
         self._refresh_exobiology()
@@ -1177,6 +1330,52 @@ class MainWindow(QMainWindow):
         self._refresh_intel()
         self._refresh_materials_inventory()
         self._refresh_shiplocker_inventory()
+
+    def _animate_overview_update(self, html: str):
+        try:
+            if not isinstance(html, str):
+                self.overview_actions.setText(html or "")
+                return
+
+            # Split into logical lines
+            new_lines = set(html.split("<br>"))
+
+            # First render (no animation)
+            if not getattr(self, "_last_overview_html", ""):
+                self.overview_actions.setText(html)
+                self._last_overview_html = html
+                self._last_overview_lines = new_lines
+                return
+
+            # If nothing changed → do nothing
+            if html == self._last_overview_html:
+                return
+
+            # Detect newly added lines
+            added_lines = new_lines - getattr(self, "_last_overview_lines", set())
+
+            # Always update content
+            self.overview_actions.setText(html)
+
+            # Only animate if something NEW was added
+            if added_lines:
+                self._overview_opacity.setOpacity(0.0)
+
+                anim = QPropertyAnimation(self._overview_opacity, b"opacity")
+                anim.setDuration(220)
+                anim.setStartValue(0.0)
+                anim.setEndValue(1.0)
+                anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+                anim.start()
+
+                self._overview_anim = anim
+
+            # Save current state
+            self._last_overview_html = html
+            self._last_overview_lines = new_lines
+
+        except Exception:
+            self.overview_actions.setText(html)
 
     def _refresh_shiplocker_inventory(self):
         """
@@ -2136,6 +2335,49 @@ class MainWindow(QMainWindow):
                 pass
             self.exploration_table.setItem(r, 6, it_val)
             self.exploration_table.setItem(r, 7, QTableWidgetItem(str(tags_txt)))
+
+            # =========================================
+            # Elite Exploration Row Intelligence Styling
+            # =========================================
+            try:
+                est_value = row_data.get("EstValue") or row_data.get("EstimatedValue") or 0
+                landable = row_data.get("Landable", False)
+                geo = row_data.get("Geo", 0) or row_data.get("GeoSignals", 0) or 0
+
+                try:
+                    min_100k = int(getattr(self.cfg, "min_planet_value_100k", 10) or 10)
+                except Exception:
+                    min_100k = 10
+                    min_value = min_100k * 100_000
+
+                # Determine color
+                row_color = None
+
+                if isinstance(est_value, int) and est_value >= min_value:
+                    # High value = Elite blue
+                    row_color = "#102A43"
+
+                    if landable:
+                        # High + landable slightly stronger
+                        row_color = "#0F3057"
+
+                    elif landable and isinstance(geo, int) and geo > 0:
+                        # Landable geo bodies = amber tint
+                        row_color = "#2A1A00"
+
+                else:
+                    # Low value muted
+                    row_color = "#111111"
+
+                # Apply to entire row
+                for c in range(self.exploration_table.columnCount()):
+                    item = self.exploration_table.item(r, c)
+                    if item:
+                        item.setBackground(Qt.GlobalColor.transparent)
+                        item.setBackground(QColor(row_color))
+
+            except Exception:
+                pass
 
         # Hint line under the table
         if not shown:
