@@ -9,6 +9,9 @@ from .external_intel import ExternalIntel
 from edc.engine.handlers import exploration, exobio, inventory, powerplay, misc
 
 log = logging.getLogger("edc.event_engine")
+import logging
+
+logger = logging.getLogger(__name__)
 
 class EventEngine:
     def __init__(
@@ -135,6 +138,19 @@ class EventEngine:
         msgs: List[str] = []
         name = event.get("event")
         self.state.last_event = name
+
+        # ---- DEBUG TRACE: Event start snapshot ----
+        try:
+            log.debug(
+                "EVENT START: %s | bodies=%d exo=%d signals=%d combat=%d",
+                name,
+                len(self.state.bodies),
+                len(self.state.exo),
+                len(self.state.system_signals),
+                len(self.state.combat_contacts),
+            )
+        except Exception:
+            pass
 
         credits_now = event.get("Credits")
         if isinstance(credits_now, int):
@@ -1055,6 +1071,20 @@ class EventEngine:
                 log.exception("Handler error for event=%s in %s", name, getattr(fn, "__module__", "handler"))
                 handled = True
                 break
+
+        # ---- DEBUG TRACE: Event end snapshot ----
+        try:
+            log.debug(
+                "EVENT END: %s | bodies=%d exo=%d signals=%d combat=%d msgs=%d",
+                name,
+                len(self.state.bodies),
+                len(self.state.exo),
+                len(self.state.system_signals),
+                len(self.state.combat_contacts),
+                len(msgs),
+            )
+        except Exception:
+            pass
 
         return self.state, msgs
 
