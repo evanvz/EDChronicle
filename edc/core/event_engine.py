@@ -2,6 +2,7 @@ import logging
 import math
 from typing import Any, Dict, List, Tuple
 from .state import GameState
+from pathlib import Path
 from .planet_values import PlanetValueTable
 from .exo_values import ExoValueTable
 from .external_intel import ExternalIntel
@@ -13,13 +14,14 @@ class EventEngine:
     def __init__(
         self,
         state: GameState,
+        settings_base: Path,
         planet_values: PlanetValueTable | None = None,
         exo_values: ExoValueTable | None = None,
         external_intel: ExternalIntel | None = None,
     ):
         self.state = state
-        self.planet_values = planet_values
-        self.exo_values = exo_values
+        self.planet_values = PlanetValueTable.load_from_paths(settings_base / "planet_values.json")
+        self.exo_values = ExoValueTable.load_from_paths(settings_base / "exo_values.json")
         self.external_intel = external_intel
 
     def _apply_external_intel(self, system_name: str | None, system_address: Any = None) -> None:

@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-log = logging.getLogger("edc.external_intel")
+log = logging.getLogger("settings.external_intel")
 
 class ExternalIntel:
     """

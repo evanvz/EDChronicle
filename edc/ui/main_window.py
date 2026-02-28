@@ -55,16 +55,17 @@ class MainWindow(QMainWindow):
         settings_base = Path(getattr(self.cfg_store, "settings_dir", app_dir / "settings"))
 
         # Load value tables from the canonical app_dir only (no Path.cwd fallbacks).
-        self.planet_values = PlanetValueTable.load_from_paths(app_dir / "planet_values.json")
-        self.exo_values = ExoValueTable.load_from_paths(app_dir / "exo_values.json")
+        self.planet_values = PlanetValueTable.load_from_paths(settings_base / "planet_values.json")
+        self.exo_values = ExoValueTable.load_from_paths(settings_base / "exo_values.json")
 
         log.info("MainWindow paths: app_dir=%s settings_dir=%s", str(app_dir), str(settings_base))
 
         self.external_intel = ExternalIntel(settings_base)
-        self.item_catalog = ItemCatalog(settings_base)
-        self.farming_locations = FarmingLocations(settings_base)
+        self.item_catalog = ItemCatalog(settings_base / "inara_items_catalog.json")
+        self.farming_locations = FarmingLocations(settings_base / "elite_farming_locations.json")
         self.engine = EventEngine(
             self.state,
+            settings_base,
             planet_values=self.planet_values,
             exo_values=self.exo_values,
             external_intel=self.external_intel,

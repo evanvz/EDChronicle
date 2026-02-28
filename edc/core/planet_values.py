@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-log = logging.getLogger("edc.planet_values")
+log = logging.getLogger("settings.planet_values")
 
 def _norm(s: str) -> str:
     return "".join(ch.lower() for ch in (s or "") if ch.isalnum())
