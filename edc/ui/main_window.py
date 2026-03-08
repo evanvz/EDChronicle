@@ -85,7 +85,7 @@ class MainWindow(QMainWindow):
         self.cfg_store = cfg_store
         self.cfg = cfg
 
-        self.setWindowTitle("ED Companion (Fresh Build)")
+        self.setWindowTitle("ED Companion Lite(Fresh Build)")
         self.resize(1000, 650)
 
         self.state = GameState()
@@ -123,14 +123,34 @@ class MainWindow(QMainWindow):
         # ===============================
         # Elite Header Bar
         # ===============================
-        self.header_bar = QLabel("ELITE DANGEROUS COMMAND COMPANION")
+        self.header_bar = QLabel("ELITE DANGEROUS COMMAND COMPANION LITE")
         self.header_bar.setStyleSheet("""
             font-size: 18px;
             font-weight: bold;
             color: #FF8C00;
             padding: 12px;
         """)
-        layout.addWidget(self.header_bar)
+
+        # ---- Header layout (title left, session tracker right) ----
+        header_layout = QHBoxLayout()
+        header_layout.addWidget(self.header_bar)
+
+        header_layout.addStretch()
+
+        # Session tracker panel
+        self.session_panel = QLabel()
+        self.session_panel.setText("Session\nKills: 0\nBounties: 0 cr")
+        self.session_panel.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
+        self.session_panel.setStyleSheet("""
+            color: #FF8C00;
+            font-weight: bold;
+            padding-right: 10px;
+        """)
+
+        header_layout.addWidget(self.session_panel)
+
+        layout.addLayout(header_layout)
+
         self.hud = QLabel("Not connected")
         self.status = QLabel("Status: idle")
 
@@ -936,6 +956,21 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+        # ---- Update session tracker ----
+        try:
+            kills = getattr(self.state, "session_kills", 0)
+            bounty_total = getattr(self.state, "session_bounties", 0)
+
+            bounty_txt = f"{bounty_total:,} cr"
+
+            self.session_panel.setText(
+                "Session\n"
+                f"Kills: {kills}\n"
+                f"Bounties: {bounty_txt}"
+            )
+        except Exception:
+            pass
+
         # PowerPlay status + action (ONLY if PP context exists in this system)
         try:
             pledged = self.state.pp_power
@@ -1011,14 +1046,32 @@ class MainWindow(QMainWindow):
             tier_txt = "/".join([x for x in [tier, top] if x])
             pc_txt = f"{pc:,}" if isinstance(pc, int) else "?"
 
+            # Convert expiry timestamp to "Ends in Xd Yh"
+            ends_txt = ""
+            try:
+                if isinstance(exp, str) and exp.endswith("Z"):
+                    from datetime import datetime, timezone
+
+                    expiry_dt = datetime.fromisoformat(exp.replace("Z", "+00:00"))
+                    now = datetime.now(timezone.utc)
+                    remaining = expiry_dt - now
+
+                    if remaining.total_seconds() > 0:
+                        days = remaining.days
+                        hours = int((remaining.seconds) / 3600)
+                        if days > 0:
+                            ends_txt = f"{days}d {hours}h"
+                        else:
+                            ends_txt = f"{hours}h"
+            except Exception:
+                ends_txt = ""
+
             bits = [f"CG: {title}"]
             if loc:
                 bits.append(loc)
-            if tier_txt:
-                bits.append(f"Tier {tier_txt}")
             bits.append(f"You {pc_txt}")
-            if exp:
-                bits.append(f"Ends {exp}")
+            if ends_txt:
+                bits.append(f"Ends in {ends_txt}")
             lines.append(" | ".join(bits))
 
         # Session ledger (gross totals for this app run)
@@ -1648,6 +1701,40 @@ class MainWindow(QMainWindow):
                 self.combat_table.setItem(r, 6, QTableWidgetItem(str(bounty_txt)))
                 self.combat_table.setItem(r, 7, QTableWidgetItem(str(last_seen)))
 
+            # Highlight PP enemies and high-value bounty targets
+            try:
+                from PyQt5.QtGui import QColor
+
+                pledged = getattr(self.state, "pp_power", None)
+                power = rec.get("Power")
+                bounty = rec.get("Bounty")
+                wanted = rec.get("Wanted")
+                rank = (rec.get("Rank") or "").lower()
+
+                is_pp_enemy = pledged and power and power != pledged
+                is_high_bounty = (
+                    wanted
+                    and isinstance(bounty, int)
+                    and bounty >= 500000
+                    and rank in {"dangerous", "deadly", "elite"}
+                )
+
+                highlight = None
+
+                if is_pp_enemy:
+                    highlight = QColor(170, 0, 170)  # purple
+                elif is_high_bounty:
+                    highlight = QColor(200, 160, 0)  # gold
+
+                if highlight:
+                    for col in range(self.combat_table.columnCount()):
+                        item = self.combat_table.item(r, col)
+                        if item:
+                            item.setBackground(highlight)
+
+            except Exception:
+                pass
+
                 if cur_key and k == cur_key:
                     selected_row = r
 
@@ -2182,7 +2269,28 @@ class MainWindow(QMainWindow):
             self.exo_table.setItem(r, 4, QTableWidgetItem(str(pot_txt)))
             self.exo_table.setItem(r, 5, QTableWidgetItem(str(base_txt)))
             self.exo_table.setItem(r, 6, QTableWidgetItem(str(prog_txt)))
-            self.exo_table.setItem(r, 7, QTableWidgetItem(str(ccr_txt)))
+            #self.exo_table.setItem(r, 7, QTableWidgetItem(str(ccr_txt)))
+
+            # CCR column (dist/required)
+            ccr_item = QTableWidgetItem(str(ccr_txt))
+            # Highlight CCR cell green when required distance reached
+            try:
+                req = rec.get("CCRRequiredM")
+                dist = rec.get("CCRDistanceM")
+
+                if (
+                    isinstance(req, int)
+                    and isinstance(dist, int)
+                    and req > 0
+                    and dist >= req
+                ):
+                    ccr_item.setBackground(QColor(0, 120, 0))  # dark green
+                    ccr_item.setForeground(QColor(255, 255, 255))
+            except Exception:
+                pass
+
+            self.exo_table.setItem(r, 7, ccr_item)
+
             self.exo_table.setItem(r, 8, QTableWidgetItem(str(status_txt)))
 
         if has_bio_targets:

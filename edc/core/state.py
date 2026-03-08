@@ -74,6 +74,10 @@ class GameState:
     community_goals: Dict[int, Dict[str, Any]] = field(default_factory=dict)
     last_cg_joined: Optional[int] = None
 
+    # Bounty session ledgers
+    session_bounties: int = 0
+    session_kills: int = 0
+
     # Misc targeting/combat helpers (safe defaults)
     last_target_ship: Optional[str] = None
     last_target_pilot: Optional[str] = None

@@ -9,7 +9,6 @@ from .external_intel import ExternalIntel
 from edc.engine.handlers import exploration, exobio, inventory, powerplay, misc
 
 log = logging.getLogger("edc.event_engine")
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -268,6 +267,7 @@ class EventEngine:
                 except Exception:
                     self.state.pp_enemy_alerts = []
                 self.state.combat_current_key = ""
+                self.state.combat_last_alerted_key = None
                 return self.state, msgs
 
             scan_stage = event.get("ScanStage")
@@ -307,9 +307,10 @@ class EventEngine:
 
             # Build a stable-ish dedupe key.
             # IMPORTANT: do NOT include Power in the key (it may appear later and cause duplicate rows).
-            pilot_key = (event.get("PilotName") or pilot or "UNKNOWN").strip()
-            ship_key = (event.get("Ship") or ship or "UNKNOWN").strip()
-            faction_key = (faction or "UNKNOWN").strip()
+            pilot_key = self._norm_text(event.get("PilotName") or pilot or "UNKNOWN").lower()
+            ship_key = self._norm_text(event.get("Ship") or ship or "UNKNOWN").lower()
+            faction_key = self._norm_text(faction or "UNKNOWN").lower()
+
             key = f"{pilot_key}|{ship_key}|{faction_key}"
             try:
                 self.state.combat_contacts[key] = {
@@ -369,14 +370,19 @@ class EventEngine:
             alert = " | ".join(parts)
 
             try:
-                if self.state.current_contact_alert != alert:
+                last_alerted = getattr(self.state, "combat_last_alerted_key", None)
+
+                # Only alert once per fully scanned unique target
+                if key != last_alerted:
                     self.state.current_contact_alert = alert
                     self.state.pp_enemy_alerts = [alert]
+                    self.state.combat_last_alerted_key = key
+                    msgs.append(alert)
             except Exception:
                 self.state.current_contact_alert = alert
                 self.state.pp_enemy_alerts = [alert]
-
-            msgs.append(alert)
+                self.state.combat_last_alerted_key = key
+                msgs.append(alert)
 
         elif name == "Powerplay":
             self.state.pp_power = event.get("Power")
@@ -394,6 +400,23 @@ class EventEngine:
                     break
             self.state.limpets = limpets
             msgs.append(f"Cargo: {self.state.cargo_count} (Limpets {self.state.limpets})")
+
+        elif name == "Bounty":
+            reward = event.get("TotalReward")
+            if isinstance(reward, int):
+                try:
+                    self.state.session_bounties += reward
+                    self.state.session_kills += 1
+                except Exception:
+                    pass
+
+        elif name == "RedeemVoucher":
+            if event.get("Type") == "bounty":
+                try:
+                    self.state.session_bounties = 0
+                    self.state.session_kills = 0
+                except Exception:
+                    pass
 
         elif name == "Scan":
             body = self._norm_text(event.get("BodyName"))
@@ -767,6 +790,39 @@ class EventEngine:
             rec["GeoSignals"] = self.state.geo_signals.get(body, rec.get("GeoSignals", 0))
             self.state.bodies[body] = rec
 
+        elif name == "CommunityGoal":
+            # Journal Community Goal event
+            goals = event.get("CurrentGoals", [])
+
+            if not isinstance(self.state.community_goals, dict):
+                self.state.community_goals = {}
+
+            for goal in goals:
+
+                cgid = goal.get("CGID")
+                if not isinstance(cgid, int):
+                    continue
+
+                self.state.community_goals[cgid] = {
+                    "CGID": cgid,
+                    "Title": goal.get("Title"),
+                    "SystemName": goal.get("SystemName"),
+                    "MarketName": goal.get("MarketName"),
+                    "Expiry": goal.get("Expiry"),
+                    "IsComplete": goal.get("IsComplete"),
+                    "TierReached": goal.get("TierReached"),
+                    "TopTierName": (goal.get("TopTier") or {}).get("Name"),
+                    "PlayerContribution": goal.get("PlayerContribution"),
+                    "NumContributors": goal.get("NumContributors"),
+                    "PlayerPercentileBand": goal.get("PlayerPercentileBand"),
+                }
+
+                # track CG the player is participating in
+                if goal.get("PlayerContribution"):
+                    self.state.last_cg_joined = cgid
+
+            msgs.append("Community Goal updated")
+
         elif name == "ScanOrganic":
             # Journal Manual: ScanType Log/Sample/Analyse + Genus + Species + Body (ID)
             scan_type = (event.get("ScanType") or "").strip()
@@ -921,6 +977,32 @@ class EventEngine:
 
             rec["Samples"] = progress
             rec["Complete"] = (progress >= 3)
+
+            # ---- CCR distance reached (announce once) ----
+            try:
+                req = rec.get("CCRRequiredM")
+                remaining = rec.get("CCRRemainingM")
+
+                if (
+                    isinstance(req, int)
+                    and isinstance(remaining, int)
+                    and remaining == 0
+                    and progress >= 2
+                    and not rec.get("CCRAnnounced", False)
+                ):
+                    msgs.append(f"CCR distance reached for {genus}")
+                    rec["CCRAnnounced"] = True
+            except Exception:
+                pass
+
+            # ---- 3/3 completion (announce once) ----
+            try:
+                if rec["Complete"] and not rec.get("CompletionAnnounced", False):
+                    msgs.append(f"Exobiology complete: {genus}")
+                    rec["CompletionAnnounced"] = True
+            except Exception:
+                pass
+
             if rec["Complete"]:
                 rec["CCRDistanceM"] = None
                 rec["CCRRemainingM"] = None
@@ -1039,20 +1121,6 @@ class EventEngine:
                 }
             )
             self.state.exo[codex_key] = rec
-
-        elif name == "SellOrganicData":
-            # Session ledger: sum Value + Bonus for all items sold
-            total = 0
-            for item in (event.get("BioData") or []):
-                v = item.get("Value", 0)
-                b = item.get("Bonus", 0)
-                if isinstance(v, int):
-                    total += v
-                if isinstance(b, int):
-                    total += b
-            if total > 0:
-                self.state.session_exo_earnings += total
-                msgs.append(f"Exobiology sold: {total:,} cr")
 
         # Dispatch order matters slightly: inventory first, then exploration/exobio, then PP, then misc.
         handled = False
