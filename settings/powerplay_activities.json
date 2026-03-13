@@ -1,0 +1,91 @@
+{
+  "game": "Elite Dangerous",
+  "version": "Powerplay 2.0",
+
+  "ethos_categories": [
+    "Combat",
+    "Finance",
+    "Social",
+    "Covert",
+    "Logistics"
+  ],
+
+  "state_mapping": {
+  "Stronghold": "Reinforcing",
+  "Control": "Reinforcing",
+  "Controlled": "Reinforcing",
+  "Fortified": "Reinforcing",
+  "Exploited": "Reinforcing",
+
+  "Undermining": "Undermining",
+  "Contested": "Undermining",
+
+  "Preparation": "Acquisition",
+  "Expansion": "Acquisition",
+  "Unoccupied": "Acquisition"
+},
+
+  "system_states": [
+    {
+      "state": "Undermining",
+      "context": "Hostile / Enemy Controlled",
+      "allocated_resource": "Undermining Resources",
+      "activities": [
+        {"action": "Power Kills", "ethos": "Combat"},
+        {"action": "Commit Crimes", "ethos": "Combat"},
+        {"action": "Flood Markets with Low Value Goods", "ethos": "Finance"},
+        {"action": "Sell Mined Resources", "ethos": "Finance"},
+        {"action": "Transport Powerplay Commodities", "ethos": "Logistics"},
+        {"action": "Transfer Power Association and Political Data", "ethos": "Social"},
+        {"action": "Hand in Salvage", "ethos": "Social"},
+        {"action": "Complete Aid and Humanitarian Missions", "ethos": "Social"},
+        {"action": "Retrieve Specific Goods", "ethos": "Social"},
+        {"action": "Upload Powerplay-Specific Malware", "ethos": "Covert"},
+        {"action": "Holoscreen Hacking", "ethos": "Covert"},
+        {"action": "Scan Datalinks", "ethos": "Covert"},
+        {"action": "Transfer Power Classified Data", "ethos": "Covert"},
+        {"action": "Transfer Power Research and Industrial Data", "ethos": "Covert"}
+      ]
+    },
+
+    {
+      "state": "Reinforcing",
+      "context": "Friendly / Stronghold / Fortified / Exploited",
+      "allocated_resource": "Reinforcement Resources",
+      "activities": [
+        {"action": "Bounty Hunting", "ethos": "Combat"},
+        {"action": "Sell for Large Profits", "ethos": "Finance"},
+        {"action": "Sell Mined Resources", "ethos": "Finance"},
+        {"action": "Hand in Search and Rescue", "ethos": "Social"},
+        {"action": "Complete Aid and Humanitarian Missions", "ethos": "Social"},
+        {"action": "Transfer Power Association and Political Data", "ethos": "Social"},
+        {"action": "Deliver Allocated Resources", "ethos": "Logistics"},
+        {"action": "Hand in Cartography Data", "ethos": "Covert"},
+        {"action": "Hand in Exobiology Data", "ethos": "Covert"},
+        {"action": "Transfer Power Research and Industrial Data", "ethos": "Covert"},
+        {"action": "Transfer Power Classified Data", "ethos": "Covert"}
+      ]
+    },
+
+    {
+      "state": "Acquisition",
+      "context": "Expansion / Unoccupied Territory",
+      "allocated_resource": "Acquisition Resources",
+      "activities": [
+        {"action": "Bounty Hunting", "ethos": "Combat"},
+        {"action": "Power Kills", "ethos": "Combat"},
+        {"action": "Sell for Large Profits", "ethos": "Finance"},
+        {"action": "Sell Mined Resources", "ethos": "Finance"},
+        {"action": "Sell Rare Goods", "ethos": "Finance"},
+        {"action": "Retrieve Specific Goods", "ethos": "Social"},
+        {"action": "Transfer Power Association and Political Data", "ethos": "Social"},
+        {"action": "Deliver Allocated Resources", "ethos": "Logistics"},
+        {"action": "Holoscreen Hacking", "ethos": "Covert"},
+        {"action": "Scan Datalinks", "ethos": "Covert"},
+        {"action": "Upload Powerplay-Specific Malware", "ethos": "Covert"},
+        {"action": "Transfer Power Classified Data", "ethos": "Covert"},
+        {"action": "Transfer Power Research and Industrial Data", "ethos": "Covert"}
+      ]
+    }
+  ]
+}

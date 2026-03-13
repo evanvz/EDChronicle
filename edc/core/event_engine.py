@@ -74,8 +74,8 @@ class EventEngine:
     def _parse_materials_category(self, items: Any) -> tuple[Dict[str, int], Dict[str, str]]:
         """
         Parse Materials event category list into:
-          counts: name(lower) -> Count(int)
-          loc:    name(lower) -> Name_Localised (or best-effort display)
+        counts: name(lower) -> Count(int)
+        loc:    name(lower) -> Name_Localised (or best-effort display)
         """
         counts: Dict[str, int] = {}
         loc: Dict[str, str] = {}
@@ -176,10 +176,7 @@ class EventEngine:
                 self.state.population = None
                 self.state.controlling_faction = None
                 self.state.factions = []
-                self.state.system_controlling_power = None
-                self.state.system_powerplay_state = None
-                self.state.system_powers = []
-                self.state.system_powerplay_conflict_progress = {}
+
                 try:
                     self.state.pp_enemy_alerts.clear()
                 except Exception:
@@ -199,10 +196,33 @@ class EventEngine:
             self.state.factions = event.get("Factions", []) or []
 
             # Powerplay (if present in this system)
-            self.state.system_controlling_power = event.get("ControllingPower")
-            self.state.system_powerplay_state = event.get("PowerplayState")
-            pw = event.get("Powers") or []
-            self.state.system_powers = [p for p in pw if isinstance(p, str)]
+            cp = event.get("ControllingPower")
+            if cp:
+                self.state.system_controlling_power = cp
+
+            pps = event.get("PowerplayState")
+            if pps:
+                self.state.system_powerplay_state = pps
+
+            cprog = event.get("PowerplayStateControlProgress")
+            if cprog is not None:
+                self.state.system_powerplay_control_progress = cprog
+
+            rein = event.get("PowerplayStateReinforcement")
+            if rein is not None:
+                self.state.system_powerplay_reinforcement = rein
+
+            und = event.get("PowerplayStateUndermining")
+            if und is not None:
+                self.state.system_powerplay_undermining = und
+
+            # Only update powers if event actually includes them
+            pw = event.get("Powers")
+            if isinstance(pw, list):
+                self.state.system_powers = [p for p in pw if isinstance(p, str)]
+
+            # Force PowerPlay UI refresh after Location update
+            msgs.append("refresh_powerplay")
             prog = {}
             for rec in (event.get("PowerplayConflictProgress") or []):
                 if isinstance(rec, dict) and isinstance(rec.get("Power"), str):
@@ -231,6 +251,7 @@ class EventEngine:
                 self.state.system_signals = []
                 self.state.external_pois = []
                 self.state.system_body_count = None
+                self.state.fss_complete = False
                 self.state.system_allegiance = None
                 self.state.system_government = None
                 self.state.system_economy = None
@@ -238,10 +259,6 @@ class EventEngine:
                 self.state.population = None
                 self.state.controlling_faction = None
                 self.state.factions = []
-                self.state.system_controlling_power = None
-                self.state.system_powerplay_state = None
-                self.state.system_powers = []
-                self.state.system_powerplay_conflict_progress = {}
                 try:
                     self.state.pp_enemy_alerts.clear()
                 except Exception:
@@ -254,6 +271,15 @@ class EventEngine:
                 self.state.in_hyperspace = True
                 self.state.jump_star_class = star_class
                 self._apply_external_intel(self.state.system, None)
+                
+                # ---- Clear PowerPlay state for previous system ----
+                self.state.system_controlling_power = None
+                self.state.system_powerplay_state = None
+                self.state.system_powers = []
+                self.state.system_powerplay_conflict_progress = {}
+
+                # Force UI refresh so old PP info disappears immediately
+                msgs.append("refresh_powerplay")
 
                 if target:
                     msgs.append(f"Jumping to: {target} ({star_class})")
@@ -498,9 +524,31 @@ class EventEngine:
             bc = event.get("BodyCount")
             if isinstance(bc, int):
                 self.state.system_body_count = bc
+
             nb = event.get("NonBodyCount")
-            if isinstance(nb, int):
+            prog = event.get("Progress")
+
+            # If FSS scan is complete, mark system as resolved
+            if isinstance(prog, (int, float)) and prog >= 1.0:
+                self.state.fss_complete = True
+            else:
+                self.state.fss_complete = False
+    
+            # When FSS scan is complete, there are no unresolved signals
+            if isinstance(prog, (int, float)) and prog >= 1.0:
+                self.state.non_body_count = 0
+            elif isinstance(nb, int):
                 self.state.non_body_count = nb
+
+        elif name == "FSSAllBodiesFound":
+            count = event.get("Count")
+
+            if isinstance(count, int):
+                self.state.system_body_count = count
+
+            # System fully resolved
+            self.state.fss_complete = True
+            self.state.non_body_count = 0
 
         elif name == "FSSSignalDiscovered":
             # Discovered via FSS zoom; includes USS/Stations/Phenomena etc.
@@ -611,7 +659,7 @@ class EventEngine:
                 pass
             try:
                 if event.get("Longitude") is not None:
-                   self.state.surface_lon = float(event.get("Longitude"))
+                    self.state.surface_lon = float(event.get("Longitude"))
             except Exception:
                 pass
             try:
