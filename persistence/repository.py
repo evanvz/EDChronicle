@@ -189,3 +189,72 @@ class Repository:
             ),
         ).fetchone()
         return row is not None
+
+
+    def get_system(self, system_address: int):
+        return self.db.execute(
+            """
+            SELECT
+                system_address,
+                system_name,
+                body_count,
+                fss_complete,
+                first_visit,
+                last_visit,
+                visit_count
+            FROM systems
+            WHERE system_address = ?
+            """,
+            (system_address,),
+        ).fetchone()
+
+    def get_bodies(self, system_address: int):
+        return self.db.execute(
+            """
+            SELECT
+                system_address,
+                body_id,
+                body_name,
+                planet_class,
+                terraformable,
+                landable,
+                mapped,
+                estimated_value,
+                distance_ls
+            FROM bodies
+            WHERE system_address = ?
+            ORDER BY distance_ls IS NULL, distance_ls, body_name
+            """,
+            (system_address,),
+        ).fetchall()
+
+    def get_body_signals(self, system_address: int):
+        return self.db.execute(
+            """
+            SELECT
+                system_address,
+                body_name,
+                bio_signals,
+                geo_signals
+            FROM body_signals
+            WHERE system_address = ?
+            ORDER BY body_name
+            """,
+            (system_address,),
+        ).fetchall()
+
+    def get_exobiology(self, system_address: int):
+        return self.db.execute(
+            """
+            SELECT
+                system_address,
+                body_name,
+                genus,
+                species,
+                samples
+            FROM exobiology
+            WHERE system_address = ?
+            ORDER BY body_name, genus, species
+            """,
+            (system_address,),
+        ).fetchall()

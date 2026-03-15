@@ -593,6 +593,90 @@ class MainWindow(QMainWindow):
         self._refresh_hud()
         self._auto_start_if_configured()
 
+    def load_current_system_data(self):
+        system_address = getattr(self.state, "system_address", None)
+        if not isinstance(system_address, int):
+            return
+
+        row = self.repo.get_system(system_address)
+        if row is not None:
+            self.state.system_address = row["system_address"]
+            self.state.system = row["system_name"]
+            self.state.system_body_count = row["body_count"]
+            self.state.fss_complete = bool(row["fss_complete"])
+
+        self.state.bodies.clear()
+        self.state.body_id_to_name.clear()
+        self.state.bio_signals.clear()
+        self.state.geo_signals.clear()
+        self.state.exo.clear()
+
+        for row in self.repo.get_bodies(system_address):
+            body_id = row["body_id"]
+            body_name = row["body_name"]
+
+            if not body_name:
+                continue
+
+            rec = {
+                "BodyID": body_id if isinstance(body_id, int) else None,
+                "BodyName": body_name,
+                "PlanetClass": row["planet_class"] or "",
+                "Terraformable": bool(row["terraformable"]),
+                "DistanceLS": row["distance_ls"],
+                "Landable": None if row["landable"] is None else bool(row["landable"]),
+                "Mapped": bool(row["mapped"]),
+                "EstimatedValue": row["estimated_value"],
+            }
+
+            self.state.bodies[body_name] = rec
+
+            if isinstance(body_id, int):
+                self.state.body_id_to_name[body_id] = body_name
+
+        for row in self.repo.get_body_signals(system_address):
+            body_name = row["body_name"]
+            if not body_name:
+                continue
+
+            bio = int(row["bio_signals"] or 0)
+            geo = int(row["geo_signals"] or 0)
+
+            self.state.bio_signals[body_name] = bio
+            self.state.geo_signals[body_name] = geo
+
+            rec = self.state.bodies.get(body_name)
+            if isinstance(rec, dict):
+                rec["BioSignals"] = bio
+                rec["GeoSignals"] = geo
+
+        for row in self.repo.get_exobiology(system_address):
+            body_name = row["body_name"]
+            genus = row["genus"]
+            species = row["species"]
+            samples = int(row["samples"] or 0)
+
+            if not body_name or not genus or not species:
+                continue
+
+            body = self.state.bodies.get(body_name)
+            if not isinstance(body, dict):
+                continue
+
+            body_id = body.get("BodyID")
+            if not isinstance(body_id, int):
+                continue
+
+            key = f"{body_id}|{genus}|{species}"
+            self.state.exo[key] = {
+                "BodyID": body_id,
+                "Genus": genus,
+                "Species": species,
+                "Samples": samples,
+                "Complete": samples >= 3,
+                "LastScanType": "DB",
+            }
+
     def _auto_start_if_configured(self):
         """
         Auto-start journal watching on launch if a journal_dir is configured and valid.
