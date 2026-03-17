@@ -36,12 +36,41 @@ from edc.core.exo_values import ExoValueTable
 from edc.core.external_intel import ExternalIntel
 from edc.core.item_catalog import ItemCatalog
 from edc.core.farming_locations import FarmingLocations
+from edc.core.powerplay_activities import PowerPlayActivityTable
 from edc.ui import formatting as fmt
 from typing import Any, Dict, List, Optional
+
+from persistence.database import Database
+from persistence.schema import SCHEMA_SQL
+from persistence.repository import Repository
 
 log = logging.getLogger("edc.ui.main")
 
 class MainWindow(QMainWindow):
+
+    def refresh_from_state(self):
+        self._refresh_system_card()
+        self._refresh_exploration()
+        self._refresh_powerplay()
+
+    def start_auto_watch(self):
+        self._auto_start_if_configured()
+
+    def load_last_system_data(self):
+        row = self.repo.get_most_recent_system()
+        if row is None:
+            return
+
+        system_address = row["system_address"]
+        if not isinstance(system_address, int):
+            return
+
+        self.state.system_address = system_address
+        self.state.system = row["system_name"]
+        self.state.system_body_count = row["body_count"]
+        self.state.fss_complete = bool(row["fss_complete"])
+
+        self.load_current_system_data()
 
     def resizeEvent(self, event):
         try:
@@ -80,12 +109,12 @@ class MainWindow(QMainWindow):
 
         super().resizeEvent(event)
 
-    def __init__(self, cfg_store, cfg):
+    def __init__(self, cfg_store, cfg, auto_start: bool = True):
         super().__init__()
         self.cfg_store = cfg_store
         self.cfg = cfg
 
-        self.setWindowTitle("ED Companion (Fresh Build)")
+        self.setWindowTitle("ED Companion Lite(Fresh Build)")
         self.resize(1000, 650)
 
         self.state = GameState()
@@ -94,9 +123,16 @@ class MainWindow(QMainWindow):
         app_dir = Path(getattr(self.cfg_store, "app_dir", Path.cwd()))
         settings_base = Path(getattr(self.cfg_store, "settings_dir", app_dir / "settings"))
 
+        data_dir = app_dir / "data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        self.db = Database(data_dir / "edhelper.db")
+        self.db.executescript(SCHEMA_SQL)
+        self.repo = Repository(self.db)
+
         # Load value tables from the canonical app_dir only (no Path.cwd fallbacks).
         self.planet_values = PlanetValueTable.load_from_paths(settings_base / "planet_values.json")
         self.exo_values = ExoValueTable.load_from_paths(settings_base / "exo_values.json")
+        self.pp_activities = PowerPlayActivityTable.load_from_paths(settings_base / "powerplay_activities.json")
 
         log.info("MainWindow paths: app_dir=%s settings_dir=%s", str(app_dir), str(settings_base))
 
@@ -123,14 +159,34 @@ class MainWindow(QMainWindow):
         # ===============================
         # Elite Header Bar
         # ===============================
-        self.header_bar = QLabel("ELITE DANGEROUS COMMAND COMPANION")
+        self.header_bar = QLabel("ELITE DANGEROUS COMMAND COMPANION LITE")
         self.header_bar.setStyleSheet("""
             font-size: 18px;
             font-weight: bold;
             color: #FF8C00;
             padding: 12px;
         """)
-        layout.addWidget(self.header_bar)
+
+        # ---- Header layout (title left, session tracker right) ----
+        header_layout = QHBoxLayout()
+        header_layout.addWidget(self.header_bar)
+
+        header_layout.addStretch()
+
+        # Session tracker panel
+        self.session_panel = QLabel()
+        self.session_panel.setText("Session\nKills: 0\nBounties: 0 cr")
+        self.session_panel.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
+        self.session_panel.setStyleSheet("""
+            color: #FF8C00;
+            font-weight: bold;
+            padding-right: 10px;
+        """)
+
+        header_layout.addWidget(self.session_panel)
+
+        layout.addLayout(header_layout)
+
         self.hud = QLabel("Not connected")
         self.status = QLabel("Status: idle")
 
@@ -181,7 +237,7 @@ class MainWindow(QMainWindow):
         self.exploration_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
         self.exploration_table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
         self.exploration_table.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)
-        self.exploration_table.setMinimumHeight(220)
+        self.exploration_table.setMinimumHeight(240)
         self.exploration_table.setSortingEnabled(True)
         self.exploration_action = QLabel("")
         self.exploration_action.setWordWrap(True)
@@ -189,11 +245,11 @@ class MainWindow(QMainWindow):
         self.exploration_hint.setWordWrap(True)
         self.system_signals_box = QTextEdit()
         self.system_signals_box.setReadOnly(True)
-        self.system_signals_box.setMinimumHeight(110)
+        self.system_signals_box.setMinimumHeight(160)
         self.system_signals_box.setPlaceholderText("System signals will appear here after FSSSignalDiscovered events.")
         self.materials_box = QTextEdit()
         self.materials_box.setReadOnly(True)
-        self.materials_box.setMinimumHeight(130)
+        self.materials_box.setMinimumHeight(80)
         self.materials_box.setPlaceholderText("Materials shortlist will appear here once landable bodies are scanned (Scan event includes Materials/Volcanism).")
 
         # Intel (external / advisory)
@@ -569,7 +625,94 @@ class MainWindow(QMainWindow):
         self.sidebar.currentRowChanged.connect(self.stack.setCurrentIndex)
         self.sidebar.setCurrentRow(0)
         self._refresh_hud()
-        self._auto_start_if_configured()
+        if auto_start:
+            self._auto_start_if_configured()
+
+    def load_current_system_data(self):
+        system_address = getattr(self.state, "system_address", None)
+        if not isinstance(system_address, int):
+            return
+
+        row = self.repo.get_system(system_address)
+        if row is not None:
+            self.state.system_address = row["system_address"]
+            self.state.system = row["system_name"]
+            self.state.system_body_count = row["body_count"]
+            self.state.fss_complete = bool(row["fss_complete"])
+
+        self.state.bodies.clear()
+        self.state.body_id_to_name.clear()
+        self.state.bio_signals.clear()
+        self.state.geo_signals.clear()
+        self.state.exo.clear()
+
+        for row in self.repo.get_bodies(system_address):
+            body_id = row["body_id"]
+            body_name = row["body_name"]
+
+            if not body_name:
+                continue
+
+            rec = {
+                "BodyID": body_id if isinstance(body_id, int) else None,
+                "BodyName": body_name,
+                "PlanetClass": row["planet_class"] or "",
+                "Terraformable": bool(row["terraformable"]),
+                "DistanceLS": row["distance_ls"],
+                "Landable": None if row["landable"] is None else bool(row["landable"]),
+                "Mapped": bool(row["mapped"]),
+                "EstimatedValue": row["estimated_value"],
+            }
+
+            self.state.bodies[body_name] = rec
+
+            if isinstance(body_id, int):
+                self.state.body_id_to_name[body_id] = body_name
+
+        for row in self.repo.get_body_signals(system_address):
+            body_name = row["body_name"]
+            if not body_name:
+                continue
+
+            bio = int(row["bio_signals"] or 0)
+            geo = int(row["geo_signals"] or 0)
+
+            self.state.bio_signals[body_name] = bio
+            self.state.geo_signals[body_name] = geo
+
+            rec = self.state.bodies.get(body_name)
+            if isinstance(rec, dict):
+                rec["BioSignals"] = bio
+                rec["GeoSignals"] = geo
+
+        for row in self.repo.get_exobiology(system_address):
+            body_name = row["body_name"]
+            genus = row["genus"]
+            species = row["species"]
+            variant = row["variant"]
+            samples = int(row["samples"] or 0)
+
+            if not body_name or not genus or not species or not variant:
+                continue
+
+            body = self.state.bodies.get(body_name)
+            if not isinstance(body, dict):
+                continue
+
+            body_id = body.get("BodyID")
+            if not isinstance(body_id, int):
+                continue
+
+            key = f"{body_id}|{genus}|{species}|{variant}"
+            self.state.exo[key] = {
+                "BodyID": body_id,
+                "Genus": genus,
+                "Species": species,
+                "Variant": variant,
+                "Samples": samples,
+                "Complete": samples >= 3,
+                "LastScanType": "DB",
+            }
 
     def _auto_start_if_configured(self):
         """
@@ -692,6 +835,14 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+    def _pp_state_category(self, pp_state: str, friendly: bool):
+        s = (pp_state or "").lower()
+        if "unoccupied" in s or "expansion" in s:
+            return "Acquisition"
+        if friendly:
+            return "Reinforcing"
+        return "Undermining"
+    
     def stop_watching(self):
         if self.watcher:
             self.watcher.stop()
@@ -727,11 +878,21 @@ class MainWindow(QMainWindow):
     def _on_event(self, evt: dict):
         name = evt.get("event", "UNKNOWN")
         self._append(f"[EVENT] {name}")
+
         state, msgs = self.engine.process(evt)
         self.state = state
+
         for m in msgs:
-            self._append(m)
+            if m == "refresh_powerplay":
+                self._refresh_powerplay()
+            else:
+                self._append(m)
+
         self._schedule_hud_refresh()
+
+        # Refresh PowerPlay panel when relevant events occur
+        if name in ("Location", "FSDJump", "Powerplay", "PowerplayState"):
+            self._refresh_powerplay()
 
     def _schedule_hud_refresh(self):
         """Coalesce multiple rapid journal events into a single UI refresh."""
@@ -767,7 +928,7 @@ class MainWindow(QMainWindow):
             return ""
 
         friendly = bool(ctrl and ctrl == pledged)
-        enemy = bool(ctrl and ctrl != pledged)
+        enemy = bool(ctrl and ctrl != pledged and ctrl != "Unoccupied")
         st = (pp_state or "").strip()
         pows = powers if isinstance(powers, list) else []
 
@@ -798,6 +959,37 @@ class MainWindow(QMainWindow):
             return "Friendly space: PP objectives may be available."
         return ""
 
+    def _derive_pp_activity_hint(self, pledged, ctrl, state, powers):
+        if not pledged:
+            return ""
+
+        s = str(state or "").lower()
+
+        friendly = ctrl and ctrl == pledged
+        enemy = ctrl and ctrl != pledged
+
+        hints = []
+
+        if "stronghold" in s or "fortified" in s:
+            if friendly:
+                hints.append("Fortify (deliver supplies)")
+            else:
+                hints.append("Undermine (kill power ships)")
+
+        elif "exploited" in s:
+            if enemy:
+                hints.append("Undermine enemy logistics")
+            else:
+                hints.append("Maintain control")
+
+        elif "unoccupied" in s:
+            hints.append("Preparation / Expansion opportunity")
+
+        if powers and pledged not in powers:
+            hints.append("Enemy agents likely present")
+
+        return "\n".join([f"✔ {h}" for h in hints])
+    
     def _format_poi_line(self, poi: Dict[str, Any]) -> str:
         """One-line, low-noise POI formatting for HUD."""
         try:
@@ -928,11 +1120,35 @@ class MainWindow(QMainWindow):
             pledged = getattr(self.state, "pp_power", None)
             ctrl = getattr(self.state, "system_controlling_power", None)
             pp_state = getattr(self.state, "system_powerplay_state", None) or ""
+            reinforce = getattr(self.state, "system_powerplay_reinforcement", None)
+            undermine = getattr(self.state, "system_powerplay_undermining", None)
+            progress = getattr(self.state, "system_powerplay_control_progress", None)
             powers = getattr(self.state, "system_powers", None) or []
 
             action = self._derive_pp_action(pledged, ctrl, pp_state, powers)
             if action:
                 self._pp_action_text = f"PP Action: {action}"
+        except Exception:
+            pass
+
+        # Ensure PowerPlay tab updates whenever HUD refreshes
+        try:
+            self._refresh_powerplay()
+        except Exception:
+            pass
+
+        # ---- Update session tracker ----
+        try:
+            kills = getattr(self.state, "session_kills", 0)
+            bounty_total = getattr(self.state, "session_bounties", 0)
+
+            bounty_txt = f"{bounty_total:,} cr"
+
+            self.session_panel.setText(
+                "Session\n"
+                f"Kills: {kills}\n"
+                f"Bounties: {bounty_txt}"
+            )
         except Exception:
             pass
 
@@ -960,7 +1176,7 @@ class MainWindow(QMainWindow):
                 # --- Action hint (Overview only) ---
                 s = str(pp_state or "").lower()
                 friendly = bool(ctrl and ctrl == pledged)
-                enemy = bool(ctrl and ctrl != pledged)
+                enemy = bool(ctrl and ctrl != pledged and ctrl != "Unoccupied")
 
                 action = None
                 if "stronghold" in s or "fortified" in s:
@@ -1011,14 +1227,32 @@ class MainWindow(QMainWindow):
             tier_txt = "/".join([x for x in [tier, top] if x])
             pc_txt = f"{pc:,}" if isinstance(pc, int) else "?"
 
+            # Convert expiry timestamp to "Ends in Xd Yh"
+            ends_txt = ""
+            try:
+                if isinstance(exp, str) and exp.endswith("Z"):
+                    from datetime import datetime, timezone
+
+                    expiry_dt = datetime.fromisoformat(exp.replace("Z", "+00:00"))
+                    now = datetime.now(timezone.utc)
+                    remaining = expiry_dt - now
+
+                    if remaining.total_seconds() > 0:
+                        days = remaining.days
+                        hours = int((remaining.seconds) / 3600)
+                        if days > 0:
+                            ends_txt = f"{days}d {hours}h"
+                        else:
+                            ends_txt = f"{hours}h"
+            except Exception:
+                ends_txt = ""
+
             bits = [f"CG: {title}"]
             if loc:
                 bits.append(loc)
-            if tier_txt:
-                bits.append(f"Tier {tier_txt}")
             bits.append(f"You {pc_txt}")
-            if exp:
-                bits.append(f"Ends {exp}")
+            if ends_txt:
+                bits.append(f"Ends in {ends_txt}")
             lines.append(" | ".join(bits))
 
         # Session ledger (gross totals for this app run)
@@ -1117,10 +1351,12 @@ class MainWindow(QMainWindow):
 
         # Journal-derived system signals (NonBodyCount + discovered signal list)
         try:
-            nb = getattr(self.state, "non_body_count", None)
-            sigs = getattr(self.state, "system_signals", None) or []
-            if isinstance(nb, int) and nb > 0 and not sigs:
-                lines.append(f"🔎 Action: {nb} non-body signals present (FSS)")
+            total = getattr(self.state, "system_body_count", None)
+            scanned = len(getattr(self.state, "bodies", {}))
+            fss_complete = getattr(self.state, "fss_complete", False)
+            if isinstance(total, int) and not fss_complete and total > scanned:
+                remaining = total - scanned
+                lines.append(f"🔎 Action: {remaining} bodies unresolved (FSS)")
         except Exception:
             pass
 
@@ -1604,17 +1840,17 @@ class MainWindow(QMainWindow):
         try:
             contacts = getattr(self.state, "combat_contacts", None) or {}
             cur_key = getattr(self.state, "combat_current_key", "") or ""
+            pledged = getattr(self.state, "pp_power", None)
 
             rows = []
             for k, rec in contacts.items():
-                if not isinstance(rec, dict):
-                    continue
-                rows.append((k, rec))
+                if isinstance(rec, dict):
+                    rows.append((k, rec))
 
-            # newest first (by timestamp string if present)
             def _ts(rec):
                 ts = rec.get("LastSeen") or ""
                 return ts if isinstance(ts, str) else ""
+
             rows.sort(key=lambda x: _ts(x[1]), reverse=True)
 
             self.combat_table.setSortingEnabled(False)
@@ -1627,36 +1863,59 @@ class MainWindow(QMainWindow):
                 ship = rec.get("Ship") or ""
                 faction = rec.get("Faction") or ""
                 power = rec.get("Power") or ""
-                wanted = "Wanted" if rec.get("Wanted") else ""
+                wanted_flag = bool(rec.get("Wanted"))
+                wanted = "Wanted" if wanted_flag else ""
                 bounty = rec.get("Bounty")
                 bounty_txt = f"{bounty:,}" if isinstance(bounty, int) else ""
+
                 ts = rec.get("LastSeen") or ""
                 if isinstance(ts, str) and "T" in ts:
-                    # 2026-01-18T15:57:17Z -> 15:57:17
                     last_seen = ts.split("T", 1)[1].replace("Z", "")[:8]
                 else:
                     last_seen = str(ts) if ts else ""
 
-                it0 = QTableWidgetItem(str(pilot))
-                it0.setData(Qt.ItemDataRole.UserRole, k)
-                self.combat_table.setItem(r, 0, it0)
-                self.combat_table.setItem(r, 1, QTableWidgetItem(str(rank)))
-                self.combat_table.setItem(r, 2, QTableWidgetItem(str(ship)))
-                self.combat_table.setItem(r, 3, QTableWidgetItem(str(faction)))
-                self.combat_table.setItem(r, 4, QTableWidgetItem(str(power)))
-                self.combat_table.setItem(r, 5, QTableWidgetItem(str(wanted)))
-                self.combat_table.setItem(r, 6, QTableWidgetItem(str(bounty_txt)))
-                self.combat_table.setItem(r, 7, QTableWidgetItem(str(last_seen)))
+                items = [
+                    QTableWidgetItem(str(pilot)),
+                    QTableWidgetItem(str(rank)),
+                    QTableWidgetItem(str(ship)),
+                    QTableWidgetItem(str(faction)),
+                    QTableWidgetItem(str(power)),
+                    QTableWidgetItem(str(wanted)),
+                    QTableWidgetItem(str(bounty_txt)),
+                    QTableWidgetItem(str(last_seen)),
+                ]
+                items[0].setData(Qt.ItemDataRole.UserRole, k)
+
+                is_pp_enemy = bool(pledged and power and power != pledged)
+                is_high_bounty = bool(
+                    wanted_flag
+                    and isinstance(bounty, int)
+                    and bounty >= 500000
+                    and str(rank).lower() in {"dangerous", "deadly", "elite"}
+                )
+
+                highlight = None
+                if is_pp_enemy:
+                    highlight = QColor(170, 0, 170)  # purple
+                elif is_high_bounty:
+                    highlight = QColor(200, 160, 0)  # gold
+
+                if highlight:
+                    for it in items:
+                        it.setBackground(highlight)
+                        it.setForeground(QColor(255, 255, 255))
+
+                for c, it in enumerate(items):
+                    self.combat_table.setItem(r, c, it)
 
                 if cur_key and k == cur_key:
                     selected_row = r
 
             self.combat_table.setSortingEnabled(True)
-
             if selected_row is not None:
                 self.combat_table.selectRow(selected_row)
         except Exception:
-            pass
+            log.exception("Combat refresh failed")
 
     def _refresh_powerplay(self):
         # Everything here is journal-driven. Use getattr defensively to avoid crashes.
@@ -1668,42 +1927,74 @@ class MainWindow(QMainWindow):
         pp_state = getattr(self.state, "system_powerplay_state", None)
         powers = getattr(self.state, "system_powers", None) or []
         prog = getattr(self.state, "system_powerplay_conflict_progress", None) or {}
+        reinforce = getattr(self.state, "system_powerplay_reinforcement", None)
+        undermine = getattr(self.state, "system_powerplay_undermining", None)
+        progress = getattr(self.state, "system_powerplay_control_progress", None)
 
-        if not pledged:
-            self.pp_summary.setText("Not pledged to a Power. (PowerPlay details are hidden when not pledged.)")
-            self.pp_actions.setText("")
-            self.pp_progress.setRowCount(0)
-            return
+        pledged_txt = pledged or "Unknown"
 
         pr_txt = pr if pr is not None else "?"
         me_txt = f"{me:,}" if isinstance(me, int) else "?"
         sysn = getattr(self.state, "system", None) or "Unknown system"
 
-        bits = [f"System: {sysn}", f"Pledged: {pledged} (R{pr_txt} M{me_txt})"]
-        # Relationship badge (simple, at-a-glance)
         friendly = bool(ctrl and ctrl == pledged)
-        enemy = bool(ctrl and ctrl != pledged)
-        if friendly:
+        enemy = bool(ctrl and ctrl != pledged and ctrl != "Unoccupied")
+        if ctrl == "Unoccupied":
+            rel = "🟡 Neutral"
+        elif ctrl and ctrl == pledged:
             rel = "🟢 Friendly"
-        elif enemy:
+        elif ctrl and ctrl != pledged:
             rel = "🔴 Enemy"
         else:
             rel = "🟡 Neutral"
 
-        bits = [rel, f"System: {sysn}", f"Pledged: {pledged} (R{pr_txt} M{me_txt})"]
+        bits = [rel, f"System: {sysn}", f"Pledged: {pledged_txt} (R{pr_txt} M{me_txt})"]
         if ctrl:
-            bits.append(f"Controlling Power: {ctrl}")
+            bits.append(f"Controlling Power: {ctrl or 'Unoccupied'}")
         if pp_state:
             bits.append(f"PowerPlay State: {pp_state}")
+        # Show control progress if available
+        if isinstance(progress, (int, float)):
+            bits.append(f"Control Progress: {progress*100:.1f}%")
+        # Show reinforcement / undermining activity values
+        if isinstance(reinforce, int):
+            bits.append(f"Reinforcement: {reinforce:,}")
+        if isinstance(undermine, int):
+            bits.append(f"Undermining: {undermine:,}")
         if isinstance(powers, list) and powers:
             bits.append("Powers present: " + ", ".join([p for p in powers if isinstance(p, str)]))
         self.pp_summary.setText(" | ".join(bits))
+
+
+        try:
+            if self.pp_activities and pp_state:
+                cat = self._pp_state_category(pp_state, friendly)
+                acts = self.pp_activities.get_actions(cat)
+                if acts:
+                    lines = [f"• {a.action} ({a.ethos})" for a in acts[:6]]
+                    self.pp_actions.setText("\n".join(lines))
+                else:
+                    self.pp_actions.setText("")
+            else:
+                self.pp_actions.setText("")
+        except Exception:
+            self.pp_actions.setText("")
 
         # Action hint (short, generic, and honest)
         s = str(pp_state or "").strip().lower()
         action = self._derive_pp_action(pledged, ctrl, pp_state, powers)
 
-        self.pp_actions.setText(f"Recommended: {action}" if action else "")
+        hint = self._derive_pp_activity_hint(pledged, ctrl, pp_state, powers)
+
+        txt = []
+        if action:
+            txt.append(f"Recommended: {action}")
+        if hint:
+            txt.append("")
+            txt.append("Best Activity Here:")
+            txt.append(hint)
+
+        self.pp_actions.setText("\n".join(txt))
 
         # Conflict progress table (if present)
         rows = []
@@ -1712,12 +2003,29 @@ class MainWindow(QMainWindow):
                 if isinstance(p, str) and isinstance(v, (int, float)):
                     rows.append((p, float(v)))
         rows.sort(key=lambda x: x[1], reverse=True)
+        
+        # Determine leader
+        leader = None
+        if rows:
+            leader = rows[0][0]
+            leader_val = rows[0][1]
 
         shown = rows[:12]
         self.pp_progress.setRowCount(len(shown))
         for r, (p, v) in enumerate(shown):
-            self.pp_progress.setItem(r, 0, QTableWidgetItem(p))
-            self.pp_progress.setItem(r, 1, QTableWidgetItem(f"{v*100:.2f}%"))
+            power_item = QTableWidgetItem(p)
+            pct_item = QTableWidgetItem(f"{v*100:.2f}%")
+
+            # Leader highlight
+            if p == leader:
+                power_item.setText(f"{p} ⭐")
+
+            # Your pledged power
+            if pledged and p == pledged:
+                power_item.setText(f"{p} (YOU)")
+
+            self.pp_progress.setItem(r, 0, power_item)
+            self.pp_progress.setItem(r, 1, pct_item)
 
     def _refresh_exobiology(self):
         # Ensure FSS-only bio targets show even if handler refactors update
@@ -1929,6 +2237,7 @@ class MainWindow(QMainWindow):
             pot_v = rec.get("PotentialValue")
             pot_txt = f"{pot_v:,} cr" if isinstance(pot_v, int) else ""
             base_v = rec.get("BaseValue")
+
             # Journal does not provide a numeric base value for ScanOrganic; derive from exo_values.json.
             if not isinstance(base_v, int):
                 nm = rec.get("Variant") or rec.get("Species") or rec.get("CodexName") or ""
@@ -2020,7 +2329,6 @@ class MainWindow(QMainWindow):
                     if (isinstance(body_id, int) and (body_id, gk) in real_body_genus_id) or ((_norm_text(body), gk) in real_body_genus_name):
                         continue
                     pot = genus_max.get(gk)
-                    pot_txt = f"{pot:,} cr" if isinstance(pot, int) and pot > 0 else ""
                     sp = ""
                     vv = ""
                     try:
@@ -2034,6 +2342,7 @@ class MainWindow(QMainWindow):
                     except Exception:
                         sp = ""
                         vv = ""
+                    pot_txt = "" if sp or vv else (f"{pot:,} cr" if isinstance(pot, int) and pot > 0 else "")
                     try:
                         sp = str(sp or "").strip()
                     except Exception:
@@ -2173,7 +2482,7 @@ class MainWindow(QMainWindow):
                 _samples, _status, body_txt, genus, species, var_txt, pot_txt, base_txt, prog_txt, status_txt = row
                 ccr_txt = ""
             else:
-                _samples, _status, body_txt, genus, species, var_txt, pot_txt, base_txt, prog_txt, ccr_txt, status_txt = row[:11]
+                _samples, _status, body_txt, genus, species, var_txt, pot_txt, base_txt, prog_txt, ccr_txt, status_txt = row
 
             self.exo_table.setItem(r, 0, QTableWidgetItem(str(body_txt)))
             self.exo_table.setItem(r, 1, QTableWidgetItem(str(genus)))
@@ -2182,8 +2491,25 @@ class MainWindow(QMainWindow):
             self.exo_table.setItem(r, 4, QTableWidgetItem(str(pot_txt)))
             self.exo_table.setItem(r, 5, QTableWidgetItem(str(base_txt)))
             self.exo_table.setItem(r, 6, QTableWidgetItem(str(prog_txt)))
-            self.exo_table.setItem(r, 7, QTableWidgetItem(str(ccr_txt)))
+            #self.exo_table.setItem(r, 7, QTableWidgetItem(str(ccr_txt)))
+
+            # CCR column (dist/required)
+            ccr_item = QTableWidgetItem(str(ccr_txt))
+
+            self.exo_table.setItem(r, 7, ccr_item)
             self.exo_table.setItem(r, 8, QTableWidgetItem(str(status_txt)))
+
+            # Highlight the full row for active in-progress scans:
+            # samples > 0 and not yet COMPLETE.
+            try:
+                if isinstance(_samples, int) and _samples > 0 and str(_status).upper() != "COMPLETE":
+                    for c in range(self.exo_table.columnCount()):
+                        item = self.exo_table.item(r, c)
+                        if item is not None:
+                            item.setBackground(QColor(60, 90, 140))
+                            item.setForeground(QColor(255, 255, 255))
+            except Exception:
+                pass
 
         if has_bio_targets:
             self.exo_action.setText(
@@ -2289,18 +2615,25 @@ class MainWindow(QMainWindow):
 
         scanned = len(self.state.bodies)
         total = self.state.system_body_count
+        fss_complete = bool(getattr(self.state, "fss_complete", False))
         header_bits = []
         if isinstance(total, int) and total > 0:
-            remaining = max(0, total - scanned)
-            header_bits.append(f"Bodies resolved: {scanned}/{total} (unknown remaining: {remaining})")
+            if fss_complete:
+                header_bits.append(
+                    f"Bodies discovered: {total}/{total} • detailed records loaded: {scanned}"
+                )
+            else:
+                remaining = max(0, total - scanned)
+                header_bits.append(
+                    f"Bodies resolved: {scanned}/{total} (unknown remaining: {remaining})"
+                )
         else:
             header_bits.append(f"Bodies resolved: {scanned} (honk for total count)")
-        if not self.planet_values:
-            header_bits.append("WARNING: planet_values.json not loaded")
-        header_bits.append(f"Showing bodies worth ≥ {fmt.credits(min_value, default='?')} or with Geo signals")
+
         nb = getattr(self.state, "non_body_count", None)
-        if isinstance(nb, int) and nb > 0:
-            header_bits.append(f"Non-body signals: {nb} (FSS)")
+        if not fss_complete and isinstance(total, int) and total > scanned:
+            header_bits.append(f"Unresolved bodies: {total - scanned}")
+
         sigs = getattr(self.state, "system_signals", None) or []
         if isinstance(sigs, list) and sigs:
             header_bits.append(f"Signals discovered: {len(sigs)}")
@@ -2464,9 +2797,14 @@ class MainWindow(QMainWindow):
 
                 self.system_signals_box.setPlainText("\n".join(out_lines).strip())
             else:
-                nb = getattr(self.state, "non_body_count", None)
-                if isinstance(nb, int) and nb > 0:
-                    self.system_signals_box.setPlainText(f"{nb} non-body signals present. Use FSS to discover details.")
+                total = getattr(self.state, "system_body_count", None)
+                scanned = len(getattr(self.state, "bodies", {}))
+                fss_complete = getattr(self.state, "fss_complete", False)
+                if isinstance(total, int) and not fss_complete and total > scanned:
+                    remaining = total - scanned
+                    self.system_signals_box.setPlainText(
+                        f"{remaining} bodies unresolved. Use FSS to discover them."
+                    )
                 else:
                     self.system_signals_box.setPlainText("")
         except Exception:

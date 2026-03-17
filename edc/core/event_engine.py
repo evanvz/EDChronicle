@@ -10,6 +10,8 @@ from edc.engine.handlers import exploration, exobio, inventory, powerplay, misc
 
 log = logging.getLogger("edc.event_engine")
 
+logger = logging.getLogger(__name__)
+
 class EventEngine:
     def __init__(
         self,
@@ -72,8 +74,8 @@ class EventEngine:
     def _parse_materials_category(self, items: Any) -> tuple[Dict[str, int], Dict[str, str]]:
         """
         Parse Materials event category list into:
-          counts: name(lower) -> Count(int)
-          loc:    name(lower) -> Name_Localised (or best-effort display)
+        counts: name(lower) -> Count(int)
+        loc:    name(lower) -> Name_Localised (or best-effort display)
         """
         counts: Dict[str, int] = {}
         loc: Dict[str, str] = {}
@@ -136,6 +138,19 @@ class EventEngine:
         name = event.get("event")
         self.state.last_event = name
 
+        # ---- DEBUG TRACE: Event start snapshot ----
+        try:
+            log.debug(
+                "EVENT START: %s | bodies=%d exo=%d signals=%d combat=%d",
+                name,
+                len(self.state.bodies),
+                len(self.state.exo),
+                len(self.state.system_signals),
+                len(self.state.combat_contacts),
+            )
+        except Exception:
+            pass
+
         credits_now = event.get("Credits")
         if isinstance(credits_now, int):
             self.state.credits = credits_now
@@ -161,10 +176,7 @@ class EventEngine:
                 self.state.population = None
                 self.state.controlling_faction = None
                 self.state.factions = []
-                self.state.system_controlling_power = None
-                self.state.system_powerplay_state = None
-                self.state.system_powers = []
-                self.state.system_powerplay_conflict_progress = {}
+
                 try:
                     self.state.pp_enemy_alerts.clear()
                 except Exception:
@@ -184,10 +196,33 @@ class EventEngine:
             self.state.factions = event.get("Factions", []) or []
 
             # Powerplay (if present in this system)
-            self.state.system_controlling_power = event.get("ControllingPower")
-            self.state.system_powerplay_state = event.get("PowerplayState")
-            pw = event.get("Powers") or []
-            self.state.system_powers = [p for p in pw if isinstance(p, str)]
+            cp = event.get("ControllingPower")
+            if cp:
+                self.state.system_controlling_power = cp
+
+            pps = event.get("PowerplayState")
+            if pps:
+                self.state.system_powerplay_state = pps
+
+            cprog = event.get("PowerplayStateControlProgress")
+            if cprog is not None:
+                self.state.system_powerplay_control_progress = cprog
+
+            rein = event.get("PowerplayStateReinforcement")
+            if rein is not None:
+                self.state.system_powerplay_reinforcement = rein
+
+            und = event.get("PowerplayStateUndermining")
+            if und is not None:
+                self.state.system_powerplay_undermining = und
+
+            # Only update powers if event actually includes them
+            pw = event.get("Powers")
+            if isinstance(pw, list):
+                self.state.system_powers = [p for p in pw if isinstance(p, str)]
+
+            # Force PowerPlay UI refresh after Location update
+            msgs.append("refresh_powerplay")
             prog = {}
             for rec in (event.get("PowerplayConflictProgress") or []):
                 if isinstance(rec, dict) and isinstance(rec.get("Power"), str):
@@ -216,6 +251,7 @@ class EventEngine:
                 self.state.system_signals = []
                 self.state.external_pois = []
                 self.state.system_body_count = None
+                self.state.fss_complete = False
                 self.state.system_allegiance = None
                 self.state.system_government = None
                 self.state.system_economy = None
@@ -223,10 +259,6 @@ class EventEngine:
                 self.state.population = None
                 self.state.controlling_faction = None
                 self.state.factions = []
-                self.state.system_controlling_power = None
-                self.state.system_powerplay_state = None
-                self.state.system_powers = []
-                self.state.system_powerplay_conflict_progress = {}
                 try:
                     self.state.pp_enemy_alerts.clear()
                 except Exception:
@@ -239,6 +271,15 @@ class EventEngine:
                 self.state.in_hyperspace = True
                 self.state.jump_star_class = star_class
                 self._apply_external_intel(self.state.system, None)
+                
+                # ---- Clear PowerPlay state for previous system ----
+                self.state.system_controlling_power = None
+                self.state.system_powerplay_state = None
+                self.state.system_powers = []
+                self.state.system_powerplay_conflict_progress = {}
+
+                # Force UI refresh so old PP info disappears immediately
+                msgs.append("refresh_powerplay")
 
                 if target:
                     msgs.append(f"Jumping to: {target} ({star_class})")
@@ -252,6 +293,7 @@ class EventEngine:
                 except Exception:
                     self.state.pp_enemy_alerts = []
                 self.state.combat_current_key = ""
+                self.state.combat_last_alerted_key = None
                 return self.state, msgs
 
             scan_stage = event.get("ScanStage")
@@ -291,9 +333,10 @@ class EventEngine:
 
             # Build a stable-ish dedupe key.
             # IMPORTANT: do NOT include Power in the key (it may appear later and cause duplicate rows).
-            pilot_key = (event.get("PilotName") or pilot or "UNKNOWN").strip()
-            ship_key = (event.get("Ship") or ship or "UNKNOWN").strip()
-            faction_key = (faction or "UNKNOWN").strip()
+            pilot_key = self._norm_text(event.get("PilotName") or pilot or "UNKNOWN").lower()
+            ship_key = self._norm_text(event.get("Ship") or ship or "UNKNOWN").lower()
+            faction_key = self._norm_text(faction or "UNKNOWN").lower()
+
             key = f"{pilot_key}|{ship_key}|{faction_key}"
             try:
                 self.state.combat_contacts[key] = {
@@ -353,14 +396,19 @@ class EventEngine:
             alert = " | ".join(parts)
 
             try:
-                if self.state.current_contact_alert != alert:
+                last_alerted = getattr(self.state, "combat_last_alerted_key", None)
+
+                # Only alert once per fully scanned unique target
+                if key != last_alerted:
                     self.state.current_contact_alert = alert
                     self.state.pp_enemy_alerts = [alert]
+                    self.state.combat_last_alerted_key = key
+                    msgs.append(alert)
             except Exception:
                 self.state.current_contact_alert = alert
                 self.state.pp_enemy_alerts = [alert]
-
-            msgs.append(alert)
+                self.state.combat_last_alerted_key = key
+                msgs.append(alert)
 
         elif name == "Powerplay":
             self.state.pp_power = event.get("Power")
@@ -378,6 +426,23 @@ class EventEngine:
                     break
             self.state.limpets = limpets
             msgs.append(f"Cargo: {self.state.cargo_count} (Limpets {self.state.limpets})")
+
+        elif name == "Bounty":
+            reward = event.get("TotalReward")
+            if isinstance(reward, int):
+                try:
+                    self.state.session_bounties += reward
+                    self.state.session_kills += 1
+                except Exception:
+                    pass
+
+        elif name == "RedeemVoucher":
+            if event.get("Type") == "bounty":
+                try:
+                    self.state.session_bounties = 0
+                    self.state.session_kills = 0
+                except Exception:
+                    pass
 
         elif name == "Scan":
             body = self._norm_text(event.get("BodyName"))
@@ -459,9 +524,31 @@ class EventEngine:
             bc = event.get("BodyCount")
             if isinstance(bc, int):
                 self.state.system_body_count = bc
+
             nb = event.get("NonBodyCount")
-            if isinstance(nb, int):
+            prog = event.get("Progress")
+
+            # If FSS scan is complete, mark system as resolved
+            if isinstance(prog, (int, float)) and prog >= 1.0:
+                self.state.fss_complete = True
+            else:
+                self.state.fss_complete = False
+    
+            # When FSS scan is complete, there are no unresolved signals
+            if isinstance(prog, (int, float)) and prog >= 1.0:
+                self.state.non_body_count = 0
+            elif isinstance(nb, int):
                 self.state.non_body_count = nb
+
+        elif name == "FSSAllBodiesFound":
+            count = event.get("Count")
+
+            if isinstance(count, int):
+                self.state.system_body_count = count
+
+            # System fully resolved
+            self.state.fss_complete = True
+            self.state.non_body_count = 0
 
         elif name == "FSSSignalDiscovered":
             # Discovered via FSS zoom; includes USS/Stations/Phenomena etc.
@@ -572,7 +659,7 @@ class EventEngine:
                 pass
             try:
                 if event.get("Longitude") is not None:
-                   self.state.surface_lon = float(event.get("Longitude"))
+                    self.state.surface_lon = float(event.get("Longitude"))
             except Exception:
                 pass
             try:
@@ -751,6 +838,39 @@ class EventEngine:
             rec["GeoSignals"] = self.state.geo_signals.get(body, rec.get("GeoSignals", 0))
             self.state.bodies[body] = rec
 
+        elif name == "CommunityGoal":
+            # Journal Community Goal event
+            goals = event.get("CurrentGoals", [])
+
+            if not isinstance(self.state.community_goals, dict):
+                self.state.community_goals = {}
+
+            for goal in goals:
+
+                cgid = goal.get("CGID")
+                if not isinstance(cgid, int):
+                    continue
+
+                self.state.community_goals[cgid] = {
+                    "CGID": cgid,
+                    "Title": goal.get("Title"),
+                    "SystemName": goal.get("SystemName"),
+                    "MarketName": goal.get("MarketName"),
+                    "Expiry": goal.get("Expiry"),
+                    "IsComplete": goal.get("IsComplete"),
+                    "TierReached": goal.get("TierReached"),
+                    "TopTierName": (goal.get("TopTier") or {}).get("Name"),
+                    "PlayerContribution": goal.get("PlayerContribution"),
+                    "NumContributors": goal.get("NumContributors"),
+                    "PlayerPercentileBand": goal.get("PlayerPercentileBand"),
+                }
+
+                # track CG the player is participating in
+                if goal.get("PlayerContribution"):
+                    self.state.last_cg_joined = cgid
+
+            msgs.append("Community Goal updated")
+
         elif name == "ScanOrganic":
             # Journal Manual: ScanType Log/Sample/Analyse + Genus + Species + Body (ID)
             scan_type = (event.get("ScanType") or "").strip()
@@ -778,7 +898,7 @@ class EventEngine:
                     pass
 
             # Keying by (BodyID, Genus, Species) avoids duplicate rows when Variant is missing/inconsistent.
-            key = f"{body_id}|{genus}|{species}"
+            key = f"{body_id}|{genus}|{species}|{variant}"
             rec = self.state.exo.get(key, {})
             if not isinstance(rec, dict):
                 rec = {}
@@ -905,6 +1025,32 @@ class EventEngine:
 
             rec["Samples"] = progress
             rec["Complete"] = (progress >= 3)
+
+            # ---- CCR distance reached (announce once) ----
+            try:
+                req = rec.get("CCRRequiredM")
+                remaining = rec.get("CCRRemainingM")
+
+                if (
+                    isinstance(req, int)
+                    and isinstance(remaining, int)
+                    and remaining == 0
+                    and progress >= 2
+                    and not rec.get("CCRAnnounced", False)
+                ):
+                    msgs.append(f"CCR distance reached for {genus}")
+                    rec["CCRAnnounced"] = True
+            except Exception:
+                pass
+
+            # ---- 3/3 completion (announce once) ----
+            try:
+                if rec["Complete"] and not rec.get("CompletionAnnounced", False):
+                    msgs.append(f"Exobiology complete: {genus}")
+                    rec["CompletionAnnounced"] = True
+            except Exception:
+                pass
+
             if rec["Complete"]:
                 rec["CCRDistanceM"] = None
                 rec["CCRRemainingM"] = None
@@ -1024,20 +1170,6 @@ class EventEngine:
             )
             self.state.exo[codex_key] = rec
 
-        elif name == "SellOrganicData":
-            # Session ledger: sum Value + Bonus for all items sold
-            total = 0
-            for item in (event.get("BioData") or []):
-                v = item.get("Value", 0)
-                b = item.get("Bonus", 0)
-                if isinstance(v, int):
-                    total += v
-                if isinstance(b, int):
-                    total += b
-            if total > 0:
-                self.state.session_exo_earnings += total
-                msgs.append(f"Exobiology sold: {total:,} cr")
-
         # Dispatch order matters slightly: inventory first, then exploration/exobio, then PP, then misc.
         handled = False
         for fn in (
@@ -1055,6 +1187,20 @@ class EventEngine:
                 log.exception("Handler error for event=%s in %s", name, getattr(fn, "__module__", "handler"))
                 handled = True
                 break
+
+        # ---- DEBUG TRACE: Event end snapshot ----
+        try:
+            log.debug(
+                "EVENT END: %s | bodies=%d exo=%d signals=%d combat=%d msgs=%d",
+                name,
+                len(self.state.bodies),
+                len(self.state.exo),
+                len(self.state.system_signals),
+                len(self.state.combat_contacts),
+                len(msgs),
+            )
+        except Exception:
+            pass
 
         return self.state, msgs
 

@@ -10,3 +10,5 @@ project_instructions.txt
 settings.json
 .aider*
 *.yml
+data/
+*.db

@@ -24,6 +24,9 @@ class GameState:
     system_powerplay_state: Optional[str] = None
     system_powers: List[str] = field(default_factory=list)
     system_powerplay_conflict_progress: Dict[str, float] = field(default_factory=dict)
+    system_powerplay_control_progress: Optional[float] = None
+    system_powerplay_reinforcement: Optional[int] = None
+    system_powerplay_undermining: Optional[int] = None
     pp_enemy_alerts: List[str] = field(default_factory=list)
     current_contact_alert: str = ""
     combat_contacts: Dict[str, Dict[str, Any]] = field(default_factory=dict)
@@ -42,6 +45,7 @@ class GameState:
     geo_signals: Dict[str, int] = field(default_factory=dict)          # BodyName -> geological count
     saa_signals: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
     non_body_count: Optional[int] = None                               # FSSDiscoveryScan.NonBodyCount
+    fss_complete: bool = False
     system_signals: List[Dict[str, Any]] = field(default_factory=list) # FSSSignalDiscovered entries
     external_pois: List[Dict[str, Any]] = field(default_factory=list)  # advisory (local file), per-system
     last_event: Optional[str] = None
@@ -73,6 +77,10 @@ class GameState:
     session_voucher_earnings: int = 0
     community_goals: Dict[int, Dict[str, Any]] = field(default_factory=dict)
     last_cg_joined: Optional[int] = None
+
+    # Bounty session ledgers
+    session_bounties: int = 0
+    session_kills: int = 0
 
     # Misc targeting/combat helpers (safe defaults)
     last_target_ship: Optional[str] = None
