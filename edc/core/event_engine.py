@@ -205,16 +205,13 @@ class EventEngine:
                 self.state.system_powerplay_state = pps
 
             cprog = event.get("PowerplayStateControlProgress")
-            if cprog is not None:
-                self.state.system_powerplay_control_progress = cprog
+            self.state.system_powerplay_control_progress = cprog if cprog is not None else None
 
             rein = event.get("PowerplayStateReinforcement")
-            if rein is not None:
-                self.state.system_powerplay_reinforcement = rein
+            self.state.system_powerplay_reinforcement = rein if rein is not None else None
 
             und = event.get("PowerplayStateUndermining")
-            if und is not None:
-                self.state.system_powerplay_undermining = und
+            self.state.system_powerplay_undermining = und if und is not None else None
 
             # Only update powers if event actually includes them
             pw = event.get("Powers")
