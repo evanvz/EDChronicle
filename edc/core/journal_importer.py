@@ -175,12 +175,22 @@ class JournalImporter:
     ) -> None:
         visit = self.system_visits.get(system_address)
         if visit is None:
+            existing = self.repo.get_system_details(system_address)
+            existing_first_visit = None
+            existing_last_visit = None
+            existing_visit_count = 0
+
+            if existing is not None:
+                existing_first_visit = existing["first_visit"]
+                existing_last_visit = existing["last_visit"]
+                existing_visit_count = existing["visit_count"] or 0
+
             visit = SystemVisit(
                 system_address=system_address,
                 system_name=system_name,
-                first_visit=timestamp,
-                last_visit=timestamp,
-                visit_count=0,
+                first_visit=existing_first_visit or timestamp,
+                last_visit=existing_last_visit or timestamp,
+                visit_count=existing_visit_count,
             )
             self.system_visits[system_address] = visit
 
@@ -188,9 +198,10 @@ class JournalImporter:
             visit.system_name = system_name
 
         if timestamp:
-            if not visit.first_visit:
+            if not visit.first_visit or timestamp < visit.first_visit:
                 visit.first_visit = timestamp
-            visit.last_visit = timestamp
+            if not visit.last_visit or timestamp > visit.last_visit:
+                visit.last_visit = timestamp
 
         if increment_visit:
             visit.visit_count += 1

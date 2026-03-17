@@ -193,6 +193,18 @@ class Repository:
         ).fetchone()
         return row is not None
 
+    def get_system_details(self, system_address: int):
+        return self.db.execute(
+            """
+            SELECT
+                first_visit,
+                last_visit,
+                visit_count
+            FROM systems
+            WHERE system_address = ?
+            """,
+            (system_address,),
+        ).fetchone()
 
     def get_system(self, system_address: int):
         return self.db.execute(
