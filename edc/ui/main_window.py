@@ -40,9 +40,37 @@ from edc.core.powerplay_activities import PowerPlayActivityTable
 from edc.ui import formatting as fmt
 from typing import Any, Dict, List, Optional
 
+from persistence.database import Database
+from persistence.schema import SCHEMA_SQL
+from persistence.repository import Repository
+
 log = logging.getLogger("edc.ui.main")
 
 class MainWindow(QMainWindow):
+
+    def refresh_from_state(self):
+        self._refresh_system_card()
+        self._refresh_exploration()
+        self._refresh_powerplay()
+
+    def start_auto_watch(self):
+        self._auto_start_if_configured()
+
+    def load_last_system_data(self):
+        row = self.repo.get_most_recent_system()
+        if row is None:
+            return
+
+        system_address = row["system_address"]
+        if not isinstance(system_address, int):
+            return
+
+        self.state.system_address = system_address
+        self.state.system = row["system_name"]
+        self.state.system_body_count = row["body_count"]
+        self.state.fss_complete = bool(row["fss_complete"])
+
+        self.load_current_system_data()
 
     def resizeEvent(self, event):
         try:
@@ -81,7 +109,7 @@ class MainWindow(QMainWindow):
 
         super().resizeEvent(event)
 
-    def __init__(self, cfg_store, cfg):
+    def __init__(self, cfg_store, cfg, auto_start: bool = True):
         super().__init__()
         self.cfg_store = cfg_store
         self.cfg = cfg
@@ -94,6 +122,12 @@ class MainWindow(QMainWindow):
         # Canonical paths: app_dir for shipped assets, settings_dir for writable JSON/caches.
         app_dir = Path(getattr(self.cfg_store, "app_dir", Path.cwd()))
         settings_base = Path(getattr(self.cfg_store, "settings_dir", app_dir / "settings"))
+
+        data_dir = app_dir / "data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        self.db = Database(data_dir / "edhelper.db")
+        self.db.executescript(SCHEMA_SQL)
+        self.repo = Repository(self.db)
 
         # Load value tables from the canonical app_dir only (no Path.cwd fallbacks).
         self.planet_values = PlanetValueTable.load_from_paths(settings_base / "planet_values.json")
@@ -591,7 +625,8 @@ class MainWindow(QMainWindow):
         self.sidebar.currentRowChanged.connect(self.stack.setCurrentIndex)
         self.sidebar.setCurrentRow(0)
         self._refresh_hud()
-        self._auto_start_if_configured()
+        if auto_start:
+            self._auto_start_if_configured()
 
     def load_current_system_data(self):
         system_address = getattr(self.state, "system_address", None)
@@ -654,9 +689,10 @@ class MainWindow(QMainWindow):
             body_name = row["body_name"]
             genus = row["genus"]
             species = row["species"]
+            variant = row["variant"]
             samples = int(row["samples"] or 0)
 
-            if not body_name or not genus or not species:
+            if not body_name or not genus or not species or not variant:
                 continue
 
             body = self.state.bodies.get(body_name)
@@ -667,11 +703,12 @@ class MainWindow(QMainWindow):
             if not isinstance(body_id, int):
                 continue
 
-            key = f"{body_id}|{genus}|{species}"
+            key = f"{body_id}|{genus}|{species}|{variant}"
             self.state.exo[key] = {
                 "BodyID": body_id,
                 "Genus": genus,
                 "Species": species,
+                "Variant": variant,
                 "Samples": samples,
                 "Complete": samples >= 3,
                 "LastScanType": "DB",
@@ -2200,6 +2237,7 @@ class MainWindow(QMainWindow):
             pot_v = rec.get("PotentialValue")
             pot_txt = f"{pot_v:,} cr" if isinstance(pot_v, int) else ""
             base_v = rec.get("BaseValue")
+
             # Journal does not provide a numeric base value for ScanOrganic; derive from exo_values.json.
             if not isinstance(base_v, int):
                 nm = rec.get("Variant") or rec.get("Species") or rec.get("CodexName") or ""
@@ -2291,7 +2329,6 @@ class MainWindow(QMainWindow):
                     if (isinstance(body_id, int) and (body_id, gk) in real_body_genus_id) or ((_norm_text(body), gk) in real_body_genus_name):
                         continue
                     pot = genus_max.get(gk)
-                    pot_txt = f"{pot:,} cr" if isinstance(pot, int) and pot > 0 else ""
                     sp = ""
                     vv = ""
                     try:
@@ -2305,6 +2342,7 @@ class MainWindow(QMainWindow):
                     except Exception:
                         sp = ""
                         vv = ""
+                    pot_txt = "" if sp or vv else (f"{pot:,} cr" if isinstance(pot, int) and pot > 0 else "")
                     try:
                         sp = str(sp or "").strip()
                     except Exception:
@@ -2444,7 +2482,7 @@ class MainWindow(QMainWindow):
                 _samples, _status, body_txt, genus, species, var_txt, pot_txt, base_txt, prog_txt, status_txt = row
                 ccr_txt = ""
             else:
-                _samples, _status, body_txt, genus, species, var_txt, pot_txt, base_txt, prog_txt, ccr_txt, status_txt = row[:11]
+                _samples, _status, body_txt, genus, species, var_txt, pot_txt, base_txt, prog_txt, ccr_txt, status_txt = row
 
             self.exo_table.setItem(r, 0, QTableWidgetItem(str(body_txt)))
             self.exo_table.setItem(r, 1, QTableWidgetItem(str(genus)))
@@ -2457,25 +2495,21 @@ class MainWindow(QMainWindow):
 
             # CCR column (dist/required)
             ccr_item = QTableWidgetItem(str(ccr_txt))
-            # Highlight CCR cell green when required distance reached
-            try:
-                req = rec.get("CCRRequiredM")
-                dist = rec.get("CCRDistanceM")
-
-                if (
-                    isinstance(req, int)
-                    and isinstance(dist, int)
-                    and req > 0
-                    and dist >= req
-                ):
-                    ccr_item.setBackground(QColor(0, 120, 0))  # dark green
-                    ccr_item.setForeground(QColor(255, 255, 255))
-            except Exception:
-                pass
 
             self.exo_table.setItem(r, 7, ccr_item)
-
             self.exo_table.setItem(r, 8, QTableWidgetItem(str(status_txt)))
+
+            # Highlight the full row for active in-progress scans:
+            # samples > 0 and not yet COMPLETE.
+            try:
+                if isinstance(_samples, int) and _samples > 0 and str(_status).upper() != "COMPLETE":
+                    for c in range(self.exo_table.columnCount()):
+                        item = self.exo_table.item(r, c)
+                        if item is not None:
+                            item.setBackground(QColor(60, 90, 140))
+                            item.setForeground(QColor(255, 255, 255))
+            except Exception:
+                pass
 
         if has_bio_targets:
             self.exo_action.setText(
@@ -2581,18 +2615,25 @@ class MainWindow(QMainWindow):
 
         scanned = len(self.state.bodies)
         total = self.state.system_body_count
+        fss_complete = bool(getattr(self.state, "fss_complete", False))
         header_bits = []
         if isinstance(total, int) and total > 0:
-            remaining = max(0, total - scanned)
-            header_bits.append(f"Bodies resolved: {scanned}/{total} (unknown remaining: {remaining})")
+            if fss_complete:
+                header_bits.append(
+                    f"Bodies discovered: {total}/{total} • detailed records loaded: {scanned}"
+                )
+            else:
+                remaining = max(0, total - scanned)
+                header_bits.append(
+                    f"Bodies resolved: {scanned}/{total} (unknown remaining: {remaining})"
+                )
         else:
             header_bits.append(f"Bodies resolved: {scanned} (honk for total count)")
-        if not self.planet_values:
-            header_bits.append("WARNING: planet_values.json not loaded")
-        header_bits.append(f"Showing bodies worth ≥ {fmt.credits(min_value, default='?')} or with Geo signals")
+
         nb = getattr(self.state, "non_body_count", None)
-        if not getattr(self.state, "fss_complete", False) and isinstance(total, int) and total > scanned:
+        if not fss_complete and isinstance(total, int) and total > scanned:
             header_bits.append(f"Unresolved bodies: {total - scanned}")
+
         sigs = getattr(self.state, "system_signals", None) or []
         if isinstance(sigs, list) and sigs:
             header_bits.append(f"Signals discovered: {len(sigs)}")

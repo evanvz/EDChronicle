@@ -437,7 +437,8 @@ class JournalImporter:
 
         genus = _norm_text(event.get("Genus_Localised") or event.get("Genus"))
         species = _norm_text(event.get("Species_Localised") or event.get("Species"))
-        if not genus or not species:
+        variant = _norm_text(event.get("Variant_Localised") or event.get("Variant"))
+        if not genus or not species or not variant:
             return
 
         scan_type = str(event.get("ScanType") or "").strip().lower()
@@ -448,5 +449,6 @@ class JournalImporter:
             body_name=body_name,
             genus=genus,
             species=species,
+            variant=variant,
             samples=samples,
         )

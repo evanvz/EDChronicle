@@ -898,7 +898,7 @@ class EventEngine:
                     pass
 
             # Keying by (BodyID, Genus, Species) avoids duplicate rows when Variant is missing/inconsistent.
-            key = f"{body_id}|{genus}|{species}"
+            key = f"{body_id}|{genus}|{species}|{variant}"
             rec = self.state.exo.get(key, {})
             if not isinstance(rec, dict):
                 rec = {}

@@ -1,10 +1,12 @@
 import argparse
+from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication
 from pathlib import Path
 import logging
 
 from edc.config import ConfigStore, default_app_dir
 from edc.utils.log import setup_logging
+from edc.core.journal_importer import JournalImporter
 from edc.ui.main_window import MainWindow
 from qt_material import apply_stylesheet
 
@@ -34,7 +36,7 @@ def run():
 
     log = logging.getLogger("edc.app")
     log.info("Startup paths: app_dir=%s settings_dir=%s settings_path=%s",
-             str(cfg_store.app_dir), str(cfg_store.settings_dir), str(cfg_store.settings_path))
+            str(cfg_store.app_dir), str(cfg_store.settings_dir), str(cfg_store.settings_path))
 
     cfg = cfg_store.load()
 
@@ -169,6 +171,26 @@ def run():
     }
 
     """)
-    win = MainWindow(cfg_store, cfg)
+    win = MainWindow(cfg_store, cfg, auto_start=False)
+
+    try:
+        journal_dir = Path(cfg.journal_dir)
+        importer = JournalImporter(journal_dir, win.repo)
+        importer.import_all()
+    except Exception:
+        log.exception("Historical journal import failed")
+
+    try:
+        if isinstance(getattr(win.state, "system_address", None), int):
+            win.load_current_system_data()
+        else:
+            win.load_last_system_data()
+    except Exception:
+        log.exception("Historical system hydration failed")
+
     win.show()
+
+    QTimer.singleShot(0, win.refresh_from_state)
+    QTimer.singleShot(0, win.start_auto_watch)
+
     app.exec()

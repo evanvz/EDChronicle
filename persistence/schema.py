@@ -35,8 +35,9 @@ CREATE TABLE IF NOT EXISTS exobiology (
     body_name TEXT NOT NULL,
     genus TEXT NOT NULL,
     species TEXT NOT NULL,
+    variant TEXT NOT NULL,
     samples INTEGER,
-    PRIMARY KEY (system_address, body_name, genus, species)
+    PRIMARY KEY (system_address, body_name, genus, species, variant)
 );
 
 CREATE TABLE IF NOT EXISTS processed_journals (

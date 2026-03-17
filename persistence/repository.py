@@ -128,6 +128,7 @@ class Repository:
         body_name: str,
         genus: str,
         species: str,
+        variant: str,
         samples: int | None,
     ):
         self.db.execute(
@@ -137,10 +138,11 @@ class Repository:
                 body_name,
                 genus,
                 species,
+                variant,
                 samples
             )
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(system_address, body_name, genus, species) DO UPDATE SET
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(system_address, body_name, genus, species, variant) DO UPDATE SET
                 samples = excluded.samples
             """,
             (
@@ -148,6 +150,7 @@ class Repository:
                 body_name,
                 genus,
                 species,
+                variant,
                 samples,
             ),
         )
@@ -208,6 +211,26 @@ class Repository:
             (system_address,),
         ).fetchone()
 
+    def get_most_recent_system(self):
+        return self.db.execute(
+            """
+            SELECT
+                system_address,
+                system_name,
+                body_count,
+                fss_complete,
+                first_visit,
+                last_visit,
+                visit_count
+            FROM systems
+            ORDER BY
+                last_visit IS NULL,
+                last_visit DESC,
+                first_visit DESC
+            LIMIT 1
+            """
+        ).fetchone()
+
     def get_bodies(self, system_address: int):
         return self.db.execute(
             """
@@ -251,10 +274,11 @@ class Repository:
                 body_name,
                 genus,
                 species,
+                variant,
                 samples
             FROM exobiology
             WHERE system_address = ?
-            ORDER BY body_name, genus, species
+            ORDER BY body_name, genus, species, variant
             """,
             (system_address,),
         ).fetchall()
