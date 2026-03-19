@@ -879,8 +879,17 @@ class MainWindow(QMainWindow):
         name = evt.get("event", "UNKNOWN")
         self._append(f"[EVENT] {name}")
 
+        old_system_address = getattr(self.state, "system_address", None)
         state, msgs = self.engine.process(evt)
         self.state = state
+
+        incoming_system_address = evt.get("SystemAddress")
+        if name in ("Location", "FSDJump"):
+            if isinstance(incoming_system_address, int) and incoming_system_address != old_system_address:
+                self.state.system_address = incoming_system_address
+                self.load_current_system_data()
+                self._refresh_hud()
+                self._refresh_exploration()
 
         for m in msgs:
             if m == "refresh_powerplay":
@@ -2588,10 +2597,7 @@ class MainWindow(QMainWindow):
 
             # Filter: Exploration tab shows high-value bodies AND any bodies with Geological signals
             # (Geological is useful for raw-material farming, even when the body is not valuable for credits.)
-            include_value = isinstance(est, int) and est >= min_value
-            include_geo = isinstance(geo, int) and geo > 0
-            if not include_value and not include_geo:
-                continue
+            pass
 
             tags = []
             if tf:

@@ -158,6 +158,7 @@ class EventEngine:
         if name == "Location":
             # Happens on login; great for HUD
             new_sys = event.get("StarSystem", self.state.system)
+            new_system_address = event.get("SystemAddress")
             if new_sys and new_sys != self.state.system:
                 self.state.bodies.clear()
                 self.state.exo.clear()
@@ -184,6 +185,8 @@ class EventEngine:
                 self.state.combat_contacts.clear()
                 self.state.combat_current_key = ""
             self.state.system = new_sys
+            if isinstance(new_system_address, int):
+                self.state.system_address = new_system_address
             self.state.in_hyperspace = False
             self.state.jump_star_class = None
             self.state.system_allegiance = event.get("SystemAllegiance")
@@ -230,6 +233,18 @@ class EventEngine:
             self._apply_external_intel(self.state.system, event.get("SystemAddress"))
             if self.state.system:
                 msgs.append(f"Location: {self.state.system}")
+
+        elif name == "FSDJump":
+            new_sys = event.get("StarSystem", self.state.system)
+            new_system_address = event.get("SystemAddress")
+            self.state.system = new_sys
+            if isinstance(new_system_address, int):
+                self.state.system_address = new_system_address
+            self.state.in_hyperspace = False
+            self.state.jump_star_class = None
+            self._apply_external_intel(self.state.system, new_system_address)
+            if self.state.system:
+                msgs.append(f"FSDJump: {self.state.system}")
 
         elif name == "StartJump":
             # Clear UI as soon as hyperspace starts and show destination
