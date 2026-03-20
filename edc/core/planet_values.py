@@ -93,6 +93,7 @@ class PlanetValueTable:
             _norm("Metal rich body"): _norm("Metal Rich Body"),
             _norm("Water world"): _norm("Water World"),
             _norm("Earthlike world"): _norm("Earth-Like World"),
+            _norm("Earthlike body"): _norm("Earth-Like World"),
             _norm("Ammonia world"): _norm("Ammonia World"),
             _norm("Gas giant with water based life"): _norm("Gas Giant With Water Based Life"),
             _norm("Gas giant with ammonia based life"): _norm("Gas Giant With Ammonia Based Life"),
@@ -113,6 +114,13 @@ class PlanetValueTable:
         pt = self._canonical_type(planet_class)
         if not pt:
             return None
+
+        # Earth-like / Water World / Ammonia World should use their canonical table rows.
+        # Some journal/UI paths may mark them terraformable, but the value table generally
+        # treats them as their own planet classes rather than terraformable variants.
+        if pt in ("Earth-Like World", "Water World", "Ammonia World"):
+            terraformable = False
+
         row = self._rows.get((pt, terraformable))
         if not row:
             return None

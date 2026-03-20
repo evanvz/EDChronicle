@@ -72,6 +72,18 @@ class MainWindow(QMainWindow):
 
         self.load_current_system_data()
 
+    def _planet_value_class_name(self, planet_class: str) -> str:
+        pc = (planet_class or "").strip()
+        mapping = {
+            "Earthlike body": "Earth-like World",
+            "High metal content body": "High Metal Content Planet",
+            "Rocky body": "Rocky Body",
+            "Rocky ice body": "Rocky Ice Body",
+            "Water world": "Water World",
+            "Ammonia world": "Ammonia World",
+        }
+        return mapping.get(pc, pc)
+
     def resizeEvent(self, event):
         try:
             if hasattr(self, "expl_outer_split"):
@@ -653,6 +665,18 @@ class MainWindow(QMainWindow):
             if not body_name:
                 continue
 
+            estimated_value = row["estimated_value"]
+            if not isinstance(estimated_value, int) and self.planet_values:
+                try:
+                    estimated_value = self.planet_values.estimate(
+                        planet_class=self._planet_value_class_name(row["planet_class"] or ""),
+                        terraformable=bool(row["terraformable"]),
+                        mapped=bool(row["mapped"]),
+                        first_discovered=False,
+                    )
+                except Exception:
+                    estimated_value = None
+
             rec = {
                 "BodyID": body_id if isinstance(body_id, int) else None,
                 "BodyName": body_name,
@@ -661,7 +685,7 @@ class MainWindow(QMainWindow):
                 "DistanceLS": row["distance_ls"],
                 "Landable": None if row["landable"] is None else bool(row["landable"]),
                 "Mapped": bool(row["mapped"]),
-                "EstimatedValue": row["estimated_value"],
+                "EstimatedValue": estimated_value,
             }
 
             self.state.bodies[body_name] = rec
@@ -1173,7 +1197,11 @@ class MainWindow(QMainWindow):
 
             if pledged and has_pp_context:
                 # --- Status line (HUD only) ---
-                if ctrl and ctrl == pledged:
+                if ctrl == "Unoccupied":
+                    ptxt = ", ".join([p for p in pw[:3] if isinstance(p, str)])
+                    extra = f" | Powers: {ptxt}" if ptxt else ""
+                    lines.append(f"🟡 PP: Neutral ({ctrl}) — {pp_state or 'Active'}{extra}")
+                elif ctrl and ctrl == pledged:
                     lines.append(f"🟢 PP: Friendly space ({ctrl}) — {pp_state or 'Active'}")
                 elif ctrl and ctrl != pledged:
                     lines.append(f"🔴 PP: Enemy-controlled ({ctrl}) — {pp_state or 'Active'} (caution)")
