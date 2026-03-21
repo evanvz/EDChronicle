@@ -103,10 +103,10 @@ class EventEngine:
     def _parse_shiplocker_items(self, items: Any) -> tuple[Dict[str, int], Dict[str, str]]:
         """
         Parse ShipLocker.Items into aggregated inventory:
-          counts: name(lower) -> total Count(int)
-          loc:    name(lower) -> Name_Localised (best-effort display)
+        counts: name(lower) -> total Count(int)
+        loc:    name(lower) -> Name_Localised (best-effort display)
         Notes:
-          - Items can repeat with different MissionID; we aggregate totals by Name.
+        - Items can repeat with different MissionID; we aggregate totals by Name.
         """
         counts: Dict[str, int] = {}
         loc: Dict[str, str] = {}
@@ -128,7 +128,7 @@ class EventEngine:
                 loc[key] = nl.strip()
             else:
                 loc[key] = key.replace("_", " ").title()
-        return counts, loc
+        return counts, loc           
 
     def process(self, event: Dict[str, Any]) -> Tuple[GameState, List[str]]:
         """
@@ -249,6 +249,21 @@ class EventEngine:
             self._apply_external_intel(self.state.system, new_system_address)
             if self.state.system:
                 msgs.append(f"FSDJump: {self.state.system}")
+
+        elif name == "FSDTarget":
+            target_name = event.get("Name")
+            remaining_jumps = event.get("RemainingJumpsInRoute")
+
+            self.state.route_target_system = (
+                target_name if isinstance(target_name, str) and target_name.strip() else None
+            )
+            self.state.route_remaining_jumps = (
+                remaining_jumps if isinstance(remaining_jumps, int) else None
+            )
+
+        elif name == "NavRouteClear":
+            self.state.route_target_system = None
+            self.state.route_remaining_jumps = None
 
         elif name == "StartJump":
             # Clear UI as soon as hyperspace starts and show destination
@@ -452,6 +467,15 @@ class EventEngine:
                     self.state.session_kills += 1
                 except Exception:
                     pass
+
+            try:
+                cur_key = getattr(self.state, "combat_current_key", "") or ""
+                contacts = getattr(self.state, "combat_contacts", None) or {}
+                if cur_key and cur_key in contacts and isinstance(contacts[cur_key], dict):
+                    contacts[cur_key]["Destroyed"] = True
+                    self.state.combat_contacts = contacts
+            except Exception:
+                pass
 
         elif name == "RedeemVoucher":
             if event.get("Type") == "bounty":

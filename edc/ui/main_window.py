@@ -188,13 +188,24 @@ class MainWindow(QMainWindow):
         # Session tracker panel
         self.session_panel = QLabel()
         self.session_panel.setText("Session\nKills: 0\nBounties: 0 cr")
-        self.session_panel.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
+        self.session_panel.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         self.session_panel.setStyleSheet("""
             color: #FF8C00;
             font-weight: bold;
-            padding-right: 10px;
+            padding-left: 10px;
         """)
 
+        # Route tracker panel
+        self.route_panel = QLabel()
+        self.route_panel.setText("Route\nNext: -\nJumps: -")
+        self.route_panel.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        self.route_panel.setStyleSheet("""
+            color: #87CEFA;
+            font-weight: bold;
+            padding-left: 10px;
+        """)
+
+        header_layout.addWidget(self.route_panel)
         header_layout.addWidget(self.session_panel)
 
         layout.addLayout(header_layout)
@@ -299,8 +310,19 @@ class MainWindow(QMainWindow):
         # PowerPlay tab widgets
         self.pp_summary = QLabel("")
         self.pp_summary.setWordWrap(True)
+
+        self.pp_conflict_banner = QLabel("")
+        self.pp_conflict_banner.setWordWrap(True)
+        self.pp_conflict_banner.setTextFormat(Qt.TextFormat.RichText)
+        self.pp_conflict_banner.setVisible(False)
+        self.pp_conflict_banner.setAlignment(Qt.AlignmentFlag.AlignTop)
+
         self.pp_actions = QLabel("")
         self.pp_actions.setWordWrap(True)
+        self.pp_actions.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+
+        self.pp_progress_label = QLabel("Conflict progress (if present)")
+        self.pp_progress_label.setVisible(False)
 
         self.pp_progress = QTableWidget()
         self.pp_progress.setColumnCount(2)
@@ -312,6 +334,7 @@ class MainWindow(QMainWindow):
         self.pp_progress.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.pp_progress.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.pp_progress.setMinimumHeight(180)
+        self.pp_progress.setVisible(False)
 
         # Combat (stub)
         self.combat_hint = QLabel("Scanned contacts will appear here once you fully scan a ship (ScanStage ≥ 3).")
@@ -483,11 +506,16 @@ class MainWindow(QMainWindow):
         # PowerPlay tab
         tab_pp = QWidget()
         pp = QVBoxLayout(tab_pp)
+        pp.setSpacing(6)
+        pp.setContentsMargins(6, 6, 6, 6)
+        pp.setAlignment(Qt.AlignmentFlag.AlignTop)
         pp.addWidget(QLabel("PowerPlay"))
         pp.addWidget(self.pp_summary)
+        pp.addWidget(self.pp_conflict_banner)
         pp.addWidget(self.pp_actions)
-        pp.addWidget(QLabel("Conflict progress (if present)"))
-        pp.addWidget(self.pp_progress, 1)
+        pp.addWidget(self.pp_progress_label)
+        pp.addWidget(self.pp_progress)
+        pp.addStretch(1)
         self.stack.addWidget(tab_pp)
         self.sidebar.addItem("PowerPlay")
 
@@ -652,6 +680,9 @@ class MainWindow(QMainWindow):
             self.state.system_body_count = row["body_count"]
             self.state.fss_complete = bool(row["fss_complete"])
 
+        existing_resolved_ids = set(getattr(self.state, "resolved_body_ids", set()) or set())
+
+        loaded_body_count = 0
         self.state.bodies.clear()
         self.state.body_id_to_name.clear()
         self.state.resolved_body_ids.clear()
@@ -694,6 +725,10 @@ class MainWindow(QMainWindow):
             if isinstance(body_id, int):
                 self.state.body_id_to_name[body_id] = body_name
                 self.state.resolved_body_ids.add(body_id)
+                loaded_body_count += 1
+
+        if loaded_body_count == 0 and existing_resolved_ids:
+            self.state.resolved_body_ids.update(existing_resolved_ids)
 
         for row in self.repo.get_body_signals(system_address):
             body_name = row["body_name"]
@@ -1028,7 +1063,78 @@ class MainWindow(QMainWindow):
             hints.append("Enemy agents likely present")
 
         return "\n".join([f"✔ {h}" for h in hints])
-    
+
+    def _build_pp_conflict_banner_html(
+        self,
+        pledged,
+        ctrl,
+        pp_state,
+        control_progress,
+        reinforcement,
+        undermining,
+        powers,
+    ) -> str:
+        ctrl_txt = fmt.text(ctrl, default="Unknown")
+        state_txt = fmt.text(pp_state, default="Active")
+
+        if isinstance(control_progress, (int, float)):
+            progress_txt = f"{control_progress * 100:.1f}%"
+        else:
+            progress_txt = "—"
+
+        reinforce_txt = f"{reinforcement:,}" if isinstance(reinforcement, int) else "—"
+        undermine_txt = f"{undermining:,}" if isinstance(undermining, int) else "—"
+
+        other_powers = []
+        if isinstance(powers, list):
+            for p in powers:
+                if isinstance(p, str) and p and p != ctrl:
+                    other_powers.append(p)
+
+        enemy_lines = []
+        pledged_txt = fmt.text(pledged, default="")
+        for p in other_powers[:5]:
+            if pledged_txt and p == pledged_txt:
+                enemy_lines.append(
+                    f'<span style="color:#7CFC98; font-weight:700;">{p} ★</span>'
+                )
+            else:
+                enemy_lines.append(p)
+
+        enemy_txt = "<br>".join(enemy_lines) if enemy_lines else "—"
+
+        return f"""
+
+<div style="
+    background-color:#1f1f1f;
+    border:1px solid #333333;
+    border-radius:8px;
+    padding:10px 12px;
+    margin-top:4px;
+    margin-bottom:4px;">
+<table width="100%" cellspacing="0" cellpadding="0">
+    <tr>
+    <td width="33%" valign="top">
+        <div style="color:#ff7043; font-size:24px; font-weight:700;">{undermine_txt}</div>
+        <div style="color:#ff7043; font-size:12px; font-weight:700;">UNDERMINING</div>
+        <div style="color:#ffb199; font-size:12px; margin-top:6px;">{enemy_txt}</div>
+    </td>
+    <td width="34%" valign="top" align="center">
+        <div style="color:#bdbdbd; font-size:11px; font-weight:700;">POWERPLAY</div>
+        <div style="color:#ff9f43; font-size:20px; font-weight:700; margin-top:2px;">{ctrl_txt}</div>
+        <div style="color:#64b5f6; font-size:16px; font-weight:700; margin-top:2px;">{state_txt}</div>
+        <div style="color:#ff7043; font-size:15px; font-weight:700; margin-top:2px;">{progress_txt}</div>
+    </td>
+    <td width="33%" valign="top" align="right">
+        <div style="color:#64b5f6; font-size:24px; font-weight:700;">{reinforce_txt}</div>
+        <div style="color:#64b5f6; font-size:12px; font-weight:700;">REINFORCEMENT</div>
+        <div style="color:#d0e6ff; font-size:12px; margin-top:6px;">{ctrl_txt}</div>
+    </td>
+    </tr>
+</table>
+</div>
+"""
+
     def _format_poi_line(self, poi: Dict[str, Any]) -> str:
         """One-line, low-noise POI formatting for HUD."""
         try:
@@ -1187,6 +1293,22 @@ class MainWindow(QMainWindow):
                 "Session\n"
                 f"Kills: {kills}\n"
                 f"Bounties: {bounty_txt}"
+            )
+        except Exception:
+            pass
+
+        # ---- Update route tracker ----
+        try:
+            route_target = getattr(self.state, "route_target_system", None)
+            route_jumps = getattr(self.state, "route_remaining_jumps", None)
+
+            target_txt = route_target if isinstance(route_target, str) and route_target.strip() else "-"
+            jumps_txt = str(route_jumps) if isinstance(route_jumps, int) else "-"
+
+            self.route_panel.setText(
+                "Route\n"
+                f"Next: {target_txt}\n"
+                f"Jumps: {jumps_txt}"
             )
         except Exception:
             pass
@@ -1902,6 +2024,9 @@ class MainWindow(QMainWindow):
             selected_row = None
             for r, (k, rec) in enumerate(rows):
                 pilot = rec.get("Pilot") or ""
+                destroyed = bool(rec.get("Destroyed"))
+                if destroyed and pilot:
+                    pilot = f"{pilot} [DESTROYED]"
                 rank = rec.get("Rank") or ""
                 ship = rec.get("Ship") or ""
                 faction = rec.get("Faction") or ""
@@ -1938,15 +2063,22 @@ class MainWindow(QMainWindow):
                 )
 
                 highlight = None
-                if is_pp_enemy:
+                foreground = None
+                if destroyed:
+                    highlight = QColor(90, 30, 30)   # muted dark red
+                    foreground = QColor(255, 220, 220)
+                elif is_pp_enemy:
                     highlight = QColor(170, 0, 170)  # purple
+                    foreground = QColor(255, 255, 255)
                 elif is_high_bounty:
                     highlight = QColor(200, 160, 0)  # gold
+                    foreground = QColor(255, 255, 255)
 
                 if highlight:
                     for it in items:
                         it.setBackground(highlight)
-                        it.setForeground(QColor(255, 255, 255))
+                        if foreground:
+                            it.setForeground(foreground)
 
                 for c, it in enumerate(items):
                     self.combat_table.setItem(r, c, it)
@@ -1963,8 +2095,6 @@ class MainWindow(QMainWindow):
     def _refresh_powerplay(self):
         # Everything here is journal-driven. Use getattr defensively to avoid crashes.
         pledged = getattr(self.state, "pp_power", None)
-        pr = getattr(self.state, "pp_rank", None)
-        me = getattr(self.state, "pp_merits", None)
 
         ctrl = getattr(self.state, "system_controlling_power", None)
         pp_state = getattr(self.state, "system_powerplay_state", None)
@@ -1974,10 +2104,34 @@ class MainWindow(QMainWindow):
         undermine = getattr(self.state, "system_powerplay_undermining", None)
         progress = getattr(self.state, "system_powerplay_control_progress", None)
 
-        pledged_txt = pledged or "Unknown"
+        try:
+            has_banner_data = bool(
+                ctrl
+                or pp_state
+                or isinstance(progress, (int, float))
+                or isinstance(reinforce, int)
+                or isinstance(undermine, int)
+            )
+            if has_banner_data:
+                self.pp_conflict_banner.setText(
+                    self._build_pp_conflict_banner_html(
+                        pledged=pledged,
+                        ctrl=ctrl,
+                        pp_state=pp_state,
+                        control_progress=progress,
+                        reinforcement=reinforce,
+                        undermining=undermine,
+                        powers=powers,
+                    )
+                )
+                self.pp_conflict_banner.setVisible(True)
+            else:
+                self.pp_conflict_banner.setText("")
+                self.pp_conflict_banner.setVisible(False)
+        except Exception:
+            self.pp_conflict_banner.setText("")
+            self.pp_conflict_banner.setVisible(False)
 
-        pr_txt = pr if pr is not None else "?"
-        me_txt = f"{me:,}" if isinstance(me, int) else "?"
         sysn = getattr(self.state, "system", None) or "Unknown system"
 
         friendly = bool(ctrl and ctrl == pledged)
@@ -1991,7 +2145,7 @@ class MainWindow(QMainWindow):
         else:
             rel = "🟡 Neutral"
 
-        bits = [rel, f"System: {sysn}", f"Pledged: {pledged_txt} (R{pr_txt} M{me_txt})"]
+        bits = [rel, f"System: {sysn}"]
         if ctrl:
             bits.append(f"Controlling Power: {ctrl or 'Unoccupied'}")
         if pp_state:
@@ -2008,23 +2162,7 @@ class MainWindow(QMainWindow):
             bits.append("Powers present: " + ", ".join([p for p in powers if isinstance(p, str)]))
         self.pp_summary.setText(" | ".join(bits))
 
-
-        try:
-            if self.pp_activities and pp_state:
-                cat = self._pp_state_category(pp_state, friendly)
-                acts = self.pp_activities.get_actions(cat)
-                if acts:
-                    lines = [f"• {a.action} ({a.ethos})" for a in acts[:6]]
-                    self.pp_actions.setText("\n".join(lines))
-                else:
-                    self.pp_actions.setText("")
-            else:
-                self.pp_actions.setText("")
-        except Exception:
-            self.pp_actions.setText("")
-
         # Action hint (short, generic, and honest)
-        s = str(pp_state or "").strip().lower()
         action = self._derive_pp_action(pledged, ctrl, pp_state, powers)
 
         hint = self._derive_pp_activity_hint(pledged, ctrl, pp_state, powers)
@@ -2038,6 +2176,14 @@ class MainWindow(QMainWindow):
             txt.append(hint)
 
         self.pp_actions.setText("\n".join(txt))
+
+        # Show/hide conflict progress section only when we actually have per-power conflict data.
+        has_conflict_rows = isinstance(prog, dict) and any(
+            isinstance(k, str) and isinstance(v, (int, float))
+            for k, v in prog.items()
+        )
+        self.pp_progress_label.setVisible(has_conflict_rows)
+        self.pp_progress.setVisible(has_conflict_rows)
 
         # Conflict progress table (if present)
         rows = []
@@ -2065,7 +2211,7 @@ class MainWindow(QMainWindow):
 
             # Your pledged power
             if pledged and p == pledged:
-                power_item.setText(f"{p} (YOU)")
+                power_item.setText(f"{p} (Your PP)")
 
             self.pp_progress.setItem(r, 0, power_item)
             self.pp_progress.setItem(r, 1, pct_item)
@@ -2197,7 +2343,7 @@ class MainWindow(QMainWindow):
         # Track which (body, genus) already has a real ScanOrganic record so we can still show remaining DSS genuses.
         real_body_genus_name = set()  # (BodyName, Genus)
         real_body_genus_id = set()    # (BodyID, Genus)
- 
+
         # Track which (body, genus) is already present via CODEX so we can suppress
         # CODEX duplicates when we already have a better "real" row (ScanOrganic) or DSS target row.
         # We track both BodyID and normalized BodyName keys for robustness.
@@ -2980,9 +3126,9 @@ class MainWindow(QMainWindow):
         """Normalize Frontier-style token strings for display.
 
         Examples:
-          '$SYSTEM_SECURITY_low;' -> 'Low'
-          '$economy_Extraction;'  -> 'Extraction'
-          '$government_Corporate;' -> 'Corporate'
+        '$SYSTEM_SECURITY_low;' -> 'Low'
+        '$economy_Extraction;'  -> 'Extraction'
+        '$government_Corporate;' -> 'Corporate'
         """
         s = fmt.text(value)
         if not s:
