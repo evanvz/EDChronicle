@@ -6,9 +6,9 @@ settings/*.bak
 .venv/
 venv/
 .env
-project_instructions.txt
 settings.json
 .aider*
 *.yml
 data/
-*.dbImportStars.txt
+*.db
+ImportStars.txt

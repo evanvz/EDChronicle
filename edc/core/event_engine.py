@@ -163,6 +163,7 @@ class EventEngine:
                 self.state.bodies.clear()
                 self.state.exo.clear()
                 self.state.body_id_to_name.clear()
+                self.state.resolved_body_ids.clear()
                 self.state.bio_signals.clear()
                 self.state.bio_genuses.clear()
                 self.state.geo_signals.clear()
@@ -240,6 +241,9 @@ class EventEngine:
             self.state.system = new_sys
             if isinstance(new_system_address, int):
                 self.state.system_address = new_system_address
+            entry_body_id = event.get("BodyID")
+            if isinstance(entry_body_id, int):
+                self.state.resolved_body_ids.add(entry_body_id)
             self.state.in_hyperspace = False
             self.state.jump_star_class = None
             self._apply_external_intel(self.state.system, new_system_address)
@@ -256,6 +260,7 @@ class EventEngine:
                 self.state.bodies.clear()
                 self.state.exo.clear()
                 self.state.body_id_to_name.clear()
+                self.state.resolved_body_ids.clear()
                 self.state.bio_signals.clear()
                 self.state.bio_genuses.clear()
                 self.state.geo_signals.clear()
@@ -513,6 +518,8 @@ class EventEngine:
                 if body in self.state.geo_signals:
                     rec["GeoSignals"] = self.state.geo_signals.get(body, 0)
                 self.state.bodies[body] = rec
+                if isinstance(body_id, int):
+                    self.state.resolved_body_ids.add(body_id)
 
         elif name == "SAAScanComplete":
             body = self._norm_text(event.get("BodyName"))

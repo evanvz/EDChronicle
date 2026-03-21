@@ -654,6 +654,7 @@ class MainWindow(QMainWindow):
 
         self.state.bodies.clear()
         self.state.body_id_to_name.clear()
+        self.state.resolved_body_ids.clear()
         self.state.bio_signals.clear()
         self.state.geo_signals.clear()
         self.state.exo.clear()
@@ -692,6 +693,7 @@ class MainWindow(QMainWindow):
 
             if isinstance(body_id, int):
                 self.state.body_id_to_name[body_id] = body_name
+                self.state.resolved_body_ids.add(body_id)
 
         for row in self.repo.get_body_signals(system_address):
             body_name = row["body_name"]
@@ -737,6 +739,10 @@ class MainWindow(QMainWindow):
                 "Complete": samples >= 3,
                 "LastScanType": "DB",
             }
+
+        self._refresh_exploration()
+        self._refresh_materials_shortlist()
+        self._refresh_exobiology()
 
     def _auto_start_if_configured(self):
         """
@@ -1389,10 +1395,10 @@ class MainWindow(QMainWindow):
         # Journal-derived system signals (NonBodyCount + discovered signal list)
         try:
             total = getattr(self.state, "system_body_count", None)
-            scanned = len(getattr(self.state, "bodies", {}))
+            resolved = len(getattr(self.state, "resolved_body_ids", set()) or set())
             fss_complete = getattr(self.state, "fss_complete", False)
-            if isinstance(total, int) and not fss_complete and total > scanned:
-                remaining = total - scanned
+            if isinstance(total, int) and not fss_complete and total > resolved:
+                remaining = total - resolved
                 lines.append(f"🔎 Action: {remaining} bodies unresolved (FSS)")
         except Exception:
             pass
@@ -2648,6 +2654,7 @@ class MainWindow(QMainWindow):
         rows.sort(key=lambda x: x[0], reverse=True)
 
         scanned = len(self.state.bodies)
+        resolved = len(getattr(self.state, "resolved_body_ids", set()) or set())
         total = self.state.system_body_count
         fss_complete = bool(getattr(self.state, "fss_complete", False))
         header_bits = []
@@ -2657,9 +2664,9 @@ class MainWindow(QMainWindow):
                     f"Bodies discovered: {total}/{total} • detailed records loaded: {scanned}"
                 )
             else:
-                remaining = max(0, total - scanned)
+                remaining = max(0, total - resolved)
                 header_bits.append(
-                    f"Bodies resolved: {scanned}/{total} (unknown remaining: {remaining})"
+                    f"Bodies resolved: {resolved}/{total} (detailed records loaded: {scanned}, unknown remaining: {remaining})"
                 )
         else:
             header_bits.append(f"Bodies resolved: {scanned} (honk for total count)")
@@ -2832,10 +2839,10 @@ class MainWindow(QMainWindow):
                 self.system_signals_box.setPlainText("\n".join(out_lines).strip())
             else:
                 total = getattr(self.state, "system_body_count", None)
-                scanned = len(getattr(self.state, "bodies", {}))
                 fss_complete = getattr(self.state, "fss_complete", False)
-                if isinstance(total, int) and not fss_complete and total > scanned:
-                    remaining = total - scanned
+                resolved = len(getattr(self.state, "resolved_body_ids", set()) or set())
+                if isinstance(total, int) and not fss_complete and total > resolved:
+                    remaining = total - resolved
                     self.system_signals_box.setPlainText(
                         f"{remaining} bodies unresolved. Use FSS to discover them."
                     )
