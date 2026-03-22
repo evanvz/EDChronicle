@@ -178,6 +178,16 @@ class EventEngine:
                 self.state.population = None
                 self.state.controlling_faction = None
                 self.state.factions = []
+                self.state.system_controlling_power = None
+                self.state.system_powerplay_state = None
+                self.state.system_powers = []
+                self.state.system_powerplay_conflict_progress = {}
+                self.state.system_powerplay_control_progress = None
+                self.state.system_powerplay_reinforcement = None
+                self.state.system_powerplay_undermining = None
+                self.state.pp_enemy_alerts.clear()
+                self.state.combat_contacts.clear()
+                self.state.combat_current_key = ""
 
                 try:
                     self.state.pp_enemy_alerts.clear()
@@ -201,12 +211,10 @@ class EventEngine:
 
             # Powerplay (if present in this system)
             cp = event.get("ControllingPower")
-            if cp:
-                self.state.system_controlling_power = cp
+            self.state.system_controlling_power = cp if cp else None
 
             pps = event.get("PowerplayState")
-            if pps:
-                self.state.system_powerplay_state = pps
+            self.state.system_powerplay_state = pps if pps else None
 
             cprog = event.get("PowerplayStateControlProgress")
             self.state.system_powerplay_control_progress = cprog if cprog is not None else None
@@ -219,8 +227,7 @@ class EventEngine:
 
             # Only update powers if event actually includes them
             pw = event.get("Powers")
-            if isinstance(pw, list):
-                self.state.system_powers = [p for p in pw if isinstance(p, str)]
+            self.state.system_powers = [p for p in pw if isinstance(p, str)] if isinstance(pw, list) else []
 
             # Force PowerPlay UI refresh after Location update
             msgs.append("refresh_powerplay")
@@ -246,7 +253,36 @@ class EventEngine:
                 self.state.resolved_body_ids.add(entry_body_id)
             self.state.in_hyperspace = False
             self.state.jump_star_class = None
+
+            # PowerPlay data is often present directly on FSDJump.
+            cp = event.get("ControllingPower")
+            self.state.system_controlling_power = cp if cp else None
+
+            pps = event.get("PowerplayState")
+            self.state.system_powerplay_state = pps if pps else None
+
+            cprog = event.get("PowerplayStateControlProgress")
+            self.state.system_powerplay_control_progress = cprog if cprog is not None else None
+
+            rein = event.get("PowerplayStateReinforcement")
+            self.state.system_powerplay_reinforcement = rein if rein is not None else None
+
+            und = event.get("PowerplayStateUndermining")
+            self.state.system_powerplay_undermining = und if und is not None else None
+
+            pw = event.get("Powers")
+            self.state.system_powers = [p for p in pw if isinstance(p, str)] if isinstance(pw, list) else []
+
+            prog = {}
+            for rec in (event.get("PowerplayConflictProgress") or []):
+                if isinstance(rec, dict) and isinstance(rec.get("Power"), str):
+                    cpct = rec.get("ConflictProgress")
+                    if isinstance(cpct, (int, float)):
+                        prog[rec["Power"]] = float(cpct)
+            self.state.system_powerplay_conflict_progress = prog
+
             self._apply_external_intel(self.state.system, new_system_address)
+            msgs.append("refresh_powerplay")
             if self.state.system:
                 msgs.append(f"FSDJump: {self.state.system}")
 
@@ -261,17 +297,13 @@ class EventEngine:
                 remaining_jumps if isinstance(remaining_jumps, int) else None
             )
 
-        elif name == "NavRouteClear":
-            self.state.route_target_system = None
-            self.state.route_remaining_jumps = None
-
         elif name == "StartJump":
-            # Clear UI as soon as hyperspace starts and show destination
+            # Clear live per-system state as soon as hyperspace starts and show destination.
             if event.get("JumpType") == "Hyperspace":
                 target = event.get("StarSystem")
                 star_class = event.get("StarClass")
 
-                # Clear per-system state immediately
+                # Clear per-system exploration / scan state
                 self.state.bodies.clear()
                 self.state.exo.clear()
                 self.state.body_id_to_name.clear()
@@ -284,6 +316,8 @@ class EventEngine:
                 self.state.external_pois = []
                 self.state.system_body_count = None
                 self.state.fss_complete = False
+
+                # Clear per-system info
                 self.state.system_allegiance = None
                 self.state.system_government = None
                 self.state.system_economy = None
@@ -291,6 +325,17 @@ class EventEngine:
                 self.state.population = None
                 self.state.controlling_faction = None
                 self.state.factions = []
+
+                # Clear per-system PowerPlay info
+                self.state.system_controlling_power = None
+                self.state.system_powerplay_state = None
+                self.state.system_powers = []
+                self.state.system_powerplay_conflict_progress = {}
+                self.state.system_powerplay_control_progress = None
+                self.state.system_powerplay_reinforcement = None
+                self.state.system_powerplay_undermining = None
+
+                # Clear per-system combat / alerts
                 try:
                     self.state.pp_enemy_alerts.clear()
                 except Exception:
@@ -298,23 +343,21 @@ class EventEngine:
                 self.state.combat_contacts.clear()
                 self.state.combat_current_key = ""
 
-                # Show "next target" right away
+                # Enter hyperspace transitional state
                 self.state.system = target or self.state.system
                 self.state.in_hyperspace = True
                 self.state.jump_star_class = star_class
                 self._apply_external_intel(self.state.system, None)
-                
-                # ---- Clear PowerPlay state for previous system ----
-                self.state.system_controlling_power = None
-                self.state.system_powerplay_state = None
-                self.state.system_powers = []
-                self.state.system_powerplay_conflict_progress = {}
 
-                # Force UI refresh so old PP info disappears immediately
+                # Force PP UI refresh so old PP system info disappears immediately
                 msgs.append("refresh_powerplay")
 
                 if target:
                     msgs.append(f"Jumping to: {target} ({star_class})")
+
+        elif name == "NavRouteClear":
+            self.state.route_target_system = None
+            self.state.route_remaining_jumps = None
 
         elif name == "ShipTargeted":
             # Clear current contact info when target is dropped

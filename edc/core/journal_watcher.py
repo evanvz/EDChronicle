@@ -78,7 +78,6 @@ class JournalWatcher(QObject):
         self._cleanup()
         self._current_file = path
         self._fp = path.open("r", encoding="utf-8", errors="replace")
-        self._bootstrap_newest_system(max_bytes=256 * 1024, max_events=800)
         self._fp.seek(0, 2)
         self.status.emit(f"Tailing: {path.name}")
 

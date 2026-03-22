@@ -1250,6 +1250,7 @@ class MainWindow(QMainWindow):
                     parts.append(f"Jumping to: {self.state.system}")
             else:
                 parts.append(f"System: {self.state.system}")
+
         if self.state.pp_power:
             # Keep it compact
             pr = self.state.pp_rank if self.state.pp_rank is not None else "?"
@@ -2095,8 +2096,9 @@ class MainWindow(QMainWindow):
     def _refresh_powerplay(self):
         # Everything here is journal-driven. Use getattr defensively to avoid crashes.
         pledged = getattr(self.state, "pp_power", None)
-
         ctrl = getattr(self.state, "system_controlling_power", None)
+        if ctrl in {"Stronghold", "Fortified", "Contested"}:
+            ctrl = None
         pp_state = getattr(self.state, "system_powerplay_state", None)
         powers = getattr(self.state, "system_powers", None) or []
         prog = getattr(self.state, "system_powerplay_conflict_progress", None) or {}

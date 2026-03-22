@@ -177,14 +177,8 @@ def run():
         journal_dir = Path(cfg.journal_dir)
         importer = JournalImporter(journal_dir, win.repo)
         importer.import_all()
-    except Exception:
-        log.exception("Historical journal import failed")
-
-    try:
-        if isinstance(getattr(win.state, "system_address", None), int):
-            win.load_current_system_data()
-        else:
-            win.load_last_system_data()
+        # Do not restore last known live system state on startup.
+        # Wait for fresh journal events instead.
     except Exception:
         log.exception("Historical system hydration failed")
 
