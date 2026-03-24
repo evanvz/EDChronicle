@@ -122,6 +122,39 @@ class Repository:
             ),
         )
 
+    def save_dss_genus_discovery(
+        self,
+        system_address: int,
+        body_name: str,
+        genus: str,
+    ) -> None:
+        self.db.execute(
+            """
+            INSERT INTO dss_genus_discovery (
+                system_address,
+                body_name,
+                genus
+            )
+            VALUES (?, ?, ?)
+            ON CONFLICT(system_address, body_name, genus) DO NOTHING
+            """,
+            (system_address, body_name, genus),
+        )
+
+    def get_dss_genus_discovery(self, system_address: int):
+        return self.db.execute(
+            """
+            SELECT
+                system_address,
+                body_name,
+                genus
+            FROM dss_genus_discovery
+            WHERE system_address = ?
+            ORDER BY body_name, genus
+            """,
+            (system_address,),
+        ).fetchall()
+
     def save_exobiology(
         self,
         system_address: int,

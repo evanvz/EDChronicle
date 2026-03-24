@@ -326,6 +326,24 @@ class JournalImporter:
         if not body_name:
             return
 
+        if event.get("event") == "SAASignalsFound":
+            genuses = event.get("Genuses")
+            if isinstance(genuses, list):
+                for genus_entry in genuses:
+                    if not isinstance(genus_entry, dict):
+                        continue
+                    genus = _norm_text(
+                        genus_entry.get("Genus_Localised")
+                        or genus_entry.get("Genus")
+                    )
+                    if not genus:
+                        continue
+                    self.repo.save_dss_genus_discovery(
+                        system_address=system_address,
+                        body_name=body_name,
+                        genus=genus,
+                    )
+
         body_id = event.get("BodyID")
         if isinstance(body_id, int):
             self.body_id_to_name[body_id] = body_name

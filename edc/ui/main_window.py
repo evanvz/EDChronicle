@@ -746,6 +746,23 @@ class MainWindow(QMainWindow):
                 rec["BioSignals"] = bio
                 rec["GeoSignals"] = geo
 
+        for row in self.repo.get_dss_genus_discovery(system_address):
+            body_name = row["body_name"]
+            genus = row["genus"]
+            if not body_name or not genus:
+                continue
+
+            cur = self.state.bio_genuses.get(body_name)
+            if not isinstance(cur, list):
+                cur = []
+            if genus not in cur:
+                cur.append(genus)
+            self.state.bio_genuses[body_name] = cur
+
+            rec = self.state.bodies.get(body_name)
+            if isinstance(rec, dict):
+                rec["BioGenuses"] = cur
+
         for row in self.repo.get_exobiology(system_address):
             body_name = row["body_name"]
             genus = row["genus"]
@@ -767,6 +784,7 @@ class MainWindow(QMainWindow):
             key = f"{body_id}|{genus}|{species}|{variant}"
             self.state.exo[key] = {
                 "BodyID": body_id,
+                "BodyName": body_name,
                 "Genus": genus,
                 "Species": species,
                 "Variant": variant,

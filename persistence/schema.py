@@ -40,6 +40,13 @@ CREATE TABLE IF NOT EXISTS exobiology (
     PRIMARY KEY (system_address, body_name, genus, species, variant)
 );
 
+CREATE TABLE IF NOT EXISTS dss_genus_discovery (
+    system_address INTEGER NOT NULL,
+    body_name TEXT NOT NULL,
+    genus TEXT NOT NULL,
+    PRIMARY KEY (system_address, body_name, genus)
+);
+
 CREATE TABLE IF NOT EXISTS processed_journals (
     file_name TEXT NOT NULL,
     file_size INTEGER NOT NULL,
