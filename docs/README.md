@@ -1,4 +1,4 @@
-# EDHelper
+# Elite Dangerous Little Helper
 
 EDHelper is a Python desktop companion app for Elite Dangerous focused on live journal monitoring, current commander/game-state visibility, and historical journal import into a local SQLite database.
 
