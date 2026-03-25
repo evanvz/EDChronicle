@@ -4,7 +4,6 @@ import sqlite3
 import sys
 import time
 import socket
-from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
@@ -12,10 +11,16 @@ from urllib.parse import urlencode
 from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from persistence.schema import SCHEMA_SQL
+
 EDSM_LOGS_URL = "https://www.edsm.net/api-logs-v1/get-logs"
 EDSM_BODIES_URL = "https://www.edsm.net/api-system-v1/bodies"
 
-DEFAULT_DB_PATH = Path("data") / "edhelper.db"
+DEFAULT_DB_PATH = Path("data") / "edhelper_edsm_stage.db"
 DEFAULT_CHECKPOINT = Path("data") / "edsm_sync_checkpoint.json"
 REQUEST_DELAY_SECONDS = 11.0  # stay safely under EDSM 360 req/hour limit
 HTTP_TIMEOUT_SECONDS = 120
@@ -84,6 +89,7 @@ def save_checkpoint(path: Path, payload: Dict[str, Any]) -> None:
 def db_connect(db_path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
+    conn.executescript(SCHEMA_SQL)
     return conn
 
 
@@ -97,6 +103,13 @@ def system_exists(conn: sqlite3.Connection, system_name: str) -> Optional[sqlite
         (system_name,),
     ).fetchone()
 
+def resolve_system_address(existing_row: Optional[sqlite3.Row], edsm_system_id: Any, system_name: str) -> Optional[int]:
+    if existing_row is not None and isinstance(existing_row["system_address"], int):
+        return existing_row["system_address"]
+    if isinstance(edsm_system_id, int):
+        return edsm_system_id
+    print(f"[WARN] skipping {system_name}: no stable system_address available from DB or EDSM")
+    return None
 
 def system_has_bodies(conn: sqlite3.Connection, system_address: int) -> bool:
     row = conn.execute(
@@ -104,7 +117,6 @@ def system_has_bodies(conn: sqlite3.Connection, system_address: int) -> bool:
         (system_address,),
     ).fetchone()
     return row is not None
-
 
 def upsert_system(
     conn: sqlite3.Connection,
@@ -291,7 +303,7 @@ def sync_system_bodies(conn: sqlite3.Connection, system_name: str, system_addres
             estimated_value=infer_estimated_value(body),
             distance_ls=float(distance_ls) if distance_ls is not None else None,
         )
-        count = 1
+        count += 1
 
     return count
 
@@ -322,6 +334,7 @@ def main() -> int:
     end_dt = utc_now()
 
     print(f"Syncing logs from {fmt_utc(start_dt)} to {fmt_utc(end_dt)}")
+    print(f"Using staging DB: {db_path}")
 
     imported_systems = 0
     imported_bodies = 0
@@ -363,7 +376,9 @@ def main() -> int:
                     bucket["first_visit"] = visit_date
                 if not bucket["last_visit"] or visit_date > bucket["last_visit"]:
                     bucket["last_visit"] = visit_date
-            bucket["visit_count"] = 1
+            bucket["visit_count"] += 1
+            if isinstance(system_id, int):
+                bucket["edsm_system_id"] = system_id
 
         print(f"[WINDOW] unique systems in window: {len(window_systems)}")
 
@@ -392,7 +407,17 @@ def main() -> int:
 
             try:
                 body_count = sync_system_bodies(conn, system_name, system_address)
-                imported_bodies = body_count
+                imported_bodies += body_count
+                upsert_system(
+                    conn=conn,
+                    system_address=system_address,
+                    system_name=system_name,
+                    body_count=body_count if body_count > 0 else None,
+                    fss_complete=None,
+                    first_visit=meta["first_visit"],
+                    last_visit=meta["last_visit"],
+                    visit_count=meta["visit_count"],
+                )
                 print(f"[BODIES] {system_name}: {body_count}")
             except Exception as exc:
                 print(f"[WARN] bodies fetch failed for {system_name}: {exc}")
