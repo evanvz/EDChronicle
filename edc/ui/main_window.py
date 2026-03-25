@@ -2123,7 +2123,6 @@ class MainWindow(QMainWindow):
         reinforce = getattr(self.state, "system_powerplay_reinforcement", None)
         undermine = getattr(self.state, "system_powerplay_undermining", None)
         progress = getattr(self.state, "system_powerplay_control_progress", None)
-
         try:
             has_banner_data = bool(
                 ctrl

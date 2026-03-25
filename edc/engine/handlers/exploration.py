@@ -96,7 +96,7 @@ def handle(engine, name: str | None, event: Dict[str, Any], msgs: List[str]) -> 
         engine.state.factions = event.get("Factions") if isinstance(event.get("Factions"), list) else engine.state.factions
 
         # Powerplay system fields (if journal provides them)
-        engine.state.system_controlling_power = event.get("PowerplayState") or engine.state.system_controlling_power
+        engine.state.system_controlling_power = event.get("ControllingPower") or engine.state.system_controlling_power
         engine.state.system_powerplay_state = event.get("PowerplayState") or engine.state.system_powerplay_state
         engine.state.system_powers = event.get("Powers") if isinstance(event.get("Powers"), list) else engine.state.system_powers
         engine.state.system_powerplay_conflict_progress = (
