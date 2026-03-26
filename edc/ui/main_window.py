@@ -44,6 +44,8 @@ from persistence.database import Database
 from persistence.schema import SCHEMA_SQL
 from persistence.repository import Repository
 
+from edc.core.session_ledger import SessionLedger
+
 log = logging.getLogger("edc.ui.main")
 
 class MainWindow(QMainWindow):
@@ -71,6 +73,18 @@ class MainWindow(QMainWindow):
         self.state.fss_complete = bool(row["fss_complete"])
 
         self.load_current_system_data()
+
+    def _save_session_ledger(self):
+        try:
+            self.session_ledger.save(
+                {
+                    "combat_unsold_total": int(getattr(self.state, "combat_unsold_total", 0) or 0),
+                    "exploration_unsold_total_est": int(getattr(self.state, "exploration_unsold_total_est", 0) or 0),
+                    "exobiology_unsold_total_est": int(getattr(self.state, "exobiology_unsold_total_est", 0) or 0),
+                }
+            )
+        except Exception:
+            pass
 
     def _planet_value_class_name(self, planet_class: str) -> str:
         pc = (planet_class or "").strip()
@@ -181,6 +195,12 @@ class MainWindow(QMainWindow):
         self.db = Database(data_dir / "edhelper.db")
         self.db.executescript(SCHEMA_SQL)
         self.repo = Repository(self.db)
+
+        self.session_ledger = SessionLedger(data_dir / "session_ledger.json")
+        ledger = self.session_ledger.load()
+        self.state.combat_unsold_total = int(ledger.get("combat_unsold_total", 0) or 0)
+        self.state.exploration_unsold_total_est = int(ledger.get("exploration_unsold_total_est", 0) or 0)
+        self.state.exobiology_unsold_total_est = int(ledger.get("exobiology_unsold_total_est", 0) or 0)
 
         # Load value tables from the canonical app_dir only (no Path.cwd fallbacks).
         self.planet_values = PlanetValueTable.load_from_paths(settings_base / "planet_values.json")
@@ -1012,6 +1032,17 @@ class MainWindow(QMainWindow):
         state, msgs = self.engine.process(evt)
         self.state = state
 
+        if name in (
+            "Bounty",
+            "RedeemVoucher",
+            "Scan",
+            "MultiSellExplorationData",
+            "SellExplorationData",
+            "ScanOrganic",
+            "SellOrganicData",
+        ):
+            self._save_session_ledger()
+
         incoming_system_address = evt.get("SystemAddress")
         if name in ("Location", "FSDJump"):
             if isinstance(incoming_system_address, int) and incoming_system_address != old_system_address:
@@ -1350,14 +1381,24 @@ class MainWindow(QMainWindow):
         # ---- Update session tracker ----
         try:
             kills = getattr(self.state, "session_kills", 0)
-            bounty_total = getattr(self.state, "session_bounties", 0)
+            combat_session = int(getattr(self.state, "combat_session_collected", 0) or 0)
+            combat_unsold = int(getattr(self.state, "combat_unsold_total", 0) or 0)
 
-            bounty_txt = f"{bounty_total:,} cr"
+            exploration_session = int(getattr(self.state, "exploration_session_collected_est", 0) or 0)
+            exploration_unsold = int(getattr(self.state, "exploration_unsold_total_est", 0) or 0)
+
+            exo_session = int(getattr(self.state, "exobiology_session_collected_est", 0) or 0)
+            exo_unsold = int(getattr(self.state, "exobiology_unsold_total_est", 0) or 0)
 
             self.session_panel.setText(
                 "Session\n"
                 f"Kills: {kills}\n"
-                f"Bounties: {bounty_txt}"
+                f"Combat: {combat_session:,} cr\n"
+                f"Combat Unsold: {combat_unsold:,} cr\n"
+                f"Exploration: {exploration_session:,} cr\n"
+                f"Expl. Unsold: {exploration_unsold:,} cr\n"
+                f"Exobio: {exo_session:,} cr\n"
+                f"Exo Unsold: {exo_unsold:,} cr"
             )
         except Exception:
             pass

@@ -510,6 +510,12 @@ class EventEngine:
         elif name == "Bounty":
             reward = event.get("TotalReward")
             if isinstance(reward, int):
+                ts = event.get("timestamp") or ""
+                reward_key = f"{ts}|{reward}|{self.state.combat_current_key}"
+                if reward_key not in self.state.counted_combat_keys:
+                    self.state.counted_combat_keys.add(reward_key)
+                    self.state.combat_session_collected += reward
+                    self.state.combat_unsold_total += reward
                 try:
                     self.state.session_bounties += reward
                     self.state.session_kills += 1
@@ -530,6 +536,7 @@ class EventEngine:
                 try:
                     self.state.session_bounties = 0
                     self.state.session_kills = 0
+                    self.state.combat_unsold_total = 0
                 except Exception:
                     pass
 
@@ -592,6 +599,16 @@ class EventEngine:
                 self.state.bodies[body] = rec
                 if isinstance(body_id, int):
                     self.state.resolved_body_ids.add(body_id)
+
+                if isinstance(est, int) and est > 0:
+                    body_key = f"{self.state.system_address}|{body}"
+                    if body_key not in self.state.counted_exploration_keys:
+                        self.state.counted_exploration_keys.add(body_key)
+                        self.state.exploration_session_collected_est += est
+                        self.state.exploration_unsold_total_est += est
+
+        elif name in ("MultiSellExplorationData", "SellExplorationData"):
+            self.state.exploration_unsold_total_est = 0
 
         elif name == "SAAScanComplete":
             body = self._norm_text(event.get("BodyName"))
@@ -1117,6 +1134,16 @@ class EventEngine:
             rec["Samples"] = progress
             rec["Complete"] = (progress >= 3)
 
+            exo_key = f"{body_id}|{genus}|{species}|{variant}"
+            if rec["Complete"] and exo_key not in self.state.counted_exobiology_keys:
+                self.state.counted_exobiology_keys.add(exo_key)
+                est_val = rec.get("BaseValue")
+                if not isinstance(est_val, int):
+                    est_val = rec.get("PotentialValue")
+                if isinstance(est_val, int) and est_val > 0:
+                    self.state.exobiology_session_collected_est += est_val
+                    self.state.exobiology_unsold_total_est += est_val
+
             # ---- CCR distance reached (announce once) ----
             try:
                 req = rec.get("CCRRequiredM")
@@ -1147,6 +1174,9 @@ class EventEngine:
                 rec["CCRRemainingM"] = None
 
             self.state.exo[key] = rec
+
+        elif name == "SellOrganicData":
+            self.state.exobiology_unsold_total_est = 0
 
         elif name == "CodexEntry":
             # CodexEntry is NOT sampling progress, but it's a useful early hint.

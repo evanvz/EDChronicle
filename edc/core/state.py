@@ -119,3 +119,18 @@ class GameState:
     # Convenience: internal name -> category (raw/manufactured/encoded/odyssey)
     # Used as a fallback when an item has no explicit category.
     item_category: Dict[str, str] = field(default_factory=dict)
+
+    # Session collected this run only (resets on app start)
+    combat_session_collected: int = 0
+    exploration_session_collected_est: int = 0
+    exobiology_session_collected_est: int = 0
+
+    # Persistent unsold totals (loaded from JSON on startup)
+    combat_unsold_total: int = 0
+    exploration_unsold_total_est: int = 0
+    exobiology_unsold_total_est: int = 0
+
+    # Session dedupe sets (do not persist initially)
+    counted_combat_keys: Set[str] = field(default_factory=set)
+    counted_exploration_keys: Set[str] = field(default_factory=set)
+    counted_exobiology_keys: Set[str] = field(default_factory=set)
