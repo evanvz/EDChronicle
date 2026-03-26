@@ -228,11 +228,12 @@ class MainWindow(QMainWindow):
 
         self.system_card = QTextEdit()
         self.system_card.setReadOnly(True)
-        self.system_card.setMinimumHeight(220)
+        self.system_card.setMinimumHeight(120)
+        self.system_card.setMaximumHeight(150)
 
         self.factions_table = QTableWidget()
-        self.factions_table.setColumnCount(4)
-        self.factions_table.setHorizontalHeaderLabels(["Faction", "Influence", "State", "Rep"])
+        self.factions_table.setColumnCount(6)
+        self.factions_table.setHorizontalHeaderLabels(["Faction", "Government", "Allegiance", "Active", "Influence", "Rep"])
         self.factions_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.factions_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.factions_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
@@ -243,7 +244,9 @@ class MainWindow(QMainWindow):
         self.factions_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.factions_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         self.factions_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        self.factions_table.setMinimumHeight(180)
+        self.factions_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        self.factions_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+        self.factions_table.setMinimumHeight(420)
 
         self.exploration_table = QTableWidget()
         self.exploration_table.setColumnCount(8)
@@ -437,7 +440,8 @@ class MainWindow(QMainWindow):
         split.addWidget(top_panel)
         split.addWidget(bottom_panel)
         split.setStretchFactor(0, 1)
-        split.setStretchFactor(1, 2)
+        split.setStretchFactor(1, 7)
+        split.setSizes([140, 520])
         ov.addWidget(split)
 
         self.stack.addWidget(tab_overview)
@@ -1712,21 +1716,26 @@ class MainWindow(QMainWindow):
 
             final_lines = []
 
+            # Keep Overview compact: only show top-priority action items here.
+            max_action_lines = 5
+            max_intel_lines = 2
+            max_poi_lines = 2
+
             if contact_lines:
                 final_lines.append('<span style="color:#FF8C00; font-weight:700; font-size:13px;">CONTACT</span>')
-                final_lines.extend(contact_lines)
+                final_lines.extend(contact_lines[:2])
 
             if action_lines:
                 final_lines.append('<span style="color:#FF8C00; font-weight:700; font-size:13px;">ACTIONS</span>')
-                final_lines.extend(action_lines)
+                final_lines.extend(action_lines[:max_action_lines])
 
             if intel_lines:
                 final_lines.append('<span style="color:#FF8C00; font-weight:700; font-size:13px;">INTEL</span>')
-                final_lines.extend(intel_lines)
+                final_lines.extend(intel_lines[:max_intel_lines])
 
             if poi_lines:
                 final_lines.append('<span style="color:#FF8C00; font-weight:700; font-size:13px;">POI</span>')
-                final_lines.extend(poi_lines)
+                final_lines.extend(poi_lines[:max_poi_lines])
 
             self._animate_overview_update("<br>".join(final_lines))
         except Exception:
@@ -3203,50 +3212,125 @@ class MainWindow(QMainWindow):
 
         self.system_card.setPlainText("\n".join(lines))
 
-        # Fill factions table (top 8 by influence)
+        # Fill factions table (top by influence)
         facs = []
+        controlling_name = fmt.text(self.state.controlling_faction, default="")
+
         for f in (self.state.factions or []):
             if not isinstance(f, dict):
                 continue
-            name = f.get("Name", "Unknown")
+
+            name = fmt.text(f.get("Name"), default="Unknown")
+
             infl = f.get("Influence")
             infl_val = float(infl) if isinstance(infl, (float, int)) else -1.0
             infl_txt = fmt.pct_1(infl_val, default="?") if infl_val >= 0 else "?"
 
-            state = ""
-            states = f.get("ActiveStates") or []
-            if isinstance(states, list) and states:
-                st = states[0]
-                if isinstance(st, dict):
-                    # Prefer Localised label; otherwise normalize Frontier token-ish values
-                    state = fmt.text(
+            government = fmt.text(
+                f.get("Government_Localised") or self._norm_token(f.get("Government")) or f.get("Government") or "",
+                default="",
+            )
+
+            allegiance = fmt.text(
+                f.get("Allegiance_Localised") or self._norm_token(f.get("Allegiance")) or f.get("Allegiance") or "",
+                default="",
+            )
+
+            active_txt = ""
+            active_states = f.get("ActiveStates") or []
+            if isinstance(active_states, list) and active_states:
+                vals = []
+                for st in active_states:
+                    if not isinstance(st, dict):
+                        continue
+                    val = fmt.text(
                         st.get("State_Localised") or self._norm_token(st.get("State")) or st.get("State") or "",
                         default="",
                     )
+                    if val:
+                        vals.append(val)
+                active_txt = ", ".join(vals[:2])
+            elif f.get("FactionState") and str(f.get("FactionState")).strip().lower() != "none":
+                active_txt = fmt.text(self._norm_token(f.get("FactionState")) or f.get("FactionState"), default="")
 
             rep = f.get("MyReputation")
-
-            # MyReputation is usually -1..+1; display as % if in 0..1 (or -1..1), else fallback numeric
             if isinstance(rep, (float, int)):
                 rep_f = float(rep)
                 if -1.0 <= rep_f <= 1.0:
-                    # shift -1..+1 to -100..+100 for readability
                     rep_txt = f"{(rep_f * 100):.1f}%"
                 else:
                     rep_txt = f"{rep_f:.1f}"
             else:
                 rep_txt = ""
 
-            facs.append((infl_val, str(name), infl_txt, state, rep_txt))
+            is_controller = bool(controlling_name and name == controlling_name)
+            display_name = f"{name} ★" if is_controller else name
+            facs.append((infl_val, display_name, government, allegiance, active_txt, infl_txt, rep_txt, is_controller))
 
         facs.sort(key=lambda x: x[0], reverse=True)
-        top = facs[:8]
+        top = facs[:12]
         self.factions_table.setRowCount(len(top))
-        for r, (_infl_val, name, infl_txt, state, rep_txt) in enumerate(top):
-            self.factions_table.setItem(r, 0, QTableWidgetItem(name))
-            self.factions_table.setItem(r, 1, QTableWidgetItem(infl_txt))
-            self.factions_table.setItem(r, 2, QTableWidgetItem(state))
-            self.factions_table.setItem(r, 3, QTableWidgetItem(rep_txt))
+        for r, (_infl_val, name, government, allegiance, active_txt, infl_txt, rep_txt, is_controller) in enumerate(top):
+            items = [
+                QTableWidgetItem(name),
+                QTableWidgetItem(government),
+                QTableWidgetItem(allegiance),
+                QTableWidgetItem(active_txt),
+                QTableWidgetItem(infl_txt),
+                QTableWidgetItem(rep_txt),
+            ]
+
+            # Base styling rules
+            row_bg = None
+            row_fg = None
+
+            active_l = (active_txt or "").strip().lower()
+
+            # Controlling faction highlight
+            if is_controller:
+                row_bg = QColor(35, 55, 85)   # soft elite blue
+                row_fg = QColor(255, 255, 255)
+
+            # Conflict tint overrides controller tint if important enough
+            if active_l in {"war", "civil war"}:
+                row_bg = QColor(95, 35, 35)   # muted red
+                row_fg = QColor(255, 235, 235)
+            elif active_l == "election":
+                row_bg = QColor(85, 70, 35)   # muted amber
+                row_fg = QColor(255, 245, 220)
+
+            # Rep text tint
+            try:
+                rep_val = None
+                txt = (rep_txt or "").replace("%", "").strip()
+                if txt:
+                    rep_val = float(txt)
+                if rep_val is not None:
+                    if rep_val >= 50:
+                        items[5].setForeground(QColor(140, 255, 180))
+                    elif rep_val < 0:
+                        items[5].setForeground(QColor(255, 160, 160))
+            except Exception:
+                pass
+
+            # Active state cell badge tint
+            if active_l in {"war", "civil war"}:
+                items[3].setBackground(QColor(140, 60, 60))
+                items[3].setForeground(QColor(255, 255, 255))
+            elif active_l == "election":
+                items[3].setBackground(QColor(140, 110, 50))
+                items[3].setForeground(QColor(255, 255, 255))
+
+            if row_bg is not None:
+                for it in items:
+                    # keep active-state badge cell stronger if already set
+                    if it is not items[3]:
+                        it.setBackground(row_bg)
+                    if row_fg is not None and it is not items[5]:
+                        it.setForeground(row_fg)
+
+            for c, it in enumerate(items):
+                self.factions_table.setItem(r, c, it)
 
     def _compute_action_state(self):
         """
