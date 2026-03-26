@@ -288,10 +288,14 @@ class EventEngine:
 
         elif name == "FSDTarget":
             target_name = event.get("Name")
+            target_star_class = event.get("StarClass")
             remaining_jumps = event.get("RemainingJumpsInRoute")
 
             self.state.route_target_system = (
                 target_name if isinstance(target_name, str) and target_name.strip() else None
+            )
+            self.state.route_target_star_class = (
+                target_star_class if isinstance(target_star_class, str) and target_star_class.strip() else None
             )
             self.state.route_remaining_jumps = (
                 remaining_jumps if isinstance(remaining_jumps, int) else None
@@ -357,6 +361,7 @@ class EventEngine:
 
         elif name == "NavRouteClear":
             self.state.route_target_system = None
+            self.state.route_target_star_class = None
             self.state.route_remaining_jumps = None
 
         elif name == "ShipTargeted":

@@ -84,6 +84,47 @@ class MainWindow(QMainWindow):
         }
         return mapping.get(pc, pc)
 
+    # --- add inside class MainWindow, near other helper methods ---
+    def _format_star_class_label(self, star_class: str | None) -> str:
+        if not isinstance(star_class, str) or not star_class.strip():
+            return ""
+
+        sc = star_class.strip().upper()
+
+        scoopable = {"O", "B", "A", "F", "G", "K", "M"}
+        brown_dwarfs = {"L", "T", "Y"}
+
+        if sc in scoopable:
+            return f"{sc} • Scoopable"
+        if sc in brown_dwarfs:
+            return f"{sc} • Brown Dwarf"
+        if sc.startswith("D"):
+            return f"{sc} • White Dwarf"
+        if sc in {"N", "NEUTRON"}:
+            return f"{sc} • Neutron Star"
+
+        return sc
+
+    def _get_star_class_label_and_color(self, star_class: str | None) -> tuple[str, str]:
+        if not isinstance(star_class, str) or not star_class.strip():
+            return "", ""
+
+        sc = star_class.strip().upper()
+
+        scoopable = {"O", "B", "A", "F", "G", "K", "M"}
+        brown_dwarfs = {"L", "T", "Y"}
+
+        if sc in scoopable:
+            return f"{sc} • Scoopable", "#7CFC98"   # soft green
+        if sc in brown_dwarfs:
+            return f"{sc} • Brown Dwarf", "#FFCC66" # amber
+        if sc.startswith("D"):
+            return f"{sc} • White Dwarf", "#FFB366" # orange-amber
+        if sc in {"N", "NEUTRON"}:
+            return f"{sc} • Neutron Star", "#FF9966" # deeper orange
+
+        return sc, "#D3D3D3"  # neutral fallback
+
     def resizeEvent(self, event):
         try:
             if hasattr(self, "expl_outer_split"):
@@ -198,6 +239,7 @@ class MainWindow(QMainWindow):
         # Route tracker panel
         self.route_panel = QLabel()
         self.route_panel.setText("Route\nNext: -\nJumps: -")
+        self.route_panel.setTextFormat(Qt.TextFormat.RichText)
         self.route_panel.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         self.route_panel.setStyleSheet("""
             color: #87CEFA;
@@ -1323,14 +1365,25 @@ class MainWindow(QMainWindow):
         # ---- Update route tracker ----
         try:
             route_target = getattr(self.state, "route_target_system", None)
+            route_star_class = getattr(self.state, "route_target_star_class", None)
             route_jumps = getattr(self.state, "route_remaining_jumps", None)
 
             target_txt = route_target if isinstance(route_target, str) and route_target.strip() else "-"
+            star_label, star_color = self._get_star_class_label_and_color(route_star_class)
+
             jumps_txt = str(route_jumps) if isinstance(route_jumps, int) else "-"
 
+            if star_label:
+                next_line = (
+                    f"Next: {target_txt} "
+                    f"(<span style='color:{star_color};'>{star_label}</span>)"
+                )
+            else:
+                next_line = f"Next: {target_txt}"
+
             self.route_panel.setText(
-                "Route\n"
-                f"Next: {target_txt}\n"
+                "Route<br>"
+                f"{next_line}<br>"
                 f"Jumps: {jumps_txt}"
             )
         except Exception:

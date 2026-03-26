@@ -48,6 +48,7 @@ class GameState:
     non_body_count: Optional[int] = None                               # FSSDiscoveryScan.NonBodyCount
     fss_complete: bool = False
     route_target_system: Optional[str] = None
+    route_target_star_class: Optional[str] = None
     route_remaining_jumps: Optional[int] = None
     system_signals: List[Dict[str, Any]] = field(default_factory=list) # FSSSignalDiscovered entries
     external_pois: List[Dict[str, Any]] = field(default_factory=list)  # advisory (local file), per-system
