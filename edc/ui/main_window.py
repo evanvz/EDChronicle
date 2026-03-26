@@ -237,23 +237,26 @@ class MainWindow(QMainWindow):
             font-size: 18px;
             font-weight: bold;
             color: #FF8C00;
-            padding: 12px;
+            padding-left: 12px;
+            padding-top: 8px;
         """)
 
         # ---- Header layout (title left, session tracker right) ----
         header_layout = QHBoxLayout()
-        header_layout.addWidget(self.header_bar)
+        header_layout.addWidget(self.header_bar, alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
 
         header_layout.addStretch()
 
         # Session tracker panel
         self.session_panel = QLabel()
         self.session_panel.setText("Session\nKills: 0\nBounties: 0 cr")
-        self.session_panel.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        self.session_panel.setTextFormat(Qt.TextFormat.RichText)
+        self.session_panel.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.session_panel.setStyleSheet("""
             color: #FF8C00;
             font-weight: bold;
             padding-left: 10px;
+            padding-top: 0px;
         """)
 
         # Route tracker panel
@@ -265,6 +268,7 @@ class MainWindow(QMainWindow):
             color: #87CEFA;
             font-weight: bold;
             padding-left: 10px;
+            padding-top: 14px;
         """)
 
         header_layout.addWidget(self.route_panel)
@@ -1391,14 +1395,14 @@ class MainWindow(QMainWindow):
             exo_unsold = int(getattr(self.state, "exobiology_unsold_total_est", 0) or 0)
 
             self.session_panel.setText(
-                "Session\n"
-                f"Kills: {kills}\n"
-                f"Combat: {combat_session:,} cr\n"
-                f"Combat Unsold: {combat_unsold:,} cr\n"
-                f"Exploration: {exploration_session:,} cr\n"
-                f"Expl. Unsold: {exploration_unsold:,} cr\n"
-                f"Exobio: {exo_session:,} cr\n"
-                f"Exo Unsold: {exo_unsold:,} cr"
+                "Session<br>"
+                f"Kills: {kills}<br>"
+                f"<span style='color:#FF8C66;'>Combat: {combat_session:,} cr</span><br>"
+                f"<span style='color:#FFB199;'>Combat Unsold: {combat_unsold:,} cr</span><br>"
+                f"<span style='color:#87CEFA;'>Exploration: {exploration_session:,} cr</span><br>"
+                f"<span style='color:#B7E3FF;'>Expl. Unsold: {exploration_unsold:,} cr</span><br>"
+                f"<span style='color:#7CFC98;'>Exobio: {exo_session:,} cr</span><br>"
+                f"<span style='color:#BDFCC9;'>Exo Unsold: {exo_unsold:,} cr</span>"
             )
         except Exception:
             pass
