@@ -1012,6 +1012,29 @@ class EventEngine:
                 rec = {}
             progress = int(rec.get("Samples", 0) or 0)
 
+            # Elite does not let you partially scan one genus/species,
+            # switch to another, and then continue the old one from 1/3 or 2/3.
+            # When a new ScanOrganic target becomes active, reset any other
+            # incomplete live-progress rows back to 0/3 and UNSCANNED.
+            if st in {"log", "sample", "analyse"}:
+                for other_key, other_rec in self.state.exo.items():
+                    if other_key == key:
+                        continue
+                    if not isinstance(other_rec, dict):
+                        continue
+                    if other_rec.get("Complete"):
+                        continue
+
+                    other_last = str(other_rec.get("LastScanType") or "").upper()
+                    if other_last in {"LOG", "SAMPLE", "ANALYSE"}:
+                        other_rec["Samples"] = 0
+                        other_rec["Complete"] = False
+                        other_rec["LastScanType"] = "UNSCANNED"
+                        other_rec.pop("CCRDistanceM", None)
+                        other_rec.pop("CCRRemainingM", None)
+                        other_rec["CCRPendingBaseline"] = False
+                        other_rec["SamplePoints"] = []
+
             # Migrate any legacy per-variant keys into the new per-species key.
             legacy_prefix = f"{key}|"
             for k in list(self.state.exo.keys()):
