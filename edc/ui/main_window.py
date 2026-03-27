@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
+    QScrollArea,
     QLineEdit,
     QComboBox,
     QSpinBox,
@@ -21,7 +22,9 @@ from PyQt6.QtWidgets import (
     QSplitter,
     QStackedWidget,
     QGraphicsOpacityEffect,
-    QFrame
+    QFrame,
+    QAbstractScrollArea,
+    QSizePolicy,
 )
 from PyQt6.QtCore import QThread, Qt, QTimer, QSettings, QPropertyAnimation, QEasingCurve, QSize
 from PyQt6.QtGui import QTextCursor, QColor
@@ -242,21 +245,37 @@ class MainWindow(QMainWindow):
         """)
 
         # ---- Header layout (title left, session tracker right) ----
-        header_layout = QHBoxLayout()
-        header_layout.addWidget(self.header_bar, alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        self.hud = QLabel("Not connected")
+        self.status = QLabel("Status: idle")
 
-        header_layout.addStretch()
+        btn_start = QPushButton("Start Watching Journals")
+        btn_stop = QPushButton("Stop")
+
+        left_header = QVBoxLayout()
+        left_header.setContentsMargins(0, 0, 0, 0)
+        left_header.setSpacing(6)
+        left_header.addWidget(self.header_bar)
+        left_header.addWidget(self.hud)
+        left_header.addWidget(self.status)
+
+        btn_row = QHBoxLayout()
+        btn_row.setContentsMargins(0, 0, 0, 0)
+        btn_row.setSpacing(8)
+        btn_row.addWidget(btn_start)
+        btn_row.addWidget(btn_stop)
+        btn_row.addStretch(1)
+        left_header.addLayout(btn_row)
 
         # Session tracker panel
         self.session_panel = QLabel()
         self.session_panel.setText("Session\nKills: 0\nBounties: 0 cr")
         self.session_panel.setTextFormat(Qt.TextFormat.RichText)
-        self.session_panel.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.session_panel.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         self.session_panel.setStyleSheet("""
             color: #FF8C00;
             font-weight: bold;
             padding-left: 10px;
-            padding-top: 0px;
+            padding-top: 4px;
         """)
 
         # Route tracker panel
@@ -268,16 +287,22 @@ class MainWindow(QMainWindow):
             color: #87CEFA;
             font-weight: bold;
             padding-left: 10px;
-            padding-top: 14px;
+            padding-top: 4px;
         """)
 
-        header_layout.addWidget(self.route_panel)
-        header_layout.addWidget(self.session_panel)
+        right_header = QHBoxLayout()
+        right_header.setContentsMargins(0, 0, 0, 0)
+        right_header.setSpacing(10)
+        right_header.addWidget(self.route_panel)
+        right_header.addWidget(self.session_panel)
+
+        header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(12)
+        header_layout.addLayout(left_header, 1)
+        header_layout.addLayout(right_header, 0)
 
         layout.addLayout(header_layout)
-
-        self.hud = QLabel("Not connected")
-        self.status = QLabel("Status: idle")
 
         self.overview_actions = QLabel("")
         self.overview_actions.setWordWrap(True)
@@ -294,8 +319,7 @@ class MainWindow(QMainWindow):
 
         self.system_card = QTextEdit()
         self.system_card.setReadOnly(True)
-        self.system_card.setMinimumHeight(120)
-        self.system_card.setMaximumHeight(150)
+        self.system_card.setMinimumHeight(180)
 
         self.factions_table = QTableWidget()
         self.factions_table.setColumnCount(6)
@@ -312,7 +336,7 @@ class MainWindow(QMainWindow):
         self.factions_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         self.factions_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         self.factions_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
-        self.factions_table.setMinimumHeight(420)
+        self.factions_table.setMinimumHeight(280)
 
         self.exploration_table = QTableWidget()
         self.exploration_table.setColumnCount(8)
@@ -321,6 +345,10 @@ class MainWindow(QMainWindow):
         self.exploration_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.exploration_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.exploration_table.verticalHeader().setVisible(False)
+        self.exploration_table.setSizeAdjustPolicy(QAbstractScrollArea.SizeAdjustPolicy.AdjustIgnored)
+        self.exploration_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.exploration_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.exploration_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.exploration_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.exploration_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.exploration_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
@@ -329,16 +357,18 @@ class MainWindow(QMainWindow):
         self.exploration_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
         self.exploration_table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
         self.exploration_table.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)
-        self.exploration_table.setMinimumHeight(240)
-        self.exploration_table.setSortingEnabled(True)
+        self.exploration_table.setMinimumHeight(120)
+        self.exploration_table.setSortingEnabled(False)
         self.exploration_action = QLabel("")
         self.exploration_action.setWordWrap(True)
         self.exploration_hint = QLabel("")
         self.exploration_hint.setWordWrap(True)
+
         self.system_signals_box = QTextEdit()
         self.system_signals_box.setReadOnly(True)
-        self.system_signals_box.setMinimumHeight(160)
+        self.system_signals_box.setMinimumHeight(120)
         self.system_signals_box.setPlaceholderText("System signals will appear here after FSSSignalDiscovered events.")
+
         self.materials_box = QTextEdit()
         self.materials_box.setReadOnly(True)
         self.materials_box.setMinimumHeight(80)
@@ -360,7 +390,11 @@ class MainWindow(QMainWindow):
         self.exo_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.exo_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.exo_table.verticalHeader().setVisible(False)
-        self.exo_table.setSortingEnabled(True)
+        self.exo_table.setSizeAdjustPolicy(QAbstractScrollArea.SizeAdjustPolicy.AdjustIgnored)
+        self.exo_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.exo_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.exo_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.exo_table.setSortingEnabled(False)
         self.exo_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.exo_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.exo_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
@@ -370,7 +404,7 @@ class MainWindow(QMainWindow):
         self.exo_table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)  # Samples
         self.exo_table.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)  # CCR
         self.exo_table.horizontalHeader().setSectionResizeMode(8, QHeaderView.ResizeMode.ResizeToContents)  # Status
-        self.exo_table.setMinimumHeight(200)
+        self.exo_table.setMinimumHeight(120)
         self.exo_action = QLabel("")
         self.exo_action.setWordWrap(True)
         self.exo_hint = QLabel("")
@@ -402,7 +436,7 @@ class MainWindow(QMainWindow):
         self.pp_progress.verticalHeader().setVisible(False)
         self.pp_progress.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.pp_progress.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        self.pp_progress.setMinimumHeight(180)
+        self.pp_progress.setMinimumHeight(120)
         self.pp_progress.setVisible(False)
 
         # Combat (stub)
@@ -418,7 +452,7 @@ class MainWindow(QMainWindow):
         self.combat_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.combat_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.combat_table.verticalHeader().setVisible(False)
-        self.combat_table.setSortingEnabled(True)
+        self.combat_table.setSortingEnabled(False)
         self.combat_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.combat_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.combat_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
@@ -427,7 +461,7 @@ class MainWindow(QMainWindow):
         self.combat_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
         self.combat_table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
         self.combat_table.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)
-        self.combat_table.setMinimumHeight(220)
+        self.combat_table.setMinimumHeight(120)
 
         self.min_value_label = QLabel()
         self.min_value_slider = QSlider()
@@ -449,18 +483,6 @@ class MainWindow(QMainWindow):
 
         self.log_box = QTextEdit()
         self.log_box.setReadOnly(True)
-
-        btn_start = QPushButton("Start Watching Journals")
-        btn_stop = QPushButton("Stop")
-
-        layout.addWidget(self.hud)
-        layout.addWidget(self.status)
-
-        btn_row = QHBoxLayout()
-        btn_row.addWidget(btn_start)
-        btn_row.addWidget(btn_stop)
-        btn_row.addStretch(1)
-        layout.addLayout(btn_row)
 
         # === ELITE SIDEBAR LAYOUT ===
         main_layout = QHBoxLayout()
@@ -626,7 +648,7 @@ class MainWindow(QMainWindow):
         self.ody_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.ody_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.ody_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        self.ody_table.setMinimumHeight(240)
+        self.ody_table.setMinimumHeight(120)
 
         tab_ody = QWidget()
         oy = QVBoxLayout(tab_ody)
@@ -658,7 +680,7 @@ class MainWindow(QMainWindow):
         self.inv_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.inv_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.inv_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        self.inv_table.setMinimumHeight(240)
+        self.inv_table.setMinimumHeight(120)
 
         tab_mats = QWidget()
         mt = QVBoxLayout(tab_mats)
