@@ -33,6 +33,7 @@ from pathlib import Path
 from edc.core.state import GameState
 from edc.core.event_engine import EventEngine
 from edc.core.journal_watcher import JournalWatcher
+from edc.ui.watcher_controller import WatcherController
 from edc.core.status_watcher import StatusWatcher
 from edc.core.planet_values import PlanetValueTable
 from edc.core.exo_values import ExoValueTable
@@ -223,10 +224,11 @@ class MainWindow(QMainWindow):
             external_intel=self.external_intel,
         )
 
-        self.thread: QThread | None = None
-        self.watcher: JournalWatcher | None = None
-        self.status_thread: QThread | None = None
-        self.status_watcher: StatusWatcher | None = None
+        self.watcher_controller = WatcherController(
+            on_event=self._on_event,
+            on_status=self._on_status,
+            on_error=self._on_error,
+        )
 
         root = QWidget()
         self.setCentralWidget(root)
@@ -976,47 +978,20 @@ class MainWindow(QMainWindow):
             else:
                 self.status.setText("Status: missing journal folder (set in Settings)")
             return
-
         journal_path = Path(self.cfg.journal_dir)
         if not journal_path.exists():
             if not silent:
-                QMessageBox.warning(self, "Invalid folder", "That folder doesn’t exist.")
+                QMessageBox.warning(self, "Invalid folder", "That folder doesn't exist.")
             else:
                 self.status.setText("Status: journal folder invalid (set in Settings)")
             return
-
         # Stop any existing watcher cleanly
         self.stop_watching()
-
-        self.thread = QThread()
-        self.watcher = JournalWatcher(journal_path)
-        self.watcher.moveToThread(self.thread)
-
-        self.thread.started.connect(self.watcher.run)
-        self.watcher.status.connect(self._on_status)
-        self.watcher.error.connect(self._on_error)
-        self.watcher.event_received.connect(self._on_event)
-
-        self.thread.start()
+        status_path = journal_path / "Status.json"
+        self.watcher_controller.start_watching(journal_path, status_path)
         self.status.setText(f"Status: watching {journal_path}")
         self._append(f"Started watching: {journal_path}")
-
-        # Status.json watcher (for live lat/lon + CCR)
-        try:
-            status_path = journal_path / "Status.json"
-            self.status_thread = QThread()
-            self.status_watcher = StatusWatcher(status_path)
-            self.status_watcher.moveToThread(self.status_thread)
-
-            self.status_thread.started.connect(self.status_watcher.run)
-            self.status_watcher.error.connect(self._on_error)
-            # Don't spam the UI status bar with status.json messages; keep it quiet.
-            self.status_watcher.event_received.connect(self._on_event)
-
-            self.status_thread.start()
-            self._append(f"Started watching status: {status_path}")
-        except Exception:
-            pass
+        self._append(f"Started watching status: {status_path}")
 
     def _pp_state_category(self, pp_state: str, friendly: bool):
         s = (pp_state or "").lower()
@@ -1027,25 +1002,7 @@ class MainWindow(QMainWindow):
         return "Undermining"
     
     def stop_watching(self):
-        if self.watcher:
-            self.watcher.stop()
-
-        if self.thread:
-            self.thread.quit()
-            self.thread.wait(1500)
-
-        if self.status_watcher:
-            self.status_watcher.stop()
-
-        if self.status_thread:
-            self.status_thread.quit()
-            self.status_thread.wait(1500)
-
-        self.thread = None
-        self.watcher = None
-        self.status_thread = None
-        self.status_watcher = None
-        self.status.setText("Status: stopped")
+        self.watcher_controller.stop_watching()
 
     def closeEvent(self, event):
         self.stop_watching()
