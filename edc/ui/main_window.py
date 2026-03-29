@@ -38,6 +38,7 @@ from edc.ui.system_data_loader import SystemDataLoader
 from edc.ui.panels.combat_panel import CombatPanel
 from edc.ui.panels.inventory_panel import ShiplockerPanel, MaterialsPanel
 from edc.ui.panels.powerplay_panel import PowerplayPanel
+from edc.ui.panels.overview_panel import OverviewPanel
 from edc.core.status_watcher import StatusWatcher
 from edc.core.planet_values import PlanetValueTable
 from edc.core.exo_values import ExoValueTable
@@ -308,40 +309,6 @@ class MainWindow(QMainWindow):
 
         layout.addLayout(header_layout)
 
-        self.overview_actions = QLabel("")
-        self.overview_actions.setWordWrap(True)
-        self.overview_actions.setTextFormat(Qt.TextFormat.RichText)
-        self.overview_actions.setOpenExternalLinks(False)
-        self.overview_actions.linkActivated.connect(self._on_overview_action_link)
-
-        # Subtle fade animation for Overview updates
-        self._overview_opacity = QGraphicsOpacityEffect(self.overview_actions)
-        self.overview_actions.setGraphicsEffect(self._overview_opacity)
-        self._overview_opacity.setOpacity(1.0)
-        self._last_overview_html = ""
-        self._last_overview_lines = set()
-
-        self.system_card = QTextEdit()
-        self.system_card.setReadOnly(True)
-        self.system_card.setMinimumHeight(180)
-
-        self.factions_table = QTableWidget()
-        self.factions_table.setColumnCount(6)
-        self.factions_table.setHorizontalHeaderLabels(["Faction", "Government", "Allegiance", "Active", "Influence", "Rep"])
-        self.factions_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.factions_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.factions_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self.factions_table.verticalHeader().setVisible(False)
-        self.factions_table.setShowGrid(False)
-        self.factions_table.setAlternatingRowColors(True)
-        self.factions_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.factions_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        self.factions_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        self.factions_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        self.factions_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
-        self.factions_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
-        self.factions_table.setMinimumHeight(280)
-
         self.exploration_table = QTableWidget()
         self.exploration_table.setColumnCount(10)
         self.exploration_table.setHorizontalHeaderLabels(
@@ -457,35 +424,9 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self.stack, 1)
 
         # Overview tab (System Card)
-        tab_overview = QWidget()
-        ov = QVBoxLayout(tab_overview)
-        ov.addWidget(self.overview_actions)
-        top_label = QLabel("System")
-        bottom_label = QLabel("Factions (top by influence)")
-        top_label.setContentsMargins(0, 0, 0, 0)
-        bottom_label.setContentsMargins(0, 0, 0, 0)
-
-        top_panel = QWidget()
-        top_l = QVBoxLayout(top_panel)
-        top_l.setContentsMargins(0, 0, 0, 0)
-        top_l.addWidget(top_label)
-        top_l.addWidget(self.system_card)
-
-        bottom_panel = QWidget()
-        bot_l = QVBoxLayout(bottom_panel)
-        bot_l.setContentsMargins(0, 0, 0, 0)
-        bot_l.addWidget(bottom_label)
-        bot_l.addWidget(self.factions_table)
-
-        split = QSplitter(Qt.Orientation.Vertical)
-        split.addWidget(top_panel)
-        split.addWidget(bottom_panel)
-        split.setStretchFactor(0, 1)
-        split.setStretchFactor(1, 7)
-        split.setSizes([140, 520])
-        ov.addWidget(split)
-
-        self.stack.addWidget(tab_overview)
+        self.overview_panel = OverviewPanel()
+        self.overview_panel.navigate_to.connect(self.sidebar.setCurrentRow)
+        self.stack.addWidget(self.overview_panel)
         self.sidebar.addItem("Overview")
 
         # Exploration tab
@@ -691,23 +632,7 @@ class MainWindow(QMainWindow):
         self.status.setText("Status: settings saved")
 
     def _on_overview_action_link(self, link: str):
-        try:
-            mapping = {
-                "exploration": 1,
-                "exobiology": 2,
-                "powerplay": 3,
-                "combat": 4,
-                "intel": 5,
-                "odyssey": 6,
-                "materials": 7,
-                "settings": 8,
-                "log": 9,
-            }
-            idx = mapping.get(link)
-            if idx is not None:
-                self.sidebar.setCurrentRow(idx)
-        except Exception:
-            pass
+        self.overview_panel._on_overview_action_link(link)
 
     def start_watching(self, silent: bool = False):
         if not self.cfg.journal_dir:
@@ -1447,50 +1372,7 @@ class MainWindow(QMainWindow):
         self._refresh_shiplocker_inventory()
 
     def _animate_overview_update(self, html: str):
-        try:
-            if not isinstance(html, str):
-                self.overview_actions.setText(html or "")
-                return
-
-            # Split into logical lines
-            new_lines = set(html.split("<br>"))
-
-            # First render (no animation)
-            if not getattr(self, "_last_overview_html", ""):
-                self.overview_actions.setText(html)
-                self._last_overview_html = html
-                self._last_overview_lines = new_lines
-                return
-
-            # If nothing changed → do nothing
-            if html == self._last_overview_html:
-                return
-
-            # Detect newly added lines
-            added_lines = new_lines - getattr(self, "_last_overview_lines", set())
-
-            # Always update content
-            self.overview_actions.setText(html)
-
-            # Only animate if something NEW was added
-            if added_lines:
-                self._overview_opacity.setOpacity(0.0)
-
-                anim = QPropertyAnimation(self._overview_opacity, b"opacity")
-                anim.setDuration(220)
-                anim.setStartValue(0.0)
-                anim.setEndValue(1.0)
-                anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-                anim.start()
-
-                self._overview_anim = anim
-
-            # Save current state
-            self._last_overview_html = html
-            self._last_overview_lines = new_lines
-
-        except Exception:
-            self.overview_actions.setText(html)
+        self.overview_panel.animate_overview_update(html)
 
     def _refresh_shiplocker_inventory(self):
         self.shiplocker_panel.refresh(self.state, self.item_catalog)
@@ -2553,157 +2435,7 @@ class MainWindow(QMainWindow):
         return s[:1].upper() + s[1:]
 
     def _refresh_system_card(self):
-        if not self.state.system:
-            self.system_card.setPlainText("No system data yet.")
-            self.factions_table.setRowCount(0)
-            return
-
-        lines = []
-        lines.append(f"System: {self.state.system}")
-        if self.state.controlling_faction:
-            lines.append(f"Controlling Faction: {self.state.controlling_faction}")
-
-        meta = []
-        allegiance = self._norm_token(getattr(self.state, "system_allegiance", None))
-        government = self._norm_token(getattr(self.state, "system_government", None))
-        security = self._norm_token(getattr(self.state, "system_security", None))
-        economy = self._norm_token(getattr(self.state, "system_economy", None))
-        population = fmt.int_commas(getattr(self.state, "population", None))
-
-        if allegiance:
-            meta.append(f"Allegiance: {allegiance}")
-        if government:
-            meta.append(f"Government: {government}")
-        if security:
-            meta.append(f"Security: {security}")
-        if economy:
-            meta.append(f"Economy: {economy}")
-        if population:
-            meta.append(f"Population: {population}")
-        if meta:
-            lines.append(" | ".join(meta))
-
-        self.system_card.setPlainText("\n".join(lines))
-
-        # Fill factions table (top by influence)
-        facs = []
-        controlling_name = fmt.text(self.state.controlling_faction, default="")
-
-        for f in (self.state.factions or []):
-            if not isinstance(f, dict):
-                continue
-
-            name = fmt.text(f.get("Name"), default="Unknown")
-
-            infl = f.get("Influence")
-            infl_val = float(infl) if isinstance(infl, (float, int)) else -1.0
-            infl_txt = fmt.pct_1(infl_val, default="?") if infl_val >= 0 else "?"
-
-            government = fmt.text(
-                f.get("Government_Localised") or self._norm_token(f.get("Government")) or f.get("Government") or "",
-                default="",
-            )
-
-            allegiance = fmt.text(
-                f.get("Allegiance_Localised") or self._norm_token(f.get("Allegiance")) or f.get("Allegiance") or "",
-                default="",
-            )
-
-            active_txt = ""
-            active_states = f.get("ActiveStates") or []
-            if isinstance(active_states, list) and active_states:
-                vals = []
-                for st in active_states:
-                    if not isinstance(st, dict):
-                        continue
-                    val = fmt.text(
-                        st.get("State_Localised") or self._norm_token(st.get("State")) or st.get("State") or "",
-                        default="",
-                    )
-                    if val:
-                        vals.append(val)
-                active_txt = ", ".join(vals[:2])
-            elif f.get("FactionState") and str(f.get("FactionState")).strip().lower() != "none":
-                active_txt = fmt.text(self._norm_token(f.get("FactionState")) or f.get("FactionState"), default="")
-
-            rep = f.get("MyReputation")
-            if isinstance(rep, (float, int)):
-                rep_f = float(rep)
-                if -1.0 <= rep_f <= 1.0:
-                    rep_txt = f"{(rep_f * 100):.1f}%"
-                else:
-                    rep_txt = f"{rep_f:.1f}"
-            else:
-                rep_txt = ""
-
-            is_controller = bool(controlling_name and name == controlling_name)
-            display_name = f"{name} ★" if is_controller else name
-            facs.append((infl_val, display_name, government, allegiance, active_txt, infl_txt, rep_txt, is_controller))
-
-        facs.sort(key=lambda x: x[0], reverse=True)
-        top = facs[:12]
-        self.factions_table.setRowCount(len(top))
-        for r, (_infl_val, name, government, allegiance, active_txt, infl_txt, rep_txt, is_controller) in enumerate(top):
-            items = [
-                QTableWidgetItem(name),
-                QTableWidgetItem(government),
-                QTableWidgetItem(allegiance),
-                QTableWidgetItem(active_txt),
-                QTableWidgetItem(infl_txt),
-                QTableWidgetItem(rep_txt),
-            ]
-
-            # Base styling rules
-            row_bg = None
-            row_fg = None
-
-            active_l = (active_txt or "").strip().lower()
-
-            # Controlling faction highlight
-            if is_controller:
-                row_bg = QColor(35, 55, 85)   # soft elite blue
-                row_fg = QColor(255, 255, 255)
-
-            # Conflict tint overrides controller tint if important enough
-            if active_l in {"war", "civil war"}:
-                row_bg = QColor(95, 35, 35)   # muted red
-                row_fg = QColor(255, 235, 235)
-            elif active_l == "election":
-                row_bg = QColor(85, 70, 35)   # muted amber
-                row_fg = QColor(255, 245, 220)
-
-            # Rep text tint
-            try:
-                rep_val = None
-                txt = (rep_txt or "").replace("%", "").strip()
-                if txt:
-                    rep_val = float(txt)
-                if rep_val is not None:
-                    if rep_val >= 50:
-                        items[5].setForeground(QColor(140, 255, 180))
-                    elif rep_val < 0:
-                        items[5].setForeground(QColor(255, 160, 160))
-            except Exception:
-                pass
-
-            # Active state cell badge tint
-            if active_l in {"war", "civil war"}:
-                items[3].setBackground(QColor(140, 60, 60))
-                items[3].setForeground(QColor(255, 255, 255))
-            elif active_l == "election":
-                items[3].setBackground(QColor(140, 110, 50))
-                items[3].setForeground(QColor(255, 255, 255))
-
-            if row_bg is not None:
-                for it in items:
-                    # keep active-state badge cell stronger if already set
-                    if it is not items[3]:
-                        it.setBackground(row_bg)
-                    if row_fg is not None and it is not items[5]:
-                        it.setForeground(row_fg)
-
-            for c, it in enumerate(items):
-                self.factions_table.setItem(r, c, it)
+        self.overview_panel.refresh(self.state)
 
     def _compute_action_state(self):
         """
