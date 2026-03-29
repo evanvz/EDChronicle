@@ -165,6 +165,7 @@ class EventEngine:
                 self.state.body_id_to_name.clear()
                 self.state.resolved_body_ids.clear()
                 self.state.bio_signals.clear()
+                self.state.human_signals.clear()
                 self.state.bio_genuses.clear()
                 self.state.geo_signals.clear()
                 self.state.non_body_count = None
@@ -313,6 +314,7 @@ class EventEngine:
                 self.state.body_id_to_name.clear()
                 self.state.resolved_body_ids.clear()
                 self.state.bio_signals.clear()
+                self.state.human_signals.clear()
                 self.state.bio_genuses.clear()
                 self.state.geo_signals.clear()
                 self.state.non_body_count = None
@@ -586,7 +588,8 @@ class EventEngine:
                         "Volcanism": volcanism,
                         "Materials": materials,
                         "FirstDiscovered": first_discovered,
-                        "Mapped": was_mapped,
+                        "WasMapped": was_mapped,
+                        "DSSMapped": bool(rec.get("DSSMapped", False)),
                         "EstimatedValue": est,
                     }
                 )
@@ -614,7 +617,7 @@ class EventEngine:
             body = self._norm_text(event.get("BodyName"))
             if body and body in self.state.bodies:
                 rec = self.state.bodies[body]
-                rec["Mapped"] = True
+                rec["DSSMapped"] = True
                 planet_class = rec.get("PlanetClass", "")
                 terraformable = bool(rec.get("Terraformable", False))
                 first_discovered = bool(rec.get("FirstDiscovered", False))
@@ -717,6 +720,7 @@ class EventEngine:
 
             bio = 0
             geo = 0
+            human = 0
             for sig in (event.get("Signals") or []):
                 t = (sig.get("Type") or "")
                 tl = (sig.get("Type_Localised") or "")
@@ -729,9 +733,14 @@ class EventEngine:
                     c = sig.get("Count", 0)
                     if isinstance(c, int):
                         geo = c
+                if ("human" in t.lower()) or (tl.strip().lower() == "human"):
+                    c = sig.get("Count", 0)
+                    if isinstance(c, int):
+                        human = c
 
             self.state.bio_signals[body] = bio
             self.state.geo_signals[body] = geo
+            self.state.human_signals[body] = human
 
             # Create or update a placeholder record so the UI can show Bio immediately
             rec = self.state.bodies.get(body)
@@ -744,12 +753,14 @@ class EventEngine:
                     "EstimatedValue": None,
                     "Terraformable": False,
                     "FirstDiscovered": False,
-                    "Mapped": False,
+                    "WasMapped": False,
+                    "DSSMapped": False,
                 }
             if isinstance(body_id, int):
                 rec["BodyID"] = body_id
             rec["BioSignals"] = bio
             rec["GeoSignals"] = geo
+            rec["HumanSignals"] = human
             # IMPORTANT: preserve DSS-confirmed genera if we already have them.
             # FSSBodySignals can arrive after SAASignalsFound and would otherwise overwrite the body record.
             rec["BioGenuses"] = self.state.bio_genuses.get(body, rec.get("BioGenuses", []))
@@ -892,6 +903,7 @@ class EventEngine:
 
             bio = 0
             geo = 0
+            human = 0
             for sig in (event.get("Signals") or []):
                 t = (sig.get("Type") or "")
                 tl = (sig.get("Type_Localised") or "")
@@ -903,8 +915,14 @@ class EventEngine:
                     c = sig.get("Count", 0)
                     if isinstance(c, int):
                         geo = c
+                if ("human" in t.lower()) or (tl.strip().lower() == "human"):
+                    c = sig.get("Count", 0)
+                    if isinstance(c, int):
+                        human = c
             if bio:
                 self.state.bio_signals[body] = bio
+            if human:
+                self.state.human_signals[body] = human
 
             genuses: List[str] = []
             for g in (event.get("Genuses") or []):
@@ -936,7 +954,8 @@ class EventEngine:
                     "EstimatedValue": None,
                     "Terraformable": False,
                     "FirstDiscovered": False,
-                    "Mapped": False,
+                    "WasMapped": False,
+                    "DSSMapped": False,
                 }
             if isinstance(body_id, int):
                 rec["BodyID"] = body_id
@@ -944,6 +963,8 @@ class EventEngine:
             rec["BioSignals"] = self.state.bio_signals.get(body, rec.get("BioSignals", 0))
             rec["BioGenuses"] = self.state.bio_genuses.get(body, rec.get("BioGenuses", []))
             rec["GeoSignals"] = self.state.geo_signals.get(body, rec.get("GeoSignals", 0))
+            rec["HumanSignals"] = self.state.human_signals.get(body, rec.get("HumanSignals", 0))
+            rec["DSSMapped"] = True
             self.state.bodies[body] = rec
 
         elif name == "CommunityGoal":

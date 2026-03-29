@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS bodies (
     planet_class TEXT,
     terraformable INTEGER,
     landable INTEGER,
-    mapped INTEGER,
+    was_mapped INTEGER,
+    dss_mapped INTEGER,
     estimated_value INTEGER,
     distance_ls REAL,
     PRIMARY KEY (system_address, body_id)
@@ -27,6 +28,7 @@ CREATE TABLE IF NOT EXISTS body_signals (
     body_name TEXT NOT NULL,
     bio_signals INTEGER,
     geo_signals INTEGER,
+    human_signals INTEGER,
     PRIMARY KEY (system_address, body_name)
 );
 

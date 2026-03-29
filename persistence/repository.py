@@ -54,7 +54,8 @@ class Repository:
         planet_class: str | None,
         terraformable: int | None,
         landable: int | None,
-        mapped: int | None,
+        was_mapped: int | None,
+        dss_mapped: int | None,
         estimated_value: int | None,
         distance_ls: float | None,
     ):
@@ -67,17 +68,19 @@ class Repository:
                 planet_class,
                 terraformable,
                 landable,
-                mapped,
+                was_mapped,
+                dss_mapped,
                 estimated_value,
                 distance_ls
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(system_address, body_id) DO UPDATE SET
                 body_name = excluded.body_name,
                 planet_class = excluded.planet_class,
                 terraformable = excluded.terraformable,
                 landable = excluded.landable,
-                mapped = excluded.mapped,
+                was_mapped = excluded.was_mapped,
+                dss_mapped = excluded.dss_mapped,
                 estimated_value = excluded.estimated_value,
                 distance_ls = excluded.distance_ls
             """,
@@ -88,7 +91,8 @@ class Repository:
                 planet_class,
                 terraformable,
                 landable,
-                mapped,
+                was_mapped,
+                dss_mapped,
                 estimated_value,
                 distance_ls,
             ),
@@ -100,6 +104,7 @@ class Repository:
         body_name: str,
         bio_signals: int | None,
         geo_signals: int | None,
+        human_signals: int | None,
     ):
         self.db.execute(
             """
@@ -107,18 +112,21 @@ class Repository:
                 system_address,
                 body_name,
                 bio_signals,
-                geo_signals
+                geo_signals,
+                human_signals
             )
-            VALUES (?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(system_address, body_name) DO UPDATE SET
                 bio_signals = excluded.bio_signals,
-                geo_signals = excluded.geo_signals
+                geo_signals = excluded.geo_signals,
+                human_signals = excluded.human_signals
             """,
             (
                 system_address,
                 body_name,
                 bio_signals,
                 geo_signals,
+                human_signals,
             ),
         )
 
@@ -286,7 +294,8 @@ class Repository:
                 planet_class,
                 terraformable,
                 landable,
-                mapped,
+                was_mapped,
+                dss_mapped,
                 estimated_value,
                 distance_ls
             FROM bodies
@@ -303,7 +312,8 @@ class Repository:
                 system_address,
                 body_name,
                 bio_signals,
-                geo_signals
+                geo_signals,
+                human_signals
             FROM body_signals
             WHERE system_address = ?
             ORDER BY body_name

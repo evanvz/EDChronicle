@@ -339,8 +339,10 @@ class MainWindow(QMainWindow):
         self.factions_table.setMinimumHeight(280)
 
         self.exploration_table = QTableWidget()
-        self.exploration_table.setColumnCount(8)
-        self.exploration_table.setHorizontalHeaderLabels(["Body", "Class", "LS", "Bio", "Geo", "Genera", "Est. Value", "Tags"])
+        self.exploration_table.setColumnCount(10)
+        self.exploration_table.setHorizontalHeaderLabels(
+            ["Body", "Class", "LS", "Bio", "Geo", "Bio DSS", "Est. Value", "Prev Map", "DSS", "Flags"]
+        )
         self.exploration_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.exploration_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.exploration_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
@@ -354,9 +356,11 @@ class MainWindow(QMainWindow):
         self.exploration_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         self.exploration_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         self.exploration_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
-        self.exploration_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
+        self.exploration_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
         self.exploration_table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
         self.exploration_table.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)
+        self.exploration_table.horizontalHeader().setSectionResizeMode(8, QHeaderView.ResizeMode.ResizeToContents)
+        self.exploration_table.horizontalHeader().setSectionResizeMode(9, QHeaderView.ResizeMode.ResizeToContents)
         self.exploration_table.setMinimumHeight(120)
         self.exploration_table.setSortingEnabled(False)
         self.exploration_action = QLabel("")
@@ -367,12 +371,10 @@ class MainWindow(QMainWindow):
         self.system_signals_box = QTextEdit()
         self.system_signals_box.setReadOnly(True)
         self.system_signals_box.setMinimumHeight(120)
-        self.system_signals_box.setPlaceholderText("System signals will appear here after FSSSignalDiscovered events.")
 
         self.materials_box = QTextEdit()
         self.materials_box.setReadOnly(True)
         self.materials_box.setMinimumHeight(80)
-        self.materials_box.setPlaceholderText("Materials shortlist will appear here once landable bodies are scanned (Scan event includes Materials/Volcanism).")
 
         # Intel (external / advisory)
         self.intel_summary = QLabel("")
@@ -780,6 +782,7 @@ class MainWindow(QMainWindow):
         self.state.resolved_body_ids.clear()
         self.state.bio_signals.clear()
         self.state.geo_signals.clear()
+        self.state.human_signals.clear()
         self.state.exo.clear()
 
         for row in self.repo.get_bodies(system_address):
@@ -808,7 +811,8 @@ class MainWindow(QMainWindow):
                 "Terraformable": bool(row["terraformable"]),
                 "DistanceLS": row["distance_ls"],
                 "Landable": None if row["landable"] is None else bool(row["landable"]),
-                "Mapped": bool(row["mapped"]),
+                "WasMapped": bool(row["was_mapped"]),
+                "DSSMapped": bool(row["dss_mapped"]),
                 "EstimatedValue": estimated_value,
             }
 
@@ -829,14 +833,17 @@ class MainWindow(QMainWindow):
 
             bio = int(row["bio_signals"] or 0)
             geo = int(row["geo_signals"] or 0)
+            human = int(row["human_signals"] or 0)
 
             self.state.bio_signals[body_name] = bio
             self.state.geo_signals[body_name] = geo
+            self.state.human_signals[body_name] = human
 
             rec = self.state.bodies.get(body_name)
             if isinstance(rec, dict):
                 rec["BioSignals"] = bio
                 rec["GeoSignals"] = geo
+                rec["HumanSignals"] = human
 
         for row in self.repo.get_dss_genus_discovery(system_address):
             body_name = row["body_name"]
@@ -854,6 +861,7 @@ class MainWindow(QMainWindow):
             rec = self.state.bodies.get(body_name)
             if isinstance(rec, dict):
                 rec["BioGenuses"] = cur
+                rec["DSSMapped"] = True
 
         for row in self.repo.get_exobiology(system_address):
             body_name = row["body_name"]
@@ -2875,7 +2883,7 @@ class MainWindow(QMainWindow):
             self.exploration_hint.setText(hint)
             return
 
-        rows = []  # (sort_val, body, class, ls_txt, bio_txt, geo_txt, genera_txt, value_txt, tags_txt)
+        rows = []  # (sort_val, body, class, ls_txt, bio_txt, geo_txt, bio_dss_txt, value_txt, prev_map_txt, dss_txt, flags_txt)
         best_below = None  # (value, line)
         bio_bodies = 0
         geo_bodies = 0
@@ -2888,7 +2896,9 @@ class MainWindow(QMainWindow):
             # Normalize Frontier token-ish planet class strings for display
             pc_disp = self._norm_token(pc) or fmt.text(pc, default="")
             tf = rec.get("Terraformable", False)
-            mapped = rec.get("Mapped", False)
+            was_mapped = bool(rec.get("WasMapped", False))
+            dss_mapped = bool(rec.get("DSSMapped", False)) or bool(rec.get("BioGenuses"))
+            human_signals = int(rec.get("HumanSignals", 0) or 0)
             first = rec.get("FirstDiscovered", False)
             bio = rec.get("BioSignals", 0) or 0
             geo = rec.get("GeoSignals", 0) or 0
@@ -2897,9 +2907,9 @@ class MainWindow(QMainWindow):
                 bio_bodies += 1
             if isinstance(geo, int) and geo > 0:
                 geo_bodies += 1
-            if tf and not mapped:
+            if tf and not dss_mapped:
                 tf_unmapped += 1
-            if isinstance(est, int) and est >= min_value and not mapped:
+            if isinstance(est, int) and est >= min_value and not dss_mapped:
                 hv_unmapped += 1
 
             # Sort key: estimated value if present else 0
@@ -2912,9 +2922,11 @@ class MainWindow(QMainWindow):
                     preview_tags.append("Terraformable")
                 if first:
                     preview_tags.append("NEW")
-                if mapped:
-                    preview_tags.append("Mapped")
-                else:
+                if was_mapped:
+                    preview_tags.append("PREV MAPPED")
+                if dss_mapped:
+                    preview_tags.append("DSS MAPPED")
+                if not was_mapped and not dss_mapped:
                     preview_tags.append("UNMAPPED")
                 dist_txt = (fmt.int_commas(dist) + " LS") if isinstance(dist, (float, int)) else ""
                 est_txt = fmt.credits(est, default="?")
@@ -2932,18 +2944,41 @@ class MainWindow(QMainWindow):
                 tags.append("Terraformable")
             if first:
                 tags.append("NEW")
-            if mapped:
-                tags.append("Mapped")
-            else:
-                tags.append("UNMAPPED")
+
 
             dist_txt = (fmt.int_commas(dist) + " LS") if isinstance(dist, (float, int)) else ""
-            est_txt = fmt.credits(est, default="?") if isinstance(est, int) else "?"
-            tags_txt = ", ".join(tags) if tags else ""
+
             bio_txt = str(bio) if isinstance(bio, int) and bio > 0 else ""
             geo_txt = str(geo) if isinstance(geo, int) and geo > 0 else ""
-            genera_txt = ", ".join([fmt.text(x, default="") for x in gen if fmt.text(x, default="")]) if isinstance(gen, list) and gen else ""
-            rows.append((sort_val, fmt.text(body, default=""), pc_disp, dist_txt, bio_txt, geo_txt, genera_txt, est_txt, tags_txt))
+            bio_dss_txt = "✔" if isinstance(gen, list) and len(gen) > 0 else ""
+            est_txt = fmt.credits(est, default="?") if isinstance(est, int) else "?"
+            prev_map_txt = "✔" if was_mapped else ""
+            dss_txt = "✔" if dss_mapped else ""
+
+            flags = []
+            if tf:
+                flags.append("Terra")
+            if first:
+                flags.append("NEW")
+            if human_signals > 0:
+                flags.append("Human")
+            flags_txt = ", ".join(flags)
+
+            rows.append(
+                (
+                    sort_val,
+                    fmt.text(body, default=""),
+                    pc_disp,
+                    dist_txt,
+                    bio_txt,
+                    geo_txt,
+                    bio_dss_txt,
+                    est_txt,
+                    prev_map_txt,
+                    dss_txt,
+                    flags_txt,
+                )
+            )
 
         rows.sort(key=lambda x: x[0], reverse=True)
 
@@ -2976,7 +3011,7 @@ class MainWindow(QMainWindow):
         # Fill table (top 50 is plenty)
         shown = rows[:50]
         self.exploration_table.setRowCount(len(shown))
-        for r, (_sv, b, pc, ls_txt, bio_txt, geo_txt, genera_txt, v_txt, tags_txt) in enumerate(shown):
+        for r, (_sv, b, pc, ls_txt, bio_txt, geo_txt, bio_dss_txt, v_txt, prev_map_txt, dss_txt, flags_txt) in enumerate(shown):
             self.exploration_table.setItem(r, 0, QTableWidgetItem(str(b)))
             self.exploration_table.setItem(r, 1, QTableWidgetItem(str(pc)))
             # Ensure numeric sorting on the "LS" column (avoid lexicographic sort like "100" < "9")
@@ -2993,7 +3028,7 @@ class MainWindow(QMainWindow):
             self.exploration_table.setItem(r, 2, it_ls)
             self.exploration_table.setItem(r, 3, QTableWidgetItem(str(bio_txt)))
             self.exploration_table.setItem(r, 4, QTableWidgetItem(str(geo_txt)))
-            self.exploration_table.setItem(r, 5, QTableWidgetItem(str(genera_txt)))
+            self.exploration_table.setItem(r, 5, QTableWidgetItem(str(bio_dss_txt)))
             it_val = QTableWidgetItem(str(v_txt))
 
             # Numeric sort key: use the stored sort value directly
@@ -3002,7 +3037,9 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
             self.exploration_table.setItem(r, 6, it_val)
-            self.exploration_table.setItem(r, 7, QTableWidgetItem(str(tags_txt)))
+            self.exploration_table.setItem(r, 7, QTableWidgetItem(str(prev_map_txt)))
+            self.exploration_table.setItem(r, 8, QTableWidgetItem(str(dss_txt)))
+            self.exploration_table.setItem(r, 9, QTableWidgetItem(str(flags_txt)))
 
             # =========================================
             # Elite Exploration Row Intelligence Styling
@@ -3490,16 +3527,16 @@ class MainWindow(QMainWindow):
                 continue
 
             est = rec.get("EstimatedValue")
-            mapped = bool(rec.get("Mapped", False))
+            dss_mapped = bool(rec.get("DSSMapped", False)) or bool(rec.get("BioGenuses"))
             tf = bool(rec.get("Terraformable", False))
 
             bio = rec.get("BioSignals", 0) or 0
             gen = rec.get("BioGenuses", []) or []
 
-            if tf and not mapped:
+            if tf and not dss_mapped:
                 tf_unmapped += 1
 
-            if isinstance(est, int) and est >= min_value and not mapped:
+            if isinstance(est, int) and est >= min_value and not dss_mapped:
                 hv_unmapped += 1
 
             if isinstance(bio, int) and bio > 0 and not gen:

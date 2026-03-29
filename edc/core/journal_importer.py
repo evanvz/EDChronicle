@@ -35,12 +35,13 @@ def _terraformable_from_state(terraform_state: Any) -> int | None:
     return 0 if state == "not terraformable" else 1
 
 
-def _bio_geo_from_signals(signals: Any) -> tuple[int, int]:
+def _surface_signal_counts(signals: Any) -> tuple[int, int, int]:
     bio = 0
     geo = 0
+    human = 0
 
     if not isinstance(signals, list):
-        return bio, geo
+        return bio, geo, human
 
     for sig in signals:
         if not isinstance(sig, dict):
@@ -56,8 +57,10 @@ def _bio_geo_from_signals(signals: Any) -> tuple[int, int]:
             bio = count
         if ("geological" in sig_type) or (sig_type_loc == "geological"):
             geo = count
+        if ("human" in sig_type) or (sig_type_loc == "human"):
+            human = count
 
-    return bio, geo
+    return bio, geo, human
 
 
 @dataclass
@@ -67,7 +70,8 @@ class CachedBody:
     planet_class: str | None = None
     terraformable: int | None = 0
     landable: int | None = None
-    mapped: int | None = 0
+    was_mapped: int | None = 0
+    dss_mapped: int | None = 0
     estimated_value: int | None = None
     distance_ls: float | None = None
 
@@ -326,6 +330,10 @@ class JournalImporter:
         if not body_name:
             return
 
+        body_id = event.get("BodyID")
+        if isinstance(body_id, int):
+            self.body_id_to_name[body_id] = body_name
+
         if event.get("event") == "SAASignalsFound":
             genuses = event.get("Genuses")
             if isinstance(genuses, list):
@@ -344,12 +352,32 @@ class JournalImporter:
                         genus=genus,
                     )
 
-        body_id = event.get("BodyID")
-        if isinstance(body_id, int):
-            self.body_id_to_name[body_id] = body_name
+            cached = self.bodies_by_name.get(body_name)
+            if cached is None:
+                cached = CachedBody(
+                    body_id=body_id if isinstance(body_id, int) else -1,
+                    body_name=body_name,
+                )
 
-        bio, geo = _bio_geo_from_signals(event.get("Signals"))
-        self.repo.save_body_signals(system_address, body_name, bio, geo)
+            cached.dss_mapped = 1
+            self.bodies_by_name[body_name] = cached
+
+            if isinstance(cached.body_id, int) and cached.body_id >= 0:
+                self.repo.save_body(
+                    system_address=system_address,
+                    body_id=cached.body_id,
+                    body_name=cached.body_name,
+                    planet_class=cached.planet_class,
+                    terraformable=cached.terraformable,
+                    landable=cached.landable,
+                    was_mapped=cached.was_mapped,
+                    dss_mapped=cached.dss_mapped,
+                    estimated_value=cached.estimated_value,
+                    distance_ls=cached.distance_ls,
+                )
+
+        bio, geo, human = _surface_signal_counts(event.get("Signals"))
+        self.repo.save_body_signals(system_address, body_name, bio, geo, human)
 
         cached = self.bodies_by_name.get(body_name)
         if cached is None:
@@ -404,7 +432,8 @@ class JournalImporter:
             planet_class=planet_class,
             terraformable=terraformable,
             landable=landable,
-            mapped=was_mapped,
+            was_mapped=was_mapped,
+            dss_mapped=0,
             estimated_value=estimated_value,
             distance_ls=float(distance_ls) if distance_ls is not None else None,
         )
@@ -415,7 +444,8 @@ class JournalImporter:
             planet_class=planet_class,
             terraformable=terraformable,
             landable=landable,
-            mapped=was_mapped,
+            was_mapped=was_mapped,
+            dss_mapped=0,
             estimated_value=estimated_value,
             distance_ls=float(distance_ls) if distance_ls is not None else None,
         )
@@ -435,7 +465,7 @@ class JournalImporter:
         if cached is None or not isinstance(cached.body_id, int) or cached.body_id < 0:
             return
 
-        cached.mapped = 1
+        cached.dss_mapped = 1
 
         self.repo.save_body(
             system_address=system_address,
@@ -444,7 +474,8 @@ class JournalImporter:
             planet_class=cached.planet_class,
             terraformable=cached.terraformable,
             landable=cached.landable,
-            mapped=cached.mapped,
+            was_mapped=cached.was_mapped,
+            dss_mapped=cached.dss_mapped,
             estimated_value=cached.estimated_value,
             distance_ls=cached.distance_ls,
         )
@@ -471,7 +502,8 @@ class JournalImporter:
             return
 
         scan_type = str(event.get("ScanType") or "").strip().lower()
-        samples = 3 if scan_type == "analyse" else 1
+        if scan_type != "analyse":
+            return
 
         self.repo.save_exobiology(
             system_address=system_address,
@@ -479,5 +511,5 @@ class JournalImporter:
             genus=genus,
             species=species,
             variant=variant,
-            samples=samples,
+            samples=3,
         )
