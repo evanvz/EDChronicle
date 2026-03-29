@@ -36,6 +36,7 @@ from edc.core.journal_watcher import JournalWatcher
 from edc.ui.watcher_controller import WatcherController
 from edc.ui.system_data_loader import SystemDataLoader
 from edc.ui.panels.combat_panel import CombatPanel
+from edc.ui.panels.inventory_panel import ShiplockerPanel, MaterialsPanel
 from edc.core.status_watcher import StatusWatcher
 from edc.core.planet_values import PlanetValueTable
 from edc.core.exo_values import ExoValueTable
@@ -605,73 +606,12 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(tab_intel)
         self.sidebar.addItem("Intel")
 
-        # Odyssey tab (ShipLocker inventory; journal-derived)
-        self.ody_summary = QLabel("")
-        self.ody_summary.setWordWrap(True)
-        self.ody_filter = QLineEdit()
-        self.ody_filter.setPlaceholderText("Filter (e.g. schematic, data, health, ionised...)")
-
-        self.ody_table = QTableWidget()
-        self.ody_table.setColumnCount(3)
-        self.ody_table.setHorizontalHeaderLabels(["Item", "Subtype", "Count"])
-        self.ody_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.ody_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.ody_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self.ody_table.verticalHeader().setVisible(False)
-        self.ody_table.setShowGrid(False)
-        self.ody_table.setAlternatingRowColors(True)
-        self.ody_table.setSortingEnabled(True)
-        self.ody_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.ody_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        self.ody_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        self.ody_table.setMinimumHeight(120)
-
-        tab_ody = QWidget()
-        oy = QVBoxLayout(tab_ody)
-        oy.addWidget(QLabel("Odyssey (Ship Locker inventory; journal-derived)"))
-        oy.addWidget(self.ody_filter)
-        oy.addWidget(self.ody_summary)
-        oy.addWidget(self.ody_table, 1)
-        self.stack.addWidget(tab_ody)
+        self.shiplocker_panel = ShiplockerPanel()
+        self.stack.addWidget(self.shiplocker_panel)
         self.sidebar.addItem("Odyssey")
-
-        # Materials tab (journal-derived inventory snapshot)
-        self.inv_summary = QLabel("")
-        self.inv_summary.setWordWrap(True)
-        self.inv_kind = QComboBox()
-        self.inv_kind.addItems(["Raw", "Manufactured", "Encoded"])
-        self.inv_filter = QLineEdit()
-        self.inv_filter.setPlaceholderText("Filter (e.g. selenium, polymer, wake...)")
-
-        self.inv_table = QTableWidget()
-        self.inv_table.setColumnCount(3)
-        self.inv_table.setHorizontalHeaderLabels(["Material", "Subtype", "Count"])
-        self.inv_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.inv_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.inv_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self.inv_table.verticalHeader().setVisible(False)
-        self.inv_table.setShowGrid(False)
-        self.inv_table.setAlternatingRowColors(True)
-        self.inv_table.setSortingEnabled(True)
-        self.inv_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.inv_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        self.inv_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        self.inv_table.setMinimumHeight(120)
-
-        tab_mats = QWidget()
-        mt = QVBoxLayout(tab_mats)
-        mt.addWidget(QLabel("Materials (Commander inventory; journal-derived)"))
-
-        rowm = QHBoxLayout()
-        rowm.addWidget(QLabel("Category:"))
-        rowm.addWidget(self.inv_kind)
-        rowm.addWidget(QLabel("Filter:"))
-        rowm.addWidget(self.inv_filter, 1)
-        mt.addLayout(rowm)
-
-        mt.addWidget(self.inv_summary)
-        mt.addWidget(self.inv_table, 1)
-        self.stack.addWidget(tab_mats)
+        
+        self.materials_panel = MaterialsPanel()
+        self.stack.addWidget(self.materials_panel)
         self.sidebar.addItem("Materials")
 
         # Settings tab
@@ -716,9 +656,6 @@ class MainWindow(QMainWindow):
         btn_stop.clicked.connect(self.stop_watching)
         btn_browse.clicked.connect(self._browse_journal_dir)
         self.settings_journal_edit.editingFinished.connect(self._on_settings_journal_changed)
-        self.inv_kind.currentIndexChanged.connect(self._refresh_materials_inventory)
-        self.inv_filter.textChanged.connect(self._refresh_materials_inventory)
-        self.ody_filter.textChanged.connect(self._refresh_shiplocker_inventory)
 
         # ---- Intel hint suppression (show once per system change) ----
         self._last_intel_system_key: str = ""
@@ -1732,143 +1669,10 @@ class MainWindow(QMainWindow):
             self.overview_actions.setText(html)
 
     def _refresh_shiplocker_inventory(self):
-        """
-        Odyssey ShipLocker inventory snapshot (from ShipLocker journal event).
-        """
-        try:
-            src = getattr(self.state, "shiplocker_items", {}) or {}
-            localised = getattr(self.state, "shiplocker_localised", {}) or {}
-            if not isinstance(src, dict) or not src:
-                self.ody_summary.setText(
-                    "No ShipLocker inventory loaded yet.\n"
-                    "Tip: open the on-foot inventory/locker screen or relog so a 'ShipLocker' journal event is emitted."
-                )
-                self.ody_table.setRowCount(0)
-                return
-
-            filt = (self.ody_filter.text() or "").strip().lower()
-            rows = []
-            for nm, cnt in src.items():
-                if not isinstance(nm, str) or not isinstance(cnt, int):
-                    continue
-                key = nm.strip().lower()
-                disp = localised.get(key) or key.replace("_", " ").title()
-                if filt and (filt not in key and filt not in disp.lower()):
-                    continue
-                subtype = ""
-                try:
-                    subtype = self.item_catalog.get_subtype_label(disp) or ""
-                except Exception:
-                    subtype = ""
-                rows.append((cnt, disp, subtype))
-
-            rows.sort(key=lambda x: (x[0], x[1].lower()))
-            self.ody_table.setSortingEnabled(False)
-            self.ody_table.setRowCount(len(rows))
-            for r, (cnt, disp, subtype) in enumerate(rows):
-                self.ody_table.setItem(r, 0, QTableWidgetItem(disp))
-                self.ody_table.setItem(r, 1, QTableWidgetItem(str(subtype or "")))
-                self.ody_table.setItem(r, 2, QTableWidgetItem(str(cnt)))
-            self.ody_table.setSortingEnabled(True)
-
-            ts = getattr(self.state, "shiplocker_last_update", None)
-            ts_txt = f"Updated: {ts}" if isinstance(ts, str) and ts.strip() else "Updated: (unknown)"
-            cat_txt = ""
-            try:
-                if self.item_catalog.has_data():
-                    lu = getattr(self.item_catalog, "last_updated", None)
-                    lu_txt = f", updated {lu}" if isinstance(lu, str) and lu.strip() else ""
-                    cat_txt = f" | Catalog: {self.item_catalog.count()}{lu_txt}"
-            except Exception:
-                cat_txt = ""
-            self.ody_summary.setText(f"{ts_txt} | Items: {len(src)}{cat_txt}")
-        except Exception:
-            try:
-                self.ody_summary.setText("")
-                self.ody_table.setRowCount(0)
-            except Exception:
-                pass
+        self.shiplocker_panel.refresh(self.state, self.item_catalog)
 
     def _refresh_materials_inventory(self):
-        """
-        Commander inventory snapshot (from Materials journal event).
-        """
-        try:
-            kind = self.inv_kind.currentText() if hasattr(self, "inv_kind") else "Raw"
-            filt = (self.inv_filter.text() or "").strip().lower() if hasattr(self, "inv_filter") else ""
-
-            src = {}
-            if kind == "Raw":
-                src = getattr(self.state, "materials_raw", {}) or {}
-            elif kind == "Manufactured":
-                src = getattr(self.state, "materials_manufactured", {}) or {}
-            elif kind == "Encoded":
-                src = getattr(self.state, "materials_encoded", {}) or {}
-
-            if not isinstance(src, dict) or not src:
-                tip = (
-                    "No materials inventory loaded yet.\n"
-                    "Tip: open the in-game Inventory/Materials screen or relog so a 'Materials' journal event is emitted."
-                )
-                self.inv_summary.setText(tip)
-                self.inv_table.setRowCount(0)
-                return
-
-            localised = getattr(self.state, "materials_localised", {}) or {}
-            if not isinstance(localised, dict):
-                localised = {}
-
-            rows = []
-            zero = 0
-            low_threshold = 25
-            low = 0
-
-            for nm, cnt in src.items():
-                if not isinstance(nm, str) or not isinstance(cnt, int):
-                    continue
-                key = nm.strip().lower()
-                disp = localised.get(key) or key.replace("_", " ").title()
-                if filt and (filt not in key and filt not in disp.lower()):
-                    continue
-                if cnt == 0:
-                    zero += 1
-                if cnt <= low_threshold:
-                    low += 1
-                subtype = ""
-                try:
-                    subtype = self.item_catalog.get_subtype_label(disp) or ""
-                except Exception:
-                    subtype = ""
-                rows.append((cnt, disp, subtype, key))
-
-            rows.sort(key=lambda x: (x[0], x[1].lower()))  # low-first by default; user can sort in UI
-
-            self.inv_table.setSortingEnabled(False)
-            self.inv_table.setRowCount(len(rows))
-            for r, (cnt, disp, subtype, _key) in enumerate(rows):
-                self.inv_table.setItem(r, 0, QTableWidgetItem(disp))
-                self.inv_table.setItem(r, 1, QTableWidgetItem(str(subtype or "")))
-                self.inv_table.setItem(r, 2, QTableWidgetItem(str(cnt)))
-            self.inv_table.setSortingEnabled(True)
-
-            ts = getattr(self.state, "materials_last_update", None)
-            ts_txt = f"Updated: {ts}" if isinstance(ts, str) and ts.strip() else "Updated: (unknown)"
-            cat_txt = ""
-            try:
-                if self.item_catalog.has_data():
-                    lu = getattr(self.item_catalog, "last_updated", None)
-                    lu_txt = f", updated {lu}" if isinstance(lu, str) and lu.strip() else ""
-                    cat_txt = f" | Catalog: {self.item_catalog.count()}{lu_txt}"
-            except Exception:
-                cat_txt = ""
-            summary = f"{ts_txt} | Items: {len(src)} | Low (≤{low_threshold}): {low} | Zero: {zero}{cat_txt}"
-            self.inv_summary.setText(summary)
-        except Exception:
-            try:
-                self.inv_summary.setText("")
-                self.inv_table.setRowCount(0)
-            except Exception:
-                pass
+        self.materials_panel.refresh(self.state, self.item_catalog)
 
     def _refresh_intel(self):
         # External intel (POIs) + Farming locations (both advisory, offline)
