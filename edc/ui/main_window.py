@@ -35,6 +35,7 @@ from edc.core.event_engine import EventEngine
 from edc.core.journal_watcher import JournalWatcher
 from edc.ui.watcher_controller import WatcherController
 from edc.ui.system_data_loader import SystemDataLoader
+from edc.ui.panels.combat_panel import CombatPanel
 from edc.core.status_watcher import StatusWatcher
 from edc.core.planet_values import PlanetValueTable
 from edc.core.exo_values import ExoValueTable
@@ -442,30 +443,6 @@ class MainWindow(QMainWindow):
         self.pp_progress.setMinimumHeight(120)
         self.pp_progress.setVisible(False)
 
-        # Combat (stub)
-        self.combat_hint = QLabel("Scanned contacts will appear here once you fully scan a ship (ScanStage ≥ 3).")
-        self.combat_hint.setWordWrap(True)
-
-        self.combat_table = QTableWidget()
-        self.combat_table.setColumnCount(8)
-        self.combat_table.setHorizontalHeaderLabels(
-            ["Pilot", "Rank", "Ship", "Faction", "Power", "Wanted", "Bounty", "Last Seen"]
-        )
-        self.combat_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.combat_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.combat_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self.combat_table.verticalHeader().setVisible(False)
-        self.combat_table.setSortingEnabled(False)
-        self.combat_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.combat_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        self.combat_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        self.combat_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
-        self.combat_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
-        self.combat_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
-        self.combat_table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
-        self.combat_table.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)
-        self.combat_table.setMinimumHeight(120)
-
         self.min_value_label = QLabel()
         self.min_value_slider = QSlider()
         self.min_value_slider.setOrientation(Qt.Orientation.Horizontal)
@@ -615,12 +592,8 @@ class MainWindow(QMainWindow):
         self.sidebar.addItem("PowerPlay")
 
         # Combat tab (stub)
-        tab_combat = QWidget()
-        cb = QVBoxLayout(tab_combat)
-        cb.addWidget(QLabel("Combat"))
-        cb.addWidget(self.combat_hint)
-        cb.addWidget(self.combat_table, 1)
-        self.stack.addWidget(tab_combat)
+        self.combat_panel = CombatPanel()
+        self.stack.addWidget(self.combat_panel)
         self.sidebar.addItem("Combat")
 
         # Intel tab (external / advisory)
@@ -1982,95 +1955,7 @@ class MainWindow(QMainWindow):
         self.intel_box.setPlainText("\n".join(lines).strip() or "No usable intel entries.")
 
     def _refresh_combat(self):
-        try:
-            contacts = getattr(self.state, "combat_contacts", None) or {}
-            cur_key = getattr(self.state, "combat_current_key", "") or ""
-            pledged = getattr(self.state, "pp_power", None)
-
-            rows = []
-            for k, rec in contacts.items():
-                if isinstance(rec, dict):
-                    rows.append((k, rec))
-
-            def _ts(rec):
-                ts = rec.get("LastSeen") or ""
-                return ts if isinstance(ts, str) else ""
-
-            rows.sort(key=lambda x: _ts(x[1]), reverse=True)
-
-            self.combat_table.setSortingEnabled(False)
-            self.combat_table.setRowCount(len(rows))
-
-            selected_row = None
-            for r, (k, rec) in enumerate(rows):
-                pilot = rec.get("Pilot") or ""
-                destroyed = bool(rec.get("Destroyed"))
-                if destroyed and pilot:
-                    pilot = f"{pilot} [DESTROYED]"
-                rank = rec.get("Rank") or ""
-                ship = rec.get("Ship") or ""
-                faction = rec.get("Faction") or ""
-                power = rec.get("Power") or ""
-                wanted_flag = bool(rec.get("Wanted"))
-                wanted = "Wanted" if wanted_flag else ""
-                bounty = rec.get("Bounty")
-                bounty_txt = f"{bounty:,}" if isinstance(bounty, int) else ""
-
-                ts = rec.get("LastSeen") or ""
-                if isinstance(ts, str) and "T" in ts:
-                    last_seen = ts.split("T", 1)[1].replace("Z", "")[:8]
-                else:
-                    last_seen = str(ts) if ts else ""
-
-                items = [
-                    QTableWidgetItem(str(pilot)),
-                    QTableWidgetItem(str(rank)),
-                    QTableWidgetItem(str(ship)),
-                    QTableWidgetItem(str(faction)),
-                    QTableWidgetItem(str(power)),
-                    QTableWidgetItem(str(wanted)),
-                    QTableWidgetItem(str(bounty_txt)),
-                    QTableWidgetItem(str(last_seen)),
-                ]
-                items[0].setData(Qt.ItemDataRole.UserRole, k)
-
-                is_pp_enemy = bool(pledged and power and power != pledged)
-                is_high_bounty = bool(
-                    wanted_flag
-                    and isinstance(bounty, int)
-                    and bounty >= 500000
-                    and str(rank).lower() in {"dangerous", "deadly", "elite"}
-                )
-
-                highlight = None
-                foreground = None
-                if destroyed:
-                    highlight = QColor(90, 30, 30)   # muted dark red
-                    foreground = QColor(255, 220, 220)
-                elif is_pp_enemy:
-                    highlight = QColor(170, 0, 170)  # purple
-                    foreground = QColor(255, 255, 255)
-                elif is_high_bounty:
-                    highlight = QColor(200, 160, 0)  # gold
-                    foreground = QColor(255, 255, 255)
-
-                if highlight:
-                    for it in items:
-                        it.setBackground(highlight)
-                        if foreground:
-                            it.setForeground(foreground)
-
-                for c, it in enumerate(items):
-                    self.combat_table.setItem(r, c, it)
-
-                if cur_key and k == cur_key:
-                    selected_row = r
-
-            self.combat_table.setSortingEnabled(True)
-            if selected_row is not None:
-                self.combat_table.selectRow(selected_row)
-        except Exception:
-            log.exception("Combat refresh failed")
+        self.combat_panel.refresh(self.state)
 
     def _refresh_powerplay(self):
         # Everything here is journal-driven. Use getattr defensively to avoid crashes.
