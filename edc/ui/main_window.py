@@ -966,7 +966,7 @@ class MainWindow(QMainWindow):
                 elif ctrl and ctrl == pledged:
                     lines.append(f"🟢 PP: Friendly space ({ctrl}) — {pp_state or 'Active'}")
                 elif ctrl and ctrl != pledged:
-                    lines.append(f"🔴 PP: Enemy-controlled ({ctrl}) — {pp_state or 'Active'} (caution)")
+                    lines.append(f"🔴 PP: Enemy-Controlled ({ctrl}) — {pp_state or 'Active'} (caution)")
                 else:
                     ptxt = ", ".join([p for p in pw[:3] if isinstance(p, str)])
                     extra = f" | Powers: {ptxt}" if ptxt else ""

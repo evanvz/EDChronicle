@@ -34,8 +34,7 @@ class CombatPanel(QWidget):
         self.combat_table = QTableWidget()
         self.combat_table.setColumnCount(8)
         self.combat_table.setHorizontalHeaderLabels(
-            ["Pilot", "Rank", "Ship", "Faction",
-             "Power", "Wanted", "Bounty", "Last Seen"]
+            ["Pilot", "Rank", "Ship", "Faction", "Power", "Wanted", "Bounty", "Last Seen"]
         )
         self.combat_table.setEditTriggers(
             QTableWidget.EditTrigger.NoEditTriggers
