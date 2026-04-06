@@ -81,12 +81,11 @@ class SystemDataLoader:
                             row["planet_class"] or ""
                         ),
                         terraformable=bool(row["terraformable"]),
-                        mapped=bool(row["mapped"]),
+                        mapped=bool(row["dss_mapped"] or row["was_mapped"]),
                         first_discovered=False,
                     )
                 except Exception:
                     estimated_value = None
-
             rec = {
                 "BodyID": body_id if isinstance(body_id, int) else None,
                 "BodyName": body_name,
