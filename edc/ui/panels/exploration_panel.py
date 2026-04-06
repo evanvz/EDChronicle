@@ -432,6 +432,8 @@ class ExplorationPanel(QWidget):
                         if isinstance(s.get("Category"), str)
                         else "Other"
                     )
+                    if cat_raw == "FleetCarrier":
+                        continue
                     cat = self._norm_token(cat_raw) or "Other"
                     if cat not in cats:
                         cat = "Other"

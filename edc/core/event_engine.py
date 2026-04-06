@@ -40,12 +40,14 @@ class EventEngine:
     def _classify_system_signal(self, signal_name: str, uss_type: str, is_station: Any, signal_type: Any = None) -> str:
         """
         Journal-derived classification to keep UI low-noise.
-        Categories: Megaship | Station | USS | Phenomena | Other
+        Categories: Megaship | FleetCarrier | Station | USS | Phenomena | Other
         """
         try:
             st = (signal_type or "")
             if isinstance(st, str) and st.strip().lower() == "megaship":
                 return "Megaship"
+            if isinstance(st, str) and st.strip().lower() == "fleetcarrier":
+                return "FleetCarrier"
             if isinstance(is_station, bool) and is_station:
                 return "Station"
             if isinstance(uss_type, str) and uss_type.strip():
