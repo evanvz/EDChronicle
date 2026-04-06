@@ -948,12 +948,6 @@ class MainWindow(QMainWindow):
                 bits.append(f"Ends in {ends_txt}")
             lines.append(" | ".join(bits))
 
-        # Session ledger (gross totals for this app run)
-        cod_col = int(getattr(self.state, "session_codex_collected", 0) or 0)
-        cod_sold = int(getattr(self.state, "session_codex_earnings", 0) or 0)
-
-        if cod_col > 0 or cod_sold > 0:
-            lines.append(f"Codex | Collected: {cod_col:,} cr | Sold: {cod_sold:,} cr")
         # One-line "action hints" (what's worth doing in THIS system)
         try:
             min_100k = int(getattr(self.cfg, "min_planet_value_100k", 10) or 10)
