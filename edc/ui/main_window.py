@@ -935,10 +935,15 @@ class MainWindow(QMainWindow):
             except Exception:
                 ends_txt = ""
 
+            percentile = chosen.get("PlayerPercentileBand")
+            percentile_txt = f"Top {percentile}%" if isinstance(percentile, int) else ""
+        
             bits = [f"CG: {title}"]
             if loc:
                 bits.append(loc)
             bits.append(f"You {pc_txt}")
+            if percentile_txt:
+                bits.append(percentile_txt)
             if ends_txt:
                 bits.append(f"Ends in {ends_txt}")
             lines.append(" | ".join(bits))
