@@ -151,26 +151,75 @@ def handle(engine, name: str | None, event: Dict[str, Any], msgs: List[str]) -> 
         return True
 
     elif name == "Scan":
-        # Body scan (DSS/FSS)
         body_name = event.get("BodyName")
         body_id = event.get("BodyID")
+        planet_class = event.get("PlanetClass") or ""
+
         if isinstance(body_id, int) and isinstance(body_name, str) and body_name.strip():
             engine.state.body_id_to_name[body_id] = body_name
 
         if isinstance(body_name, str) and body_name.strip():
             engine.state.last_body = body_name
 
-        # Store scan record in bodies dict keyed by BodyName
-        if isinstance(body_name, str) and body_name.strip():
-            engine.state.bodies[body_name] = event
+        if isinstance(body_name, str) and body_name.strip() and planet_class:
+            terraform_state = event.get("TerraformState") or ""
+            terraformable = terraform_state.strip().lower() not in ("", "notterraformable")
+            was_mapped = bool(event.get("WasMapped", False))
+            dss_mapped = bool(event.get("DSSMapped", False))
+            first_discovered = not bool(event.get("WasDiscovered", True))
+            landable_raw = event.get("Landable")
+            landable = bool(landable_raw) if isinstance(landable_raw, bool) else None
+            distance = event.get("DistanceFromArrivalLS")
+            if not isinstance(distance, (int, float)):
+                distance = None
+            materials = event.get("Materials") or []
+            mats_dict = {}
+            if isinstance(materials, list):
+                for m in materials:
+                    if isinstance(m, dict):
+                        n = m.get("Name") or ""
+                        p = m.get("Percent")
+                        if n and isinstance(p, (int, float)):
+                            mats_dict[n] = p
+            volcanism = event.get("Volcanism") or ""
 
-        # Value estimate (if table is present)
-        try:
-            if engine.planet_values and isinstance(body_name, str) and body_name.strip():
-                val = engine.planet_values.estimate_base_value(event)
-                engine.state.bodies[body_name]["EstimatedValue"] = val
-        except Exception:
-            pass
+            estimated_value = None
+            try:
+                if engine.planet_values:
+                    mapped = was_mapped or dss_mapped
+                    estimated_value = engine.planet_values.estimate(
+                        planet_class=planet_class,
+                        terraformable=terraformable,
+                        mapped=mapped,
+                        first_discovered=first_discovered,
+                    )
+            except Exception:
+                pass
+
+            existing = engine.state.bodies.get(body_name) or {}
+            if not isinstance(existing, dict):
+                existing = {}
+
+            rec = {
+                "BodyID":          body_id if isinstance(body_id, int) else existing.get("BodyID"),
+                "BodyName":        body_name,
+                "PlanetClass":     planet_class,
+                "Terraformable":   terraformable,
+                "DistanceLS":      distance,
+                "Landable":        landable,
+                "WasMapped":       was_mapped,
+                "DSSMapped":       dss_mapped or existing.get("DSSMapped", False),
+                "FirstDiscovered": first_discovered,
+                "EstimatedValue":  estimated_value,
+                "BioSignals":      existing.get("BioSignals", 0),
+                "GeoSignals":      existing.get("GeoSignals", 0),
+                "HumanSignals":    existing.get("HumanSignals", 0),
+                "BioGenuses":      existing.get("BioGenuses", []),
+                "Materials":       mats_dict,
+                "Volcanism":       volcanism,
+            }
+            engine.state.bodies[body_name] = rec
+
         return True
 
     elif name == "SAAScanComplete":
