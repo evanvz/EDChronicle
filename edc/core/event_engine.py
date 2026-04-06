@@ -496,8 +496,30 @@ class EventEngine:
             self.state.pp_power = event.get("Power")
             self.state.pp_rank = event.get("Rank")
             self.state.pp_merits = event.get("Merits")
+            if self.state.pp_merits_start is None and isinstance(
+                self.state.pp_merits, int
+            ):
+                self.state.pp_merits_start = self.state.pp_merits
+                self.state.pp_merits_session = 0
             if self.state.pp_power:
-                msgs.append(f"PP: {self.state.pp_power} (Rank {self.state.pp_rank}, Merits {self.state.pp_merits})")
+                msgs.append(
+                    f"PP: {self.state.pp_power} "
+                    f"(Rank {self.state.pp_rank}, "
+                    f"Merits {self.state.pp_merits:,})"
+                )
+
+        elif name == "PowerplayMerits":
+            gained = event.get("MeritsGained")
+            total = event.get("TotalMerits")
+            if isinstance(total, int):
+                self.state.pp_merits = total
+            if isinstance(gained, int) and gained > 0:
+                self.state.pp_merits_session += gained
+                msgs.append(
+                    f"PP Merits: +{gained:,} this action "
+                    f"| Session: +{self.state.pp_merits_session:,} "
+                    f"| Total: {self.state.pp_merits:,}"
+                )
 
         elif name == "Cargo":
             self.state.cargo_count = event.get("Count")
