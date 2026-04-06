@@ -16,10 +16,8 @@ class GameState:
     pp_power: Optional[str] = None
     pp_rank: Optional[int] = None
     pp_merits: Optional[int] = None
-    power: Optional[str] = None
-    power_state: Optional[str] = None
-    power_rank: Optional[int] = None
-    power_merits: Optional[int] = None
+    pp_merits_session: int = 0
+    pp_merits_start: Optional[int] = None
     system_controlling_power: Optional[str] = None
     system_powerplay_state: Optional[str] = None
     system_powers: List[str] = field(default_factory=list)

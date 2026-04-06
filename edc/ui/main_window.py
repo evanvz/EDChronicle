@@ -796,6 +796,27 @@ class MainWindow(QMainWindow):
             exo_session = int(getattr(self.state, "exobiology_session_collected_est", 0) or 0)
             exo_unsold = int(getattr(self.state, "exobiology_unsold_total_est", 0) or 0)
 
+            pp_merits_session = int(
+                getattr(self.state, "pp_merits_session", 0) or 0
+            )
+
+            pp_line = ""
+            if pp_merits_session > 0:
+                pp_line = (
+                    f"<br><span style='color:#DDA0DD;'>"
+                    f"PP Merits: +{pp_merits_session:,}</span>"
+                )
+
+            pp_merits_session = int(
+                getattr(self.state, "pp_merits_session", 0) or 0
+            )
+            pp_line = ""
+            if pp_merits_session > 0:
+                pp_line = (
+                    f"<br><span style='color:#DDA0DD;'>"
+                    f"PP Merits: +{pp_merits_session:,}</span>"
+                )
+
             self.session_panel.setText(
                 "Session<br>"
                 f"Kills: {kills}<br>"
@@ -805,7 +826,9 @@ class MainWindow(QMainWindow):
                 f"<span style='color:#B7E3FF;'>Expl. Unsold: {exploration_unsold:,} cr</span><br>"
                 f"<span style='color:#7CFC98;'>Exobio: {exo_session:,} cr</span><br>"
                 f"<span style='color:#BDFCC9;'>Exo Unsold: {exo_unsold:,} cr</span>"
+                f"{pp_line}"
             )
+
         except Exception:
             pass
 
