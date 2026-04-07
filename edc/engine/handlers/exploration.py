@@ -241,18 +241,6 @@ def handle(engine, name: str | None, event: Dict[str, Any], msgs: List[str]) -> 
             engine.state.non_body_count = nbc
         return True
 
-    elif name == "FSSSignalDiscovered":
-        # System-level signal classification
-        sig_type = event.get("SignalType")
-        sig_name = event.get("SignalName")
-        if isinstance(sig_type, str):
-            # EventEngine expects: (sig_type, sig_name, is_station)
-            # Best-effort inference; default to False.
-            is_station = bool(event.get("IsStation")) if "IsStation" in event else False
-            cls = engine._classify_system_signal(sig_type, sig_name, is_station)
-            engine.state.system_signals.append(cls)
-        return True
-
     elif name == "FSSBodySignals":
         # Per-body biological/geological signal counts
         body = event.get("BodyName")

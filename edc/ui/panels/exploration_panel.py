@@ -418,9 +418,10 @@ class ExplorationPanel(QWidget):
             if isinstance(sigs, list) and sigs:
                 out_lines = []
                 cat_order = [
-                    "Phenomena", "Megaship", "TouristBeacon",
-                    "Station", "USS", "Other"
+                    "Phenomena", "Megaship", "Station",
+                    "Installation", "NavBeacon", "USS", "Other"
                 ]
+                _hidden_categories = {"FleetCarrier"}
                 cats = {k: [] for k in cat_order}
                 cat_counts = {k: 0 for k in cat_order}
                 uss_counts = {}
@@ -432,7 +433,7 @@ class ExplorationPanel(QWidget):
                         if isinstance(s.get("Category"), str)
                         else "Other"
                     )
-                    if cat_raw == "FleetCarrier":
+                    if cat_raw in _hidden_categories:
                         continue
                     cat = self._norm_token(cat_raw) or "Other"
                     if cat not in cats:

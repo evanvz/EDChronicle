@@ -587,6 +587,7 @@ class MainWindow(QMainWindow):
             self._save_session_ledger()
 
         incoming_system_address = evt.get("SystemAddress")
+
         if name in ("Location", "FSDJump"):
             if isinstance(incoming_system_address, int) and incoming_system_address != old_system_address:
                 self.state.system_address = incoming_system_address
@@ -597,6 +598,14 @@ class MainWindow(QMainWindow):
         for m in msgs:
             if m == "refresh_powerplay":
                 self._refresh_powerplay()
+            elif m == "refresh_exploration":
+                self._refresh_exploration()
+            elif m == "refresh_exobiology":
+                self._refresh_exobiology()
+            elif m == "refresh_combat":
+                self._refresh_combat()
+            elif m == "refresh_overview":
+                self._refresh_system_card()
             else:
                 self._append(m)
 
@@ -605,6 +614,10 @@ class MainWindow(QMainWindow):
         # Refresh PowerPlay panel when relevant events occur
         if name in ("Location", "FSDJump", "Powerplay", "PowerplayState"):
             self._refresh_powerplay()
+
+        # Refresh exploration panel when signal or scan data arrives
+        if name in ("FSSSignalDiscovered", "FSSDiscoveryScan", "SAASignalsFound"):
+            self._refresh_exploration()
 
     def _schedule_hud_refresh(self):
         """Coalesce multiple rapid journal events into a single UI refresh."""

@@ -40,22 +40,29 @@ class EventEngine:
     def _classify_system_signal(self, signal_name: str, uss_type: str, is_station: Any, signal_type: Any = None) -> str:
         """
         Journal-derived classification to keep UI low-noise.
-        Categories: Megaship | FleetCarrier | Station | USS | Phenomena | Other
+        Categories: Megaship | FleetCarrier | Station | Installation
+                    | NavBeacon | USS | Phenomena | Other
         """
         try:
-            st = (signal_type or "")
-            if isinstance(st, str) and st.strip().lower() == "megaship":
+            st = (signal_type or "").strip().lower()
+            if st == "megaship":
                 return "Megaship"
-            if isinstance(st, str) and st.strip().lower() == "fleetcarrier":
+            if st == "fleetcarrier":
                 return "FleetCarrier"
+            if st == "installation":
+                return "Installation"
+            if st == "navbeacon":
+                return "NavBeacon"
             if isinstance(is_station, bool) and is_station:
                 return "Station"
             if isinstance(uss_type, str) and uss_type.strip():
                 return "USS"
             s = signal_name if isinstance(signal_name, str) else ""
             sl = s.lower()
-            # Heuristics for notable stellar phenomena / lagrange clouds etc.
-            if any(k in sl for k in ("lagrange", "cloud", "anomal", "phenomen", "notable", "stellar")):
+            if any(k in sl for k in (
+                "lagrange", "cloud", "anomal", "phenomen",
+                "notable", "stellar"
+            )):
                 return "Phenomena"
         except Exception:
             pass
@@ -357,8 +364,12 @@ class EventEngine:
                 self.state.jump_star_class = star_class
                 self._apply_external_intel(self.state.system, None)
 
-                # Force PP UI refresh so old PP system info disappears immediately
+                # Force UI refresh so old system info disappears immediately
                 msgs.append("refresh_powerplay")
+                msgs.append("refresh_exploration")
+                msgs.append("refresh_exobiology")
+                msgs.append("refresh_combat")
+                msgs.append("refresh_overview")
 
                 if target:
                     msgs.append(f"Jumping to: {target} ({star_class})")
