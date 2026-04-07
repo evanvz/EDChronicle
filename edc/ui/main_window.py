@@ -595,21 +595,17 @@ class MainWindow(QMainWindow):
                 self._refresh_hud()
                 self._refresh_exploration()
 
+        if name == "StartJump" and evt.get("JumpType") == "Hyperspace":
+            self._clear_all_panels()
+
         for m in msgs:
             if m == "refresh_powerplay":
                 self._refresh_powerplay()
-            elif m == "refresh_exploration":
-                self._refresh_exploration()
-            elif m == "refresh_exobiology":
-                self._refresh_exobiology()
-            elif m == "refresh_combat":
-                self._refresh_combat()
-            elif m == "refresh_overview":
-                self._refresh_system_card()
             else:
                 self._append(m)
 
-        self._schedule_hud_refresh()
+        if name != "StartJump":
+            self._schedule_hud_refresh()
 
         # Refresh PowerPlay panel when relevant events occur
         if name in ("Location", "FSDJump", "Powerplay", "PowerplayState"):
@@ -1357,6 +1353,39 @@ class MainWindow(QMainWindow):
 
     def _refresh_system_card(self):
         self.overview_panel.refresh(self.state)
+
+    def _clear_all_panels(self):
+        """Clear all system-specific UI panels on jump."""
+        try:
+            self.overview_panel.refresh(self.state)
+        except Exception:
+            pass
+        try:
+            self.exploration_panel.refresh(
+                self.state, self.cfg, self.planet_values
+            )
+        except Exception:
+            pass
+        try:
+            self.exobiology_panel.refresh(
+                self.state, self.cfg, self.exo_values
+            )
+        except Exception:
+            pass
+        try:
+            self.combat_panel.refresh(self.state)
+        except Exception:
+            pass
+        try:
+            self.powerplay_panel.refresh(self.state)
+        except Exception:
+            pass
+        try:
+            self.intel_panel.refresh(
+                self.state, self.farming_locations
+            )
+        except Exception:
+            pass
 
     def _compute_action_state(self):
         """

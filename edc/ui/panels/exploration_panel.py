@@ -156,6 +156,8 @@ class ExplorationPanel(QWidget):
 
         self.min_value_changed.emit(f"{min_100k / 10:.1f}M")
 
+        self._refresh_signals_box(state)
+
         if not state.bodies:
             hint = (
                 "No scan data yet. Tip: Do FSS / honk / nav beacon "
@@ -326,12 +328,8 @@ class ExplorationPanel(QWidget):
                 est_val, row_landable, row_geo, row_min_value,
             ) = row_tuple
 
-            self.exploration_table.setItem(
-                r, 0, QTableWidgetItem(str(b))
-            )
-            self.exploration_table.setItem(
-                r, 1, QTableWidgetItem(str(pc))
-            )
+            self.exploration_table.setItem(r, 0, QTableWidgetItem(str(b)))
+            self.exploration_table.setItem(r, 1, QTableWidgetItem(str(pc)))
 
             it_ls = QTableWidgetItem(str(ls_txt))
             try:
@@ -343,15 +341,9 @@ class ExplorationPanel(QWidget):
                 pass
             self.exploration_table.setItem(r, 2, it_ls)
 
-            self.exploration_table.setItem(
-                r, 3, QTableWidgetItem(str(bio_txt))
-            )
-            self.exploration_table.setItem(
-                r, 4, QTableWidgetItem(str(geo_txt))
-            )
-            self.exploration_table.setItem(
-                r, 5, QTableWidgetItem(str(bio_dss_txt))
-            )
+            self.exploration_table.setItem(r, 3, QTableWidgetItem(str(bio_txt)))
+            self.exploration_table.setItem(r, 4, QTableWidgetItem(str(geo_txt)))
+            self.exploration_table.setItem(r, 5, QTableWidgetItem(str(bio_dss_txt)))
 
             it_val = QTableWidgetItem(str(v_txt))
             try:
@@ -360,26 +352,19 @@ class ExplorationPanel(QWidget):
                 pass
             self.exploration_table.setItem(r, 6, it_val)
 
-            self.exploration_table.setItem(
-                r, 7, QTableWidgetItem(str(prev_map_txt))
-            )
-            self.exploration_table.setItem(
-                r, 8, QTableWidgetItem(str(dss_txt))
-            )
-            self.exploration_table.setItem(
-                r, 9, QTableWidgetItem(str(flags_txt))
-            )
+            self.exploration_table.setItem(r, 7, QTableWidgetItem(str(prev_map_txt)))
+            self.exploration_table.setItem(r, 8, QTableWidgetItem(str(dss_txt)))
+            self.exploration_table.setItem(r, 9, QTableWidgetItem(str(flags_txt)))
 
-            # Row styling — fixed: use actual row data not undefined row_data
             try:
                 row_color = None
                 if isinstance(est_val, int) and est_val >= row_min_value:
                     if row_landable and isinstance(row_geo, int) and row_geo > 0:
-                        row_color = "#2A1A00"  # landable geo — amber
+                        row_color = "#2A1A00"
                     elif row_landable:
-                        row_color = "#0F3057"  # high value + landable — blue
+                        row_color = "#0F3057"
                     else:
-                        row_color = "#102A43"  # high value — elite blue
+                        row_color = "#102A43"
                 if row_color:
                     for c in range(self.exploration_table.columnCount()):
                         item = self.exploration_table.item(r, c)
@@ -412,7 +397,9 @@ class ExplorationPanel(QWidget):
             f"{hv_unmapped} high-value unmapped"
         )
 
-        # System signals box
+        self._refresh_materials_shortlist(state)
+
+    def _refresh_signals_box(self, state):
         try:
             sigs = getattr(state, "system_signals", None) or []
             if isinstance(sigs, list) and sigs:
@@ -518,8 +505,6 @@ class ExplorationPanel(QWidget):
                     self.system_signals_box.setPlainText("")
         except Exception:
             self.system_signals_box.setPlainText("")
-
-        self._refresh_materials_shortlist(state)
 
     def _refresh_materials_shortlist(self, state):
         try:

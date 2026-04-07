@@ -366,10 +366,6 @@ class EventEngine:
 
                 # Force UI refresh so old system info disappears immediately
                 msgs.append("refresh_powerplay")
-                msgs.append("refresh_exploration")
-                msgs.append("refresh_exobiology")
-                msgs.append("refresh_combat")
-                msgs.append("refresh_overview")
 
                 if target:
                     msgs.append(f"Jumping to: {target} ({star_class})")
