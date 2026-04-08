@@ -210,6 +210,7 @@ class EventEngine:
                 self.state.system_address = new_system_address
             self.state.in_hyperspace = False
             self.state.jump_star_class = None
+
             self.state.system_allegiance = event.get("SystemAllegiance")
             self.state.system_government = event.get("SystemGovernment_Localised") or event.get("SystemGovernment")
             self.state.system_economy = event.get("SystemEconomy_Localised") or event.get("SystemEconomy")

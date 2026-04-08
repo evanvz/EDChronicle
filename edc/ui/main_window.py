@@ -843,28 +843,28 @@ class MainWindow(QMainWindow):
 
         # ---- Update route tracker ----
         try:
-            route_target = getattr(self.state, "route_target_system", None)
-            route_star_class = getattr(self.state, "route_target_star_class", None)
-            route_jumps = getattr(self.state, "route_remaining_jumps", None)
+            if not getattr(self.state, "in_hyperspace", False):
+                route_target = getattr(self.state, "route_target_system", None)
+                route_star_class = getattr(self.state, "route_target_star_class", None)
+                route_jumps = getattr(self.state, "route_remaining_jumps", None)
 
-            target_txt = route_target if isinstance(route_target, str) and route_target.strip() else "-"
-            star_label, star_color = self._get_star_class_label_and_color(route_star_class)
+                target_txt = route_target if isinstance(route_target, str) and route_target.strip() else "-"
+                star_label, star_color = self._get_star_class_label_and_color(route_star_class)
+                jumps_txt = str(route_jumps) if isinstance(route_jumps, int) else "-"
 
-            jumps_txt = str(route_jumps) if isinstance(route_jumps, int) else "-"
+                if star_label:
+                    next_line = (
+                        f"Next: {target_txt} "
+                        f"(<span style='color:{star_color};'>{star_label}</span>)"
+                    )
+                else:
+                    next_line = f"Next: {target_txt}"
 
-            if star_label:
-                next_line = (
-                    f"Next: {target_txt} "
-                    f"(<span style='color:{star_color};'>{star_label}</span>)"
+                self.route_panel.setText(
+                    "Route<br>"
+                    f"{next_line}<br>"
+                    f"Jumps: {jumps_txt}"
                 )
-            else:
-                next_line = f"Next: {target_txt}"
-
-            self.route_panel.setText(
-                "Route<br>"
-                f"{next_line}<br>"
-                f"Jumps: {jumps_txt}"
-            )
         except Exception:
             pass
 
