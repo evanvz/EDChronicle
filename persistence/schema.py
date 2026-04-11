@@ -42,6 +42,18 @@ CREATE TABLE IF NOT EXISTS exobiology (
     PRIMARY KEY (system_address, body_name, genus, species, variant)
 );
 
+CREATE TABLE IF NOT EXISTS codex_entries (
+    system_address  INTEGER NOT NULL,
+    body_id         INTEGER NOT NULL,
+    genus           TEXT    NOT NULL,
+    species         TEXT    NOT NULL,
+    variant         TEXT    NOT NULL,
+    codex_entry_id  INTEGER,
+    codex_name      TEXT,
+    base_value      INTEGER,
+    PRIMARY KEY (system_address, body_id, genus)
+);
+
 CREATE TABLE IF NOT EXISTS dss_genus_discovery (
     system_address INTEGER NOT NULL,
     body_name TEXT NOT NULL,

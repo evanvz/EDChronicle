@@ -196,6 +196,50 @@ class Repository:
             ),
         )
 
+    def save_codex_entry(
+        self,
+        system_address: int,
+        body_id: int,
+        genus: str,
+        species: str,
+        variant: str,
+        codex_entry_id: int | None,
+        codex_name: str | None,
+        base_value: int | None,
+    ):
+        self.db.execute(
+            """
+            INSERT INTO codex_entries (
+                system_address, body_id, genus, species,
+                variant, codex_entry_id, codex_name, base_value
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(system_address, body_id, genus) DO UPDATE SET
+                species        = excluded.species,
+                variant        = excluded.variant,
+                codex_entry_id = excluded.codex_entry_id,
+                codex_name     = excluded.codex_name,
+                base_value     = excluded.base_value
+            """,
+            (
+                system_address, body_id, genus, species,
+                variant, codex_entry_id, codex_name, base_value,
+            ),
+        )
+
+    def get_codex_entries(self, system_address: int):
+        return self.db.execute(
+            """
+            SELECT
+                system_address, body_id, genus, species,
+                variant, codex_entry_id, codex_name, base_value
+            FROM codex_entries
+            WHERE system_address = ?
+            ORDER BY body_id, genus
+            """,
+            (system_address,),
+        ).fetchall()
+
     def mark_journal_processed(
         self,
         file_name: str,
