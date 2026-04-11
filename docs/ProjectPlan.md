@@ -117,6 +117,7 @@ High
   - run
   - test
   - commit
+  - use Claude Code (VS Code extension) for analysis and architecture discussion — never for direct file edits
 
 ### Priority
 Medium

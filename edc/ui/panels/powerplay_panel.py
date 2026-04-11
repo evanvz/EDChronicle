@@ -297,16 +297,55 @@ class PowerplayPanel(QWidget):
             txt.append(hint)
 
         # Add pp_activities list if available
+        self.pp_actions.setTextFormat(Qt.TextFormat.RichText)
+
+        html_parts = []
+        if txt:
+            safe = "<br>".join(
+                t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                for t in txt
+            )
+            html_parts.append(safe)
+
         if pp_activities:
             pp_state = getattr(state, "system_powerplay_state", None)
             acts = pp_activities.get_actions(pp_state or "")
             if acts:
-                txt.append("")
-                txt.append("Recommended activities:")
+                ethos_colors = {
+                    "Combat":    "#FF6B6B",
+                    "Finance":   "#FFD93D",
+                    "Social":    "#6BCB77",
+                    "Logistics": "#4D96FF",
+                    "Covert":    "#C77DFF",
+                }
+                ethos_order = [
+                    "Combat", "Finance", "Social",
+                    "Logistics", "Covert"
+                ]
+                grouped = {e: [] for e in ethos_order}
                 for a in acts:
-                    txt.append(f"  [{a.ethos}] {a.action}")
+                    if a.ethos in grouped:
+                        grouped[a.ethos].append(a.action)
+                    else:
+                        grouped.setdefault(a.ethos, []).append(a.action)
 
-        self.pp_actions.setText("\n".join(txt))
+                html_parts.append("<br><b>Recommended Activities:</b>")
+                for ethos in ethos_order:
+                    actions = grouped.get(ethos, [])
+                    if not actions:
+                        continue
+                    color = ethos_colors.get(ethos, "#FFFFFF")
+                    html_parts.append(
+                        f'<br><span style="color:{color};'
+                        f'font-weight:700;">{ethos}</span>'
+                    )
+                    for action in actions:
+                        html_parts.append(
+                            f'<span style="color:{color};">'
+                            f'&nbsp;&nbsp;• {action}</span>'
+                        )
+
+        self.pp_actions.setText("<br>".join(html_parts))
 
         has_conflict_rows = isinstance(prog, dict) and any(
             isinstance(k, str) and isinstance(v, (int, float))

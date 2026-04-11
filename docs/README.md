@@ -98,6 +98,18 @@ The historical importer currently persists data through repository methods such 
 
 Live event processing currently updates in-memory state through `EventEngine` and UI logic through `MainWindow`. Historical import is the main confirmed persistence path.
 
+## Development tooling
+
+| Tool | Purpose |
+|------|---------|
+| Visual Studio Code | Primary IDE |
+| Claude Code (VS Code extension) | AI-assisted analysis and architecture discussion — analysis only, no direct file edits |
+| Python venv (Windows) | Isolated runtime environment |
+| Git | Version control with branch-based workflow |
+| GitHub | Remote repository and release tracking |
+
+**Claude Code usage rule:** Claude Code is used in read-only/discussion mode only. All code changes are reviewed and applied manually before committing. No AI tool writes directly to project files.
+
 ## Running the application
 
 Current startup is driven through the application bootstrap in `edc/app.py`, with `run()` acting as the main application startup function.
