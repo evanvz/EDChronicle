@@ -219,6 +219,14 @@ class EventEngine:
             cf = event.get("SystemFaction", {}) or {}
             self.state.controlling_faction = cf.get("Name")
             self.state.factions = event.get("Factions", []) or []
+            self.state.system_conflicts = [
+                c for c in (event.get("Conflicts") or [])
+                if isinstance(c, dict)
+            ]
+            self.state.system_conflicts = [
+                c for c in (event.get("Conflicts") or [])
+                if isinstance(c, dict)
+            ]
 
             # Powerplay (if present in this system)
             cp = event.get("ControllingPower")
@@ -341,6 +349,7 @@ class EventEngine:
                 self.state.population = None
                 self.state.controlling_faction = None
                 self.state.factions = []
+                self.state.system_conflicts = []
 
                 # Clear per-system PowerPlay info
                 self.state.system_controlling_power = None

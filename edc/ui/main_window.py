@@ -1218,55 +1218,44 @@ class MainWindow(QMainWindow):
             # PP enemy scan alerts (Overview only)
             # Contact Alert
             try:
-                cur = getattr(self.state, "current_contact_alert", "") or ""
-                if isinstance(cur, str) and cur.strip():
-                    safe = cur.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                    contact_lines.append(safe)
+                for alert in (getattr(self.state, "pp_enemy_alerts", None) or []):
+                    if not isinstance(alert, dict):
+                        continue
+                    msg = alert.get("msg", "")
+                    if msg and msg not in seen:
+                        seen.add(msg)
+                        contact_lines.append(
+                            f'<span style="color:#FF4444;">⚠ {msg}</span>'
+                        )
             except Exception:
                 pass
-            for ln in lines:
-                if not isinstance(ln, str):
+
+            for ln in (lines or []):
+                if not isinstance(ln, str) or not ln.strip():
                     continue
                 if ln in seen:
                     continue
                 seen.add(ln)
+                ll = ln.lower()
+                if "action:" in ll:
+                    action_lines.append(ln)
+                elif "intel:" in ll or "poi:" in ll:
+                    intel_lines.append(ln)
 
-                if "Action:" in ln:
-                    if ln.startswith("🧰"):
-                        action_lines.append(f'<a href="materials"><span style="color:#FF8C00;">➤</span> {ln}</a>')
-                    elif ln.startswith("🔬"):
-                        action_lines.append(f'<a href="exobiology"><span style="color:#FF8C00;">➤</span> {ln}</a>')
-                    else:
-                        action_lines.append(f'<a href="exploration"><span style="color:#FF8C00;">➤</span> {ln}</a>')
-                elif ln.startswith("📌 Intel:") or ln.startswith("⛏️ Intel:"):
-                    intel_lines.append(f'<a href="intel">{ln}</a>')
-                elif ln.startswith("📌 POI:") or ln.startswith("⛏️ Farming:"):
-                    poi_lines.append(ln)
-            if getattr(self, "_pp_action_text", ""):
-                action_lines.append(f'<a href="powerplay">🛡️ {self._pp_action_text}</a>')
+            # PP action line
+            pp_txt = getattr(self, "_pp_action_text", "") or ""
+            if pp_txt:
+                has_pp_action = True
 
             final_lines = []
-
-            # Keep Overview compact: only show top-priority action items here.
-            max_action_lines = 5
-            max_intel_lines = 2
-            max_poi_lines = 2
-
             if contact_lines:
-                final_lines.append('<span style="color:#FF8C00; font-weight:700; font-size:13px;">CONTACT</span>')
-                final_lines.extend(contact_lines[:2])
-
+                final_lines.extend(contact_lines[:3])
             if action_lines:
-                final_lines.append('<span style="color:#FF8C00; font-weight:700; font-size:13px;">ACTIONS</span>')
-                final_lines.extend(action_lines[:max_action_lines])
-
+                final_lines.extend(action_lines[:6])
             if intel_lines:
-                final_lines.append('<span style="color:#FF8C00; font-weight:700; font-size:13px;">INTEL</span>')
-                final_lines.extend(intel_lines[:max_intel_lines])
-
-            if poi_lines:
-                final_lines.append('<span style="color:#FF8C00; font-weight:700; font-size:13px;">POI</span>')
-                final_lines.extend(poi_lines[:max_poi_lines])
+                final_lines.extend(intel_lines[:4])
+            if has_pp_action:
+                final_lines.append(pp_txt)
 
             self._animate_overview_update("<br>".join(final_lines))
         except Exception:

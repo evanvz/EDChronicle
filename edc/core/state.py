@@ -22,6 +22,7 @@ class GameState:
     system_powerplay_state: Optional[str] = None
     system_powers: List[str] = field(default_factory=list)
     system_powerplay_conflict_progress: Dict[str, float] = field(default_factory=dict)
+    system_conflicts: List[dict] = field(default_factory=list)
     system_powerplay_control_progress: Optional[float] = None
     system_powerplay_reinforcement: Optional[int] = None
     system_powerplay_undermining: Optional[int] = None
