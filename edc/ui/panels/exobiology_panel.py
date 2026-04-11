@@ -42,6 +42,15 @@ class ExobiologyPanel(QWidget):
 
         layout.addWidget(self.exo_display, 1)
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        try:
+            self.factions_display.document().setTextWidth(
+                self.factions_display.viewport().width()
+            )
+        except Exception:
+            pass
+
     def _norm_text(self, v):
         try:
             return " ".join(str(v).split())

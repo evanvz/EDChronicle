@@ -134,6 +134,24 @@ class ExplorationPanel(QWidget):
         self.exploration_hint.setWordWrap(True)
         layout.addWidget(self.exploration_hint, 0)
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        try:
+            self.factions_display.document().setTextWidth(
+                self.factions_display.viewport().width()
+            )
+        except Exception:
+            pass    
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        try:
+            self.factions_display.document().setTextWidth(
+                self.factions_display.viewport().width()
+            )
+        except Exception:
+            pass
+
     def _norm_token(self, val):
         if not isinstance(val, str):
             return ""
