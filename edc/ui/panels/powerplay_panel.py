@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
+    QScrollArea,
 )
 from PyQt6.QtCore import Qt
 
@@ -24,10 +25,32 @@ class PowerplayPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        layout = QVBoxLayout(self)
-        layout.setSpacing(6)
-        layout.setContentsMargins(6, 6, 6, 6)
+        # Outer layout holds just the scroll area
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        # Scroll area
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        outer.addWidget(scroll)
+
+        # Content widget inside scroll area
+        content = QWidget()
+        content.setStyleSheet("background: transparent;")
+        layout = QVBoxLayout(content)
+        layout.setSpacing(8)
+        layout.setContentsMargins(8, 8, 8, 8)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        scroll.setWidget(content)
 
         layout.addWidget(QLabel("PowerPlay"))
 
@@ -42,6 +65,7 @@ class PowerplayPanel(QWidget):
 
         self.pp_actions = QLabel("")
         self.pp_actions.setWordWrap(True)
+        self.pp_actions.setTextFormat(Qt.TextFormat.RichText)
         self.pp_actions.setAlignment(
             Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
         )
