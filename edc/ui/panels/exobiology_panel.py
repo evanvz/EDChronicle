@@ -3,14 +3,9 @@ from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QLabel,
-    QTableWidget,
-    QTableWidgetItem,
-    QHeaderView,
-    QAbstractScrollArea,
-    QSizePolicy,
+    QTextEdit,
 )
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor
+from PyQt6.QtCore import pyqtSignal
 
 log = logging.getLogger(__name__)
 
@@ -41,45 +36,11 @@ class ExobiologyPanel(QWidget):
         self.exo_hint.setWordWrap(True)
         layout.addWidget(self.exo_hint)
 
-        self.exo_table = QTableWidget()
-        self.exo_table.setColumnCount(9)
-        self.exo_table.setHorizontalHeaderLabels([
-            "Body", "Genus", "Species", "Variant",
-            "Potential", "Base Value", "Samples", "CCR", "Status"
-        ])
-        self.exo_table.setEditTriggers(
-            QTableWidget.EditTrigger.NoEditTriggers
-        )
-        self.exo_table.setSelectionBehavior(
-            QTableWidget.SelectionBehavior.SelectRows
-        )
-        self.exo_table.setSelectionMode(
-            QTableWidget.SelectionMode.SingleSelection
-        )
-        self.exo_table.verticalHeader().setVisible(False)
-        self.exo_table.setSizeAdjustPolicy(
-            QAbstractScrollArea.SizeAdjustPolicy.AdjustIgnored
-        )
-        self.exo_table.setVerticalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAsNeeded
-        )
-        self.exo_table.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAsNeeded
-        )
-        self.exo_table.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
-        )
-        self.exo_table.setSortingEnabled(False)
-        self.exo_table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.ResizeMode.Stretch
-        )
-        for col in range(1, 9):
-            self.exo_table.horizontalHeader().setSectionResizeMode(
-                col, QHeaderView.ResizeMode.ResizeToContents
-            )
-        self.exo_table.setMinimumHeight(120)
+        self.exo_display = QTextEdit()
+        self.exo_display.setReadOnly(True)
+        self.exo_display.setMinimumHeight(120)
 
-        layout.addWidget(self.exo_table, 1)
+        layout.addWidget(self.exo_display, 1)
 
     def _norm_text(self, v):
         try:
@@ -135,7 +96,7 @@ class ExobiologyPanel(QWidget):
                 break
 
         if not state.exo and not has_bio_targets:
-            self.exo_table.setRowCount(0)
+            self.exo_display.setHtml("")
             self.exo_action.setText(
                 "🔬 Exobiology: no biological signals detected "
                 "in this system yet."
@@ -562,49 +523,107 @@ class ExobiologyPanel(QWidget):
             return 30
 
         rows.sort(key=lambda x: (_status_rank(x[1]), -x[0]))
-
         shown = rows[:80]
-        self.exo_table.setRowCount(len(shown))
 
-        for r, row in enumerate(shown):
+        # Group by body
+        bodies_order = []
+        bodies_data = {}
+        for row in shown:
             if not isinstance(row, (list, tuple)):
                 continue
             if len(row) == 10:
-                (
-                    _samples, _status, body_txt, genus, species,
-                    var_txt, pot_txt, base_txt, prog_txt, status_txt
-                ) = row
+                _samples, _status, body_txt, genus, species, \
+                    var_txt, pot_txt, base_txt, prog_txt, status_txt = row
                 ccr_txt = ""
             else:
-                (
-                    _samples, _status, body_txt, genus, species,
-                    var_txt, pot_txt, base_txt, prog_txt,
-                    ccr_txt, status_txt
-                ) = row
+                _samples, _status, body_txt, genus, species, \
+                    var_txt, pot_txt, base_txt, prog_txt, \
+                    ccr_txt, status_txt = row
 
-            self.exo_table.setItem(r, 0, QTableWidgetItem(str(body_txt)))
-            self.exo_table.setItem(r, 1, QTableWidgetItem(str(genus)))
-            self.exo_table.setItem(r, 2, QTableWidgetItem(str(species)))
-            self.exo_table.setItem(r, 3, QTableWidgetItem(str(var_txt)))
-            self.exo_table.setItem(r, 4, QTableWidgetItem(str(pot_txt)))
-            self.exo_table.setItem(r, 5, QTableWidgetItem(str(base_txt)))
-            self.exo_table.setItem(r, 6, QTableWidgetItem(str(prog_txt)))
-            self.exo_table.setItem(r, 7, QTableWidgetItem(str(ccr_txt)))
-            self.exo_table.setItem(r, 8, QTableWidgetItem(str(status_txt)))
+            if body_txt not in bodies_data:
+                bodies_order.append(body_txt)
+                bodies_data[body_txt] = []
+            bodies_data[body_txt].append({
+                "genus":    genus,
+                "species":  species,
+                "variant":  var_txt,
+                "base":     base_txt,
+                "progress": prog_txt,
+                "ccr":      ccr_txt,
+                "status":   status_txt,
+                "samples":  _samples,
+            })
 
-            try:
-                if (
-                    isinstance(_samples, int)
-                    and _samples > 0
-                    and str(_status).upper() != "COMPLETE"
-                ):
-                    for c in range(self.exo_table.columnCount()):
-                        item = self.exo_table.item(r, c)
-                        if item is not None:
-                            item.setBackground(QColor(60, 90, 140))
-                            item.setForeground(QColor(255, 255, 255))
-            except Exception:
-                pass
+        status_colors = {
+            "COMPLETE":    "#6BCB77",
+            "IN PROGRESS": "#FFD93D",
+            "ANALYSE":     "#FFD93D",
+            "UNSCANNED":   "#AAAAAA",
+            "CODEX":       "#C77DFF",
+            "NEEDS DSS":   "#FF6B6B",
+        }
+
+        def _status_color(s):
+            s = str(s or "").upper()
+            for k, v in status_colors.items():
+                if s.startswith(k):
+                    return v
+            return "#AAAAAA"
+
+        def _esc(t):
+            return str(t or "").replace(
+                "&", "&amp;"
+            ).replace("<", "&lt;").replace(">", "&gt;")
+
+        html = []
+        html.append(
+            '<style>'
+            '.bh { color: #4D96FF; font-weight: 700; '
+            'font-size: 14px; margin-top: 8px; }'
+            '.gr { margin-left: 16px; margin-top: 4px; }'
+            '.st { font-weight: 700; }'
+            '.dm { color: #888888; }'
+            '</style>'
+        )
+
+        for body_txt in bodies_order:
+            entries = bodies_data[body_txt]
+            html.append(
+                f'<div class="bh">🪐 {_esc(body_txt)}</div>'
+            )
+            for e in entries:
+                sc = _status_color(e["status"])
+                line = '<div class="gr">'
+                line += (
+                    f'<span class="st" style="color:{sc};">'
+                    f'{_esc(e["status"])}</span> '
+                    f'<b>{_esc(e["genus"])}</b>'
+                )
+                if e["species"]:
+                    line += f' — {_esc(e["species"])}'
+                if e["variant"]:
+                    line += (
+                        f' <span class="dm">'
+                        f'({_esc(e["variant"])})</span>'
+                    )
+                line += (
+                    f' &nbsp;<span class="dm">'
+                    f'{_esc(e["progress"])}</span>'
+                )
+                if e["base"]:
+                    line += (
+                        f' &nbsp;<span style="color:#FFD93D;">'
+                        f'{_esc(e["base"])}</span>'
+                    )
+                if e["ccr"]:
+                    line += (
+                        f' &nbsp;<span class="dm">'
+                        f'CCR:{_esc(e["ccr"])}</span>'
+                    )
+                line += '</div>'
+                html.append(line)
+
+        self.exo_display.setHtml("".join(html))
 
         if has_bio_targets:
             self.exo_action.setText(
