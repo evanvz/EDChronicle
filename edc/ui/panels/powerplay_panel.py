@@ -216,7 +216,7 @@ class PowerplayPanel(QWidget):
 </div>
 """
 
-    def refresh(self, state):
+    def refresh(self, state, pp_activities=None):
         pledged = getattr(state, "pp_power", None)
         ctrl = getattr(state, "system_controlling_power", None)
         if ctrl in {"Stronghold", "Fortified", "Contested"}:
@@ -295,6 +295,17 @@ class PowerplayPanel(QWidget):
             txt.append("")
             txt.append("Best Activity Here:")
             txt.append(hint)
+
+        # Add pp_activities list if available
+        if pp_activities:
+            pp_state = getattr(state, "system_powerplay_state", None)
+            acts = pp_activities.get_actions(pp_state or "")
+            if acts:
+                txt.append("")
+                txt.append("Recommended activities:")
+                for a in acts:
+                    txt.append(f"  [{a.ethos}] {a.action}")
+
         self.pp_actions.setText("\n".join(txt))
 
         has_conflict_rows = isinstance(prog, dict) and any(

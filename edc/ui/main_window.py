@@ -1307,7 +1307,7 @@ class MainWindow(QMainWindow):
         self.combat_panel.refresh(self.state)
 
     def _refresh_powerplay(self):
-        self.powerplay_panel.refresh(self.state)
+        self.powerplay_panel.refresh(self.state, self.pp_activities)
 
     def _refresh_exobiology(self):
         self.exobiology_panel.refresh(
@@ -1377,7 +1377,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         try:
-            self.powerplay_panel.refresh(self.state)
+            self.powerplay_panel.refresh(self.state, self.pp_activities)
         except Exception:
             pass
         try:

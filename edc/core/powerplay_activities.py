@@ -16,8 +16,13 @@ class PowerPlayActivity:
 
 
 class PowerPlayActivityTable:
-    def __init__(self, states: Dict[str, List[PowerPlayActivity]]):
+    def __init__(
+        self,
+        states: Dict[str, List[PowerPlayActivity]],
+        state_mapping: Dict[str, str] | None = None,
+    ):
         self.states = states
+        self.state_mapping = state_mapping or {}
 
     @staticmethod
     def load_from_paths(*paths: Path) -> Optional["PowerPlayActivityTable"]:
@@ -44,8 +49,13 @@ class PowerPlayActivityTable:
 
                     states[state] = acts
 
-                log.info("Loaded PowerPlay activities from %s (%d states)", p, len(states))
-                return PowerPlayActivityTable(states)
+                state_mapping = data.get("state_mapping", {})
+
+                log.info(
+                    "Loaded PowerPlay activities from %s (%d states)",
+                    p, len(states)
+                )
+                return PowerPlayActivityTable(states, state_mapping)
 
             except Exception as e:
                 log.warning("Failed loading PowerPlay activities from %s: %s", p, e)
@@ -53,4 +63,5 @@ class PowerPlayActivityTable:
         return None
 
     def get_actions(self, state: str) -> List[PowerPlayActivity]:
-        return self.states.get(state, [])
+        mapped = self.state_mapping.get(state, state)
+        return self.states.get(mapped, [])
