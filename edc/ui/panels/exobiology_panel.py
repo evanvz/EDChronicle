@@ -280,6 +280,7 @@ class ExobiologyPanel(QWidget):
             var_txt = self._variant_color(rec.get("Variant") or "")
 
             ccr_txt = ""
+            ccr_ok = False
             try:
                 req = rec.get("CCRRequiredM")
                 dist = rec.get("CCRDistanceM")
@@ -287,12 +288,15 @@ class ExobiologyPanel(QWidget):
                     if not isinstance(dist, int) or dist < 0:
                         dist = 0
                     ccr_txt = f"{dist}/{req}m"
+                    ccr_ok = dist >= req
             except Exception:
                 ccr_txt = ""
+                ccr_ok = False
 
             rows.append((
                 samples, status, body_txt, genus, species,
-                var_txt, pot_txt, base_txt, prog_txt, ccr_txt, status
+                var_txt, pot_txt, base_txt, prog_txt, ccr_txt,
+                ccr_ok, status
             ))
             scanned_species += 1
 
@@ -535,10 +539,16 @@ class ExobiologyPanel(QWidget):
                 _samples, _status, body_txt, genus, species, \
                     var_txt, pot_txt, base_txt, prog_txt, status_txt = row
                 ccr_txt = ""
-            else:
+                ccr_ok = False
+            elif len(row) == 11:
                 _samples, _status, body_txt, genus, species, \
                     var_txt, pot_txt, base_txt, prog_txt, \
                     ccr_txt, status_txt = row
+                ccr_ok = False
+            else:
+                _samples, _status, body_txt, genus, species, \
+                    var_txt, pot_txt, base_txt, prog_txt, \
+                    ccr_txt, ccr_ok, status_txt = row
 
             if body_txt not in bodies_data:
                 bodies_order.append(body_txt)
@@ -550,6 +560,7 @@ class ExobiologyPanel(QWidget):
                 "base":     base_txt,
                 "progress": prog_txt,
                 "ccr":      ccr_txt,
+                "ccr_ok":   ccr_ok,
                 "status":   status_txt,
                 "samples":  _samples,
             })
@@ -632,8 +643,10 @@ class ExobiologyPanel(QWidget):
                         f'{_esc(e["base"])}</span>'
                     )
                 if e["ccr"]:
+                    ccr_color = e.get("ccr_ok") and "#6BCB77" or "#888888"
                     line += (
-                        f' &nbsp;<span class="dm">'
+                        f' &nbsp;<span style="color:{ccr_color};'
+                        f'font-weight:700;">'
                         f'CCR:{_esc(e["ccr"])}</span>'
                     )
                 line += '</div>'
