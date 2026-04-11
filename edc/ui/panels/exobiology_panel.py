@@ -593,12 +593,28 @@ class ExobiologyPanel(QWidget):
             )
             for e in entries:
                 sc = _status_color(e["status"])
-                line = '<div class="gr">'
+                is_active = (
+                    isinstance(e["samples"], int)
+                    and e["samples"] > 0
+                    and e["status"] != "COMPLETE"
+                )
+                if is_active:
+                    line = (
+                        '<div class="gr" style="'
+                        'background-color:#1a3a5c;'
+                        'border-left:3px solid #4D96FF;'
+                        'padding:3px 6px;'
+                        'border-radius:4px;'
+                        'margin-top:4px;">'
+                    )
+                else:
+                    line = '<div class="gr">'
                 line += (
                     f'<span class="st" style="color:{sc};">'
                     f'{_esc(e["status"])}</span> '
                     f'<b>{_esc(e["genus"])}</b>'
                 )
+
                 if e["species"]:
                     line += f' — {_esc(e["species"])}'
                 if e["variant"]:
