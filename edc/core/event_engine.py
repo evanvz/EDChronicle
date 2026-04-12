@@ -186,6 +186,8 @@ class EventEngine:
                 self.state.system_allegiance = None
                 self.state.system_government = None
                 self.state.system_economy = None
+                self.state.system_economy_secondary = None
+                self.state.system_state = None
                 self.state.system_security = None
                 self.state.population = None
                 self.state.controlling_faction = None
@@ -215,7 +217,17 @@ class EventEngine:
 
             self.state.system_allegiance = event.get("SystemAllegiance")
             self.state.system_government = event.get("SystemGovernment_Localised") or event.get("SystemGovernment")
-            self.state.system_economy = event.get("SystemEconomy_Localised") or event.get("SystemEconomy")
+            self.state.system_economy = (
+                event.get("SystemEconomy_Localised")
+                or event.get("SystemEconomy")
+                or None
+            )
+            self.state.system_economy_secondary = (
+                event.get("SystemSecondEconomy_Localised")
+                or event.get("SystemSecondEconomy")
+                or None
+            )
+            self.state.system_state = event.get("SystemState") or None
             self.state.system_security = event.get("SystemSecurity_Localised") or event.get("SystemSecurity")
             self.state.population = event.get("Population")
             cf = event.get("SystemFaction", {}) or {}
@@ -347,6 +359,8 @@ class EventEngine:
                 self.state.system_allegiance = None
                 self.state.system_government = None
                 self.state.system_economy = None
+                self.state.system_economy_secondary = None
+                self.state.system_state = None
                 self.state.system_security = None
                 self.state.population = None
                 self.state.controlling_faction = None

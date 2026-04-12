@@ -453,10 +453,37 @@ class OverviewPanel(QWidget):
 
         # Left column — economy, government, allegiance
         left  = ""
-        left += self._meta_row(
-            "ECONOMY",
-            self._norm_token(getattr(state, "system_economy", None)) or "—"
-        )
+        econ1 = self._norm_token(getattr(state, "system_economy", None))
+        econ2 = self._norm_token(getattr(state, "system_economy_secondary", None))
+        econ_display = econ1 or "—"
+        if econ2 and econ2.lower() not in ("none", ""):
+            econ_display += f" / {econ2}"
+        left += self._meta_row("ECONOMY", econ_display)
+
+        # Show controlling faction's active state
+        ctrl_state = ""
+        controlling = fmt.text(state.controlling_faction, default="")
+        for f in (state.factions or []):
+            if not isinstance(f, dict):
+                continue
+            if fmt.text(f.get("Name"), default="") == controlling:
+                active = f.get("ActiveStates") or []
+                if isinstance(active, list) and active:
+                    first = active[0]
+                    if isinstance(first, dict):
+                        ctrl_state = fmt.text(
+                            first.get("State_Localised")
+                            or self._norm_token(first.get("State"))
+                            or first.get("State") or "",
+                            default=""
+                        )
+                elif f.get("FactionState") and str(
+                    f.get("FactionState")
+                ).strip().lower() != "none":
+                    ctrl_state = self._norm_token(f.get("FactionState")) or ""
+                break
+        if ctrl_state:
+            left += self._meta_row("STATE", ctrl_state, value_color="#FFD93D")
         left += self._meta_row(
             "GOVERNMENT",
             self._norm_token(getattr(state, "system_government", None)) or "—"
