@@ -4,8 +4,10 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QLabel,
     QTextEdit,
+    QScrollArea,
+    QFrame,
 )
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal
 
 log = logging.getLogger(__name__)
 
@@ -24,29 +26,75 @@ class ExobiologyPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
 
-        layout.addWidget(QLabel("Exobiology"))
+        # ── Header strip ──────────────────────────────────────────────────
+        hdr = QWidget()
+        hdr_l = QVBoxLayout(hdr)
+        hdr_l.setContentsMargins(8, 6, 8, 4)
+        hdr_l.setSpacing(2)
 
         self.exo_action = QLabel("")
         self.exo_action.setWordWrap(True)
-        layout.addWidget(self.exo_action)
+        hdr_l.addWidget(self.exo_action)
 
         self.exo_hint = QLabel("")
         self.exo_hint.setWordWrap(True)
-        layout.addWidget(self.exo_hint)
+        hdr_l.addWidget(self.exo_hint)
+
+        outer.addWidget(hdr, 0)
+
+        # ── Scroll area ───────────────────────────────────────────────────
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        outer.addWidget(scroll, 1)
+
+        content = QWidget()
+        content.setStyleSheet("background: transparent;")
+        content_l = QVBoxLayout(content)
+        content_l.setSpacing(6)
+        content_l.setContentsMargins(8, 6, 8, 8)
+        content_l.setAlignment(Qt.AlignmentFlag.AlignTop)
+        scroll.setWidget(content)
+
+        # ── Exobiology display card ───────────────────────────────────────
+        exo_frame = QFrame()
+        exo_frame.setStyleSheet(
+            "QFrame { background: #0d1a0d; border: 1px solid #1e3a1e;"
+            "border-radius: 5px; }"
+        )
+        exo_frame_l = QVBoxLayout(exo_frame)
+        exo_frame_l.setContentsMargins(8, 6, 8, 6)
+        exo_frame_l.setSpacing(2)
+
+        exo_hdr = QLabel("BIOLOGICAL CONTACTS")
+        exo_hdr.setStyleSheet(
+            "color: #555555; font-size: 10px; font-weight: bold; "
+            "letter-spacing: 1px; background: transparent; border: none;"
+        )
+        exo_frame_l.addWidget(exo_hdr)
 
         self.exo_display = QTextEdit()
         self.exo_display.setReadOnly(True)
         self.exo_display.setMinimumHeight(120)
+        self.exo_display.setStyleSheet(
+            "QTextEdit { background: transparent; border: none; }"
+        )
+        exo_frame_l.addWidget(self.exo_display)
 
-        layout.addWidget(self.exo_display, 1)
+        content_l.addWidget(exo_frame)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
         try:
-            self.factions_display.document().setTextWidth(
-                self.factions_display.viewport().width()
+            self.exo_display.document().setTextWidth(
+                self.exo_display.viewport().width()
             )
         except Exception:
             pass
@@ -360,9 +408,7 @@ class ExobiologyPanel(QWidget):
                     try:
                         if isinstance(body_id, int):
                             sp = codex_hint_id.get((body_id, gk), "") or ""
-                            vv = codex_hint_var_id.get(
-                                (body_id, gk), ""
-                            ) or ""
+                            vv = codex_hint_var_id.get((body_id, gk), "") or ""
                         if not sp:
                             sp = codex_hint_name.get(
                                 (self._norm_text(body), gk), ""
@@ -599,8 +645,9 @@ class ExobiologyPanel(QWidget):
         html.append(
             '<style>'
             '.bh { color: #4D96FF; font-weight: 700; '
-            'font-size: 14px; margin-top: 8px; }'
-            '.gr { margin-left: 16px; margin-top: 4px; }'
+            'font-size: 13px; margin-top: 10px; '
+            'border-bottom: 1px solid #1e3a5a; padding-bottom: 3px; }'
+            '.gr { margin-left: 12px; margin-top: 5px; padding: 2px 4px; }'
             '.st { font-weight: 700; }'
             '.dm { color: #888888; }'
             '</style>'
@@ -623,7 +670,7 @@ class ExobiologyPanel(QWidget):
                         '<div class="gr" style="'
                         'background-color:#1a3a5c;'
                         'border-left:3px solid #4D96FF;'
-                        'padding:3px 6px;'
+                        'padding:4px 8px;'
                         'border-radius:4px;'
                         'margin-top:4px;">'
                     )
@@ -652,7 +699,7 @@ class ExobiologyPanel(QWidget):
                         f'{_esc(e["base"])}</span>'
                     )
                 if e["ccr"]:
-                    ccr_color = e.get("ccr_ok") and "#6BCB77" or "#888888"
+                    ccr_color = "#6BCB77" if e.get("ccr_ok") else "#888888"
                     line += (
                         f' &nbsp;<span style="color:{ccr_color};'
                         f'font-weight:700;">'

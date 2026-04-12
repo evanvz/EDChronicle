@@ -6,6 +6,8 @@ from PyQt6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
+    QScrollArea,
+    QFrame,
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
@@ -23,13 +25,72 @@ class CombatPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        # ── Header strip ──────────────────────────────────────────────────
+        hdr = QWidget()
+        hdr_l = QVBoxLayout(hdr)
+        hdr_l.setContentsMargins(8, 6, 8, 4)
+        hdr_l.setSpacing(2)
 
         self.combat_hint = QLabel(
             "Scanned contacts will appear here once you "
             "fully scan a ship (ScanStage >= 3)."
         )
         self.combat_hint.setWordWrap(True)
+        hdr_l.addWidget(self.combat_hint)
+        outer.addWidget(hdr, 0)
+
+        # ── Scroll area ───────────────────────────────────────────────────
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        outer.addWidget(scroll, 1)
+
+        content = QWidget()
+        content.setStyleSheet("background: transparent;")
+        content_l = QVBoxLayout(content)
+        content_l.setSpacing(6)
+        content_l.setContentsMargins(8, 6, 8, 8)
+        content_l.setAlignment(Qt.AlignmentFlag.AlignTop)
+        scroll.setWidget(content)
+
+        # ── Combat contacts card ──────────────────────────────────────────
+        card = QFrame()
+        card.setStyleSheet(
+            "QFrame { background: #0d1520; border: 1px solid #1e2a3a;"
+            "border-radius: 5px; }"
+        )
+        card_l = QVBoxLayout(card)
+        card_l.setContentsMargins(8, 6, 8, 6)
+        card_l.setSpacing(4)
+
+        card_hdr = QLabel("COMBAT CONTACTS")
+        card_hdr.setStyleSheet(
+            "color: #555555; font-size: 10px; font-weight: bold; "
+            "letter-spacing: 1px; background: transparent; border: none;"
+        )
+        card_l.addWidget(card_hdr)
+
+        # Legend
+        legend = QLabel(
+            '<span style="color:#B4640A;">■</span> Current &nbsp;'
+            '<span style="color:#640078;">■</span> PP Enemy &nbsp;'
+            '<span style="color:#C8A000;">■</span> High Bounty &nbsp;'
+            '<span style="color:#503200;">■</span> Wanted &nbsp;'
+            '<span style="color:#5A1E1E;">■</span> Destroyed'
+        )
+        legend.setTextFormat(Qt.TextFormat.RichText)
+        legend.setStyleSheet(
+            "font-size: 10px; color: #888888; "
+            "background: transparent; border: none;"
+        )
+        card_l.addWidget(legend)
 
         self.combat_table = QTableWidget()
         self.combat_table.setColumnCount(9)
@@ -49,21 +110,26 @@ class CombatPanel(QWidget):
         self.combat_table.verticalHeader().setVisible(False)
         self.combat_table.setSortingEnabled(False)
         self.combat_table.setMinimumHeight(120)
+        self.combat_table.setStyleSheet(
+            "QTableWidget { background: transparent; border: none; }"
+            "QHeaderView::section { background: #1a2a3a; color: #888888; "
+            "font-size: 10px; font-weight: bold; letter-spacing: 1px; "
+            "border: none; padding: 4px; }"
+        )
 
-        # Column resize modes
         self.combat_table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.ResizeMode.Stretch       # Pilot
+            0, QHeaderView.ResizeMode.Stretch
         )
         self.combat_table.horizontalHeader().setSectionResizeMode(
-            3, QHeaderView.ResizeMode.Stretch       # Faction
+            3, QHeaderView.ResizeMode.Stretch
         )
         for col in [1, 2, 4, 5, 6, 7, 8]:
             self.combat_table.horizontalHeader().setSectionResizeMode(
                 col, QHeaderView.ResizeMode.ResizeToContents
             )
 
-        layout.addWidget(self.combat_hint)
-        layout.addWidget(self.combat_table, 1)
+        card_l.addWidget(self.combat_table)
+        content_l.addWidget(card)
 
     def refresh(self, state):
         try:
@@ -92,12 +158,12 @@ class CombatPanel(QWidget):
                 if destroyed and pilot:
                     pilot = f"{pilot} [DESTROYED]"
 
-                rank      = rec.get("Rank") or ""
-                ship      = rec.get("Ship") or ""
-                faction   = rec.get("Faction") or ""
-                power     = rec.get("Power") or ""
-                wanted_f  = bool(rec.get("Wanted"))
-                bounty    = rec.get("Bounty")
+                rank       = rec.get("Rank") or ""
+                ship       = rec.get("Ship") or ""
+                faction    = rec.get("Faction") or ""
+                power      = rec.get("Power") or ""
+                wanted_f   = bool(rec.get("Wanted"))
+                bounty     = rec.get("Bounty")
                 bounty_txt = f"{bounty:,}" if isinstance(bounty, int) else ""
 
                 ts = rec.get("LastSeen") or ""
@@ -106,7 +172,6 @@ class CombatPanel(QWidget):
                 else:
                     last_seen = str(ts) if ts else ""
 
-                # Derive enemy status
                 is_enemy = bool(
                     pledged
                     and power.strip().lower()
@@ -122,40 +187,34 @@ class CombatPanel(QWidget):
                 )
 
                 items = [
-                    QTableWidgetItem(str(pilot)),       # 0
-                    QTableWidgetItem(str(rank)),        # 1
-                    QTableWidgetItem(str(ship)),        # 2
-                    QTableWidgetItem(str(faction)),     # 3
-                    QTableWidgetItem(str(power)),       # 4
-                    QTableWidgetItem(enemy_txt),        # 5 — Enemy
-                    QTableWidgetItem("Wanted" if wanted_f else ""),  # 6
-                    QTableWidgetItem(bounty_txt),       # 7
-                    QTableWidgetItem(last_seen),        # 8
+                    QTableWidgetItem(str(pilot)),
+                    QTableWidgetItem(str(rank)),
+                    QTableWidgetItem(str(ship)),
+                    QTableWidgetItem(str(faction)),
+                    QTableWidgetItem(str(power)),
+                    QTableWidgetItem(enemy_txt),
+                    QTableWidgetItem("Wanted" if wanted_f else ""),
+                    QTableWidgetItem(bounty_txt),
+                    QTableWidgetItem(last_seen),
                 ]
                 items[0].setData(Qt.ItemDataRole.UserRole, k)
 
-                # Row colour priority:
-                # 1. Destroyed — dark red
-                # 2. Current scan target — orange (highest visibility)
-                # 3. Enemy PP — purple
-                # 4. High bounty — gold
-                # 5. Wanted — dark amber
                 is_current = bool(cur_key and k == cur_key)
 
                 if destroyed:
                     bg = QColor(90, 30, 30)
                     fg = QColor(255, 220, 220)
                 elif is_current:
-                    bg = QColor(180, 100, 0)    # orange
+                    bg = QColor(180, 100, 0)
                     fg = QColor(255, 255, 255)
                 elif is_enemy:
-                    bg = QColor(100, 0, 120)    # purple
+                    bg = QColor(100, 0, 120)
                     fg = QColor(255, 200, 255)
                 elif is_high_bounty:
-                    bg = QColor(200, 160, 0)    # gold
+                    bg = QColor(200, 160, 0)
                     fg = QColor(255, 255, 255)
                 elif wanted_f:
-                    bg = QColor(80, 50, 0)      # dark amber
+                    bg = QColor(80, 50, 0)
                     fg = QColor(255, 220, 150)
                 else:
                     bg = None
