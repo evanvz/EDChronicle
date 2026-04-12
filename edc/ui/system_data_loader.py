@@ -86,6 +86,13 @@ class SystemDataLoader:
                     )
                 except Exception:
                     estimated_value = None
+            import json as _json
+            _mat_raw = row["materials"] if "materials" in row.keys() else None
+            try:
+                _materials = _json.loads(_mat_raw) if _mat_raw else {}
+            except Exception:
+                _materials = {}
+
             rec = {
                 "BodyID": body_id if isinstance(body_id, int) else None,
                 "BodyName": body_name,
@@ -96,6 +103,8 @@ class SystemDataLoader:
                 "WasMapped": bool(row["was_mapped"]),
                 "DSSMapped": bool(row["dss_mapped"]),
                 "EstimatedValue": estimated_value,
+                "Volcanism": row["volcanism"] if "volcanism" in row.keys() else "",
+                "Materials": _materials,
             }
 
             self.state.bodies[body_name] = rec

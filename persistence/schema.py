@@ -10,16 +10,18 @@ CREATE TABLE IF NOT EXISTS systems (
 );
 
 CREATE TABLE IF NOT EXISTS bodies (
-    system_address INTEGER NOT NULL,
-    body_id INTEGER NOT NULL,
-    body_name TEXT,
-    planet_class TEXT,
-    terraformable INTEGER,
-    landable INTEGER,
-    was_mapped INTEGER,
-    dss_mapped INTEGER,
+    system_address  INTEGER NOT NULL,
+    body_id         INTEGER NOT NULL,
+    body_name       TEXT,
+    planet_class    TEXT,
+    terraformable   INTEGER,
+    landable        INTEGER,
+    was_mapped      INTEGER,
+    dss_mapped      INTEGER,
     estimated_value INTEGER,
-    distance_ls REAL,
+    distance_ls     REAL,
+    volcanism       TEXT,
+    materials       TEXT,
     PRIMARY KEY (system_address, body_id)
 );
 

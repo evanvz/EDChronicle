@@ -50,14 +50,16 @@ class Repository:
         self,
         system_address: int,
         body_id: int,
-        body_name: str | None,
-        planet_class: str | None,
-        terraformable: int | None,
-        landable: int | None,
-        was_mapped: int | None,
-        dss_mapped: int | None,
-        estimated_value: int | None,
-        distance_ls: float | None,
+        body_name: str,
+        planet_class: str,
+        terraformable: int,
+        landable,
+        was_mapped: int,
+        dss_mapped: int,
+        estimated_value,
+        distance_ls,
+        volcanism: str = None,
+        materials: str = None,
     ):
         self.db.execute(
             """
@@ -71,18 +73,22 @@ class Repository:
                 was_mapped,
                 dss_mapped,
                 estimated_value,
-                distance_ls
+                distance_ls,
+                volcanism,
+                materials
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(system_address, body_id) DO UPDATE SET
-                body_name = excluded.body_name,
-                planet_class = excluded.planet_class,
-                terraformable = excluded.terraformable,
-                landable = excluded.landable,
-                was_mapped = excluded.was_mapped,
-                dss_mapped = excluded.dss_mapped,
+                body_name       = excluded.body_name,
+                planet_class    = excluded.planet_class,
+                terraformable   = excluded.terraformable,
+                landable        = excluded.landable,
+                was_mapped      = excluded.was_mapped,
+                dss_mapped      = excluded.dss_mapped,
                 estimated_value = excluded.estimated_value,
-                distance_ls = excluded.distance_ls
+                distance_ls     = excluded.distance_ls,
+                volcanism       = COALESCE(excluded.volcanism, bodies.volcanism),
+                materials       = COALESCE(excluded.materials, bodies.materials)
             """,
             (
                 system_address,
@@ -95,6 +101,8 @@ class Repository:
                 dss_mapped,
                 estimated_value,
                 distance_ls,
+                volcanism,
+                materials,
             ),
         )
 
@@ -341,7 +349,9 @@ class Repository:
                 was_mapped,
                 dss_mapped,
                 estimated_value,
-                distance_ls
+                distance_ls,
+                volcanism,
+                materials
             FROM bodies
             WHERE system_address = ?
             ORDER BY distance_ls IS NULL, distance_ls, body_name

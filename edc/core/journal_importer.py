@@ -425,6 +425,26 @@ class JournalImporter:
         if not isinstance(estimated_value, int):
             estimated_value = None
 
+        volcanism_raw = (
+            event.get("Volcanism_Localised")
+            or event.get("Volcanism")
+            or None
+        )
+        materials_raw = event.get("Materials") or []
+        materials_json = None
+        if isinstance(materials_raw, list) and materials_raw:
+            import json
+            try:
+                mat_dict = {
+                    str(m.get("Name", "") or "").strip().lower(): float(m.get("Percent", 0) or 0)
+                    for m in materials_raw
+                    if isinstance(m, dict) and m.get("Name")
+                }
+                if mat_dict:
+                    materials_json = json.dumps(mat_dict)
+            except Exception:
+                materials_json = None
+
         self.repo.save_body(
             system_address=system_address,
             body_id=body_id,
@@ -436,6 +456,8 @@ class JournalImporter:
             dss_mapped=0,
             estimated_value=estimated_value,
             distance_ls=float(distance_ls) if distance_ls is not None else None,
+            volcanism=volcanism_raw,
+            materials=materials_json,
         )
 
         self.bodies_by_name[body_name] = CachedBody(
