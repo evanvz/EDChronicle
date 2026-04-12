@@ -177,6 +177,8 @@ class EventEngine:
                 self.state.human_signals.clear()
                 self.state.bio_genuses.clear()
                 self.state.geo_signals.clear()
+                self.state.thargoid_signals.clear()
+                self.state.other_signals.clear()
                 self.state.non_body_count = None
                 self.state.system_signals = []
                 self.state.external_pois = []
@@ -942,11 +944,14 @@ class EventEngine:
             if isinstance(body_id, int):
                 self.state.body_id_to_name[body_id] = body
 
-            bio = 0
-            geo = 0
-            human = 0
+            bio      = 0
+            geo      = 0
+            human    = 0
+            thargoid = 0
+            other    = 0
+
             for sig in (event.get("Signals") or []):
-                t = (sig.get("Type") or "")
+                t  = (sig.get("Type") or "")
                 tl = (sig.get("Type_Localised") or "")
                 if ("biological" in t.lower()) or (tl.strip().lower() == "biological"):
                     c = sig.get("Count", 0)
@@ -960,10 +965,24 @@ class EventEngine:
                     c = sig.get("Count", 0)
                     if isinstance(c, int):
                         human = c
+                if ("thargoid" in t.lower()) or (tl.strip().lower() == "thargoid"):
+                    c = sig.get("Count", 0)
+                    if isinstance(c, int):
+                        thargoid = c
+                if ("other" in t.lower()) or (tl.strip().lower() == "other"):
+                    c = sig.get("Count", 0)
+                    if isinstance(c, int):
+                        other = c
             if bio:
                 self.state.bio_signals[body] = bio
+            if geo:
+                self.state.geo_signals[body] = geo
             if human:
                 self.state.human_signals[body] = human
+            if thargoid:
+                self.state.thargoid_signals[body] = thargoid
+            if other:
+                self.state.other_signals[body] = other
 
             genuses: List[str] = []
             for g in (event.get("Genuses") or []):
@@ -1005,6 +1024,8 @@ class EventEngine:
             rec["BioGenuses"] = self.state.bio_genuses.get(body, rec.get("BioGenuses", []))
             rec["GeoSignals"] = self.state.geo_signals.get(body, rec.get("GeoSignals", 0))
             rec["HumanSignals"] = self.state.human_signals.get(body, rec.get("HumanSignals", 0))
+            rec["ThargoidSignals"] = self.state.thargoid_signals.get(body, rec.get("ThargoidSignals", 0))
+            rec["OtherSignals"] = self.state.other_signals.get(body, rec.get("OtherSignals", 0))
             rec["DSSMapped"] = True
             self.state.bodies[body] = rec
 

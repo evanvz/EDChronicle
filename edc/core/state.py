@@ -12,6 +12,8 @@ class GameState:
     system_allegiance: Optional[str] = None
     system_economy: Optional[str] = None
     system_security: Optional[str] = None
+    system_economy_secondary: Optional[str] = None
+    system_state: Optional[str] = None
     population: Optional[int] = None
     pp_power: Optional[str] = None
     pp_rank: Optional[int] = None
