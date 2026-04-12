@@ -183,8 +183,8 @@ class MainWindow(QMainWindow):
         log.info("MainWindow paths: app_dir=%s settings_dir=%s", str(app_dir), str(settings_base))
 
         self.external_intel = ExternalIntel(settings_base)
-        self.item_catalog = ItemCatalog(settings_base / "inara_items_catalog.json")
-        self.farming_locations = FarmingLocations(settings_base / "elite_farming_locations.json")
+        self.item_catalog = ItemCatalog(settings_base)
+        self.farming_locations = FarmingLocations(settings_base)
 
         self.engine = EventEngine(
             self.state,
