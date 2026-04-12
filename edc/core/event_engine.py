@@ -775,29 +775,47 @@ class EventEngine:
             if isinstance(body_id, int):
                 self.state.body_id_to_name[body_id] = body
 
-            bio = 0
-            geo = 0
-            human = 0
+            bio      = 0
+            geo      = 0
+            human    = 0
+            guardian = 0
+            thargoid = 0
+            other    = 0
             for sig in (event.get("Signals") or []):
-                t = (sig.get("Type") or "")
+                t  = (sig.get("Type") or "")
                 tl = (sig.get("Type_Localised") or "")
-                # Real journals often use "$SAA_SignalType_Biological;" for Type
-                if ("biological" in t.lower()) or (tl.strip().lower() == "biological"):
+                tl_low = tl.strip().lower()
+                t_low  = t.lower()
+                if ("biological" in t_low) or (tl_low == "biological"):
                     c = sig.get("Count", 0)
                     if isinstance(c, int):
                         bio = c
-                if ("geological" in t.lower()) or (tl.strip().lower() == "geological"):
+                elif ("geological" in t_low) or (tl_low == "geological"):
                     c = sig.get("Count", 0)
                     if isinstance(c, int):
                         geo = c
-                if ("human" in t.lower()) or (tl.strip().lower() == "human"):
+                elif ("human" in t_low) or (tl_low == "human"):
                     c = sig.get("Count", 0)
                     if isinstance(c, int):
                         human = c
-
-            self.state.bio_signals[body] = bio
-            self.state.geo_signals[body] = geo
-            self.state.human_signals[body] = human
+                elif ("guardian" in t_low) or (tl_low == "guardian"):
+                    c = sig.get("Count", 0)
+                    if isinstance(c, int):
+                        guardian = c
+                elif ("thargoid" in t_low) or (tl_low == "thargoid"):
+                    c = sig.get("Count", 0)
+                    if isinstance(c, int):
+                        thargoid = c
+                elif ("other" in t_low) or (tl_low == "other"):
+                    c = sig.get("Count", 0)
+                    if isinstance(c, int):
+                        other = c
+            self.state.bio_signals[body]      = bio
+            self.state.geo_signals[body]      = geo
+            self.state.human_signals[body]    = human
+            self.state.guardian_signals[body] = guardian
+            self.state.thargoid_signals[body] = thargoid
+            self.state.other_signals[body]    = other
 
             # Create or update a placeholder record so the UI can show Bio immediately
             rec = self.state.bodies.get(body)
@@ -818,6 +836,9 @@ class EventEngine:
             rec["BioSignals"] = bio
             rec["GeoSignals"] = geo
             rec["HumanSignals"] = human
+            rec["GuardianSignals"] = guardian
+            rec["ThargoidSignals"] = thargoid
+            rec["OtherSignals"]    = other
             # IMPORTANT: preserve DSS-confirmed genera if we already have them.
             # FSSBodySignals can arrive after SAASignalsFound and would otherwise overwrite the body record.
             rec["BioGenuses"] = self.state.bio_genuses.get(body, rec.get("BioGenuses", []))

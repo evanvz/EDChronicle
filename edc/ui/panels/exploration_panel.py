@@ -349,6 +349,7 @@ class ExplorationPanel(QWidget):
             bio       = rec.get("BioSignals",      0) or 0
             geo       = rec.get("GeoSignals",      0) or 0
             human     = rec.get("HumanSignals",    0) or 0
+            guardian  = rec.get("GuardianSignals", 0) or 0
             thargoid  = rec.get("ThargoidSignals", 0) or 0
             other_sig = rec.get("OtherSignals",    0) or 0
             genuses   = rec.get("BioGenuses", []) or []
@@ -368,7 +369,7 @@ class ExplorationPanel(QWidget):
             shown += 1
             card = self._build_body_card(
                 body, pc_disp, dist, est, tf, was_mapped, dss_mapped,
-                first, bio, geo, human, thargoid, other_sig,
+                first, bio, geo, human, guardian, thargoid, other_sig,
                 genuses, landable, volcanism, materials, min_value
             )
             self._cards_layout.addWidget(card)
@@ -395,7 +396,7 @@ class ExplorationPanel(QWidget):
 
     def _build_body_card(
         self, body, pc_disp, dist, est, tf, was_mapped, dss_mapped,
-        first, bio, geo, human, thargoid, other_sig,
+        first, bio, geo, human, guardian, thargoid, other_sig,
         genuses, landable, volcanism, materials, min_value
     ):
         esc = self._esc
@@ -505,6 +506,12 @@ class ExplorationPanel(QWidget):
                 f'<span style="color:#555555;font-size:10px;">HUMAN</span>'
                 f'&nbsp;<span style="color:#4D96FF;font-size:11px;font-weight:700;">'
                 f'{human}</span>'
+            )
+        if isinstance(guardian, int) and guardian > 0:
+            info_html.append(
+                f'<span style="color:#555555;font-size:10px;">GUARDIAN</span>'
+                f'&nbsp;<span style="color:#C77DFF;font-size:11px;font-weight:700;">'
+                f'{guardian}</span>'
             )
         if isinstance(thargoid, int) and thargoid > 0:
             info_html.append(
