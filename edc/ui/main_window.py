@@ -139,40 +139,6 @@ class MainWindow(QMainWindow):
         return sc, "#D3D3D3"  # neutral fallback
 
     def resizeEvent(self, event):
-        try:
-            if hasattr(self, "expl_outer_split"):
-                total_width = self.width()
-
-                # Dynamic biasing
-                if total_width > 1600:
-                    left_ratio = 0.65
-                elif total_width > 1200:
-                    left_ratio = 0.55
-                else:
-                    left_ratio = 0.50
-
-                left_size = int(total_width * left_ratio)
-                right_size = total_width - left_size
-
-                self.expl_outer_split.setSizes([left_size, right_size])
-            # Vertical bias (Signals vs Materials)
-            if hasattr(self, "expl_right_split"):
-                total_height = self.height()
-
-                if total_height > 1000:
-                    top_ratio = 0.70
-                elif total_height > 800:
-                    top_ratio = 0.60
-                else:
-                    top_ratio = 0.50
-
-                top_size = int(total_height * top_ratio)
-                bottom_size = total_height - top_size
-
-                self.expl_right_split.setSizes([top_size, bottom_size])
-        except Exception:
-            pass
-
         super().resizeEvent(event)
 
     def _on_exploration_min_value_changed(self, text: str):

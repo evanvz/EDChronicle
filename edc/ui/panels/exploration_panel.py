@@ -5,15 +5,12 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QTextEdit,
-    QTableWidget,
-    QTableWidgetItem,
-    QHeaderView,
-    QSplitter,
-    QAbstractScrollArea,
+    QScrollArea,
+    QFrame,
     QSizePolicy,
+    QPushButton,
 )
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor
 
 from edc.ui import formatting as fmt
 
@@ -22,201 +19,339 @@ log = logging.getLogger(__name__)
 
 class ExplorationPanel(QWidget):
     """
-    Owns all widgets and refresh logic for the Exploration tab.
-    Includes the materials shortlist sub-panel.
+    Inara-inspired Exploration tab.
+    Shows system signals, body cards, and materials shortlist.
     Receives state, cfg, and planet_values via refresh().
-
-    Emits min_value_changed(str) so main_window can update
-    the min_value_label in the Settings tab without this
-    panel needing to know about the Settings tab.
+    Emits min_value_changed(str) for the Settings tab slider label.
     """
 
     min_value_changed = pyqtSignal(str)
 
+    # Rare raw materials to highlight
+    RARE = {
+        "polonium", "tellurium", "ruthenium", "yttrium",
+        "antimony", "arsenic", "selenium", "zirconium",
+        "niobium", "tin", "molybdenum", "technetium",
+    }
+
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
 
-        # Header strip
-        header_panel = QWidget()
-        header_layout = QVBoxLayout(header_panel)
-        header_layout.setContentsMargins(8, 8, 8, 4)
-        header_layout.addWidget(
-            QLabel("Exploration (scans → instant estimate)")
-        )
+        # ── Header strip ──────────────────────────────────────────────────
+        hdr = QWidget()
+        hdr_l = QVBoxLayout(hdr)
+        hdr_l.setContentsMargins(8, 6, 8, 4)
+        hdr_l.setSpacing(2)
+
         self.exploration_action = QLabel("")
         self.exploration_action.setWordWrap(True)
-        header_layout.addWidget(self.exploration_action)
-        layout.addWidget(header_panel, 0)
+        hdr_l.addWidget(self.exploration_action)
 
-        # Main table
-        self.exploration_table = QTableWidget()
-        self.exploration_table.setColumnCount(10)
-        self.exploration_table.setHorizontalHeaderLabels(
-            ["Body", "Class", "LS", "Bio", "Geo",
-             "Bio DSS", "Est. Value", "Prev Map", "DSS", "Flags"]
-        )
-        self.exploration_table.setEditTriggers(
-            QTableWidget.EditTrigger.NoEditTriggers
-        )
-        self.exploration_table.setSelectionBehavior(
-            QTableWidget.SelectionBehavior.SelectRows
-        )
-        self.exploration_table.setSelectionMode(
-            QTableWidget.SelectionMode.SingleSelection
-        )
-        self.exploration_table.verticalHeader().setVisible(False)
-        self.exploration_table.setSizeAdjustPolicy(
-            QAbstractScrollArea.SizeAdjustPolicy.AdjustIgnored
-        )
-        self.exploration_table.setVerticalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAsNeeded
-        )
-        self.exploration_table.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAsNeeded
-        )
-        self.exploration_table.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
-        )
-        self.exploration_table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.ResizeMode.Stretch
-        )
-        for col in range(1, 10):
-            self.exploration_table.horizontalHeader().setSectionResizeMode(
-                col, QHeaderView.ResizeMode.ResizeToContents
-            )
-        self.exploration_table.setMinimumHeight(120)
-        self.exploration_table.setSortingEnabled(False)
-
-        # Right split — signals + materials shortlist
-        self.system_signals_box = QTextEdit()
-        self.system_signals_box.setReadOnly(True)
-        self.system_signals_box.setMinimumHeight(120)
-
-        self.materials_box = QTextEdit()
-        self.materials_box.setReadOnly(True)
-        self.materials_box.setMinimumHeight(80)
-
-        signals_panel = QWidget()
-        signals_layout = QVBoxLayout(signals_panel)
-        signals_layout.setContentsMargins(8, 8, 8, 8)
-        signals_layout.addWidget(QLabel("System signals (FSS)"))
-        signals_layout.addWidget(self.system_signals_box)
-
-        materials_panel = QWidget()
-        materials_layout = QVBoxLayout(materials_panel)
-        materials_layout.setContentsMargins(8, 8, 8, 8)
-        materials_layout.addWidget(
-            QLabel("Materials shortlist (landable + Geo signals)")
-        )
-        materials_layout.addWidget(self.materials_box)
-
-        self.expl_right_split = QSplitter(Qt.Orientation.Vertical)
-        self.expl_right_split.addWidget(signals_panel)
-        self.expl_right_split.addWidget(materials_panel)
-        self.expl_right_split.setStretchFactor(0, 1)
-        self.expl_right_split.setStretchFactor(1, 1)
-        self.expl_right_split.setChildrenCollapsible(False)
-
-        self.expl_outer_split = QSplitter(Qt.Orientation.Horizontal)
-        self.expl_outer_split.addWidget(self.exploration_table)
-        self.expl_outer_split.addWidget(self.expl_right_split)
-        self.expl_outer_split.setStretchFactor(0, 1)
-        self.expl_outer_split.setStretchFactor(1, 1)
-        self.expl_outer_split.setChildrenCollapsible(False)
-
-        layout.addWidget(self.expl_outer_split, 1)
-
-        # Footer hint
         self.exploration_hint = QLabel("")
         self.exploration_hint.setWordWrap(True)
-        layout.addWidget(self.exploration_hint, 0)
+        hdr_l.addWidget(self.exploration_hint)
 
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        try:
-            self.factions_display.document().setTextWidth(
-                self.factions_display.viewport().width()
-            )
-        except Exception:
-            pass    
+        outer.addWidget(hdr, 0)
 
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        try:
-            self.factions_display.document().setTextWidth(
-                self.factions_display.viewport().width()
-            )
-        except Exception:
-            pass
+        # ── Scroll area ───────────────────────────────────────────────────
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        outer.addWidget(scroll, 1)
 
+        content = QWidget()
+        content.setStyleSheet("background: transparent;")
+        self._content_layout = QVBoxLayout(content)
+        self._content_layout.setSpacing(6)
+        self._content_layout.setContentsMargins(8, 6, 8, 8)
+        self._content_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        scroll.setWidget(content)
+
+        # ── Signals box (always visible at top) ───────────────────────────
+        sig_frame = QFrame()
+        sig_frame.setStyleSheet(
+            "QFrame { background: #0d1a2a; border: 1px solid #1e3a5a;"
+            "border-radius: 5px; }"
+        )
+        sig_l = QVBoxLayout(sig_frame)
+        sig_l.setContentsMargins(8, 6, 8, 6)
+        sig_l.setSpacing(2)
+        self._signals_expanded = True
+        self._signals_summary_html = ""
+        self._signals_full_html = ""
+
+        sig_hdr_row = QHBoxLayout()
+        sig_hdr_lbl = QLabel("SYSTEM SIGNALS (FSS)")
+        sig_hdr_lbl.setStyleSheet(
+            "color: #555555; font-size: 10px; font-weight: bold; "
+            "letter-spacing: 1px; background: transparent; border: none;"
+        )
+        self._sig_toggle_btn = QPushButton("Show detail ▼")
+        self._sig_toggle_btn.setStyleSheet(
+            "QPushButton { background: transparent; border: none; "
+            "color: #4D96FF; font-size: 10px; padding: 0px; }"
+            "QPushButton:hover { color: #7EC8FF; }"
+        )
+        self._sig_toggle_btn.setVisible(False)
+        self._sig_toggle_btn.clicked.connect(self._toggle_signals)
+        sig_hdr_row.addWidget(sig_hdr_lbl)
+        sig_hdr_row.addStretch()
+        sig_hdr_row.addWidget(self._sig_toggle_btn)
+
+        self.system_signals_box = QLabel("")
+        self.system_signals_box.setWordWrap(True)
+        self.system_signals_box.setTextFormat(Qt.TextFormat.RichText)
+        self.system_signals_box.setStyleSheet("background: transparent; border: none;")
+        sig_l.addLayout(sig_hdr_row)
+        sig_l.addWidget(self.system_signals_box)
+        self._content_layout.addWidget(sig_frame)
+
+        # ── Bodies section label ──────────────────────────────────────────
+        self._bodies_label = QLabel("SCANNED BODIES")
+        self._bodies_label.setStyleSheet(
+            "color: #555555; font-size: 10px; font-weight: bold;"
+            "letter-spacing: 1px; padding: 4px 0px 2px 2px;"
+        )
+        self._content_layout.addWidget(self._bodies_label)
+
+        # ── Body cards container ──────────────────────────────────────────
+        self._cards_widget = QWidget()
+        self._cards_widget.setStyleSheet("background: transparent;")
+        self._cards_layout = QVBoxLayout(self._cards_widget)
+        self._cards_layout.setSpacing(5)
+        self._cards_layout.setContentsMargins(0, 0, 0, 0)
+        self._content_layout.addWidget(self._cards_widget)
+
+        # ── Materials shortlist ───────────────────────────────────────────
+        mat_frame = QFrame()
+        mat_frame.setStyleSheet(
+            "QFrame { background: #0d1a1a; border: 1px solid #1e3a2a;"
+            "border-radius: 5px; }"
+        )
+        mat_l = QVBoxLayout(mat_frame)
+        mat_l.setContentsMargins(8, 6, 8, 6)
+        mat_l.setSpacing(2)
+        mat_hdr = QLabel("MATERIALS SHORTLIST (landable + Geo signals)")
+        mat_hdr.setStyleSheet(
+            "color: #555555; font-size: 10px; font-weight: bold; "
+            "letter-spacing: 1px; background: transparent; border: none;"
+        )
+        self.materials_box = QLabel("")
+        self.materials_box.setWordWrap(True)
+        self.materials_box.setTextFormat(Qt.TextFormat.RichText)
+        self.materials_box.setStyleSheet("background: transparent; border: none;")
+        mat_l.addWidget(mat_hdr)
+        mat_l.addWidget(self.materials_box)
+        self._content_layout.addWidget(mat_frame)
+
+    # ── Helpers ───────────────────────────────────────────────────────────────
     def _norm_token(self, val):
         if not isinstance(val, str):
             return ""
         return (
-            val.replace("$", "")
-            .replace(";", "")
-            .replace("_", " ")
-            .strip()
-            .title()
+            val.replace("$", "").replace(";", "")
+            .replace("_", " ").strip().title()
         )
 
-    def refresh(self, state, cfg, planet_values):
-        self._refresh_exploration(state, cfg, planet_values)
+    def _esc(self, t):
+        return str(t or "").replace(
+            "&", "&amp;"
+        ).replace("<", "&lt;").replace(">", "&gt;")
 
-    def _refresh_exploration(self, state, cfg, planet_values):
-        min_100k = int(getattr(cfg, "min_planet_value_100k", 10) or 10)
+    def _badge(self, text, bg="#2a2a3a", fg="#AAAAAA", bold=False):
+        fw = "font-weight:700;" if bold else ""
+        return (
+            f'<span style="background:{bg};color:{fg};{fw}'
+            f'font-size:10px;padding:1px 5px;border-radius:3px;">'
+            f'{self._esc(text)}</span>'
+        )
+
+    # ── Main refresh ──────────────────────────────────────────────────────────
+    def refresh(self, state, cfg, planet_values):
+        try:
+            min_100k = int(getattr(cfg, "min_planet_value_100k", 10) or 10)
+        except Exception:
+            min_100k = 10
         if min_100k < 0:
             min_100k = 0
         min_value = min_100k * 100_000
-
         self.min_value_changed.emit(f"{min_100k / 10:.1f}M")
 
-        self._refresh_signals_box(state)
+        self._refresh_signals(state)
+        self._refresh_bodies(state, min_value, planet_values)
+        self._refresh_materials(state)
 
-        if not state.bodies:
-            hint = (
-                "No scan data yet. Tip: Do FSS / honk / nav beacon "
-                "so Scan events appear."
-            )
-            if not planet_values:
-                hint += (
-                    " (planet_values.json not loaded — copy it to "
-                    ".ed_companion or next to main.py)"
+    # ── Signals box ───────────────────────────────────────────────────────────
+    def _refresh_signals(self, state):
+        sigs = getattr(state, "system_signals", None) or []
+
+        if not isinstance(sigs, list) or not sigs:
+            # Show body count hint instead
+            total    = getattr(state, "system_body_count", None)
+            resolved = len(getattr(state, "resolved_body_ids", set()) or set())
+            fss_done = getattr(state, "fss_complete", False)
+            if isinstance(total, int) and total > 0:
+                if fss_done:
+                    self.system_signals_box.setText(
+                        f'<span style="color:#6BCB77;">All {total} bodies discovered</span>'
+                    )
+                else:
+                    remaining = max(0, total - resolved)
+                    self.system_signals_box.setText(
+                        f'<span style="color:#AAAAAA;">'
+                        f'Bodies resolved: {resolved}/{total} '
+                        f'— {remaining} remaining. Use FSS to discover.</span>'
+                    )
+            else:
+                self.system_signals_box.setText(
+                    '<span style="color:#444444;">No signals discovered yet. Honk to start.</span>'
                 )
-            self.exploration_table.setRowCount(0)
-            self.exploration_action.setText(
-                "🌍 Exploration: no bodies resolved in this system yet."
-            )
-            self.exploration_hint.setText(hint)
-            self._refresh_materials_shortlist(state)
             return
 
-        rows = []
-        best_below = None
-        bio_bodies = 0
-        geo_bodies = 0
-        tf_unmapped = 0
-        hv_unmapped = 0
+        cat_order  = ["Phenomena", "Megaship", "Station", "Installation",
+                      "NavBeacon", "USS", "Other"]
+        hidden     = {"FleetCarrier"}
+        cats       = {k: [] for k in cat_order}
+        cat_counts = {k: 0 for k in cat_order}
+        uss_counts = {}
 
-        for body, rec in state.bodies.items():
-            est = rec.get("EstimatedValue")
-            dist = rec.get("DistanceLS")
-            pc = rec.get("PlanetClass") or ""
-            pc_disp = self._norm_token(pc) or fmt.text(pc, default="")
-            tf = rec.get("Terraformable", False)
-            was_mapped = bool(rec.get("WasMapped", False))
-            dss_mapped = bool(rec.get("DSSMapped", False)) or bool(
-                rec.get("BioGenuses")
+        for s in sigs:
+            if not isinstance(s, dict):
+                continue
+            cat_raw = s.get("Category") if isinstance(s.get("Category"), str) else "Other"
+            if cat_raw in hidden:
+                continue
+            cat = self._norm_token(cat_raw) or "Other"
+            if cat not in cats:
+                cat = "Other"
+            cats[cat].append(s)
+            cat_counts[cat] += 1
+            if cat == "USS":
+                u = self._norm_token(s.get("USSType") or "")
+                if u:
+                    uss_counts[u] = uss_counts.get(u, 0) + 1
+
+        # Summary line
+        summary_parts = []
+        for k in cat_order:
+            if cat_counts.get(k, 0):
+                summary_parts.append(
+                    f'<span style="color:#4D96FF;font-weight:700;">{k}</span>'
+                    f'&nbsp;<span style="color:#CCCCCC;">x{cat_counts[k]}</span>'
+                )
+
+        html = []
+        if summary_parts:
+            html.append(" &nbsp;|&nbsp; ".join(summary_parts))
+
+        # Detail lines per category — max 3 per cat to avoid crowding
+        for cat in cat_order:
+            if not cats[cat]:
+                continue
+            html.append(
+                f'<br><span style="color:#555555;font-size:10px;">{cat.upper()}</span>'
             )
-            human_signals = int(rec.get("HumanSignals", 0) or 0)
-            first = rec.get("FirstDiscovered", False)
-            bio = rec.get("BioSignals", 0) or 0
-            geo = rec.get("GeoSignals", 0) or 0
-            gen = rec.get("BioGenuses", []) or []
-            landable = rec.get("Landable", False)
+            shown_in_cat = 0
+            for s in cats[cat]:
+                shown_in_cat += 1
+                nm    = self._norm_token(s.get("SignalName") or "Signal") or "Signal"
+                stype = self._norm_token(s.get("SignalType") or "")
+                uss   = self._norm_token(s.get("USSType") or "")
+                tl    = s.get("ThreatLevel")
+                tr    = s.get("TimeRemaining")
+                bits  = [f'<span style="color:#CCCCCC;">{self._esc(nm)}</span>']
+                if cat == "USS" and uss:
+                    bits.append(f'<span style="color:#888888;">({self._esc(uss)})</span>')
+                if cat == "Other" and stype:
+                    bits.append(f'<span style="color:#888888;">[{self._esc(stype)}]</span>')
+                if isinstance(tl, int):
+                    bits.append(f'<span style="color:#FF6B6B;">Threat {tl}</span>')
+                if isinstance(tr, (int, float)):
+                    bits.append(f'<span style="color:#888888;">TR {int(tr)}s</span>')
+                html.append(" ".join(bits))
+            pass
+
+        # Summary only — first line
+        self._signals_summary_html = html[0] if html else ""
+        self._signals_full_html    = "<br>".join(html)
+
+        # Default to expanded, show full detail
+        self._signals_expanded = True
+        self._sig_toggle_btn.setText("Hide detail ▲")
+
+        self.system_signals_box.setText(self._signals_full_html)
+
+        # Show toggle button only if there is detail beyond summary
+        has_detail = len(html) > 1
+        self._sig_toggle_btn.setVisible(has_detail)
+
+
+    def _toggle_signals(self):
+        self._signals_expanded = not self._signals_expanded
+        if self._signals_expanded:
+            self.system_signals_box.setText(self._signals_full_html)
+            self._sig_toggle_btn.setText("Hide detail ▲")
+        else:
+            self.system_signals_box.setText(self._signals_summary_html)
+            self._sig_toggle_btn.setText("Show detail ▼")
+
+    # ── Body cards ────────────────────────────────────────────────────────────
+    def _refresh_bodies(self, state, min_value, planet_values):
+        # Clear existing cards
+        while self._cards_layout.count():
+            item = self._cards_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        if not state.bodies:
+            self._bodies_label.setVisible(False)
+            self.exploration_action.setText(
+                "🌍 Exploration: no bodies resolved yet — "
+                "use FSS / honk / nav beacon"
+            )
+            self.exploration_hint.setText("")
+            return
+
+        self._bodies_label.setVisible(True)
+
+        # Sort bodies by estimated value descending
+        body_items = []
+        for body, rec in state.bodies.items():
+            if not isinstance(rec, dict):
+                continue
+            est = rec.get("EstimatedValue")
+            sort_val = int(est) if isinstance(est, int) else 0
+            body_items.append((sort_val, body, rec))
+        body_items.sort(key=lambda x: x[0], reverse=True)
+
+        bio_bodies   = 0
+        geo_bodies   = 0
+        tf_unmapped  = 0
+        hv_unmapped  = 0
+        shown        = 0
+
+        for sort_val, body, rec in body_items[:50]:
+            est        = rec.get("EstimatedValue")
+            dist       = rec.get("DistanceLS")
+            pc         = rec.get("PlanetClass") or ""
+            pc_disp    = self._norm_token(pc) or pc
+            tf         = rec.get("Terraformable", False)
+            was_mapped = bool(rec.get("WasMapped", False))
+            dss_mapped = bool(rec.get("DSSMapped", False)) or bool(rec.get("BioGenuses"))
+            first      = rec.get("FirstDiscovered", False)
+            bio        = rec.get("BioSignals", 0) or 0
+            geo        = rec.get("GeoSignals", 0) or 0
+            genuses    = rec.get("BioGenuses", []) or []
+            landable   = rec.get("Landable", False)
+            volcanism  = rec.get("Volcanism") or ""
+            materials  = rec.get("Materials") or {}
 
             if isinstance(bio, int) and bio > 0:
                 bio_bodies += 1
@@ -227,428 +362,297 @@ class ExplorationPanel(QWidget):
             if isinstance(est, int) and est >= min_value and not dss_mapped:
                 hv_unmapped += 1
 
-            sort_val = int(est) if isinstance(est, int) else 0
-
-            if isinstance(est, int):
-                preview_tags = []
-                if tf:
-                    preview_tags.append("Terraformable")
-                if first:
-                    preview_tags.append("NEW")
-                if was_mapped:
-                    preview_tags.append("PREV MAPPED")
-                if dss_mapped:
-                    preview_tags.append("DSS MAPPED")
-                if not was_mapped and not dss_mapped:
-                    preview_tags.append("UNMAPPED")
-                dist_txt = (
-                    (fmt.int_commas(dist) + " LS")
-                    if isinstance(dist, (float, int))
-                    else ""
-                )
-                est_txt = fmt.credits(est, default="?")
-                tag_txt = (
-                    (" [" + ", ".join(preview_tags) + "]")
-                    if preview_tags
-                    else ""
-                )
-                preview_line = (
-                    f"{body} — {pc_disp} — {dist_txt} — {est_txt}{tag_txt}"
-                ).strip()
-                if best_below is None or est > best_below[0]:
-                    best_below = (est, preview_line)
-
-            dist_txt = (
-                (fmt.int_commas(dist) + " LS")
-                if isinstance(dist, (float, int))
-                else ""
+            shown += 1
+            card = self._build_body_card(
+                body, pc_disp, dist, est, tf, was_mapped, dss_mapped,
+                first, bio, geo, genuses, landable, volcanism, materials,
+                min_value
             )
-            bio_txt = str(bio) if isinstance(bio, int) and bio > 0 else ""
-            geo_txt = str(geo) if isinstance(geo, int) and geo > 0 else ""
-            bio_dss_txt = (
-                "✔" if isinstance(gen, list) and len(gen) > 0 else ""
-            )
-            est_txt = (
-                fmt.credits(est, default="?") if isinstance(est, int) else "?"
-            )
-            prev_map_txt = "✔" if was_mapped else ""
-            dss_txt = "✔" if dss_mapped else ""
-
-            flags = []
-            if tf:
-                flags.append("Terra")
-            if first:
-                flags.append("NEW")
-            if human_signals > 0:
-                flags.append("Human")
-            flags_txt = ", ".join(flags)
-
-            rows.append((
-                sort_val,
-                fmt.text(body, default=""),
-                pc_disp,
-                dist_txt,
-                bio_txt,
-                geo_txt,
-                bio_dss_txt,
-                est_txt,
-                prev_map_txt,
-                dss_txt,
-                flags_txt,
-                # extras for row styling
-                est,
-                landable,
-                geo,
-                min_value,
-            ))
-
-        rows.sort(key=lambda x: x[0], reverse=True)
-
-        scanned = len(state.bodies)
-        resolved = len(
-            getattr(state, "resolved_body_ids", set()) or set()
-        )
-        total = state.system_body_count
-        fss_complete = bool(getattr(state, "fss_complete", False))
-        header_bits = []
-        if isinstance(total, int) and total > 0:
-            if fss_complete:
-                header_bits.append(
-                    f"Bodies discovered: {total}/{total} • "
-                    f"detailed records loaded: {scanned}"
-                )
-            else:
-                remaining = max(0, total - resolved)
-                header_bits.append(
-                    f"Bodies resolved: {resolved}/{total} "
-                    f"(detailed records loaded: {scanned}, "
-                    f"unknown remaining: {remaining})"
-                )
-        else:
-            header_bits.append(
-                f"Bodies resolved: {scanned} (honk for total count)"
-            )
-
-        if not fss_complete and isinstance(total, int) and total > scanned:
-            header_bits.append(f"Unresolved bodies: {total - scanned}")
-
-        sigs = getattr(state, "system_signals", None) or []
-        if isinstance(sigs, list) and sigs:
-            header_bits.append(f"Signals discovered: {len(sigs)}")
-
-        shown = rows[:50]
-        self.exploration_table.setRowCount(len(shown))
-
-        for r, row_tuple in enumerate(shown):
-            (
-                _sv, b, pc, ls_txt, bio_txt, geo_txt, bio_dss_txt,
-                v_txt, prev_map_txt, dss_txt, flags_txt,
-                est_val, row_landable, row_geo, row_min_value,
-            ) = row_tuple
-
-            self.exploration_table.setItem(r, 0, QTableWidgetItem(str(b)))
-            self.exploration_table.setItem(r, 1, QTableWidgetItem(str(pc)))
-
-            it_ls = QTableWidgetItem(str(ls_txt))
-            try:
-                s = str(ls_txt).replace("LS", "").replace(",", "").strip()
-                v = float(s) if s else None
-                if v is not None:
-                    it_ls.setData(Qt.ItemDataRole.UserRole, v)
-            except Exception:
-                pass
-            self.exploration_table.setItem(r, 2, it_ls)
-
-            self.exploration_table.setItem(r, 3, QTableWidgetItem(str(bio_txt)))
-            self.exploration_table.setItem(r, 4, QTableWidgetItem(str(geo_txt)))
-            self.exploration_table.setItem(r, 5, QTableWidgetItem(str(bio_dss_txt)))
-
-            it_val = QTableWidgetItem(str(v_txt))
-            try:
-                it_val.setData(Qt.ItemDataRole.UserRole, int(_sv))
-            except Exception:
-                pass
-            self.exploration_table.setItem(r, 6, it_val)
-
-            self.exploration_table.setItem(r, 7, QTableWidgetItem(str(prev_map_txt)))
-            self.exploration_table.setItem(r, 8, QTableWidgetItem(str(dss_txt)))
-            self.exploration_table.setItem(r, 9, QTableWidgetItem(str(flags_txt)))
-
-            try:
-                row_color = None
-                if isinstance(est_val, int) and est_val >= row_min_value:
-                    if row_landable and isinstance(row_geo, int) and row_geo > 0:
-                        row_color = "#2A1A00"
-                    elif row_landable:
-                        row_color = "#0F3057"
-                    else:
-                        row_color = "#102A43"
-                if row_color:
-                    for c in range(self.exploration_table.columnCount()):
-                        item = self.exploration_table.item(r, c)
-                        if item:
-                            item.setBackground(QColor(row_color))
-            except Exception:
-                pass
-
-        if not shown:
-            hint = (
-                "No bodies above threshold (or with Geo signals) yet. "
-                "Tip: lower the slider, or scan more bodies "
-                "(FSS/nav beacon)."
-            )
-            if best_below:
-                hint += (
-                    f"\nBest found so far (below threshold): {best_below[1]}"
-                )
-            self.exploration_hint.setText(
-                "\n".join(header_bits) + "\n" + hint
-            )
-        else:
-            self.exploration_hint.setText("\n".join(header_bits))
+            self._cards_layout.addWidget(card)
 
         self.exploration_action.setText(
-            f"🌍 Exploration: {len(shown)} shown • "
-            f"{bio_bodies} bodies with bio • "
-            f"{geo_bodies} bodies with geo • "
-            f"{tf_unmapped} TF unmapped • "
-            f"{hv_unmapped} high-value unmapped"
+            f"🌍 Exploration: {shown} bodies • "
+            f"{bio_bodies} with bio • {geo_bodies} with geo • "
+            f"{tf_unmapped} TF unmapped • {hv_unmapped} high-value unmapped"
         )
 
-        self._refresh_materials_shortlist(state)
+        total    = getattr(state, "system_body_count", None)
+        resolved = len(getattr(state, "resolved_body_ids", set()) or set())
+        scanned  = len(state.bodies)
+        if isinstance(total, int) and total > 0:
+            remaining = max(0, total - resolved)
+            self.exploration_hint.setText(
+                f"Bodies: {resolved}/{total} resolved, "
+                f"{scanned} detailed — {remaining} unknown"
+            )
+        else:
+            self.exploration_hint.setText(
+                f"Bodies: {scanned} detailed (honk for total count)"
+            )
 
-    def _refresh_signals_box(self, state):
-        try:
-            sigs = getattr(state, "system_signals", None) or []
-            if isinstance(sigs, list) and sigs:
-                out_lines = []
-                cat_order = [
-                    "Phenomena", "Megaship", "Station",
-                    "Installation", "NavBeacon", "USS", "Other"
-                ]
-                _hidden_categories = {"FleetCarrier"}
-                cats = {k: [] for k in cat_order}
-                cat_counts = {k: 0 for k in cat_order}
-                uss_counts = {}
-                for s in sigs:
-                    if not isinstance(s, dict):
-                        continue
-                    cat_raw = (
-                        s.get("Category")
-                        if isinstance(s.get("Category"), str)
-                        else "Other"
-                    )
-                    if cat_raw in _hidden_categories:
-                        continue
-                    cat = self._norm_token(cat_raw) or "Other"
-                    if cat not in cats:
-                        cat = "Other"
-                    cats[cat].append(s)
-                    cat_counts[cat] += 1
-                    if cat == "USS":
-                        u = self._norm_token(s.get("USSType") or "")
-                        if u:
-                            uss_counts[u] = uss_counts.get(u, 0) + 1
+    def _build_body_card(
+        self, body, pc_disp, dist, est, tf, was_mapped, dss_mapped,
+        first, bio, geo, genuses, landable, volcanism, materials, min_value
+    ):
+        esc = self._esc
 
-                out_lines.append(
-                    "Summary: "
-                    + " | ".join([
-                        f"{k} x{cat_counts[k]}"
-                        for k in cat_order
-                        if cat_counts.get(k, 0)
-                    ])
-                )
-                if uss_counts:
-                    bits = []
-                    for k, v in sorted(
-                        uss_counts.items(),
-                        key=lambda x: (-x[1], str(x[0]).lower())
-                    )[:8]:
-                        bits.append(f"{k} x{v}")
-                    out_lines.append("USS types: " + " | ".join(bits))
-                out_lines.append("")
+        # Card border colour based on value/interest
+        if isinstance(est, int) and est >= min_value and not dss_mapped:
+            border_color = "#4D96FF"
+            bg_color     = "#0a1520"
+        elif bio and bio > 0:
+            border_color = "#6BCB77"
+            bg_color     = "#0a1a0a"
+        elif geo and geo > 0:
+            border_color = "#FFB347"
+            bg_color     = "#1a1200"
+        elif tf and not dss_mapped:
+            border_color = "#C77DFF"
+            bg_color     = "#120a1a"
+        else:
+            border_color = "#1e2a3a"
+            bg_color     = "#0d1015"
 
-                max_lines = 30
-                used = 0
-                for cat in cat_order:
-                    if not cats[cat]:
-                        continue
-                    out_lines.append(f"{cat}:")
-                    for s in cats[cat]:
-                        if used >= max_lines:
-                            break
-                        nm = (
-                            self._norm_token(s.get("SignalName") or "Signal")
-                            or "Signal"
-                        )
-                        stype = self._norm_token(s.get("SignalType") or "")
-                        uss = self._norm_token(s.get("USSType") or "")
-                        tl = s.get("ThreatLevel")
-                        tr = s.get("TimeRemaining")
-                        bits = [str(nm)]
-                        if cat == "USS" and uss:
-                            bits.append(f"({uss})")
-                        if cat == "Other" and stype:
-                            bits.append(f"[{stype}]")
-                        if isinstance(tl, int):
-                            bits.append(f"Threat {tl}")
-                        if isinstance(tr, (int, float)):
-                            bits.append(f"TR {int(tr)}s")
-                        out_lines.append(" | ".join(bits))
-                        used += 1
-                    out_lines.append("")
-                    if used >= max_lines:
-                        break
+        card = QFrame()
+        card.setStyleSheet(
+            f"QFrame {{ background: {bg_color}; border: 1px solid {border_color};"
+            f"border-radius: 5px; }}"
+        )
+        card_l = QVBoxLayout(card)
+        card_l.setContentsMargins(10, 7, 10, 7)
+        card_l.setSpacing(4)
 
-                self.system_signals_box.setPlainText(
-                    "\n".join(out_lines).strip()
-                )
-            else:
-                fss_complete = getattr(state, "fss_complete", False)
-                resolved = len(
-                    getattr(state, "resolved_body_ids", set()) or set()
-                )
-                total = getattr(state, "system_body_count", None)
-                if (
-                    isinstance(total, int)
-                    and not fss_complete
-                    and total > resolved
-                ):
-                    remaining = total - resolved
-                    self.system_signals_box.setPlainText(
-                        f"{remaining} bodies unresolved. "
-                        "Use FSS to discover them."
+        # ── Header row ────────────────────────────────────────────────────
+        hdr_row = QHBoxLayout()
+        hdr_row.setSpacing(6)
+
+        # Body name + class
+        name_html = (
+            f'<span style="color:{border_color};font-weight:700;font-size:12px;">'
+            f'{esc(body)}</span>'
+        )
+        if pc_disp:
+            name_html += (
+                f'&nbsp;<span style="color:#888888;font-size:10px;">'
+                f'- {esc(pc_disp)}</span>'
+            )
+        name_lbl = QLabel(name_html)
+        name_lbl.setTextFormat(Qt.TextFormat.RichText)
+        name_lbl.setStyleSheet("background: transparent; border: none;")
+        hdr_row.addWidget(name_lbl, 1)
+
+        # Badges top right
+        badges = []
+        if landable:
+            badges.append(self._badge("Landable", "#1a3a1a", "#6BCB77", bold=True))
+        if tf:
+            badges.append(self._badge("Terraformable", "#2a1a3a", "#C77DFF", bold=True))
+        if first:
+            badges.append(self._badge("First Discovery", "#2a1a00", "#FFB347", bold=True))
+        if dss_mapped:
+            badges.append(self._badge("DSS Mapped", "#1a2a3a", "#4D96FF"))
+        elif was_mapped:
+            badges.append(self._badge("Prev Mapped", "#1a1a2a", "#888888"))
+
+        if badges:
+            badge_lbl = QLabel(" ".join(badges))
+            badge_lbl.setTextFormat(Qt.TextFormat.RichText)
+            badge_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            badge_lbl.setStyleSheet("background: transparent; border: none;")
+            hdr_row.addWidget(badge_lbl)
+
+        card_l.addLayout(hdr_row)
+
+        # ── Info row ──────────────────────────────────────────────────────
+        info_html = []
+
+        dist_txt = (
+            fmt.int_commas(dist) + " Ls"
+            if isinstance(dist, (int, float)) else ""
+        )
+        est_txt = fmt.credits(est, default="?") if isinstance(est, int) else ""
+
+        if dist_txt:
+            info_html.append(
+                f'<span style="color:#555555;font-size:10px;">DISTANCE</span>'
+                f'&nbsp;<span style="color:#CCCCCC;font-size:11px;">{esc(dist_txt)}</span>'
+            )
+        if est_txt:
+            val_color = "#FFB347" if isinstance(est, int) and est >= min_value else "#AAAAAA"
+            info_html.append(
+                f'<span style="color:#555555;font-size:10px;">EST. VALUE</span>'
+                f'&nbsp;<span style="color:{val_color};font-size:11px;font-weight:700;">'
+                f'{esc(est_txt)}</span>'
+            )
+        if isinstance(bio, int) and bio > 0:
+            info_html.append(
+                f'<span style="color:#555555;font-size:10px;">BIO</span>'
+                f'&nbsp;<span style="color:#6BCB77;font-size:11px;font-weight:700;">'
+                f'{bio}</span>'
+            )
+        if isinstance(geo, int) and geo > 0:
+            info_html.append(
+                f'<span style="color:#555555;font-size:10px;">GEO</span>'
+                f'&nbsp;<span style="color:#FFB347;font-size:11px;font-weight:700;">'
+                f'{geo}</span>'
+            )
+        if volcanism and "no volcanism" not in volcanism.lower():
+            info_html.append(
+                f'<span style="color:#555555;font-size:10px;">VOLCANISM</span>'
+                f'&nbsp;<span style="color:#FF8888;font-size:10px;">'
+                f'{esc(volcanism.strip())}</span>'
+            )
+
+        if info_html:
+            info_lbl = QLabel(" &nbsp;&nbsp; ".join(info_html))
+            info_lbl.setTextFormat(Qt.TextFormat.RichText)
+            info_lbl.setWordWrap(True)
+            info_lbl.setStyleSheet("background: transparent; border: none;")
+            card_l.addWidget(info_lbl)
+
+        # ── Bio genuses ───────────────────────────────────────────────────
+        if isinstance(genuses, list) and genuses:
+            genus_badges = " ".join(
+                self._badge(str(g), "#1a2a1a", "#6BCB77")
+                for g in genuses if g
+            )
+            genus_lbl = QLabel(genus_badges)
+            genus_lbl.setTextFormat(Qt.TextFormat.RichText)
+            genus_lbl.setWordWrap(True)
+            genus_lbl.setStyleSheet("background: transparent; border: none;")
+            card_l.addWidget(genus_lbl)
+
+        # ── Materials row (landable only) ─────────────────────────────────
+        if landable and isinstance(materials, dict) and materials:
+            mat_items = sorted(
+                [(float(v), str(k)) for k, v in materials.items()
+                 if isinstance(v, (int, float))],
+                reverse=True
+            )
+            mat_badges = []
+            for pct, nm in mat_items[:10]:
+                raw  = nm.strip().lower()
+                disp = nm.capitalize() if nm.islower() else nm
+                if raw in self.RARE:
+                    badge = self._badge(
+                        f"{disp} {pct:.1f}%", "#2a1a00", "#FFD93D"
                     )
                 else:
-                    self.system_signals_box.setPlainText("")
-        except Exception:
-            self.system_signals_box.setPlainText("")
+                    badge = self._badge(
+                        f"{disp} {pct:.1f}%", "#1a1a2a", "#888888"
+                    )
+                mat_badges.append(badge)
 
-    def _refresh_materials_shortlist(self, state):
+            if mat_badges:
+                mat_lbl = QLabel(" ".join(mat_badges))
+                mat_lbl.setTextFormat(Qt.TextFormat.RichText)
+                mat_lbl.setWordWrap(True)
+                mat_lbl.setStyleSheet("background: transparent; border: none;")
+                card_l.addWidget(mat_lbl)
+
+        return card
+
+    # ── Materials shortlist ───────────────────────────────────────────────────
+    def _refresh_materials(self, state):
         try:
-            rare = {
-                "polonium", "tellurium", "ruthenium", "yttrium",
-                "antimony", "arsenic", "selenium", "zirconium",
-                "niobium", "tin", "molybdenum", "technetium",
-            }
+            rare = self.RARE
             low_threshold = 25
             low_raw = set()
             inv_raw = getattr(state, "materials_raw", {}) or {}
             if isinstance(inv_raw, dict):
                 for k, v in inv_raw.items():
-                    if (
-                        isinstance(k, str)
-                        and isinstance(v, int)
-                        and v <= low_threshold
-                    ):
+                    if isinstance(k, str) and isinstance(v, int) and v <= low_threshold:
                         low_raw.add(k.strip().lower())
 
-            need_raw = low_raw
             targets = []
-
             for body, rec in (state.bodies or {}).items():
                 if not isinstance(rec, dict):
                     continue
-                landable = rec.get("Landable")
-                if landable is not True:
+                if rec.get("Landable") is not True:
                     continue
                 geo = rec.get("GeoSignals", 0) or 0
                 if not (isinstance(geo, int) and geo > 0):
                     continue
 
-                dist = rec.get("DistanceLS")
-                dist_v = float(dist) if isinstance(dist, (int, float)) else None
-                volcanism = rec.get("Volcanism") or ""
-                volc_present = bool(
-                    isinstance(volcanism, str)
-                    and volcanism.strip()
-                    and "no volcanism" not in volcanism.strip().lower()
+                dist     = rec.get("DistanceLS")
+                dist_v   = float(dist) if isinstance(dist, (int, float)) else None
+                volc     = rec.get("Volcanism") or ""
+                volc_ok  = bool(
+                    isinstance(volc, str) and volc.strip()
+                    and "no volcanism" not in volc.strip().lower()
                 )
-                mats = rec.get("Materials") or {}
+                mats     = rec.get("Materials") or {}
                 if not isinstance(mats, dict):
                     mats = {}
 
-                rare_score = 0.0
-                need_score = 0.0
-                for k, v in mats.items():
-                    if not isinstance(v, (int, float)):
-                        continue
-                    nm = str(k).strip().lower()
-                    if nm in rare:
-                        rare_score += float(v)
-                    if nm in need_raw:
-                        need_score += float(v)
-
+                rare_score = sum(
+                    float(v) for k, v in mats.items()
+                    if isinstance(v, (int, float)) and str(k).strip().lower() in rare
+                )
+                need_score = sum(
+                    float(v) for k, v in mats.items()
+                    if isinstance(v, (int, float)) and str(k).strip().lower() in low_raw
+                )
                 score = (
                     (geo * 1000)
-                    + (120 if volc_present else 0)
+                    + (120 if volc_ok else 0)
                     + (need_score * 20.0)
                     + (rare_score * 8.0)
                     - ((dist_v or 0.0) * 0.10)
                 )
-                targets.append((score, body, geo, dist_v, volcanism, mats))
+                targets.append((score, body, geo, dist_v, volc, mats))
 
             targets.sort(key=lambda x: x[0], reverse=True)
-            show = targets[:8]
+            show = targets[:6]
 
             if not show:
-                self.materials_box.setPlainText(
-                    "No landable bodies with Geological signals yet.\n"
-                    "Tip: resolve bodies (FSS/nav beacon) so Scan events "
-                    "populate Landable/Materials/Volcanism."
+                self.materials_box.setText(
+                    '<span style="color:#444444;">No landable bodies with Geological signals yet.</span>'
                 )
                 return
 
-            out = []
-            out.append("Ranked targets (landable + Geo):")
-            out.append(
-                f"(!) low inventory (≤{low_threshold}) | (*) rarer raw mats"
-            )
-            out.append("")
-
-            for i, (
-                _score, body, geo, dist_v, volcanism, mats
-            ) in enumerate(show, 1):
-                head = f"{i}. {body}"
+            html = []
+            for i, (_, body, geo, dist_v, volc, mats) in enumerate(show, 1):
+                head = f'<span style="color:#FFB347;font-weight:700;">{i}. {self._esc(body)}</span>'
                 if isinstance(dist_v, float):
-                    head += f" — {dist_v:.0f} LS"
-                head += f" — Geo {geo}"
+                    head += f'<span style="color:#888888;"> — {dist_v:.0f} Ls</span>'
+                head += f'<span style="color:#6BCB77;"> — Geo {geo}</span>'
                 if (
-                    isinstance(volcanism, str)
-                    and volcanism.strip()
-                    and "no volcanism" not in volcanism.lower()
+                    isinstance(volc, str) and volc.strip()
+                    and "no volcanism" not in volc.lower()
                 ):
-                    head += " — Volcanism"
-                out.append(head)
+                    head += f'<span style="color:#FF8888;"> — Volcanism</span>'
+                html.append(head)
 
-                items = []
-                for k, v in mats.items():
-                    if isinstance(v, (int, float)):
-                        items.append((float(v), str(k)))
-                items.sort(key=lambda x: x[0], reverse=True)
-
-                if items:
+                mat_items = sorted(
+                    [(float(v), str(k)) for k, v in mats.items()
+                     if isinstance(v, (int, float))],
+                    reverse=True
+                )
+                if mat_items:
                     parts = []
-                    for pct, nm in items[:6]:
-                        raw = (nm or "").strip()
-                        if not raw:
-                            continue
-                        disp = raw.capitalize() if raw.islower() else raw
-                        key = raw.strip().lower()
-                        bang = "!" if key in need_raw else ""
-                        star = "*" if key in rare else ""
-                        parts.append(f"{disp}{bang}{star} {pct:.1f}%")
-                    out.append("   " + " | ".join(parts))
-                else:
-                    out.append("   Materials: (not yet scanned)")
+                    for pct, nm in mat_items[:6]:
+                        raw  = nm.strip().lower()
+                        disp = nm.capitalize() if nm.islower() else nm
+                        bang = "!" if raw in low_raw else ""
+                        star = "*" if raw in rare else ""
+                        color = "#FFD93D" if raw in rare else "#888888"
+                        parts.append(
+                            f'<span style="color:{color};">{self._esc(disp)}{bang}{star} {pct:.1f}%</span>'
+                        )
+                    html.append("&nbsp;&nbsp;" + " &nbsp; ".join(parts))
 
-                if (
-                    isinstance(volcanism, str)
-                    and volcanism.strip()
-                    and "no volcanism" not in volcanism.lower()
-                ):
-                    out.append(f"   Volcanism: {volcanism.strip()}")
+                html.append("")
 
-            self.materials_box.setPlainText("\n".join(out).strip())
+            self.materials_box.setText("<br>".join(html).strip())
+
         except Exception:
-            self.materials_box.setPlainText("")
+            self.materials_box.setText("")
+
+    # ── resizeEvent ───────────────────────────────────────────────────────────
+    def _refresh_materials_shortlist(self, state):
+        """Alias kept for main_window compatibility."""
+        self._refresh_materials(state)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
