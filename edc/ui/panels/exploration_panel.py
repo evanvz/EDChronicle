@@ -346,10 +346,13 @@ class ExplorationPanel(QWidget):
             was_mapped = bool(rec.get("WasMapped", False))
             dss_mapped = bool(rec.get("DSSMapped", False)) or bool(rec.get("BioGenuses"))
             first      = rec.get("FirstDiscovered", False)
-            bio        = rec.get("BioSignals", 0) or 0
-            geo        = rec.get("GeoSignals", 0) or 0
-            genuses    = rec.get("BioGenuses", []) or []
-            landable   = rec.get("Landable", False)
+            bio       = rec.get("BioSignals",      0) or 0
+            geo       = rec.get("GeoSignals",      0) or 0
+            human     = rec.get("HumanSignals",    0) or 0
+            thargoid  = rec.get("ThargoidSignals", 0) or 0
+            other_sig = rec.get("OtherSignals",    0) or 0
+            genuses   = rec.get("BioGenuses", []) or []
+            landable  = rec.get("Landable", False)
             volcanism  = rec.get("Volcanism") or ""
             materials  = rec.get("Materials") or {}
 
@@ -365,8 +368,8 @@ class ExplorationPanel(QWidget):
             shown += 1
             card = self._build_body_card(
                 body, pc_disp, dist, est, tf, was_mapped, dss_mapped,
-                first, bio, geo, genuses, landable, volcanism, materials,
-                min_value
+                first, bio, geo, human, thargoid, other_sig,
+                genuses, landable, volcanism, materials, min_value
             )
             self._cards_layout.addWidget(card)
 
@@ -392,7 +395,8 @@ class ExplorationPanel(QWidget):
 
     def _build_body_card(
         self, body, pc_disp, dist, est, tf, was_mapped, dss_mapped,
-        first, bio, geo, genuses, landable, volcanism, materials, min_value
+        first, bio, geo, human, thargoid, other_sig,
+        genuses, landable, volcanism, materials, min_value
     ):
         esc = self._esc
 
@@ -495,6 +499,24 @@ class ExplorationPanel(QWidget):
                 f'<span style="color:#555555;font-size:10px;">GEO</span>'
                 f'&nbsp;<span style="color:#FFB347;font-size:11px;font-weight:700;">'
                 f'{geo}</span>'
+            )
+        if isinstance(human, int) and human > 0:
+            info_html.append(
+                f'<span style="color:#555555;font-size:10px;">HUMAN</span>'
+                f'&nbsp;<span style="color:#4D96FF;font-size:11px;font-weight:700;">'
+                f'{human}</span>'
+            )
+        if isinstance(thargoid, int) and thargoid > 0:
+            info_html.append(
+                f'<span style="color:#555555;font-size:10px;">THARGOID</span>'
+                f'&nbsp;<span style="color:#FF6B6B;font-size:11px;font-weight:700;">'
+                f'{thargoid}</span>'
+            )
+        if isinstance(other_sig, int) and other_sig > 0:
+            info_html.append(
+                f'<span style="color:#555555;font-size:10px;">OTHER</span>'
+                f'&nbsp;<span style="color:#AAAAAA;font-size:11px;font-weight:700;">'
+                f'{other_sig}</span>'
             )
         if volcanism and "no volcanism" not in volcanism.lower():
             info_html.append(

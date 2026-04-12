@@ -44,6 +44,8 @@ class GameState:
     bio_genuses: Dict[str, List[str]] = field(default_factory=dict)    # BodyName -> confirmed genera list
     geo_signals: Dict[str, int] = field(default_factory=dict)          # BodyName -> geological count
     human_signals: Dict[str, int] = field(default_factory=dict)        # BodyName -> human signal count
+    thargoid_signals: Dict[str, int] = field(default_factory=dict)
+    other_signals: Dict[str, int] = field(default_factory=dict)
     saa_signals: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
     non_body_count: Optional[int] = None                               # FSSDiscoveryScan.NonBodyCount
     fss_complete: bool = False
