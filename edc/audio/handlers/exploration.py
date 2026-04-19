@@ -81,8 +81,8 @@ class ExplorationPhrases:
 
     BIO_SIGNALS_MULTIPLE = [
         "{count} biological signals detected.",
-        "Multiple bio signals. {count} on planet.",
-        "{count} bio signs detected. Good exobiology opportunity.",
+        "Multiple exobiological signals. {count} on planet.",
+        "{count} exobiological signals detected. Good exobiology opportunity.",
         "Biological diversity detected. {count} signals.",
     ]
 

@@ -472,7 +472,7 @@ class ExobiologyPanel(QWidget):
                             (self._norm_text(body), gk)
                         )
             else:
-                genus_txt = f"{bio} bio signals"
+                genus_txt = f"{bio} exobiological signals"
                 status_txt = f"NEEDS DSS (Bio: {bio})"
                 rows.append((
                     0, status_txt, body, genus_txt,

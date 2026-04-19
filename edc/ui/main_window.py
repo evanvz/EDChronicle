@@ -2053,7 +2053,7 @@ class MainWindow(QMainWindow):
 
         if bio_need_dss > 0:
             out["exobiology"].append(
-                f"🔬 Action: {bio_need_dss} bodies have bio signals — DSS/map to reveal genus"
+                f"🔬 Action: {bio_need_dss} bodies have exobiological signals — DSS/map to reveal genus"
             )
 
         dss_hv = 0
