@@ -114,12 +114,29 @@ Live event processing currently updates in-memory state through `EventEngine` an
 | Git | Version control with branch-based workflow |
 | GitHub | Remote repository and release tracking |
 
-## Running the application
+## Installation
 
-1. Activate the virtual environment
+Requires Python 3.10 or later — download from [python.org](https://www.python.org/downloads/).
+
+1. Download or clone this repository
 2. From the project root, run:
 
 ```
-python main.py
+install.bat
+```
+
+This creates a virtual environment and installs all dependencies.
+
+## Running the application
+
+```
+launch.bat
+```
+
+## Updating
+
+```
+git pull
+install.bat
 ```
 
