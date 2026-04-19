@@ -21,6 +21,8 @@ EDChronicle currently includes:
 - PowerPlay-related state handling
 - Item/material metadata support
 - User settings management
+- Text-to-speech voice alerts for in-game events
+- Panel switching for Exploration, Exobiology, Combat, and PowerPlay views
 
 ## Current architecture at a glance
 
