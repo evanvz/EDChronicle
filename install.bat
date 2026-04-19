@@ -11,13 +11,16 @@ if errorlevel 1 (
 )
 
 echo Creating virtual environment...
-python -m venv .venv
-
-echo Activating virtual environment...
-call .venv\Scripts\activate.bat
+if exist .venv rmdir /s /q .venv >nul 2>&1
+python -m venv .venv >nul 2>&1
+if not exist .venv\Scripts\python.exe (
+    echo ERROR: Failed to create virtual environment.
+    pause
+    exit /b 1
+)
 
 echo Installing dependencies...
-pip install -r requirements.txt
+.venv\Scripts\python.exe -m pip install -r requirements.txt
 
 echo.
 echo Installation complete. Run launch.bat to start EDChronicle.
