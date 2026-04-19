@@ -10,6 +10,7 @@ from edc.config import ConfigStore, default_app_dir, detect_journal_dir
 from edc.utils.log import setup_logging
 from edc.core.journal_importer import JournalImporter
 from edc.ui.main_window import MainWindow
+from edc.ui.splash_screen import SplashScreen
 
 def parse_args():
     parser = argparse.ArgumentParser(description="EDC Application")
@@ -184,20 +185,21 @@ def run():
     }
 
     """)
-    win = MainWindow(cfg_store, cfg, auto_start=False)
+    def launch():
+        win = MainWindow(cfg_store, cfg, auto_start=False)
 
-    try:
-        journal_dir = Path(cfg.journal_dir)
-        importer = JournalImporter(journal_dir, win.repo)
-        importer.import_all()
-        # Do not restore last known live system state on startup.
-        # Wait for fresh journal events instead.
-    except Exception:
-        log.exception("Historical system hydration failed")
+        try:
+            journal_dir = Path(cfg.journal_dir)
+            importer = JournalImporter(journal_dir, win.repo)
+            importer.import_all()
+        except Exception:
+            log.exception("Historical system hydration failed")
 
-    win.show()
+        win.show()
+        QTimer.singleShot(0, win.refresh_from_state)
+        QTimer.singleShot(0, win.start_auto_watch)
 
-    QTimer.singleShot(0, win.refresh_from_state)
-    QTimer.singleShot(0, win.start_auto_watch)
+    splash = SplashScreen(on_done=launch)
+    splash.show()
 
     app.exec()
