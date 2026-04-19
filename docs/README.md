@@ -112,8 +112,6 @@ Live event processing currently updates in-memory state through `EventEngine` an
 | Git | Version control with branch-based workflow |
 | GitHub | Remote repository and release tracking |
 
-**Claude Code usage rule:** Claude Code is used for analysis, architecture discussion, and direct code changes. Changes are reviewed before committing.
-
 ## Running the application
 
 1. Activate the virtual environment
@@ -123,51 +121,3 @@ Live event processing currently updates in-memory state through `EventEngine` an
 python main.py
 ```
 
-## Current project status
-
-The project has a good functional foundation and clear subsystem direction, but the documentation has lagged behind the codebase.
-
-The biggest current needs are:
-
-- updated technical documentation
-- clearer ownership boundaries
-- stronger change safety
-- better regression coverage for live event and import flows
-- continued refactoring of large or mixed-responsibility files
-
-## Known structural pain points
-
-The main issues currently identified are:
-
-- documentation drift
-- unclear boundaries between some runtime components
-- likely oversized or over-centralized UI orchestration in `main_window.py`
-- need for stronger regression tests around live event processing and import processing
-- need for better logging/debug visibility in high-risk paths
-
-## Recommended next steps
-
-### Documentation
-- refresh `README.md`
-- replace the old project structure doc with a current version
-- add a practical project plan
-
-### Change safety
-- add regression tests around `EventEngine.process(...)`
-- add regression tests around `JournalImporter.import_all()`
-- improve event and import logging
-
-### Structural cleanup
-- continue reducing responsibility in `main_window.py`
-- tighten boundaries between UI orchestration, engine logic, handlers, and importer logic
-- document “where to edit for X” for future maintenance
-
-## Project goals going forward
-
-The immediate goal is not just to add more features, but to make the existing codebase easier and safer to maintain by:
-
-- documenting the real runtime flows
-- reducing confusion between live and historical paths
-- improving testability
-- improving observability
-- supporting safer future enhancements
