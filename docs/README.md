@@ -142,3 +142,33 @@ git pull
 install.bat
 ```
 
+## Feedback, suggestions and issues
+
+Have a feature request, found a bug, or want to suggest an improvement?
+
+Open an issue on GitHub: [github.com/evanvz/EDChronicle/issues](https://github.com/evanvz/EDChronicle/issues)
+
+All feedback is welcome — whether it's a crash report, a missing feature, or an idea to make the app better for solo commanders.
+
+## Support the project
+
+EDChronicle is free and open-source. If it adds value to your gameplay, a coffee is always appreciated.
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/bobrogers_solo)
+
+## A note on indie development
+
+This project is built and maintained by a solo developer in personal time. If you use, share, or build on EDChronicle, please respect the work that went into it:
+
+- Credit the original project and author in any derivative work
+- Do not redistribute modified versions without clearly noting the changes made
+- A link back to this repository is always appreciated
+
+## License
+
+MIT License — free to use, modify and distribute, provided the original copyright notice and author credit are retained in all copies or substantial portions of the software.
+
+Copyright © 2026 Evan van Zyl (bobrogers_solo)
+
+See [LICENSE](../LICENSE) for the full license text.
+
