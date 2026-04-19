@@ -1,6 +1,10 @@
 # EDChronicle
 
-EDChronicle is a Python desktop companion app for Elite Dangerous focused on live journal monitoring, current commander/game-state visibility, and historical journal import into a local SQLite database.
+EDChronicle is a Python desktop companion app for Elite Dangerous built for the solo player, with a focus on Exploration, Exobiology, Combat, and PowerPlay. It monitors live journal entries and imports historical journals into a local SQLite database. All data is derived exclusively from in-game journal entries — no external APIs or third-party data sources are used.
+
+## Inspiration
+
+Inspired by [EDCoPilot](https://www.razzafrag.com/) by CMDR RazzaFrag.
 
 ## What the app currently does
 
