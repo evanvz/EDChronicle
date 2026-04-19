@@ -68,6 +68,12 @@ class AppConfig:
                 "MissionCompleted": False,
             }
 
+def detect_journal_dir() -> Optional[str]:
+    candidate = Path.home() / "Saved Games" / "Frontier Developments" / "Elite Dangerous"
+    if candidate.exists():
+        return str(candidate)
+    return None
+
 class ConfigStore:
     def __init__(self, app_dir: Path):
         # app_dir == project root (portable-in-repo)

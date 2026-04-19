@@ -28,7 +28,7 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
 )
 from PyQt6.QtCore import QThread, Qt, QTimer, QSettings, QPropertyAnimation, QEasingCurve, QSize
-from PyQt6.QtGui import QTextCursor, QColor
+from PyQt6.QtGui import QTextCursor, QColor, QIcon
 from pathlib import Path
 
 from edc.core.state import GameState
@@ -191,7 +191,8 @@ class MainWindow(QMainWindow):
         self.cfg_store = cfg_store
         self.cfg = cfg
 
-        self.setWindowTitle("ED Companion Lite(Fresh Build)")
+        self.setWindowTitle("EDChronicle")
+        self.setWindowIcon(QIcon("assets/edc_icon.ico"))
         self.resize(1000, 650)
 
         self.state = GameState()
@@ -255,7 +256,7 @@ class MainWindow(QMainWindow):
         # ===============================
         # Elite Header Bar
         # ===============================
-        self.header_bar = QLabel("ELITE DANGEROUS COMMAND COMPANION LITE")
+        self.header_bar = QLabel("EDChronicle")
         self.header_bar.setStyleSheet("""
             font-size: 18px;
             font-weight: bold;

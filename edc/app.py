@@ -1,14 +1,15 @@
 import argparse
+import ctypes
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication
+from PyQt6.QtGui import QIcon
 from pathlib import Path
 import logging
 
-from edc.config import ConfigStore, default_app_dir
+from edc.config import ConfigStore, default_app_dir, detect_journal_dir
 from edc.utils.log import setup_logging
 from edc.core.journal_importer import JournalImporter
 from edc.ui.main_window import MainWindow
-from qt_material import apply_stylesheet
 
 def parse_args():
     parser = argparse.ArgumentParser(description="EDC Application")
@@ -40,16 +41,19 @@ def run():
 
     cfg = cfg_store.load()
 
+    if not cfg.journal_dir:
+        detected = detect_journal_dir()
+        if detected:
+            cfg.journal_dir = detected
+            cfg_store.save(cfg)
+            log.info("Auto-detected journal directory: %s", detected)
+        else:
+            log.warning("Could not auto-detect journal directory. Set it manually in Settings.")
+
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("EDChronicle")
     app = QApplication([])
+    app.setWindowIcon(QIcon("assets/edc_icon.ico"))
 
-    # ====================================
-    # Apply qt-material Base Dark Theme
-    # ====================================
-    apply_stylesheet(app, theme='dark_dark.xml')
-
-    # ====================================
-    # Elite-Themed Styling Overlay
-    # ====================================
     app.setStyle("Fusion")
 
     app.setStyleSheet(app.styleSheet() + """

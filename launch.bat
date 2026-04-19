@@ -1,3 +1,2 @@
 @echo off
-call .venv\Scripts\activate.bat
-python main.py
+start "" .venv\Scripts\pythonw.exe main.py
