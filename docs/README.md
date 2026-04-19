@@ -26,6 +26,16 @@ EDChronicle currently includes:
 - Text-to-speech voice alerts for in-game events
 - Panel switching for Exploration, Exobiology, Combat, and PowerPlay views
 
+## Screenshots
+
+![Overview HUD](screenshots/OverView%20Hud.png)
+![Exploration](screenshots/Exploration.png)
+![Planets](screenshots/Planets.png)
+![Exobiology](screenshots/Exobiology.png)
+![Combat](screenshots/Combat.png)
+![PowerPlay](screenshots/PowerPlay.png)
+![Settings](screenshots/Settings.png)
+
 ## Current architecture at a glance
 
 The application currently has two important runtime paths:
