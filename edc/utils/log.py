@@ -4,24 +4,27 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 def setup_logging(settings_dir: Path) -> None:
-    settings_dir.mkdir(parents=True, exist_ok=True)
+    logs_dir = settings_dir.parent / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
 
-    _purge_old_logs(settings_dir, days=2)
+    _purge_old_logs(logs_dir, days=2)
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    log_file = settings_dir / f"edc_{timestamp}.log"
+    log_file = logs_dir / f"edc_{timestamp}.log"
+
+    fmt = logging.Formatter("%(asctime)s [%(levelname)s] [%(name)s] %(message)s")
 
     file_handler = logging.FileHandler(log_file, encoding="utf-8")
+    file_handler.setFormatter(fmt)
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
-        handlers=[file_handler],
-    )
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    root.handlers.clear()
+    root.addHandler(file_handler)
 
-def _purge_old_logs(settings_dir: Path, days: int) -> None:
+def _purge_old_logs(logs_dir: Path, days: int) -> None:
     cutoff = time.time() - (days * 86400)
-    for f in settings_dir.glob("edc_*.log"):
+    for f in logs_dir.glob("edc_*.log"):
         if f.stat().st_mtime < cutoff:
             try:
                 f.unlink()

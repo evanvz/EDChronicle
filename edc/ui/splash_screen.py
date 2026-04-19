@@ -9,16 +9,16 @@ from PyQt6.QtCore import Qt, QTimer, QPointF
 from PyQt6.QtGui import QFont, QPainter, QColor, QPen, QPolygonF, QBrush
 
 ASCII_HEADER = """
-███████╗██████╗  ██████╗██╗  ██╗██████╗  ██████╗ ███╗   ██╗██╗ ██████╗██╗     ███████╗
-██╔════╝██╔══██╗██╔════╝██║  ██║██╔══██╗██╔═══██╗████╗  ██║██║██╔════╝██║     ██╔════╝
-█████╗  ██║  ██║██║     ███████║██████╔╝██║   ██║██╔██╗ ██║██║██║     ██║     █████╗
-██╔══╝  ██║  ██║██║     ██╔══██║██╔══██╗██║   ██║██║╚██╗██║██║██║     ██║     ██╔══╝
-███████╗██████╔╝╚██████╗██║  ██║██║  ██║╚██████╔╝██║ ╚████║██║╚██████╗███████╗███████╗
-╚══════╝╚═════╝  ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝ ╚═════╝╚══════╝╚══════╝
+███████╗██████╗     ██████╗██╗  ██╗██████╗  ██████╗ ███╗   ██╗██╗ ██████╗██╗     ███████╗
+██╔════╝██╔══██╗   ██╔════╝██║  ██║██╔══██╗██╔═══██╗████╗  ██║██║██╔════╝██║     ██╔════╝
+█████╗  ██║  ██║   ██║     ███████║██████╔╝██║   ██║██╔██╗ ██║██║██║     ██║     █████╗
+██╔══╝  ██║  ██║   ██║     ██╔══██║██╔══██╗██║   ██║██║╚██╗██║██║██║     ██║     ██╔══╝
+███████╗██████╔╝   ╚██████╗██║  ██║██║  ██║╚██████╔╝██║ ╚████║██║╚██████╗███████╗███████╗
+╚══════╝╚═════╝     ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝ ╚═════╝╚══════╝╚══════╝
 """
 
 BOOT_LINES = [
-    ("BIOS v3.10 — FRONTIER CORE SYSTEMS", "#888888", 900),
+    ("BIOS v3.10 — CORE SYSTEMS", "#888888", 900),
     ("MEMORY CHECK.................. OK", "#666666", 950),
     ("INITIALIZING RUNTIME CORE", "#FF8C00", 1000),
     ("LOADING JOURNAL ENGINE", "#E6E6E6", 950),
@@ -242,6 +242,8 @@ class _BackgroundCanvas(QWidget):
         self._tick.start(33)
 
     def _update(self):
+        if not self.isVisible():
+            return
         # stars
         for s in self._stars:
             s.update()
@@ -395,6 +397,12 @@ class _BackgroundCanvas(QWidget):
 
     def stop(self):
         self._tick.stop()
+        self._tick.deleteLater()
+        self.hide()
+        try:
+            sd.stop()
+        except Exception:
+            pass
 
 
 # ─── Splash screen ─────────────────────────────────────────────────────────────
@@ -488,5 +496,8 @@ class SplashScreen(QWidget):
         self._cursor_timer.stop()
         self._line_timer.stop()
         self._canvas.stop()
+        QTimer.singleShot(300, self._launch)
+
+    def _launch(self):
         self.close()
         self._on_done()

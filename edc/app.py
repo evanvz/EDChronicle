@@ -1,5 +1,7 @@
 import argparse
 import ctypes
+import sys
+import traceback
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtGui import QIcon
@@ -12,6 +14,12 @@ from edc.core.journal_importer import JournalImporter
 from edc.ui.main_window import MainWindow
 from edc.ui.splash_screen import SplashScreen
 
+def _install_exception_hook():
+    def hook(exc_type, exc_value, exc_tb):
+        log = logging.getLogger("edc.unhandled")
+        log.error("Unhandled exception:\n%s", "".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
+    sys.excepthook = hook
+
 def parse_args():
     parser = argparse.ArgumentParser(description="EDC Application")
     parser.add_argument('--settings', action='store_true', help='Display current settings')
@@ -20,10 +28,7 @@ def parse_args():
 
 def run():
     args = parse_args()
-    if args.verbose:
-        logging.basicConfig(level=logging.DEBUG)
-    else:
-        logging.basicConfig(level=logging.INFO)
+    _install_exception_hook()
     if args.settings:
         cfg_store = ConfigStore(default_app_dir())
         cfg = cfg_store.load()
@@ -185,21 +190,21 @@ def run():
     }
 
     """)
-    def launch():
-        win = MainWindow(cfg_store, cfg, auto_start=False)
+    win = MainWindow(cfg_store, cfg, auto_start=False)
 
-        try:
-            journal_dir = Path(cfg.journal_dir)
-            importer = JournalImporter(journal_dir, win.repo)
-            importer.import_all()
-        except Exception:
-            log.exception("Historical system hydration failed")
+    try:
+        journal_dir = Path(cfg.journal_dir)
+        importer = JournalImporter(journal_dir, win.repo)
+        importer.import_all()
+    except Exception:
+        log.exception("Historical system hydration failed")
 
+    def _launch():
         win.show()
         QTimer.singleShot(0, win.refresh_from_state)
         QTimer.singleShot(0, win.start_auto_watch)
 
-    splash = SplashScreen(on_done=launch)
+    splash = SplashScreen(on_done=_launch)
     splash.show()
 
     app.exec()

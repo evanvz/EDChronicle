@@ -193,7 +193,7 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("EDChronicle")
         self.setWindowIcon(QIcon("assets/edc_icon.ico"))
-        self.showMaximized()
+        self.resize(1200, 700)
 
         self.state = GameState()
 
