@@ -145,6 +145,15 @@ def run():
         padding: 4px;
     }
 
+    QComboBox QAbstractItemView {
+        background-color: #1a1a1a;
+        color: #E6E6E6;
+        selection-background-color: #FF8C00;
+        selection-color: #000000;
+        border: 1px solid #333333;
+        outline: none;
+    }
+
     QSplitter::handle {
         background-color: #1E1E1E;
         width: 3px;

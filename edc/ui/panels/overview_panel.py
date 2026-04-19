@@ -218,7 +218,7 @@ class FactionHeader(QWidget):
         col_ws = [int(w * pw) for pw in self.WIDTHS]
         x = pad + 3
         f = QFont(); f.setPointSize(8); f.setBold(True)
-        p.setFont(f); p.setPen(QPen(QColor("#555555")))
+        p.setFont(f); p.setPen(QPen(QColor("#667788")))
         for i, (label, cw) in enumerate(zip(self.COLS, col_ws)):
             align = (
                 Qt.AlignmentFlag.AlignRight
@@ -245,6 +245,8 @@ class OverviewPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
+        self.setStyleSheet("background-color: #0d0d0d;")
+
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
@@ -255,7 +257,10 @@ class OverviewPanel(QWidget):
         self.overview_actions.setTextFormat(Qt.TextFormat.RichText)
         self.overview_actions.setOpenExternalLinks(False)
         self.overview_actions.linkActivated.connect(self._on_overview_action_link)
-        self.overview_actions.setContentsMargins(8, 6, 8, 4)
+        self.overview_actions.setContentsMargins(8, 6, 8, 6)
+        self.overview_actions.setStyleSheet(
+            "background-color: #0a0f1a; border-bottom: 1px solid #1a2a3a; color: #E6E6E6;"
+        )
 
         self._overview_opacity = QGraphicsOpacityEffect(self.overview_actions)
         self.overview_actions.setGraphicsEffect(self._overview_opacity)
@@ -271,11 +276,11 @@ class OverviewPanel(QWidget):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
-        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        scroll.setStyleSheet("QScrollArea { background-color: #0d0d0d; border: none; }")
         outer.addWidget(scroll, 1)
 
         content = QWidget()
-        content.setStyleSheet("background: transparent;")
+        content.setStyleSheet("background-color: #0d0d0d;")
         layout = QVBoxLayout(content)
         layout.setSpacing(6)
         layout.setContentsMargins(8, 6, 8, 8)
@@ -336,7 +341,7 @@ class OverviewPanel(QWidget):
         # ── Section label ─────────────────────────────────────────────────
         fac_label = QLabel("SYSTEM MINOR FACTIONS")
         fac_label.setStyleSheet(
-            "color: #555555; font-size: 10px; font-weight: bold;"
+            "color: #667788; font-size: 10px; font-weight: bold;"
             "letter-spacing: 1px; padding: 4px 0px 2px 2px;"
         )
         layout.addWidget(fac_label)
@@ -537,7 +542,7 @@ class OverviewPanel(QWidget):
         # Section header
         hdr = QLabel("CONFLICTS")
         hdr.setStyleSheet(
-            "color: #555555; font-size: 10px; font-weight: bold;"
+            "color: #667788; font-size: 10px; font-weight: bold;"
             "letter-spacing: 1px; padding: 4px 0px 2px 2px;"
         )
         self.conflict_layout.addWidget(hdr)

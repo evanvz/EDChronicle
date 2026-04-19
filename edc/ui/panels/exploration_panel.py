@@ -26,6 +26,7 @@ class ExplorationPanel(QWidget):
     """
 
     min_value_changed = pyqtSignal(str)
+    body_clicked = pyqtSignal(str)
 
     # Rare raw materials to highlight
     RARE = {
@@ -176,7 +177,7 @@ class ExplorationPanel(QWidget):
     # ── Main refresh ──────────────────────────────────────────────────────────
     def refresh(self, state, cfg, planet_values):
         try:
-            min_100k = int(getattr(cfg, "min_planet_value_100k", 10) or 10)
+            min_100k = int(getattr(cfg, "min_planet_value_100k", 5) or 5)
         except Exception:
             min_100k = 10
         if min_100k < 0:
@@ -216,7 +217,7 @@ class ExplorationPanel(QWidget):
             return
 
         cat_order  = ["Phenomena", "Megaship", "Station", "Installation",
-                      "NavBeacon", "USS", "Other"]
+                      "NavBeacon", "USS", "Wreckage", "Other"]
         hidden     = {"FleetCarrier"}
         cats       = {k: [] for k in cat_order}
         cat_counts = {k: 0 for k in cat_order}
@@ -255,8 +256,14 @@ class ExplorationPanel(QWidget):
         for cat in cat_order:
             if not cats[cat]:
                 continue
+            cat_suffix = (
+                f' <span style="color:#444444;font-size:9px;">'
+                f'— scan skimmers first, attack only if Wanted</span>'
+                if cat == "Wreckage" else ""
+            )
             html.append(
-                f'<br><span style="color:#555555;font-size:10px;">{cat.upper()}</span>'
+                f'<br><span style="color:#555555;font-size:10px;">'
+                f'{cat.upper()}</span>{cat_suffix}'
             )
             shown_in_cat = 0
             for s in cats[cat]:
@@ -353,9 +360,11 @@ class ExplorationPanel(QWidget):
             thargoid  = rec.get("ThargoidSignals", 0) or 0
             other_sig = rec.get("OtherSignals",    0) or 0
             genuses   = rec.get("BioGenuses", []) or []
-            landable  = rec.get("Landable", False)
-            volcanism  = rec.get("Volcanism") or ""
-            materials  = rec.get("Materials") or {}
+            landable      = rec.get("Landable", False)
+            volcanism     = rec.get("Volcanism") or ""
+            materials     = rec.get("Materials") or {}
+            first_footfall = bool(rec.get("FirstFootfall", False))
+            has_footfall   = bool(rec.get("HasFootfall", False))
 
             if isinstance(bio, int) and bio > 0:
                 bio_bodies += 1
@@ -370,7 +379,8 @@ class ExplorationPanel(QWidget):
             card = self._build_body_card(
                 body, pc_disp, dist, est, tf, was_mapped, dss_mapped,
                 first, bio, geo, human, guardian, thargoid, other_sig,
-                genuses, landable, volcanism, materials, min_value
+                genuses, landable, volcanism, materials, min_value,
+                first_footfall, has_footfall
             )
             self._cards_layout.addWidget(card)
 
@@ -397,7 +407,8 @@ class ExplorationPanel(QWidget):
     def _build_body_card(
         self, body, pc_disp, dist, est, tf, was_mapped, dss_mapped,
         first, bio, geo, human, guardian, thargoid, other_sig,
-        genuses, landable, volcanism, materials, min_value
+        genuses, landable, volcanism, materials, min_value,
+        first_footfall=False, has_footfall=False
     ):
         esc = self._esc
 
@@ -431,20 +442,25 @@ class ExplorationPanel(QWidget):
         hdr_row = QHBoxLayout()
         hdr_row.setSpacing(6)
 
-        # Body name + class
-        name_html = (
-            f'<span style="color:{border_color};font-weight:700;font-size:12px;">'
-            f'{esc(body)}</span>'
+        name_btn = QPushButton(body)
+        name_btn.setFlat(True)
+        name_btn.setStyleSheet(
+            f"QPushButton {{ background: transparent; border: none; "
+            f"color: {border_color}; font-weight: 700; font-size: 12px; "
+            f"text-align: left; padding: 0px; }}"
+            f"QPushButton:hover {{ color: #FFFFFF; text-decoration: underline; }}"
         )
+        name_btn.clicked.connect(lambda checked=False, b=body: self.body_clicked.emit(b))
+        hdr_row.addWidget(name_btn)
+
         if pc_disp:
-            name_html += (
-                f'&nbsp;<span style="color:#888888;font-size:10px;">'
-                f'- {esc(pc_disp)}</span>'
+            pc_lbl = QLabel(f"- {esc(pc_disp)}")
+            pc_lbl.setStyleSheet(
+                "color: #888888; font-size: 10px; background: transparent; border: none;"
             )
-        name_lbl = QLabel(name_html)
-        name_lbl.setTextFormat(Qt.TextFormat.RichText)
-        name_lbl.setStyleSheet("background: transparent; border: none;")
-        hdr_row.addWidget(name_lbl, 1)
+            hdr_row.addWidget(pc_lbl)
+
+        hdr_row.addStretch(1)
 
         # Badges top right
         badges = []
@@ -458,6 +474,11 @@ class ExplorationPanel(QWidget):
             badges.append(self._badge("DSS Mapped", "#1a2a3a", "#4D96FF"))
         elif was_mapped:
             badges.append(self._badge("Prev Mapped", "#1a1a2a", "#888888"))
+
+        if first_footfall:
+            badges.append(self._badge("First Footfall", "#2a1500", "#FFD700", bold=True))
+        elif has_footfall:
+            badges.append(self._badge("Footfall", "#1a1a1a", "#AAAAAA"))
 
         if badges:
             badge_lbl = QLabel(" ".join(badges))

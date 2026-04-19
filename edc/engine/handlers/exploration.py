@@ -242,18 +242,21 @@ def handle(engine, name: str | None, event: Dict[str, Any], msgs: List[str]) -> 
         return True
 
     elif name == "FSSBodySignals":
-        # Per-body biological/geological signal counts
+        # Per-body biological/geological signal counts.
+        # Signals is a list: [{"Type":"$SAA_SignalType_Biological;","Count":3}, ...]
         body = event.get("BodyName")
         if not (isinstance(body, str) and body.strip()):
             return True
-
-        bio = event.get("Signals", {}).get("Biological") if isinstance(event.get("Signals"), dict) else None
-        geo = event.get("Signals", {}).get("Geological") if isinstance(event.get("Signals"), dict) else None
-
-        if isinstance(bio, list):
-            engine.state.bio_signals[body] = len(bio)
-        if isinstance(geo, list):
-            engine.state.geo_signals[body] = len(geo)
+        for sig in (event.get("Signals") or []):
+            if not isinstance(sig, dict):
+                continue
+            t  = str(sig.get("Type") or "").lower()
+            tl = str(sig.get("Type_Localised") or "").lower()
+            c  = int(sig.get("Count", 0) or 0)
+            if "biological" in t or tl == "biological":
+                engine.state.bio_signals[body] = c
+            elif "geological" in t or tl == "geological":
+                engine.state.geo_signals[body] = c
         return True
 
     elif name == "SAASignalsFound":

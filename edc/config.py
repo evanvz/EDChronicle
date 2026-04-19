@@ -29,10 +29,44 @@ def default_app_dir() -> Path:
 @dataclass
 class AppConfig:
     journal_dir: Optional[str] = None
-    # Exploration minimum value threshold in units of 100k credits.
-    # Example: 1 => 100,000 cr; 10 => 1,000,000 cr; 100 => 10,000,000 cr
     min_planet_value_100k: int = 1
     exo_high_value_m: int = 2
+    tts_enabled: bool = False
+    tts_rate: int = 175
+    tts_volume: float = 0.9
+    tts_voice_index: int = 0
+    tts_events: dict = None
+    comms_enabled: bool = False
+    comms_voice_index: int = 1
+    comms_volume: float = 0.35
+    comms_rate: int = 210
+    voice_commands_enabled: bool = False
+
+    def __post_init__(self):
+        if self.tts_events is None:
+            self.tts_events = {
+                "StartJump": True,
+                "FSDJump": True,
+                "Location": True,
+                "LoadGame": True,
+                "Scan": True,
+                "ScanOrganic": True,
+                "SellOrganicData": True,
+                "SAASignalsFound": True,
+                "FSSBodySignals": True,
+                "SAAScanComplete": False,
+                "Disembark": True,
+                "FSSAllBodiesFound": True,
+                "UnderAttack": True,
+                "ShipTargeted": True,
+                "Bounty": True,
+                "FactionKillBond": True,
+                "Interdicted": True,
+                "EscapeInterdiction": True,
+                "Scanned": True,
+                "CodexEntry": True,
+                "MissionCompleted": False,
+            }
 
 class ConfigStore:
     def __init__(self, app_dir: Path):
@@ -120,11 +154,23 @@ class ConfigStore:
                 min_100k = 0
 
             log.info("Loaded settings from %s", str(read_path))
-            return AppConfig(
+            cfg = AppConfig(
                 journal_dir=data.get("journal_dir"),
                 min_planet_value_100k=min_100k,
                 exo_high_value_m=int(data.get("exo_high_value_m", 2) or 2),
+                tts_enabled=bool(data.get("tts_enabled", False)),
+                tts_rate=int(data.get("tts_rate", 175) or 175),
+                tts_volume=float(data.get("tts_volume", 0.9) or 0.9),
+                tts_voice_index=int(data.get("tts_voice_index", 0) or 0),
+                comms_enabled=bool(data.get("comms_enabled", False)),
+                comms_voice_index=int(data.get("comms_voice_index", 1) or 1),
+                comms_volume=float(data.get("comms_volume", 0.35) or 0.35),
+                comms_rate=int(data.get("comms_rate", 210) or 210),
+                voice_commands_enabled=bool(data.get("voice_commands_enabled", False)),
             )
+            if isinstance(data.get("tts_events"), dict):
+                cfg.tts_events.update(data["tts_events"])
+            return cfg
 
         except Exception:
             log.exception("Failed to load settings.json, using defaults.")
@@ -138,10 +184,18 @@ class ConfigStore:
                     {
                         "schema_version": SCHEMA_VERSION,
                         "journal_dir": cfg.journal_dir,
-                        # New storage (100k units)
                         "min_planet_value_100k": int(getattr(cfg, "min_planet_value_100k", 1) or 1),
-                        # Legacy storage (1M units) for older builds/config readers
                         "exo_high_value_m": int(getattr(cfg, "exo_high_value_m", 2) or 2),
+                        "tts_enabled": bool(getattr(cfg, "tts_enabled", False)),
+                        "tts_rate": int(getattr(cfg, "tts_rate", 175) or 175),
+                        "tts_volume": float(getattr(cfg, "tts_volume", 0.9) or 0.9),
+                        "tts_voice_index": int(getattr(cfg, "tts_voice_index", 0) or 0),
+                        "tts_events": getattr(cfg, "tts_events", {}),
+                        "comms_enabled": bool(getattr(cfg, "comms_enabled", False)),
+                        "comms_voice_index": int(getattr(cfg, "comms_voice_index", 1) or 1),
+                        "comms_volume": float(getattr(cfg, "comms_volume", 0.35) or 0.35),
+                        "comms_rate": int(getattr(cfg, "comms_rate", 210) or 210),
+                        "voice_commands_enabled": bool(getattr(cfg, "voice_commands_enabled", False)),
                     },
                     indent=2,
                 ),

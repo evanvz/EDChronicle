@@ -64,6 +64,8 @@ class EventEngine:
                 "notable", "stellar"
             )):
                 return "Phenomena"
+            if sl.startswith("crashed") or "wreckage" in sl or "distress call" in sl:
+                return "Wreckage"
         except Exception:
             pass
         return "Other"
@@ -621,8 +623,12 @@ class EventEngine:
                     materials = {}
                 # Journal provides these flags in Scan
                 was_discovered = bool(event.get("WasDiscovered", False))
-                was_mapped = bool(event.get("WasMapped", False))
-                first_discovered = not was_discovered
+                was_mapped     = bool(event.get("WasMapped", False))
+                was_footfalled = bool(event.get("WasFootfalled", False))
+                # WasDiscovered can be unreliable (server lag / sync issues).
+                # WasFootfalled and WasMapped are definitive proof of prior discovery —
+                # use them to veto a false first-discovery flag.
+                first_discovered = not was_discovered and not was_footfalled and not was_mapped
 
                 est = None
                 if self.planet_values and planet_class:
@@ -648,8 +654,24 @@ class EventEngine:
                         "WasMapped": was_mapped,
                         "DSSMapped": bool(rec.get("DSSMapped", False)),
                         "EstimatedValue": est,
+                        "MassEM":            event.get("MassEM"),
+                        "Radius":            event.get("Radius"),
+                        "SurfaceGravity":    event.get("SurfaceGravity"),
+                        "SurfaceTemperature": event.get("SurfaceTemperature"),
+                        "SurfacePressure":   event.get("SurfacePressure"),
+                        "AtmosphereType":    event.get("AtmosphereType_Localised") or event.get("AtmosphereType") or "",
+                        "Atmosphere":        event.get("Atmosphere_Localised") or event.get("Atmosphere") or "",
+                        "AxialTilt":              event.get("AxialTilt"),
+                        "OrbitalPeriod":          event.get("OrbitalPeriod"),
+                        "RotationPeriod":         event.get("RotationPeriod"),
+                        "TidalLock":              bool(event.get("TidalLock", False)),
+                        "WasFootfalled":          bool(event.get("WasFootfalled", False)),
+                        "AtmosphereComposition":  event.get("AtmosphereComposition") or [],
+                        "Composition":            event.get("Composition") or {},
                     }
                 )
+                if bool(event.get("WasFootfalled", False)):
+                    rec["HasFootfall"] = True
                 if body in self.state.bio_signals:
                     rec["BioSignals"] = self.state.bio_signals.get(body, 0)
                 if body in self.state.bio_genuses:
@@ -675,6 +697,7 @@ class EventEngine:
             if body and body in self.state.bodies:
                 rec = self.state.bodies[body]
                 rec["DSSMapped"] = True
+                rec["FirstMapped"] = not bool(event.get("WasMapped", True))
                 planet_class = rec.get("PlanetClass", "")
                 terraformable = bool(rec.get("Terraformable", False))
                 first_discovered = bool(rec.get("FirstDiscovered", False))
@@ -686,6 +709,16 @@ class EventEngine:
                         first_discovered=first_discovered,
                     )
                 self.state.bodies[body] = rec
+
+        elif name == "Disembark":
+            if bool(event.get("OnPlanet", False)):
+                body = self._norm_text(event.get("Body") or event.get("BodyName"))
+                first_footfall = bool(event.get("FirstFootfall", False))
+                if body:
+                    rec = self.state.bodies.get(body) or {}
+                    rec["HasFootfall"]   = True
+                    rec["FirstFootfall"] = first_footfall
+                    self.state.bodies[body] = rec
 
         elif name == "FSSDiscoveryScan":
             # "Honk" result: tells us how many bodies exist, not what they are
@@ -949,23 +982,31 @@ class EventEngine:
                         if rec_body_name and rec_body_name != body_nm:
                             continue
 
-                        # Compute min distance from current position to any saved sample point.
-                        dmin = None
-                        for p in pts:
-                            if not (isinstance(p, dict) and "lat" in p and "lon" in p):
-                                continue
-                            try:
-                                plat = float(p["lat"])
-                                plon = float(p["lon"])
-                            except Exception:
-                                continue
-                            d = self._surface_distance_m(lat, lon, plat, plon, R)
-                            if dmin is None or d < dmin:
-                                dmin = d
-                        if dmin is None:
+                        # CCR is measured from the most recent sample point only.
+                        # (The game requires each scan to be CCR metres from the previous, not all prior scans.)
+                        last_pt = pts[-1]
+                        if not (isinstance(last_pt, dict) and "lat" in last_pt and "lon" in last_pt):
                             continue
-                        rec["CCRDistanceM"] = int(round(dmin))
+                        try:
+                            d = self._surface_distance_m(
+                                lat, lon,
+                                float(last_pt["lat"]), float(last_pt["lon"]),
+                                R,
+                            )
+                        except Exception:
+                            continue
+                        rec["CCRDistanceM"] = int(round(d))
                         rec["CCRRemainingM"] = int(max(0, req - rec["CCRDistanceM"]))
+                        genus = str(rec.get("Genus") or "").strip()
+                        if rec["CCRRemainingM"] == 0:
+                            if not rec.get("CCRAnnounced", False):
+                                msgs.append(f"CCR distance reached for {genus}")
+                                rec["CCRAnnounced"] = True
+                                rec["CCRTooClose"] = False
+                        elif rec.get("CCRAnnounced", False) and not rec.get("CCRTooClose", False):
+                            msgs.append(f"CCR too close for {genus}")
+                            rec["CCRAnnounced"] = False
+                            rec["CCRTooClose"] = True
             except Exception:
                 pass
 
@@ -1213,13 +1254,27 @@ class EventEngine:
                 # CCR baseline must be initialised AFTER Status provides lat/lon
                 rec["CCRPendingBaseline"] = True
 
-                # Ensure clean state (do not assume location exists yet)
+                # Full CCR state reset for this walk
                 rec.pop("CCRDistanceM", None)
                 rec.pop("CCRRemainingM", None)
+                rec["CCRAnnounced"] = False
+                rec["CCRTooClose"]  = False
 
             elif st == "sample":
                 # Each Sample advances progress by 1 (0→1→2→3). If "Log" was missed, first sample becomes 1/3.
                 progress = min(3, max(progress, 0) + 1)
+
+                # After Sample 1 (progress==2), reset full CCR state so the walk to
+                # Sample 2 starts fresh. Force CCRRemainingM back to the required distance
+                # so Status re-tracks from Sample 1's position, not from a stale 0.
+                # After Sample 2 (progress==3) Analyse fires immediately — no reset needed.
+                if progress == 2:
+                    rec["CCRAnnounced"] = False
+                    rec["CCRTooClose"]  = False
+                    req_m = rec.get("CCRRequiredM")
+                    if isinstance(req_m, int) and req_m > 0:
+                        rec["CCRDistanceM"] = 0
+                        rec["CCRRemainingM"] = req_m
 
                 # Record sampling position (best-effort) for CCR.
                 try:
@@ -1284,23 +1339,6 @@ class EventEngine:
                 if isinstance(est_val, int) and est_val > 0:
                     self.state.exobiology_session_collected_est += est_val
                     self.state.exobiology_unsold_total_est += est_val
-
-            # ---- CCR distance reached (announce once) ----
-            try:
-                req = rec.get("CCRRequiredM")
-                remaining = rec.get("CCRRemainingM")
-
-                if (
-                    isinstance(req, int)
-                    and isinstance(remaining, int)
-                    and remaining == 0
-                    and progress >= 2
-                    and not rec.get("CCRAnnounced", False)
-                ):
-                    msgs.append(f"CCR distance reached for {genus}")
-                    rec["CCRAnnounced"] = True
-            except Exception:
-                pass
 
             # ---- 3/3 completion (announce once) ----
             try:

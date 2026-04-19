@@ -101,6 +101,29 @@ class IntelPanel(QWidget):
         farm_l.addWidget(self.farming_display)
         self._content_layout.addWidget(farm_frame)
 
+        # ── Body farming matches card ─────────────────────────────────────
+        body_farm_frame = QFrame()
+        body_farm_frame.setStyleSheet(
+            "QFrame { background: #0d1a1a; border: 1px solid #1a3a3a;"
+            "border-radius: 5px; }"
+        )
+        body_farm_l = QVBoxLayout(body_farm_frame)
+        body_farm_l.setContentsMargins(8, 6, 8, 6)
+        body_farm_l.setSpacing(4)
+        body_farm_hdr = QLabel("SURFACE SCAN — FARMING MATCHES")
+        body_farm_hdr.setStyleSheet(
+            "color: #555555; font-size: 10px; font-weight: bold; "
+            "letter-spacing: 1px; background: transparent; border: none;"
+        )
+        body_farm_l.addWidget(body_farm_hdr)
+        self.body_farm_display = QLabel("")
+        self.body_farm_display.setWordWrap(True)
+        self.body_farm_display.setTextFormat(Qt.TextFormat.RichText)
+        self.body_farm_display.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.body_farm_display.setStyleSheet("background: transparent; border: none;")
+        body_farm_l.addWidget(self.body_farm_display)
+        self._content_layout.addWidget(body_farm_frame)
+
         # ── Full farming guide card ───────────────────────────────────────
         guide_frame = QFrame()
         guide_frame.setStyleSheet(
@@ -393,6 +416,17 @@ class IntelPanel(QWidget):
             try:
                 all_records = getattr(farming_locations, "_records", []) or []
                 opportunities = self._get_system_opportunities(state)
+                # Exact system name matches
+                by_system = farming_locations.get_for_system(sys_name) if sys_name else []
+                seen_ids = {id(r) for r in by_system}
+                # State-tag matches (boom/war/outbreak etc.)
+                state_matches = [
+                    r for r in all_records
+                    if isinstance(r, dict)
+                    and id(r) not in seen_ids
+                    and self._entry_matches_system(r, opportunities)
+                ]
+                farm_entries = by_system + state_matches
             except Exception:
                 farm_entries = []
 
@@ -404,6 +438,149 @@ class IntelPanel(QWidget):
             '<span style="color:#444444;font-size:11px;">'
             'No specific farming locations for this system.<br>'
             'Browse the full guide below.</span>'
+        )
+
+        # ── Body farming matches (surface scan cross-reference) ───────────
+        body_farm_html = []
+        n_body_farm_matches = 0
+        if farming_locations:
+            try:
+                all_records = getattr(farming_locations, "_records", []) or []
+                guardian_entries = [r for r in all_records if isinstance(r, dict) and r.get("domain") == "guardian"]
+                thargoid_entries = [r for r in all_records if isinstance(r, dict) and r.get("domain") == "thargoid"]
+                onfoot_entries   = [r for r in all_records if isinstance(r, dict) and r.get("domain") == "odyssey_onfoot"]
+
+                # Known systems for each domain (for new-site detection)
+                known_guardian_systems = {
+                    str(r.get("system") or "").lower()
+                    for r in guardian_entries if r.get("system")
+                }
+                known_thargoid_systems = {
+                    str(r.get("system") or "").lower()
+                    for r in thargoid_entries if r.get("system")
+                }
+                current_sys_lower = sys_name.lower()
+
+                bodies           = getattr(state, "bodies", {}) or {}
+                human_signals    = getattr(state, "human_signals", {}) or {}
+                guardian_signals = getattr(state, "guardian_signals", {}) or {}
+                thargoid_signals = getattr(state, "thargoid_signals", {}) or {}
+
+                for body_name, rec in bodies.items():
+                    if not isinstance(rec, dict):
+                        continue
+                    materials = rec.get("Materials") or {}
+                    mat_names = list(materials.keys()) if isinstance(materials, dict) else []
+                    mat_matches = farming_locations.get_for_materials(mat_names) if mat_names else []
+
+                    h_sig = int(human_signals.get(body_name, 0) or 0)
+                    g_sig = int(guardian_signals.get(body_name, 0) or 0)
+                    t_sig = int(thargoid_signals.get(body_name, 0) or 0)
+
+                    if not mat_matches and h_sig == 0 and g_sig == 0 and t_sig == 0:
+                        continue
+
+                    n_body_farm_matches += 1
+
+                    # Pick border colour: thargoid > guardian > human > material
+                    border = "#FF6B6B" if t_sig else ("#FF8888" if g_sig else ("#FFD93D" if h_sig else "#2AFFCC"))
+                    body_farm_html.append(
+                        f'<div style="margin-bottom:8px;padding:4px 8px;'
+                        f'background:#0a1a1a;border-left:3px solid {border};'
+                        f'border-radius:4px;">'
+                        f'<span style="color:{border};font-size:10px;font-weight:700;">'
+                        f'{self._esc(body_name)}</span>'
+                    )
+
+                    if t_sig > 0:
+                        fg_t, _ = self._domain_color("thargoid")
+                        # Thargoid guide has no fixed systems — can't distinguish known vs new
+                        # so just surface the guide entries as reference
+                        body_farm_html.append(
+                            f'<br><span style="color:#FF6B6B;font-size:10px;">'
+                            f'&nbsp;&nbsp;☣ {t_sig} thargoid signal(s)'
+                            f'</span>'
+                        )
+                        for fm in thargoid_entries[:3]:
+                            name = str(fm.get("name") or "")
+                            body_farm_html.append(
+                                f'<br><span style="color:{fg_t};font-size:10px;">'
+                                f'&nbsp;&nbsp;⛏ {self._esc(name)}</span>'
+                            )
+
+                    if g_sig > 0:
+                        fg_g, _ = self._domain_color("guardian")
+                        # Guardian guide has specific known systems — flag if this is a new one
+                        if known_guardian_systems and current_sys_lower not in known_guardian_systems:
+                            body_farm_html.append(
+                                f'<br><span style="color:#FF8888;font-weight:700;font-size:10px;">'
+                                f'&nbsp;&nbsp;🔺 {g_sig} guardian signal(s) — POTENTIALLY UNDISCOVERED SITE'
+                                f'</span>'
+                                f'<br><span style="color:#888888;font-size:10px;">'
+                                f'&nbsp;&nbsp;Not in farming guide — consider logging and reporting'
+                                f'</span>'
+                            )
+                        else:
+                            body_farm_html.append(
+                                f'<br><span style="color:#FF8888;font-size:10px;">'
+                                f'&nbsp;&nbsp;🔺 {g_sig} guardian signal(s)'
+                                f'</span>'
+                            )
+                        for fm in guardian_entries[:3]:
+                            name = str(fm.get("name") or "")
+                            body_farm_html.append(
+                                f'<br><span style="color:{fg_g};font-size:10px;">'
+                                f'&nbsp;&nbsp;⛏ {self._esc(name)}</span>'
+                            )
+
+                    if h_sig > 0:
+                        body_farm_html.append(
+                            f'<br><span style="color:#FFD93D;font-size:10px;">'
+                            f'&nbsp;&nbsp;⚠ {h_sig} human signal(s) — possible installation or crash site'
+                            f'</span>'
+                        )
+                        for fm in onfoot_entries[:2]:
+                            name = str(fm.get("name") or "")
+                            fg, _ = self._domain_color("odyssey_onfoot")
+                            body_farm_html.append(
+                                f'<br><span style="color:{fg};font-size:10px;">'
+                                f'&nbsp;&nbsp;⛏ {self._esc(name)}</span>'
+                            )
+
+                    for fm in mat_matches[:3]:
+                        domain = str(fm.get("domain") or "")
+                        name = str(fm.get("name") or "")
+                        fg, _ = self._domain_color(domain)
+                        body_farm_html.append(
+                            f'<br><span style="color:{fg};font-size:10px;">'
+                            f'&nbsp;&nbsp;⛏ {self._esc(name)}</span>'
+                        )
+                        mat_names_lower = [n.lower() for n in mat_names]
+                        mats = fm.get("key_materials") or []
+                        matched = [m for m in mats if m.lower() in mat_names_lower] if isinstance(mats, list) else []
+                        if not matched:
+                            for site in (fm.get("sites") or []):
+                                if not isinstance(site, dict):
+                                    continue
+                                for sm in (site.get("materials") or []):
+                                    if sm.lower() in mat_names_lower and sm not in matched:
+                                        matched.append(sm)
+                        if matched:
+                            body_farm_html.append(
+                                f'<span style="color:#888888;font-size:10px;">'
+                                f' ({self._esc(", ".join(matched[:3]))})'
+                                f'</span>'
+                            )
+
+                    body_farm_html.append('</div>')
+            except Exception:
+                log.exception("Body farming match error")
+
+        self.body_farm_display.setText(
+            "".join(body_farm_html) if body_farm_html else
+            '<span style="color:#444444;font-size:11px;">'
+            'No surface scan farming matches yet.<br>'
+            'Perform a DSS scan to cross-reference body materials.</span>'
         )
 
         # ── Full farming guide ────────────────────────────────────────────
@@ -473,7 +650,8 @@ class IntelPanel(QWidget):
         # ── Summary ───────────────────────────────────────────────────────
         n_poi  = len(pois)
         n_farm = len(farm_entries)
-        if n_poi == 0 and n_farm == 0:
+        n_body_farm = n_body_farm_matches
+        if n_poi == 0 and n_farm == 0 and n_body_farm == 0:
             self.intel_summary.setText(
                 "Intel (External, advisory only) — "
                 "No system-specific intel."
@@ -485,6 +663,10 @@ class IntelPanel(QWidget):
             if n_farm:
                 parts.append(
                     f"{n_farm} farming location{'s' if n_farm != 1 else ''}"
+                )
+            if n_body_farm:
+                parts.append(
+                    f"{n_body_farm} body farming match{'es' if n_body_farm != 1 else ''}"
                 )
             self.intel_summary.setText(
                 "Intel (External, advisory only) — "

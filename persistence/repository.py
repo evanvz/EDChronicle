@@ -106,6 +106,23 @@ class Repository:
             ),
         )
 
+    def save_body_footfall(
+        self,
+        system_address: int,
+        body_name: str,
+        first_footfall: int,
+        has_footfall: int,
+    ):
+        self.db.execute(
+            """
+            UPDATE bodies
+            SET first_footfall = ?,
+                has_footfall   = ?
+            WHERE system_address = ? AND body_name = ?
+            """,
+            (first_footfall, has_footfall, system_address, body_name),
+        )
+
     def save_body_signals(
         self,
         system_address: int,
@@ -351,7 +368,9 @@ class Repository:
                 estimated_value,
                 distance_ls,
                 volcanism,
-                materials
+                materials,
+                first_footfall,
+                has_footfall
             FROM bodies
             WHERE system_address = ?
             ORDER BY distance_ls IS NULL, distance_ls, body_name

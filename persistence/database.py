@@ -17,5 +17,18 @@ class Database:
         self.conn.executescript(sql)
         self.conn.commit()
 
+    def run_migrations(self):
+        """Add new columns to existing tables without breaking older DBs."""
+        migrations = [
+            "ALTER TABLE bodies ADD COLUMN first_footfall INTEGER DEFAULT 0",
+            "ALTER TABLE bodies ADD COLUMN has_footfall    INTEGER DEFAULT 0",
+        ]
+        for sql in migrations:
+            try:
+                self.conn.execute(sql)
+                self.conn.commit()
+            except Exception:
+                pass  # column already exists
+
     def close(self):
         self.conn.close()

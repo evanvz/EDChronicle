@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QComboBox,
+    QFrame,
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
@@ -23,11 +24,27 @@ class ShiplockerPanel(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        layout = QVBoxLayout(self)
+        self.setStyleSheet("background-color: transparent;")
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(8, 8, 8, 8)
+        outer.setSpacing(0)
 
-        layout.addWidget(QLabel(
-            "Odyssey (Ship Locker inventory; journal-derived)"
-        ))
+        card = QFrame()
+        card.setStyleSheet(
+            "QFrame { background: #0d1a2a; border: 1px solid #1e3a5a; border-radius: 5px; }"
+        )
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(6)
+        outer.addWidget(card)
+
+        hdr = QLabel("ODYSSEY — SHIP LOCKER")
+        hdr.setStyleSheet(
+            "color: #555555; font-size: 10px; font-weight: bold;"
+            "letter-spacing: 1px; padding: 4px 0px 2px 2px;"
+            "background: transparent; border: none;"
+        )
+        layout.addWidget(hdr)
 
         self.ody_filter = QLineEdit()
         self.ody_filter.setPlaceholderText("Filter items...")
@@ -35,6 +52,10 @@ class ShiplockerPanel(QWidget):
 
         self.ody_summary = QLabel("")
         self.ody_summary.setWordWrap(True)
+        self.ody_summary.setStyleSheet(
+            "color: #666666; font-size: 10px; padding: 2px 0px;"
+            "background: transparent; border: none;"
+        )
 
         self.ody_table = QTableWidget()
         self.ody_table.setColumnCount(3)
@@ -154,11 +175,27 @@ class MaterialsPanel(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        layout = QVBoxLayout(self)
+        self.setStyleSheet("background-color: transparent;")
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(8, 8, 8, 8)
+        outer.setSpacing(0)
 
-        layout.addWidget(QLabel(
-            "Materials (Commander inventory; journal-derived)"
-        ))
+        card = QFrame()
+        card.setStyleSheet(
+            "QFrame { background: #0d1a2a; border: 1px solid #1e3a5a; border-radius: 5px; }"
+        )
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(6)
+        outer.addWidget(card)
+
+        hdr = QLabel("MATERIALS — COMMANDER INVENTORY")
+        hdr.setStyleSheet(
+            "color: #555555; font-size: 10px; font-weight: bold;"
+            "letter-spacing: 1px; padding: 4px 0px 2px 2px;"
+            "background: transparent; border: none;"
+        )
+        layout.addWidget(hdr)
 
         self.inv_kind = QComboBox()
         self.inv_kind.addItems(["Raw", "Manufactured", "Encoded"])
@@ -172,6 +209,10 @@ class MaterialsPanel(QWidget):
 
         self.inv_summary = QLabel("")
         self.inv_summary.setWordWrap(True)
+        self.inv_summary.setStyleSheet(
+            "color: #666666; font-size: 10px; padding: 2px 0px;"
+            "background: transparent; border: none;"
+        )
 
         self.inv_table = QTableWidget()
         self.inv_table.setColumnCount(3)
@@ -202,10 +243,15 @@ class MaterialsPanel(QWidget):
         )
         self.inv_table.setMinimumHeight(120)
 
+        lbl_cat = QLabel("Category:")
+        lbl_cat.setStyleSheet("color: #888888; font-size: 11px; background: transparent; border: none;")
+        lbl_flt = QLabel("Filter:")
+        lbl_flt.setStyleSheet("color: #888888; font-size: 11px; background: transparent; border: none;")
+
         row_filter = QHBoxLayout()
-        row_filter.addWidget(QLabel("Category:"))
+        row_filter.addWidget(lbl_cat)
         row_filter.addWidget(self.inv_kind)
-        row_filter.addWidget(QLabel("Filter:"))
+        row_filter.addWidget(lbl_flt)
         row_filter.addWidget(self.inv_filter, 1)
 
         layout.addLayout(row_filter)

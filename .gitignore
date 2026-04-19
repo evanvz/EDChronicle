@@ -10,6 +10,8 @@ settings.json
 .aider*
 *.yml
 data/
+models/
+.claude/
 *.db
 ImportStars.txt
 structure.txt

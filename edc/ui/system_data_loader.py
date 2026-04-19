@@ -100,11 +100,13 @@ class SystemDataLoader:
                 "Terraformable": bool(row["terraformable"]),
                 "DistanceLS": row["distance_ls"],
                 "Landable": None if row["landable"] is None else bool(row["landable"]),
-                "WasMapped": bool(row["was_mapped"]),
-                "DSSMapped": bool(row["dss_mapped"]),
+                "WasMapped":      bool(row["was_mapped"]),
+                "DSSMapped":      bool(row["dss_mapped"]),
                 "EstimatedValue": estimated_value,
-                "Volcanism": row["volcanism"] if "volcanism" in row.keys() else "",
-                "Materials": _materials,
+                "Volcanism":      row["volcanism"] if "volcanism" in row.keys() else "",
+                "Materials":      _materials,
+                "FirstFootfall":  bool(row["first_footfall"]) if "first_footfall" in row.keys() else False,
+                "HasFootfall":    bool(row["has_footfall"])    if "has_footfall"    in row.keys() else False,
             }
 
             self.state.bodies[body_name] = rec

@@ -169,6 +169,8 @@ class JournalImporter:
             self._handle_saa_scan_complete(event)
         elif name == "ScanOrganic":
             self._handle_scan_organic(event)
+        elif name == "Disembark":
+            self._handle_disembark(event)
 
     def _upsert_visit(
         self,
@@ -500,6 +502,25 @@ class JournalImporter:
             dss_mapped=cached.dss_mapped,
             estimated_value=cached.estimated_value,
             distance_ls=cached.distance_ls,
+        )
+
+    def _handle_disembark(self, event: dict[str, Any]) -> None:
+        if not bool(event.get("OnPlanet", False)):
+            return
+        system_address = event.get("SystemAddress")
+        if not isinstance(system_address, int):
+            system_address = self.current_system_address
+        if not isinstance(system_address, int):
+            return
+        body_name = _norm_text(event.get("Body") or event.get("BodyName"))
+        if not body_name:
+            return
+        first_footfall = int(bool(event.get("FirstFootfall", False)))
+        self.repo.save_body_footfall(
+            system_address=system_address,
+            body_name=body_name,
+            first_footfall=first_footfall,
+            has_footfall=1,
         )
 
     def _handle_scan_organic(self, event: dict[str, Any]) -> None:

@@ -1,4 +1,5 @@
 import logging
+import time
 from PyQt6.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -50,6 +51,13 @@ from edc.core.item_catalog import ItemCatalog
 from edc.core.farming_locations import FarmingLocations
 from edc.core.powerplay_activities import PowerPlayActivityTable
 from edc.ui import formatting as fmt
+from edc.audio.tts_engine import TTSEngine
+from edc.audio.voice_commands import VoiceCommandListener
+from edc.audio.handlers.exploration import ExplorationPhrases
+from edc.audio.handlers.exobiology import ExobiologyPhrases
+from edc.audio.handlers.combat import CombatPhrases
+from edc.audio.handlers.status import StatusPhrases
+from edc.audio.handlers.powerplay import PowerPlayPhrases
 from typing import Any, Dict, List, Optional
 
 from persistence.database import Database
@@ -72,6 +80,35 @@ class MainWindow(QMainWindow):
 
     def load_last_system_data(self):
         self.system_data_loader.load_last_system_data()
+
+    def _save_exobiology_to_db(self):
+        try:
+            sys_addr = getattr(self.state, "system_address", None)
+            if not isinstance(sys_addr, int):
+                return
+            for rec in (self.state.exo or {}).values():
+                if not isinstance(rec, dict) or not rec.get("Complete"):
+                    continue
+                if rec.get("DBSaved"):
+                    continue
+                body_name = rec.get("BodyName") or ""
+                genus     = rec.get("Genus") or ""
+                species   = rec.get("Species") or ""
+                variant   = rec.get("Variant") or ""
+                samples   = int(rec.get("Samples") or 3)
+                if not (body_name and genus and species and variant):
+                    continue
+                self.repo.save_exobiology(
+                    system_address=sys_addr,
+                    body_name=body_name,
+                    genus=genus,
+                    species=species,
+                    variant=variant,
+                    samples=samples,
+                )
+                rec["DBSaved"] = True
+        except Exception:
+            pass
 
     def _save_session_ledger(self):
         try:
@@ -167,6 +204,7 @@ class MainWindow(QMainWindow):
         data_dir.mkdir(parents=True, exist_ok=True)
         self.db = Database(data_dir / "edhelper.db")
         self.db.executescript(SCHEMA_SQL)
+        self.db.run_migrations()
         self.repo = Repository(self.db)
 
         self.session_ledger = SessionLedger(data_dir / "session_ledger.json")
@@ -230,23 +268,12 @@ class MainWindow(QMainWindow):
         self.hud = QLabel("Not connected")
         self.status = QLabel("Status: idle")
 
-        btn_start = QPushButton("Start Watching Journals")
-        btn_stop = QPushButton("Stop")
-
         left_header = QVBoxLayout()
         left_header.setContentsMargins(0, 0, 0, 0)
         left_header.setSpacing(6)
         left_header.addWidget(self.header_bar)
         left_header.addWidget(self.hud)
         left_header.addWidget(self.status)
-
-        btn_row = QHBoxLayout()
-        btn_row.setContentsMargins(0, 0, 0, 0)
-        btn_row.setSpacing(8)
-        btn_row.addWidget(btn_start)
-        btn_row.addWidget(btn_stop)
-        btn_row.addStretch(1)
-        left_header.addLayout(btn_row)
 
         # Session tracker panel
         self.session_panel = QLabel()
@@ -292,7 +319,7 @@ class MainWindow(QMainWindow):
         self.min_value_slider.setMinimum(0)
         # 0..200 => 0.0M .. 20.0M in steps of 0.1M (100k credits)
         self.min_value_slider.setMaximum(200)
-        self.min_value_slider.setValue(int(getattr(self.cfg, "min_planet_value_100k", 10) or 10))
+        self.min_value_slider.setValue(int(getattr(self.cfg, "min_planet_value_100k", 5) or 5))
         self.min_value_slider.valueChanged.connect(self._on_min_value_changed)
 
         # Exobiology filter: "high value" threshold (M cr)
@@ -337,6 +364,7 @@ class MainWindow(QMainWindow):
         self.exploration_panel.min_value_changed.connect(
             self._on_exploration_min_value_changed
         )
+        self.exploration_panel.body_clicked.connect(self._open_planet_detail)
         self.stack.addWidget(self.exploration_panel)
         self.sidebar.addItem("Exploration")
 
@@ -397,6 +425,54 @@ class MainWindow(QMainWindow):
         row3.addWidget(self.exo_min_label)
         st.addLayout(row3)
 
+        from PyQt6.QtWidgets import QCheckBox
+
+        # --- Main voice ---
+        st.addWidget(QLabel("Main voice (takes effect on restart after saving)"))
+        voice_row = QHBoxLayout()
+        self.voice_combo = QComboBox()
+        self.voice_combo.currentIndexChanged.connect(self._on_main_voice_changed)
+        voice_row.addWidget(self.voice_combo)
+        btn_test_voice = QPushButton("Test")
+        btn_test_voice.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        btn_test_voice.clicked.connect(self._test_main_voice)
+        voice_row.addWidget(btn_test_voice)
+        st.addLayout(voice_row)
+
+        st.addWidget(QLabel("Main voice volume"))
+        tts_vol_row = QHBoxLayout()
+        self.tts_vol_slider = QSlider(Qt.Orientation.Horizontal)
+        self.tts_vol_slider.setRange(0, 100)
+        self.tts_vol_slider.setValue(int(float(getattr(self.cfg, "tts_volume", 0.9)) * 100))
+        self.tts_vol_label = QLabel(f"{self.tts_vol_slider.value()}%")
+        self.tts_vol_slider.valueChanged.connect(self._on_tts_volume_changed)
+        tts_vol_row.addWidget(self.tts_vol_slider)
+        tts_vol_row.addWidget(self.tts_vol_label)
+        st.addLayout(tts_vol_row)
+
+        # --- Comms channel ---
+        self.comms_enabled_check = QCheckBox("Enable NPC comms chatter (background voice)")
+        self.comms_enabled_check.setChecked(bool(getattr(self.cfg, "comms_enabled", False)))
+        self.comms_enabled_check.toggled.connect(self._on_comms_enabled_changed)
+        st.addWidget(self.comms_enabled_check)
+
+        st.addWidget(QLabel("Comms channel volume"))
+        comms_vol_row = QHBoxLayout()
+        self.comms_vol_slider = QSlider(Qt.Orientation.Horizontal)
+        self.comms_vol_slider.setRange(0, 100)
+        self.comms_vol_slider.setValue(int(float(getattr(self.cfg, "comms_volume", 0.35)) * 100))
+        self.comms_vol_label = QLabel(f"{self.comms_vol_slider.value()}%")
+        self.comms_vol_slider.valueChanged.connect(self._on_comms_volume_changed)
+        comms_vol_row.addWidget(self.comms_vol_slider)
+        comms_vol_row.addWidget(self.comms_vol_label)
+        st.addLayout(comms_vol_row)
+
+        # --- Voice commands ---
+        self.voice_cmd_check = QCheckBox("Enable voice commands (tab switching by voice)")
+        self.voice_cmd_check.setChecked(bool(getattr(self.cfg, "voice_commands_enabled", False)))
+        self.voice_cmd_check.toggled.connect(self._on_voice_commands_toggled)
+        st.addWidget(self.voice_cmd_check)
+
         st.addStretch(1)
         self.stack.addWidget(tab_settings)
         self.sidebar.addItem("Settings")
@@ -409,8 +485,6 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(tab_log)
         self.sidebar.addItem("Log")
 
-        btn_start.clicked.connect(self.start_watching)
-        btn_stop.clicked.connect(self.stop_watching)
         btn_browse.clicked.connect(self._browse_journal_dir)
         self.settings_journal_edit.editingFinished.connect(self._on_settings_journal_changed)
 
@@ -429,6 +503,27 @@ class MainWindow(QMainWindow):
         self._refresh_hud()
         if auto_start:
             self._auto_start_if_configured()
+
+        self.tts = TTSEngine(
+            rate=getattr(self.cfg, "tts_rate", 175),
+            volume=getattr(self.cfg, "tts_volume", 0.9),
+            voice_index=getattr(self.cfg, "tts_voice_index", 0),
+        )
+        self.tts.load_from_config(self.cfg)
+        self.tts.start()
+        self._tts_spoken_ships: set = set()  # pilot|ship keys spoken this system
+        self._tts_ship_cooldown_until: float = 0.0  # monotonic timestamp
+        self._comms_cooldown_until: float = 0.0
+
+        # Voice command listener — only started if enabled in settings
+        self._voice_cmd_models_dir = app_dir / "models"
+        self._voice_cmd_worker = None
+        self._voice_cmd_thread = None
+        if bool(getattr(self.cfg, "voice_commands_enabled", False)):
+            self._start_voice_commands()
+
+        # Populate voice combo now that TTS engine is ready
+        self._populate_voice_combo()
 
     def load_current_system_data(self):
         self.system_data_loader.load_current_system_data()
@@ -524,6 +619,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self.stop_watching()
+        self._stop_voice_commands()
         super().closeEvent(event)
 
     def _on_status(self, msg: str):
@@ -557,6 +653,7 @@ class MainWindow(QMainWindow):
         if name in ("Location", "FSDJump"):
             if isinstance(incoming_system_address, int) and incoming_system_address != old_system_address:
                 self.state.system_address = incoming_system_address
+                self._tts_spoken_ships.clear()
                 self.load_current_system_data()
                 self._refresh_hud()
                 self._refresh_exploration()
@@ -564,9 +661,22 @@ class MainWindow(QMainWindow):
         if name == "StartJump" and evt.get("JumpType") == "Hyperspace":
             self._clear_all_panels()
 
+        _tts_on = getattr(self.cfg, "tts_enabled", False)
+        _tts_events = getattr(self.cfg, "tts_events", {}) or {}
         for m in msgs:
             if m == "refresh_powerplay":
                 self._refresh_powerplay()
+            elif m.startswith("CCR distance reached for "):
+                self._append(m)
+                if _tts_on and _tts_events.get("ScanOrganic", False):
+                    self.tts.speak(ExobiologyPhrases.ccr_distance_reached(), priority=3)
+            elif m.startswith("CCR too close for "):
+                self._append(m)
+                if _tts_on and _tts_events.get("ScanOrganic", False):
+                    self.tts.speak(ExobiologyPhrases.ccr_too_close(), priority=2)
+            elif m.startswith("Exobiology complete: "):
+                self._append(m)
+                self._save_exobiology_to_db()
             else:
                 self._append(m)
 
@@ -580,6 +690,538 @@ class MainWindow(QMainWindow):
         # Refresh exploration panel when signal or scan data arrives
         if name in ("FSSSignalDiscovered", "FSSDiscoveryScan", "SAASignalsFound"):
             self._refresh_exploration()
+
+        # Refresh intel panel when signal data or DSS scan arrives
+        if name in ("SAASignalsFound", "FSSBodySignals"):
+            self._refresh_intel()
+
+        tts_text = self._tts_router(name, evt, self.state)
+
+        # Override guardian TTS with uncharted phrase if system not in farming guide
+        if name == "FSSBodySignals" and tts_text:
+            body = evt.get("BodyName") or ""
+            g_sig = int((getattr(self.state, "guardian_signals", {}) or {}).get(body, 0) or 0)
+            if g_sig > 0:
+                try:
+                    all_records = getattr(self.farming_locations, "_records", []) or []
+                    known_guardian_sys = {
+                        str(r.get("system") or "").lower()
+                        for r in all_records
+                        if isinstance(r, dict) and r.get("domain") == "guardian" and r.get("system")
+                    }
+                    sys_lower = (getattr(self.state, "system", None) or "").lower()
+                    if sys_lower and known_guardian_sys and sys_lower not in known_guardian_sys:
+                        tts_text = ExplorationPhrases.guardian_signals_uncharted(body, g_sig)
+                except Exception:
+                    pass
+
+        if tts_text:
+            if name == "StartJump":
+                _p = self._tts_priority(name)
+                QTimer.singleShot(5000, lambda t=tts_text, p=_p: self.tts.speak(t, priority=p))
+            elif name in ("FSDJump", "Location", "LoadGame"):
+                _p = self._tts_priority(name)
+                QTimer.singleShot(8000, lambda t=tts_text, p=_p: self.tts.speak(t, priority=p))
+            else:
+                self.tts.speak(tts_text, priority=self._tts_priority(name))
+
+        if name == "FSDJump" and isinstance(incoming_system_address, int) and incoming_system_address != old_system_address:
+            QTimer.singleShot(8000, self._announce_loaded_system_bodies)
+            farm_brief = self._farming_arrival_brief(self.state)
+            if farm_brief:
+                QTimer.singleShot(13500, lambda t=farm_brief: self.tts.speak(t, priority=2))
+
+        if name == "ReceiveText":
+            self._handle_comms_tts(evt)
+
+    def _farming_arrival_brief(self, state) -> str:
+        """Short TTS summary of farming opportunities on FSDJump. Returns '' if nothing relevant."""
+        try:
+            if not self.farming_locations:
+                return ""
+
+            sys_name = getattr(state, "system", None) or ""
+            parts = []
+
+            # ── Exact system name match ───────────────────────────────────
+            exact = self.farming_locations.get_for_system(sys_name) if sys_name else []
+            if exact:
+                names = [str(r.get("name") or "") for r in exact if r.get("name")]
+                if names:
+                    parts.append(f"Known farming site: {names[0]}.")
+
+            # ── Faction state tags ────────────────────────────────────────
+            govt = str(getattr(state, "system_government", "") or "").lower()
+            faction_tags = set()
+            for f in (getattr(state, "factions", None) or []):
+                if not isinstance(f, dict):
+                    continue
+                all_states = [str(f.get("FactionState") or "").lower()]
+                for st in (f.get("ActiveStates") or []):
+                    if isinstance(st, dict):
+                        all_states.append(str(st.get("State") or "").lower())
+                for s in all_states:
+                    if "boom" in s:
+                        faction_tags.add("boom")
+                    if "war" in s:
+                        faction_tags.add("war")
+                    if "outbreak" in s:
+                        faction_tags.add("outbreak")
+                    if "pirate" in s and "attack" in s:
+                        faction_tags.add("pirate_attack")
+                    if "civil unrest" in s:
+                        faction_tags.add("civil_unrest")
+
+            tag_parts = []
+            if "boom" in faction_tags:
+                tag_parts.append("HGE active")
+            if "war" in faction_tags:
+                tag_parts.append("Combat Zones active")
+            if "outbreak" in faction_tags:
+                tag_parts.append("HGE outbreak")
+            if "pirate_attack" in faction_tags:
+                tag_parts.append("Pirate Attack settlements")
+            if "civil_unrest" in faction_tags:
+                tag_parts.append("Civil Unrest")
+            if "anarchy" in govt:
+                tag_parts.append("Anarchy — high wake scans available")
+
+            if tag_parts:
+                parts.append(". ".join(tag_parts) + ".")
+
+            return " ".join(parts) if parts else ""
+        except Exception:
+            return ""
+
+    def _tts_router(self, event_type: str, evt: dict, state) -> str:
+        """Route journal events to TTS phrase generators."""
+        try:
+            enabled = getattr(self.cfg, "tts_enabled", False)
+            if not enabled:
+                log.debug(f"TTS disabled")
+                return ""
+            events = getattr(self.cfg, "tts_events", {}) or {}
+            if not events.get(event_type, False):
+                return ""
+            log.debug(f"TTS routing: {event_type}")
+
+            pledged = (getattr(state, "pp_power", None) or "").strip()
+
+            if event_type == "StartJump":
+                if evt.get("JumpType") == "Hyperspace":
+                    parts = [ExplorationPhrases.fsd_announce()]
+                    jumps = getattr(state, "route_remaining_jumps", None)
+                    if isinstance(jumps, int) and jumps == 1:
+                        parts.append("Last jump.")
+                    elif isinstance(jumps, int) and jumps > 1:
+                        parts.append(f"{jumps} jumps remaining.")
+                    star_class = str(evt.get("StarClass") or "").strip().upper()
+                    if star_class:
+                        if star_class[0] in ("K", "G", "B", "F", "O", "A", "M"):
+                            parts.append("Next Start is Scoopable.")
+                        else:
+                            parts.append("Next Start is Not scoopable.")
+                    return " ".join(parts)
+                return ""
+
+            if event_type == "Location":
+                system = getattr(state, "system", None) or ""
+                if not system:
+                    return ""
+                ctrl = (getattr(state, "system_controlling_power", None) or "").strip()
+                pp_state = getattr(state, "system_powerplay_state", None) or ""
+                if pledged:
+                    if ctrl:
+                        return PowerPlayPhrases.pp_space(ctrl, pp_state, pledged)
+                    system_powers = [p.strip() for p in (getattr(state, "system_powers", []) or [])]
+                    if any(p.lower() == pledged.lower() for p in system_powers):
+                        return PowerPlayPhrases.pp_present(pledged)
+                return ExplorationPhrases.in_system(system)
+
+            if event_type == "FSDJump":
+                system = getattr(state, "system", None) or ""
+                if not system:
+                    return ""
+                ctrl     = (getattr(state, "system_controlling_power", None) or "").strip()
+                pp_state = getattr(state, "system_powerplay_state", None) or ""
+                bodies   = getattr(state, "system_body_count", None) or 0
+                security = (getattr(state, "system_security", None) or "").strip()
+                system_powers = [p.strip() for p in (getattr(state, "system_powers", []) or [])]
+                if pledged:
+                    if ctrl:
+                        base = PowerPlayPhrases.pp_space(ctrl, pp_state, pledged)
+                        is_enemy_ctrl = ctrl.lower() != pledged.lower()
+                        if is_enemy_ctrl:
+                            we_present = any(p.lower() == pledged.lower() for p in system_powers)
+                            if we_present:
+                                base = f"{base} {PowerPlayPhrases.pp_undermining_present(pledged)}"
+                            else:
+                                base = f"{base} {PowerPlayPhrases.pp_not_present(pledged)}"
+                    else:
+                        if any(p.lower() == pledged.lower() for p in system_powers):
+                            base = PowerPlayPhrases.pp_present(pledged)
+                        else:
+                            base = ExplorationPhrases.arrived(bodies)
+                else:
+                    base = ExplorationPhrases.arrived(bodies)
+                if security:
+                    return f"{base} {ExplorationPhrases.security_state(security)}"
+                return base
+
+            if event_type == "LoadGame":
+                cmdr = getattr(state, "commander", None) or evt.get("Commander") or ""
+                ship = evt.get("Ship_Localised") or getattr(state, "ship", None) or ""
+                if cmdr:
+                    return StatusPhrases.game_loaded(cmdr, ship)
+
+            if event_type == "ScanOrganic":
+                stage   = evt.get("ScanType") or ""
+                species = evt.get("Species_Localised") or evt.get("Species") or ""
+                if stage.lower() == "sample" and species:
+                    body_id  = evt.get("Body")
+                    evt_sp   = species.strip().lower()
+                    for rec in (state.exo or {}).values():
+                        if not isinstance(rec, dict):
+                            continue
+                        if rec.get("BodyID") != body_id:
+                            continue
+                        rec_sp = (rec.get("Species") or "").strip().lower()
+                        if rec_sp and (rec_sp == evt_sp or rec_sp in evt_sp or evt_sp in rec_sp):
+                            if int(rec.get("Samples") or 2) >= 3:
+                                stage = "SampleFinal"
+                            break
+                if stage and species:
+                    return ExobiologyPhrases.scan_progress(stage, species)
+
+            if event_type == "SellOrganicData":
+                reward = evt.get("TotalEarnings") or 0
+                bios   = evt.get("BioData") or []
+                count  = len(bios) if isinstance(bios, list) else 0
+                if reward:
+                    return ExobiologyPhrases.sell_data(reward, count)
+
+            if event_type == "Scan":
+                body_name = evt.get("BodyName") or ""
+                if not body_name:
+                    return ""
+                rec = (getattr(state, "bodies", {}) or {}).get(body_name)
+                if not rec:
+                    return ""  # star or untracked body
+                first_discovered = bool(rec.get("FirstDiscovered"))
+                estimated_value  = rec.get("EstimatedValue")
+                if first_discovered:
+                    return ExplorationPhrases.first_discovery(body_name)
+                threshold = getattr(self.cfg, "min_planet_value_100k", 5) * 100_000
+                if isinstance(estimated_value, int) and estimated_value >= threshold:
+                    return ExplorationPhrases.valuable_body()
+                return ""
+
+            if event_type == "SAASignalsFound":
+                body = evt.get("BodyName") or ""
+                bio = geo = 0
+                for sig in (evt.get("Signals") or []):
+                    t  = str(sig.get("Type") or "").lower()
+                    tl = str(sig.get("Type_Localised") or "").lower()
+                    c  = int(sig.get("Count", 0) or 0)
+                    if "biological" in t or tl == "biological":
+                        bio = c
+                    elif "geological" in t or tl == "geological":
+                        geo = c
+                if bio > 0:
+                    return ExplorationPhrases.bio_signals(body, bio)
+                if geo > 0:
+                    return ExplorationPhrases.geo_signals(body, geo)
+
+            if event_type == "SAAScanComplete":
+                body = evt.get("BodyName") or ""
+                was_mapped = bool(evt.get("WasMapped", True))
+                if not was_mapped:
+                    return ExplorationPhrases.first_mapped(body)
+                return ExplorationPhrases.saa_complete(body)
+
+            if event_type == "Disembark":
+                if not bool(evt.get("OnPlanet", False)):
+                    return ""
+                if not bool(evt.get("FirstFootfall", False)):
+                    return ""
+                body = evt.get("Body") or evt.get("BodyName") or ""
+                return ExplorationPhrases.first_footfall(body)
+
+            if event_type == "UnderAttack":
+                return CombatPhrases.under_attack()
+
+            if event_type == "ShipTargeted":
+                if not evt.get("TargetLocked"):
+                    return ""
+                if int(evt.get("ScanStage", 0) or 0) < 3:
+                    return ""
+
+                rank         = str(evt.get("PilotRank") or "").strip()
+                legal_status = str(evt.get("LegalStatus") or "").strip()
+                wanted       = legal_status.lower() == "wanted"
+                bounty       = int(evt.get("Bounty") or 0)
+                power        = (evt.get("Power") or "").strip()
+                is_friendly  = bool(pledged and power and power.lower() == pledged.lower())
+                top_rank     = rank.lower() in ("dangerous", "deadly", "elite")
+
+                ctrl          = (getattr(state, "system_controlling_power", None) or "").strip()
+                system_powers = [p.strip() for p in (getattr(state, "system_powers", []) or [])]
+                security      = (getattr(state, "system_security", None) or "").strip().lower()
+                is_anarchy    = "anarchy" in security or "lawless" in security
+                we_control    = bool(pledged and ctrl and ctrl.lower() == pledged.lower())
+                we_present    = bool(pledged and any(p.lower() == pledged.lower() for p in system_powers))
+                ship_from_ctrl = bool(ctrl and power and power.lower() == ctrl.lower())
+
+                # Rule 1: our controlled system — any affiliated non-friendly ship (any rank)
+                if we_control and power and not is_friendly:
+                    is_enemy = True
+                # Rule 2: we're present but not controlling — only ships of the controlling power (any rank)
+                elif we_present and not we_control and ship_from_ctrl:
+                    is_enemy = True
+                # Rule 3: anarchy/lawless — wanted + bounty > 500k, top rank only
+                elif is_anarchy and top_rank and wanted and bounty > 500_000 and not is_friendly:
+                    is_enemy = False
+                else:
+                    return ""
+
+                pilot = evt.get("PilotName_Localised") or evt.get("PilotName") or ""
+                ship  = evt.get("Ship_Localised") or evt.get("Ship") or ""
+                key   = f"{pilot}|{ship}"
+                if key in self._tts_spoken_ships:
+                    return ""
+                self._tts_spoken_ships.add(key)
+
+                now = time.monotonic()
+                if now < self._tts_ship_cooldown_until:
+                    return ""
+                self._tts_ship_cooldown_until = now + 6.0
+                return CombatPhrases.ship_targeted(
+                    ship, rank, power, is_enemy, wanted, bounty
+                )
+
+            if event_type == "FSSBodySignals":
+                body = evt.get("BodyName") or ""
+                thargoid = (getattr(state, "thargoid_signals", {}) or {}).get(body, 0)
+                if thargoid > 0:
+                    return ExplorationPhrases.thargoid_signals(body, thargoid)
+                guardian = (getattr(state, "guardian_signals", {}) or {}).get(body, 0)
+                if guardian > 0:
+                    return ExplorationPhrases.guardian_signals(body, guardian)
+                bio = (getattr(state, "bio_signals", {}) or {}).get(body, 0)
+                if bio > 0:
+                    return ExplorationPhrases.bio_signals(body, bio)
+                geo = (getattr(state, "geo_signals", {}) or {}).get(body, 0)
+                if geo > 0:
+                    return ExplorationPhrases.geo_signals(body, geo)
+                human = (getattr(state, "human_signals", {}) or {}).get(body, 0)
+                if human > 0:
+                    return ExplorationPhrases.human_signals(body, human)
+
+            if event_type == "FSSAllBodiesFound":
+                count = int(evt.get("Count") or evt.get("BodyCount") or getattr(state, "system_body_count", None) or 0)
+                if count:
+                    return ExplorationPhrases.fss_complete(count)
+
+            if event_type == "Bounty":
+                reward  = evt.get("TotalReward") or evt.get("Reward") or 0
+                faction = evt.get("VictimFaction") or ""
+                if reward:
+                    return CombatPhrases.bounty(reward, faction)
+
+            if event_type == "FactionKillBond":
+                reward  = evt.get("Reward") or 0
+                faction = evt.get("AwardingFaction") or ""
+                if reward:
+                    return CombatPhrases.kill_bond(reward, faction)
+
+            if event_type == "Interdicted":
+                return CombatPhrases.interdiction()
+
+            if event_type == "EscapeInterdiction":
+                return CombatPhrases.escape_interdiction()
+
+            if event_type == "Scanned":
+                scan_type = str(evt.get("ScanType") or "").capitalize()
+                return StatusPhrases.scan_complete(scan_type)
+
+            if event_type == "CodexEntry":
+                if evt.get("IsNewEntry"):
+                    name = evt.get("Name_Localised") or evt.get("Name") or ""
+                    return ExplorationPhrases.codex_entry(name)
+
+            if event_type == "MissionCompleted":
+                reward  = evt.get("Reward") or 0
+                faction = evt.get("Faction") or ""
+                if reward:
+                    return StatusPhrases.mission_complete(reward, faction)
+
+        except Exception:
+            pass
+        return ""
+
+    _TAB_INDEX: dict = {
+        "Overview":    0,
+        "Exploration": 1,
+        "Exobiology":  2,
+        "PowerPlay":   3,
+        "Combat":      4,
+        "Intel":       5,
+    }
+
+    def _start_voice_commands(self):
+        if self._voice_cmd_thread and self._voice_cmd_thread.isRunning():
+            return
+        self._voice_cmd_worker = VoiceCommandListener(self._voice_cmd_models_dir)
+        self._voice_cmd_thread = QThread()
+        self._voice_cmd_worker.moveToThread(self._voice_cmd_thread)
+        self._voice_cmd_thread.started.connect(self._voice_cmd_worker.run)
+        self._voice_cmd_worker.command_detected.connect(self._on_voice_command)
+        self._voice_cmd_thread.start()
+        log.info("Voice commands started")
+
+    def _stop_voice_commands(self):
+        if self._voice_cmd_worker:
+            self._voice_cmd_worker.stop()
+        if self._voice_cmd_thread:
+            self._voice_cmd_thread.quit()
+            self._voice_cmd_thread.wait(2000)
+        self._voice_cmd_worker = None
+        self._voice_cmd_thread = None
+        log.info("Voice commands stopped")
+
+    def _populate_voice_combo(self):
+        self.voice_combo.blockSignals(True)
+        self.voice_combo.clear()
+        for _, vname in self.tts.get_available_voices():
+            self.voice_combo.addItem(vname)
+        self.voice_combo.setCurrentIndex(int(getattr(self.cfg, "tts_voice_index", 0)))
+        self.voice_combo.blockSignals(False)
+
+    def _on_voice_commands_toggled(self, checked: bool):
+        self.cfg.voice_commands_enabled = checked
+        self.cfg_store.save(self.cfg)
+        if checked:
+            self._start_voice_commands()
+        else:
+            self._stop_voice_commands()
+
+    def _on_voice_command(self, tab_name: str):
+        idx = self._TAB_INDEX.get(tab_name)
+        if idx is None:
+            return
+        self.sidebar.setCurrentRow(idx)
+
+    def _on_main_voice_changed(self, idx: int):
+        try:
+            self.cfg.tts_voice_index = idx
+            self.cfg_store.save(self.cfg)
+        except Exception:
+            pass
+
+    def _test_main_voice(self):
+        idx = self.voice_combo.currentIndex()
+        self.tts.speak_test("Main voice active. How do I sound, Commander?", idx)
+
+    def _on_tts_volume_changed(self, val: int):
+        try:
+            self.tts_vol_label.setText(f"{val}%")
+            self.cfg.tts_volume = val / 100.0
+            self.tts.load_from_config(self.cfg)
+            self.cfg_store.save(self.cfg)
+        except Exception:
+            pass
+
+    def _on_comms_volume_changed(self, val: int):
+        try:
+            self.comms_vol_label.setText(f"{val}%")
+            self.cfg.comms_volume = val / 100.0
+            self.tts.load_from_config(self.cfg)
+            self.cfg_store.save(self.cfg)
+        except Exception:
+            pass
+
+    def _on_comms_enabled_changed(self, checked: bool):
+        try:
+            self.cfg.comms_enabled = bool(checked)
+            self.tts.load_from_config(self.cfg)
+            self.cfg_store.save(self.cfg)
+        except Exception:
+            pass
+
+    def _handle_comms_tts(self, evt: dict):
+        if not getattr(self.cfg, "comms_enabled", False):
+            return
+        channel = evt.get("Channel") or ""
+        if channel in ("player", "wing", "squadron", "friend", "direct", "voicechat", "squadronleader"):
+            return
+        msg = (evt.get("Message_Localised") or evt.get("Message") or "").strip()
+        if not msg or msg.startswith("$"):
+            return
+        now = time.monotonic()
+        if now < self._comms_cooldown_until:
+            return
+        self._comms_cooldown_until = now + 4.0
+        self.tts.speak_comms(msg)
+
+    def _announce_loaded_system_bodies(self):
+        if not getattr(self.cfg, "tts_enabled", False):
+            return
+        events = getattr(self.cfg, "tts_events", {}) or {}
+        bodies = getattr(self.state, "bodies", {}) or {}
+        if not bodies:
+            return
+
+        if events.get("Scan", False):
+            threshold = int(getattr(self.cfg, "min_planet_value_100k", 5) or 5) * 100_000
+            hv_count = sum(
+                1 for rec in bodies.values()
+                if isinstance(rec, dict)
+                and isinstance(rec.get("EstimatedValue"), int)
+                and rec["EstimatedValue"] >= threshold
+                and not rec.get("DSSMapped", False)
+            )
+            if hv_count > 0:
+                self.tts.speak(ExplorationPhrases.valuable_bodies_summary(hv_count), priority=5)
+
+        if events.get("FSSBodySignals", False):
+            bio_signals   = getattr(self.state, "bio_signals",   {}) or {}
+            geo_signals   = getattr(self.state, "geo_signals",   {}) or {}
+            human_signals = getattr(self.state, "human_signals", {}) or {}
+            bio_bodies   = sum(1 for v in bio_signals.values()   if int(v or 0) > 0)
+            geo_bodies   = sum(1 for v in geo_signals.values()   if int(v or 0) > 0)
+            human_bodies = sum(1 for v in human_signals.values() if int(v or 0) > 0)
+            if bio_bodies or geo_bodies or human_bodies:
+                self.tts.speak(
+                    ExplorationPhrases.signals_summary(bio_bodies, geo_bodies, human_bodies),
+                    priority=5
+                )
+
+    def _tts_priority(self, event_type: str) -> int:
+        """Lower number = higher urgency."""
+        PRIORITIES = {
+            "Interdicted":        1,
+            "EscapeInterdiction": 1,
+            "UnderAttack":        1,
+            "ShipTargeted":       2,
+            "Scanned":            2,
+            "Scan":               3,
+            "ScanOrganic":        3,
+            "SellOrganicData":    3,
+            "StartJump":          4,
+            "FSDJump":            5,
+            "Location":           5,
+            "LoadGame":           5,
+            "SAASignalsFound":    5,
+            "FSSBodySignals":     5,
+            "SAAScanComplete":    6,
+            "Disembark":          3,
+            "FSSAllBodiesFound":  6,
+            "Bounty":             6,
+            "FactionKillBond":    6,
+            "CodexEntry":         8,
+            "MissionCompleted":   8,
+        }
+        return PRIORITIES.get(event_type, 5)
 
     def _schedule_hud_refresh(self):
         """Coalesce multiple rapid journal events into a single UI refresh."""
@@ -948,9 +1590,9 @@ class MainWindow(QMainWindow):
 
         # One-line "action hints" (what's worth doing in THIS system)
         try:
-            min_100k = int(getattr(self.cfg, "min_planet_value_100k", 10) or 10)
+            min_100k = int(getattr(self.cfg, "min_planet_value_100k", 5) or 5)
         except Exception:
-            min_100k = 10
+            min_100k = 5
         min_value = min_100k * 100_000
         fss_value = max(300_000, int(min_value * 0.20))
 
@@ -1269,6 +1911,14 @@ class MainWindow(QMainWindow):
             self.state, self.cfg, self.exo_values
         )
 
+    def _open_planet_detail(self, body_name: str):
+        rec = self.state.bodies.get(body_name)
+        if not isinstance(rec, dict):
+            return
+        from edc.ui.planet_detail_dialog import PlanetDetailDialog
+        dlg = PlanetDetailDialog(body_name, rec, self.state, self)
+        dlg.exec()
+
     def _refresh_exploration(self):
         self.exploration_panel.refresh(
             self.state, self.cfg, self.planet_values
@@ -1353,7 +2003,7 @@ class MainWindow(QMainWindow):
         }
 
         try:
-            min_100k = int(getattr(self.cfg, "min_planet_value_100k", 10) or 10)
+            min_100k = int(getattr(self.cfg, "min_planet_value_100k", 5) or 5)
             if min_100k < 0:
                 min_100k = 0
             min_value = min_100k * 100_000

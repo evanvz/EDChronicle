@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS bodies (
     distance_ls     REAL,
     volcanism       TEXT,
     materials       TEXT,
+    first_footfall  INTEGER DEFAULT 0,
+    has_footfall    INTEGER DEFAULT 0,
     PRIMARY KEY (system_address, body_id)
 );
 
