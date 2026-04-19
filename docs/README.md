@@ -1,10 +1,10 @@
-# Elite Dangerous Little Helper
+# EDChronicle
 
-EDHelper is a Python desktop companion app for Elite Dangerous focused on live journal monitoring, current commander/game-state visibility, and historical journal import into a local SQLite database.
+EDChronicle is a Python desktop companion app for Elite Dangerous focused on live journal monitoring, current commander/game-state visibility, and historical journal import into a local SQLite database.
 
 ## What the app currently does
 
-EDHelper currently includes:
+EDChronicle currently includes:
 
 - Live journal monitoring
 - Live status monitoring
@@ -103,12 +103,12 @@ Live event processing currently updates in-memory state through `EventEngine` an
 | Tool | Purpose |
 |------|---------|
 | Visual Studio Code | Primary IDE |
-| Claude Code (VS Code extension) | AI-assisted analysis and architecture discussion — analysis only, no direct file edits |
+| Claude Code (VS Code extension) | AI-assisted analysis, architecture discussion, and code changes |
 | Python venv (Windows) | Isolated runtime environment |
 | Git | Version control with branch-based workflow |
 | GitHub | Remote repository and release tracking |
 
-**Claude Code usage rule:** Claude Code is used in read-only/discussion mode only. All code changes are reviewed and applied manually before committing. No AI tool writes directly to project files.
+**Claude Code usage rule:** Claude Code is used for analysis, architecture discussion, and direct code changes. Changes are reviewed before committing.
 
 ## Running the application
 
