@@ -112,15 +112,12 @@ Live event processing currently updates in-memory state through `EventEngine` an
 
 ## Running the application
 
-Current startup is driven through the application bootstrap in `edc/app.py`, with `run()` acting as the main application startup function.
+1. Activate the virtual environment
+2. From the project root, run:
 
-Recommended local workflow:
-
-1. Activate the project virtual environment
-2. Start the app through the normal project launcher/bootstrap path
-3. Verify watcher startup
-4. Verify live journal monitoring
-5. Verify database path/settings if historical import is enabled
+```
+python main.py
+```
 
 ## Current project status
 
