@@ -145,6 +145,8 @@ This creates a virtual environment and installs all dependencies.
 launch.bat
 ```
 
+> **First launch note:** On first run, EDChronicle will import all your existing journal files into its local database. This can take a minute or two depending on how many journals you have. Progress is shown on the startup screen. Subsequent launches are fast — only new journals are processed.
+
 ## Updating
 
 ```

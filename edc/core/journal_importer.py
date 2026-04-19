@@ -99,28 +99,32 @@ class JournalImporter:
         self.bodies_by_name: dict[str, CachedBody] = {}
         self.system_visits: dict[int, SystemVisit] = {}
 
-    def import_all(self) -> None:
+    def import_all(self, progress_callback=None) -> None:
         if not self.journal_dir.exists():
             log.warning("Journal directory not found: %s", self.journal_dir)
             return
 
         files = sorted(self.journal_dir.glob("Journal.*.log"))
-        log.info("Historical importer scanning %d journal files", len(files))
+        total = len(files)
+        log.info("Historical importer scanning %d journal files", total)
 
-        for path in files:
+        for idx, path in enumerate(files, start=1):
             try:
                 size = path.stat().st_size
             except OSError:
                 log.exception("Could not stat journal file: %s", path)
+                if progress_callback:
+                    progress_callback(idx, total)
                 continue
 
-            if self.repo.journal_processed(path.name, size):
-                continue
+            if not self.repo.journal_processed(path.name, size):
+                log.info("Importing historical journal: %s", path.name)
+                self._process_file(path)
+                processed_at = datetime.now(timezone.utc).isoformat()
+                self.repo.mark_journal_processed(path.name, size, processed_at)
 
-            log.info("Importing historical journal: %s", path.name)
-            self._process_file(path)
-            processed_at = datetime.now(timezone.utc).isoformat()
-            self.repo.mark_journal_processed(path.name, size, processed_at)
+            if progress_callback:
+                progress_callback(idx, total)
 
     def _process_file(self, path: Path) -> None:
         with path.open("r", encoding="utf-8", errors="replace") as f:

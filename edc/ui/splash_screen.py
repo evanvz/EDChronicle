@@ -3,6 +3,9 @@ import random
 import threading
 import numpy as np
 import sounddevice as sd
+import logging
+
+log = logging.getLogger(__name__)
 
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QApplication
 from PyQt6.QtCore import Qt, QTimer, QPointF
@@ -409,11 +412,17 @@ class _BackgroundCanvas(QWidget):
 
 class SplashScreen(QWidget):
 
-    def __init__(self, on_done):
+    def __init__(self, on_done, import_runner=None):
         super().__init__()
         self._on_done = on_done
         self._line_index = 0
         self._cursor_visible = True
+
+        self._import_runner = import_runner
+        self._import_thread: threading.Thread | None = None
+        self._import_current = 0
+        self._import_total = 0
+        self._import_done = False
 
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
@@ -456,6 +465,12 @@ class SplashScreen(QWidget):
         self._cursor_label.setStyleSheet("color: #FF8C00; background: transparent;")
         layout.addWidget(self._cursor_label)
 
+        self._import_label = QLabel("")
+        self._import_label.setFont(QFont("Courier New", 9))
+        self._import_label.setStyleSheet("color: #FF8C00; background: transparent;")
+        self._import_label.setVisible(False)
+        layout.addWidget(self._import_label)
+
         self._cursor_timer = QTimer()
         self._cursor_timer.timeout.connect(self._blink_cursor)
         self._cursor_timer.start(500)
@@ -464,6 +479,13 @@ class SplashScreen(QWidget):
         self._line_timer.setSingleShot(True)
         self._line_timer.timeout.connect(self._advance_line)
         self._line_timer.start(1000)
+
+        self._import_poll = QTimer()
+        self._import_poll.timeout.connect(self._poll_import)
+        self._import_poll.start(150)
+
+        if self._import_runner is not None:
+            self._start_import_thread()
 
     def _center(self):
         screen = QApplication.primaryScreen().availableGeometry()
@@ -492,12 +514,55 @@ class SplashScreen(QWidget):
         jitter = random.randint(-50, 50)
         self._line_timer.start(delay + jitter)
 
+    def _start_import_thread(self):
+        def _run():
+            try:
+                self._import_runner(self._on_import_progress)
+            except Exception:
+                log.exception("Journal import failed in splash thread")
+            finally:
+                self._import_done = True
+
+        self._import_thread = threading.Thread(target=_run, daemon=True)
+        self._import_thread.start()
+
+    def _on_import_progress(self, current: int, total: int):
+        self._import_current = current
+        self._import_total = total
+
+    def _poll_import(self):
+        if self._import_thread is None:
+            return
+        total = self._import_total
+        current = self._import_current
+        if total > 0:
+            self._import_label.setVisible(True)
+            if self._import_done:
+                self._import_label.setText(f"> JOURNALS READY  [ {total} / {total} ]")
+            else:
+                self._import_label.setText(f"> IMPORTING JOURNALS... [ {current} / {total} ]")
+
     def _finish(self):
         self._cursor_timer.stop()
         self._line_timer.stop()
         self._canvas.stop()
-        QTimer.singleShot(300, self._launch)
+
+        if self._import_thread is not None:
+            self._wait_for_import()
+        else:
+            QTimer.singleShot(300, self._launch)
+
+    def _wait_for_import(self):
+        if self._import_done:
+            self._import_poll.stop()
+            total = self._import_total
+            self._import_label.setVisible(True)
+            self._import_label.setText(f"> JOURNALS READY  [ {total} / {total} ]")
+            QTimer.singleShot(1000, self._launch)
+        else:
+            QTimer.singleShot(200, self._wait_for_import)
 
     def _launch(self):
+        self._import_poll.stop()
         self.close()
         self._on_done()

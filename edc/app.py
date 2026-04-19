@@ -13,6 +13,8 @@ from edc.utils.log import setup_logging
 from edc.core.journal_importer import JournalImporter
 from edc.ui.main_window import MainWindow
 from edc.ui.splash_screen import SplashScreen
+from persistence.database import Database
+from persistence.repository import Repository
 
 def _install_exception_hook():
     def hook(exc_type, exc_value, exc_tb):
@@ -192,19 +194,27 @@ def run():
     """)
     win = MainWindow(cfg_store, cfg, auto_start=False)
 
+    import_runner = None
     try:
         journal_dir = Path(cfg.journal_dir)
-        importer = JournalImporter(journal_dir, win.repo)
-        importer.import_all()
+        db_path = default_app_dir() / "data" / "edhelper.db"
+
+        def import_runner(progress_callback):
+            importer_db = Database(db_path)
+            try:
+                importer_repo = Repository(importer_db)
+                JournalImporter(journal_dir, importer_repo).import_all(progress_callback=progress_callback)
+            finally:
+                importer_db.close()
     except Exception:
-        log.exception("Historical system hydration failed")
+        log.exception("Could not prepare journal import runner")
 
     def _launch():
         win.show()
         QTimer.singleShot(0, win.refresh_from_state)
         QTimer.singleShot(0, win.start_auto_watch)
 
-    splash = SplashScreen(on_done=_launch)
+    splash = SplashScreen(on_done=_launch, import_runner=import_runner)
     splash.show()
 
     app.exec()
