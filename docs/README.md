@@ -1,5 +1,7 @@
 # EDChronicle
 
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/bobrogers_solo)
+
 EDChronicle is a Python desktop companion app for Elite Dangerous built for the solo player, with a focus on Exploration, Exobiology, Combat, and PowerPlay. It monitors live journal entries and imports historical journals into a local SQLite database. All data is derived exclusively from in-game journal entries — no external APIs or third-party data sources are used.
 
 ## Inspiration
