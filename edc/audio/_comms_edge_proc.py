@@ -17,29 +17,49 @@ import sys
 
 
 def _make_radio_click(sr: int, volume: float) -> "np.ndarray":
-    """Synthesise a ~40 ms PTT click transient (mono float32)."""
+    """Open-transmission PTT click — ~40 ms, mid-band punch."""
     import numpy as np
     from scipy.signal import butter, sosfilt
 
     n = int(sr * 0.040)
     t = np.linspace(0, 1, n, endpoint=False)
-
-    # Noise burst shaped by a fast attack / decay envelope
     env = np.exp(-t * 80.0) * (1.0 - np.exp(-t * 600.0))
     click = np.random.normal(0, 1.0, n).astype("float32") * env.astype("float32")
-
-    # Narrow band — keeps it in the radio telephony range
     sos = butter(4, [600, 2400], btype="band", fs=sr, output="sos")
     click = sosfilt(sos, click).astype("float32")
-
-    # Light saturation so it feels punchy
     click = np.tanh(click * 5.0).astype("float32")
+    peak = float(np.max(np.abs(click)))
+    if peak > 0:
+        click = click / peak * float(volume) * 0.7
+    return click.astype("float32")
 
+
+def _make_radio_end_click(sr: int, volume: float) -> "np.ndarray":
+    """End-of-transmission click — same character as open click, with a static tail."""
+    import numpy as np
+    from scipy.signal import butter, sosfilt
+
+    # Same envelope/band as the open click
+    n_click = int(sr * 0.040)
+    t = np.linspace(0, 1, n_click, endpoint=False)
+    env = np.exp(-t * 80.0) * (1.0 - np.exp(-t * 600.0))
+    click = np.random.normal(0, 1.0, n_click).astype("float32") * env.astype("float32")
+    sos = butter(4, [600, 2400], btype="band", fs=sr, output="sos")
+    click = sosfilt(sos, click).astype("float32")
+    click = np.tanh(click * 5.0).astype("float32")
     peak = float(np.max(np.abs(click)))
     if peak > 0:
         click = click / peak * float(volume) * 0.7
 
-    return click.astype("float32")
+    # Static tail fading to silence over ~80 ms
+    n_tail = int(sr * 0.080)
+    t_tail = np.linspace(0, 1, n_tail, endpoint=False)
+    tail_env = np.exp(-t_tail * 6.0)
+    tail = np.random.normal(0, 1.0, n_tail).astype("float32") * tail_env.astype("float32")
+    sos2 = butter(3, [300, 3000], btype="band", fs=sr, output="sos")
+    tail = sosfilt(sos2, tail).astype("float32") * float(volume) * 0.28
+
+    return np.concatenate([click, tail]).astype("float32")
 
 
 def _to_stereo(mono: "np.ndarray", pan: float, left_gain: float, right_gain: float) -> "np.ndarray":
@@ -50,6 +70,30 @@ def _to_stereo(mono: "np.ndarray", pan: float, left_gain: float, right_gain: flo
 def _silence(sr: int, ms: int) -> "np.ndarray":
     import numpy as np
     return np.zeros(int(sr * ms / 1000), dtype="float32")
+
+
+def _configure_audio_session():
+    """Restore Windows audio session volume and opt out of comms ducking."""
+    import os, time
+    pid = os.getpid()
+    for _ in range(5):
+        try:
+            from pycaw.pycaw import AudioUtilities, ISimpleAudioVolume, IAudioSessionControl2
+            for session in AudioUtilities.GetAllSessions():
+                try:
+                    ctrl2 = session._ctl.QueryInterface(IAudioSessionControl2)
+                    if ctrl2.GetProcessId() != pid:
+                        continue
+                    ctrl2.SetDuckingPreference(True)
+                    vol = session._ctl.QueryInterface(ISimpleAudioVolume)
+                    vol.SetMute(False, None)
+                    vol.SetMasterVolume(1.0, None)
+                    return
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        time.sleep(0.05)
 
 
 def _dsp_and_play(pcm_bytes: bytes, sample_rate: int, volume: float, pan: float):
@@ -80,22 +124,34 @@ def _dsp_and_play(pcm_bytes: bytes, sample_rate: int, volume: float, pan: float)
     data += np.random.normal(0, 0.004, len(data)).astype("float32")
     data = np.clip(data * float(volume) * 1.8, -1.0, 1.0)
 
-    pan = float(max(-1.0, min(1.0, pan)))
-    left_g  = float(np.sqrt(0.5 * (1.0 - pan)))
-    right_g = float(np.sqrt(0.5 * (1.0 + pan)))
+    pan_start = float(max(-1.0, min(1.0, pan)))
+    pan_end   = float(np.clip(pan_start + np.random.uniform(-0.3, 0.3), -0.85, 0.85))
 
-    click   = _make_radio_click(sr, volume)
-    gap     = _silence(sr, 30)
+    left_g_s  = float(np.sqrt(0.5 * (1.0 - pan_start)))
+    right_g_s = float(np.sqrt(0.5 * (1.0 + pan_start)))
+    left_g_e  = float(np.sqrt(0.5 * (1.0 - pan_end)))
+    right_g_e = float(np.sqrt(0.5 * (1.0 + pan_end)))
+
+    # Pan sweeps linearly across the speech portion
+    pan_env   = np.linspace(pan_start, pan_end, len(data))
+    left_sw   = np.sqrt(0.5 * (1.0 - pan_env)).astype("float32")
+    right_sw  = np.sqrt(0.5 * (1.0 + pan_env)).astype("float32")
+    speech_stereo = np.column_stack([data * left_sw, data * right_sw]).astype("float32")
+
+    open_click = _make_radio_click(sr, volume)
+    end_click  = _make_radio_end_click(sr, volume)
+    gap        = _silence(sr, 30)
 
     full = np.concatenate([
-        _to_stereo(click, pan, left_g, right_g),
-        _to_stereo(gap,   pan, left_g, right_g),
-        np.column_stack([data * left_g, data * right_g]).astype("float32"),
-        _to_stereo(gap,   pan, left_g, right_g),
-        _to_stereo(click, pan, left_g, right_g),
+        _to_stereo(open_click, pan_start, left_g_s, right_g_s),
+        _to_stereo(gap,        pan_start, left_g_s, right_g_s),
+        speech_stereo,
+        _to_stereo(gap,        pan_end,   left_g_e, right_g_e),
+        _to_stereo(end_click,  pan_end,   left_g_e, right_g_e),
     ])
 
     sd.play(full, sr)
+    _configure_audio_session()
     sd.wait()
 
 

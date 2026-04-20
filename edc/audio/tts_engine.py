@@ -122,27 +122,26 @@ class CommsWorker(QObject):
         self._volume  = volume
         self._running = True
 
-    _PROC      = Path(__file__).parent / "_comms_edge_proc.py"
-    _PROC_SAPI = Path(__file__).parent / "_comms_proc.py"
-
     def _speak_one(self, text: str, voice_id: str | None):
-        pan = random.uniform(-0.7, 0.7)
-        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-        # voice_id is an edge-tts voice name when using the edge proc
-        proc = str(self._PROC)
-        rate_arg = "+0%"
-        subprocess.run(
-            [
-                sys.executable, proc,
-                rate_arg,
-                str(self._volume),
-                voice_id or "en-US-GuyNeural",
-                str(round(pan, 4)),
-                text,
-            ],
-            timeout=30,
-            creationflags=flags,
-        )
+        import asyncio, random as _random
+        from edc.audio._comms_edge_proc import _mp3_to_wav_bytes, _dsp_and_play
+
+        pan = _random.uniform(-0.7, 0.7)
+        voice = voice_id or "en-US-GuyNeural"
+
+        async def _synth():
+            import edge_tts
+            communicate = edge_tts.Communicate(text, voice, rate="+0%")
+            chunks = []
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    chunks.append(chunk["data"])
+            return b"".join(chunks)
+
+        mp3_bytes = asyncio.run(_synth())
+        if mp3_bytes:
+            wav_bytes = _mp3_to_wav_bytes(mp3_bytes)
+            _dsp_and_play(wav_bytes, 22050, self._volume, pan)
 
     @pyqtSlot()
     def run(self):
@@ -154,8 +153,6 @@ class CommsWorker(QObject):
                     break
                 try:
                     self._speak_one(text, voice_id)
-                except subprocess.TimeoutExpired:
-                    log.warning("TTS comms subprocess timed out")
                 except Exception as e:
                     log.error(f"TTS comms speak error: {e}")
             except queue.Empty:

@@ -12,6 +12,28 @@ log = logging.getLogger("edc.event_engine")
 
 logger = logging.getLogger(__name__)
 
+
+def _derive_conflicts_from_factions(factions: list) -> list:
+    from collections import defaultdict
+    war_factions: dict = defaultdict(list)
+    for f in factions:
+        if not isinstance(f, dict):
+            continue
+        for s in (f.get("ActiveStates") or []):
+            state_name = str(s.get("State") or "").lower()
+            if state_name in ("war", "civilwar"):
+                war_factions[state_name].append(f.get("Name", ""))
+    conflicts = []
+    for war_type, names in war_factions.items():
+        for i in range(0, len(names), 2):
+            conflicts.append({
+                "WarType": war_type,
+                "Status": "active",
+                "Faction1": {"Name": names[i] if i < len(names) else "", "Stake": "", "WonDays": 0},
+                "Faction2": {"Name": names[i + 1] if i + 1 < len(names) else "", "Stake": "", "WonDays": 0},
+            })
+    return conflicts
+
 class EventEngine:
     def __init__(
         self,
@@ -235,14 +257,11 @@ class EventEngine:
             cf = event.get("SystemFaction", {}) or {}
             self.state.controlling_faction = cf.get("Name")
             self.state.factions = event.get("Factions", []) or []
-            self.state.system_conflicts = [
-                c for c in (event.get("Conflicts") or [])
-                if isinstance(c, dict)
-            ]
-            self.state.system_conflicts = [
-                c for c in (event.get("Conflicts") or [])
-                if isinstance(c, dict)
-            ]
+            conflicts_raw = event.get("Conflicts")
+            if conflicts_raw is not None:
+                self.state.system_conflicts = [c for c in conflicts_raw if isinstance(c, dict)]
+            else:
+                self.state.system_conflicts = _derive_conflicts_from_factions(self.state.factions)
 
             # Powerplay (if present in this system)
             cp = event.get("ControllingPower")
@@ -315,6 +334,22 @@ class EventEngine:
                     if isinstance(cpct, (int, float)):
                         prog[rec["Power"]] = float(cpct)
             self.state.system_powerplay_conflict_progress = prog
+
+            cf = event.get("SystemFaction", {}) or {}
+            self.state.controlling_faction = cf.get("Name")
+            self.state.system_allegiance = event.get("SystemAllegiance")
+            self.state.system_government = event.get("SystemGovernment_Localised") or event.get("SystemGovernment")
+            self.state.system_economy = event.get("SystemEconomy_Localised") or event.get("SystemEconomy") or None
+            self.state.system_economy_secondary = event.get("SystemSecondEconomy_Localised") or event.get("SystemSecondEconomy") or None
+            self.state.system_security = event.get("SystemSecurity_Localised") or event.get("SystemSecurity")
+            self.state.population = event.get("Population")
+            factions = event.get("Factions") or []
+            self.state.factions = [f for f in factions if isinstance(f, dict)]
+            conflicts_raw = event.get("Conflicts")
+            if conflicts_raw is not None:
+                self.state.system_conflicts = [c for c in conflicts_raw if isinstance(c, dict)]
+            else:
+                self.state.system_conflicts = _derive_conflicts_from_factions(self.state.factions)
 
             self._apply_external_intel(self.state.system, new_system_address)
             msgs.append("refresh_powerplay")

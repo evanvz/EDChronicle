@@ -31,12 +31,12 @@ class AppConfig:
     journal_dir: Optional[str] = None
     min_planet_value_100k: int = 1
     exo_high_value_m: int = 2
-    tts_enabled: bool = False
+    tts_enabled: bool = True
     tts_rate: int = 175
     tts_volume: float = 0.9
     tts_voice_index: int = 0
     tts_events: dict = None
-    comms_enabled: bool = False
+    comms_enabled: bool = True
     comms_voice_index: int = 1
     comms_volume: float = 0.35
     comms_rate: int = 210

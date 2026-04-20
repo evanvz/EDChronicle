@@ -12,7 +12,6 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-import sounddevice as sd
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 
 log = logging.getLogger(__name__)
@@ -129,6 +128,7 @@ class VoiceCommandListener(QObject):
                 audio_q.put(bytes(indata))
 
         try:
+            import sounddevice as sd
             with sd.RawInputStream(
                 samplerate=self.SAMPLE_RATE,
                 blocksize=self.BLOCK_SIZE,

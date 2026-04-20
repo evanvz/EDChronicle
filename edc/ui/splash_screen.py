@@ -1,8 +1,6 @@
 import math
 import random
 import threading
-import numpy as np
-import sounddevice as sd
 import logging
 
 log = logging.getLogger(__name__)
@@ -40,58 +38,6 @@ BOOT_LINES = [
 ]
 
 W, H = 820, 480
-SAMPLE_RATE = 44100
-
-
-# ─── Audio ────────────────────────────────────────────────────────────────────
-
-def _beep(frequency: float, duration: float, volume: float = 0.18):
-    t = np.linspace(0, duration, int(SAMPLE_RATE * duration), False)
-    wave = np.sin(2 * np.pi * frequency * t) * volume
-    fade = int(SAMPLE_RATE * 0.01)
-    wave[:fade] *= np.linspace(0, 1, fade)
-    wave[-fade:] *= np.linspace(1, 0, fade)
-    try:
-        sd.play(wave.astype(np.float32), samplerate=SAMPLE_RATE)
-    except Exception:
-        pass
-
-
-def _play_boot_beep():
-    threading.Thread(target=_beep, args=(880, 0.04), daemon=True).start()
-
-
-def _play_laser():
-    def _s():
-        t = np.linspace(0, 0.06, int(SAMPLE_RATE * 0.06), False)
-        wave = np.sin(2 * np.pi * (1200 - t * 6000) * t) * 0.12
-        try:
-            sd.play(wave.astype(np.float32), samplerate=SAMPLE_RATE)
-        except Exception:
-            pass
-    threading.Thread(target=_s, daemon=True).start()
-
-
-def _play_explosion():
-    def _s():
-        t = np.linspace(0, 0.18, int(SAMPLE_RATE * 0.18), False)
-        noise = np.random.uniform(-1, 1, len(t))
-        env = np.exp(-t * 20)
-        wave = noise * env * 0.25
-        try:
-            sd.play(wave.astype(np.float32), samplerate=SAMPLE_RATE)
-        except Exception:
-            pass
-    threading.Thread(target=_s, daemon=True).start()
-
-
-def _play_ready_tone():
-    def _seq():
-        import time
-        for freq, dur in [(523, 0.08), (659, 0.08), (784, 0.15)]:
-            _beep(freq, dur, volume=0.22)
-            time.sleep(dur + 0.02)
-    threading.Thread(target=_seq, daemon=True).start()
 
 
 # ─── Scene objects ─────────────────────────────────────────────────────────────
@@ -282,7 +228,6 @@ class _BackgroundCanvas(QWidget):
             targets = [e for e in self._enemies if abs(e.y - self._ship_y) < 60 and e.x > self._ship_x]
             if targets:
                 self._bolts.append(_Bolt(self._ship_x + 28, self._ship_y))
-                _play_laser()
                 self._fire_cd = random.randint(14, 22)
 
         # update bolts
@@ -302,7 +247,6 @@ class _BackgroundCanvas(QWidget):
                     e.alive = False
                     for _ in range(28):
                         self._particles.append(_Particle(e.x, e.y))
-                    _play_explosion()
 
         self._bolts   = [b for b in self._bolts   if b.alive]
         self._enemies = [e for e in self._enemies if e.alive]
@@ -402,10 +346,6 @@ class _BackgroundCanvas(QWidget):
         self._tick.stop()
         self._tick.deleteLater()
         self.hide()
-        try:
-            sd.stop()
-        except Exception:
-            pass
 
 
 # ─── Splash screen ─────────────────────────────────────────────────────────────
@@ -500,7 +440,6 @@ class SplashScreen(QWidget):
 
     def _advance_line(self):
         if self._line_index >= len(BOOT_LINES):
-            _play_ready_tone()
             QTimer.singleShot(900, self._finish)
             return
 
@@ -508,7 +447,6 @@ class SplashScreen(QWidget):
         lbl = self._log_labels[self._line_index]
         lbl.setText(f"> {text}")
         lbl.setStyleSheet(f"color: {color}; background: transparent;")
-        _play_boot_beep()
 
         self._line_index += 1
         jitter = random.randint(-50, 50)

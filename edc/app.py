@@ -191,6 +191,36 @@ def run():
         text-decoration: underline;
     }
 
+    QCheckBox {
+        color: #E6E6E6;
+        font-size: 13px;
+        font-weight: 600;
+        spacing: 8px;
+        padding: 4px 0px;
+    }
+
+    QCheckBox::indicator {
+        width: 18px;
+        height: 18px;
+        border-radius: 4px;
+        border: 2px solid #888888;
+        background-color: #151515;
+    }
+
+    QCheckBox::indicator:checked {
+        background-color: #FF8C00;
+        border-color: #FF8C00;
+    }
+
+    QCheckBox::indicator:unchecked:hover {
+        border-color: #FFA733;
+    }
+
+    QCheckBox::indicator:checked:hover {
+        background-color: #FFA733;
+        border-color: #FFA733;
+    }
+
     """)
     win = MainWindow(cfg_store, cfg, auto_start=False)
 

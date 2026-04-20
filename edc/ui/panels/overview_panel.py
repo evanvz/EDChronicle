@@ -42,7 +42,7 @@ def _state_badge_data(state_txt):
     sl = str(state_txt or "").strip().lower()
     if not sl or sl == "none":
         return None
-    if sl in {"war", "civil war"}:
+    if sl in {"war", "civil war", "civilwar"}:
         return (state_txt, "#5F2323", "#FF6B6B")
     if sl == "civil unrest":
         return (state_txt, "#3a2a00", "#FFB347")
@@ -763,7 +763,7 @@ class OverviewPanel(QWidget):
             is_ctrl = bool(controlling_name and name == controlling_name)
 
             # Row colours — rep-based name colour like Inara (orange=allied)
-            if active_l in {"war", "civil war"}:
+            if active_l in {"war", "civil war", "civilwar"}:
                 row_bg = "#2a0a0a"; name_color = "#FFB0B0"; border = "#FF4444"
             elif active_l == "election":
                 row_bg = "#1e1800"; name_color = "#FFE8A0"; border = "#FFD93D"

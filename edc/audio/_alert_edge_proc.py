@@ -41,6 +41,30 @@ def _mp3_to_wav_bytes(mp3_bytes: bytes) -> tuple[bytes, int]:
     return buf.getvalue(), decoded.sample_rate
 
 
+def _configure_audio_session():
+    """Restore Windows audio session volume and opt out of comms ducking."""
+    import os, time
+    pid = os.getpid()
+    for _ in range(5):
+        try:
+            from pycaw.pycaw import AudioUtilities, ISimpleAudioVolume, IAudioSessionControl2
+            for session in AudioUtilities.GetAllSessions():
+                try:
+                    ctrl2 = session._ctl.QueryInterface(IAudioSessionControl2)
+                    if ctrl2.GetProcessId() != pid:
+                        continue
+                    ctrl2.SetDuckingPreference(True)
+                    vol = session._ctl.QueryInterface(ISimpleAudioVolume)
+                    vol.SetMute(False, None)
+                    vol.SetMasterVolume(1.0, None)
+                    return
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        time.sleep(0.05)
+
+
 def _play_wav(wav_bytes: bytes, sample_rate: int, volume: float):
     import numpy as np
     from scipy.io import wavfile
@@ -60,6 +84,7 @@ def _play_wav(wav_bytes: bytes, sample_rate: int, volume: float):
 
     data = data * float(volume)
     sd.play(data, sr)
+    _configure_audio_session()
     sd.wait()
 
 

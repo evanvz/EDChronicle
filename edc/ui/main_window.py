@@ -428,6 +428,12 @@ class MainWindow(QMainWindow):
 
         from PyQt6.QtWidgets import QCheckBox
 
+        # --- Commander Assist (TTS) ---
+        self.tts_enabled_check = QCheckBox("Enable Commander Assist (text-to-speech)")
+        self.tts_enabled_check.setChecked(bool(getattr(self.cfg, "tts_enabled", False)))
+        self.tts_enabled_check.toggled.connect(self._on_tts_enabled_changed)
+        st.addWidget(self.tts_enabled_check)
+
         # --- Main voice ---
         st.addWidget(QLabel("Main voice (takes effect on restart after saving)"))
         voice_row = QHBoxLayout()
@@ -1111,6 +1117,14 @@ class MainWindow(QMainWindow):
         if idx is None:
             return
         self.sidebar.setCurrentRow(idx)
+
+    def _on_tts_enabled_changed(self, checked: bool):
+        try:
+            self.cfg.tts_enabled = bool(checked)
+            self.tts.load_from_config(self.cfg)
+            self.cfg_store.save(self.cfg)
+        except Exception:
+            pass
 
     def _on_main_voice_changed(self, idx: int):
         try:

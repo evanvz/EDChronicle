@@ -13,6 +13,7 @@ log = logging.getLogger(__name__)
 class PowerPlayActivity:
     action: str
     ethos: str
+    ethos_bonus: bool = False
 
 
 class PowerPlayActivityTable:
@@ -20,9 +21,11 @@ class PowerPlayActivityTable:
         self,
         states: Dict[str, List[PowerPlayActivity]],
         state_mapping: Dict[str, str] | None = None,
+        defensive_states: set | None = None,
     ):
         self.states = states
         self.state_mapping = state_mapping or {}
+        self.defensive_states = defensive_states or set()
 
     @staticmethod
     def load_from_paths(*paths: Path) -> Optional["PowerPlayActivityTable"]:
@@ -34,6 +37,7 @@ class PowerPlayActivityTable:
                 data = json.loads(p.read_text(encoding="utf-8"))
 
                 states: Dict[str, List[PowerPlayActivity]] = {}
+                defensive_states: set = set()
 
                 for entry in data.get("system_states", []):
                     state = entry.get("state")
@@ -44,10 +48,13 @@ class PowerPlayActivityTable:
                             PowerPlayActivity(
                                 action=a.get("action", ""),
                                 ethos=a.get("ethos", ""),
+                                ethos_bonus=bool(a.get("ethos_bonus", False)),
                             )
                         )
 
                     states[state] = acts
+                    if entry.get("defensive_multiplier"):
+                        defensive_states.add(state)
 
                 state_mapping = data.get("state_mapping", {})
 
@@ -55,7 +62,7 @@ class PowerPlayActivityTable:
                     "Loaded PowerPlay activities from %s (%d states)",
                     p, len(states)
                 )
-                return PowerPlayActivityTable(states, state_mapping)
+                return PowerPlayActivityTable(states, state_mapping, defensive_states)
 
             except Exception as e:
                 log.warning("Failed loading PowerPlay activities from %s: %s", p, e)
@@ -65,3 +72,7 @@ class PowerPlayActivityTable:
     def get_actions(self, state: str) -> List[PowerPlayActivity]:
         mapped = self.state_mapping.get(state, state)
         return self.states.get(mapped, [])
+
+    def is_defensive(self, state: str) -> bool:
+        mapped = self.state_mapping.get(state, state)
+        return mapped in self.defensive_states

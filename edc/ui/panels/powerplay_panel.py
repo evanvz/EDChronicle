@@ -347,26 +347,56 @@ class PowerplayPanel(QWidget):
                     "Covert":    "#C77DFF",
                 }
                 ethos_order = ["Combat", "Finance", "Social", "Logistics", "Covert"]
-                grouped = {e: [] for e in ethos_order}
-                for a in acts:
-                    if a.ethos in grouped:
-                        grouped[a.ethos].append(a.action)
-                    else:
-                        grouped.setdefault(a.ethos, []).append(a.action)
+                is_defensive = pp_activities.is_defensive(pp_state or "")
 
-                html_parts.append("<br><b>Recommended Activities:</b>")
-                for ethos in ethos_order:
-                    actions = grouped.get(ethos, [])
-                    if not actions:
-                        continue
-                    color = ethos_colors.get(ethos, "#FFFFFF")
+                html_parts.append(
+                    '<br><span style="color:#FF8C00;font-weight:700;letter-spacing:1px;">'
+                    'LOCAL ACTIVITIES</span>'
+                )
+                if is_defensive:
                     html_parts.append(
-                        f'<br><span style="color:{color};font-weight:700;">{ethos}</span>'
+                        '<span style="color:#FFB347;font-size:10px;">'
+                        '&#9888; Defensive system: your personal merits are reduced by 35% here. '
+                        'Control Points are unaffected.</span>'
                     )
-                    for act in actions:
+                html_parts.append(
+                    '<span style="color:#666666;font-size:10px;">'
+                    "Contribute to your Power's Control Score by completing the "
+                    'following activities in this system:</span>'
+                )
+
+                bonus = [a for a in acts if a.ethos_bonus]
+                regular = [a for a in acts if not a.ethos_bonus]
+
+                if bonus:
+                    html_parts.append("<br>")
+                    for a in bonus:
+                        color = ethos_colors.get(a.ethos, "#FFB347")
                         html_parts.append(
-                            f'<span style="color:{color};">&nbsp;&nbsp;• {act}</span>'
+                            f'<span style="color:#FFB347;">&#9656;&nbsp;{a.action}'
+                            f'&nbsp;<span style="color:{color};font-size:10px;">'
+                            f'(Ethos Bonus)</span></span>'
                         )
+
+                if regular:
+                    grouped = {e: [] for e in ethos_order}
+                    for a in regular:
+                        if a.ethos in grouped:
+                            grouped[a.ethos].append(a.action)
+                        else:
+                            grouped.setdefault(a.ethos, []).append(a.action)
+                    html_parts.append("<br>")
+                    for ethos in ethos_order:
+                        actions = grouped.get(ethos, [])
+                        if not actions:
+                            continue
+                        color = ethos_colors.get(ethos, "#FFFFFF")
+                        for act in actions:
+                            html_parts.append(
+                                f'<span style="color:#E6E6E6;">&#9656;&nbsp;{act}'
+                                f'&nbsp;<span style="color:{color};font-size:10px;">'
+                                f'[{ethos}]</span></span>'
+                            )
 
         self.pp_actions.setText("<br>".join(html_parts))
 
