@@ -1173,16 +1173,53 @@ class MainWindow(QMainWindow):
         now = time.monotonic()
         if now < self._commander_quip_cooldown_until:
             return
+
+        pledged = (getattr(self.state, "pp_power", None) or "").strip()
+        ctrl    = (getattr(self.state, "system_controlling_power", None) or "").strip()
+        in_my_pp_space = bool(pledged and ctrl and ctrl == pledged)
+
+        def _qualifies(power: str, wanted: bool, bounty, rank: str) -> bool:
+            rank_ok      = rank.lower() in ("dangerous", "deadly", "elite")
+            bounty_ok    = isinstance(bounty, int) and bounty >= 500_000
+            bounty_target = wanted and bounty_ok and rank_ok
+            pp_enemy      = bool(pledged and power and power != pledged)
+            if in_my_pp_space:
+                return pp_enemy or bounty_target
+            return bounty_target
+
         quip = ""
         if event_type == "ReceiveText":
             from_raw = evt.get("From") or ""
-            if "$npc_name_decorate" in from_raw:
+            if "$npc_name_decorate" not in from_raw:
+                return
+            # Parse pilot name from "$npc_name_decorate:#name=X;"
+            pilot_name = ""
+            if "#name=" in from_raw:
+                pilot_name = from_raw.split("#name=", 1)[1].rstrip(";").strip()
+            if not pilot_name:
+                return
+            contacts = getattr(self.state, "combat_contacts", {}) or {}
+            contact = next(
+                (c for c in contacts.values()
+                 if isinstance(c, dict) and c.get("Pilot") == pilot_name),
+                None,
+            )
+            if not contact:
+                return
+            if _qualifies(contact.get("Power", ""), contact.get("Wanted", False),
+                          contact.get("Bounty"), contact.get("Rank", "")):
                 quip = CombatPhrases.npc_challenge()
         elif event_type == "ShipTargeted":
-            if evt.get("TargetLocked") and int(evt.get("ScanStage", 0) or 0) >= 3:
-                legal = str(evt.get("LegalStatus") or "").strip().lower()
-                if legal == "wanted":
-                    quip = CombatPhrases.wanted_target_scan()
+            if not evt.get("TargetLocked") or int(evt.get("ScanStage", 0) or 0) < 3:
+                return
+            power  = (evt.get("Power") or "").strip()
+            legal  = str(evt.get("LegalStatus") or "").strip().lower()
+            wanted = legal == "wanted"
+            bounty = evt.get("Bounty")
+            rank   = str(evt.get("PilotRank") or "").strip()
+            if _qualifies(power, wanted, bounty, rank):
+                quip = CombatPhrases.wanted_target_scan()
+
         if not quip:
             return
         self._commander_quip_cooldown_until = now + 30.0
