@@ -521,6 +521,7 @@ class MainWindow(QMainWindow):
         self._tts_spoken_ships: set = set()  # pilot|ship keys spoken this system
         self._tts_ship_cooldown_until: float = 0.0  # monotonic timestamp
         self._comms_cooldown_until: float = 0.0
+        self._commander_quip_cooldown_until: float = 0.0
 
         # Voice command listener — only started if enabled in settings
         self._voice_cmd_models_dir = app_dir / "models"
@@ -740,6 +741,9 @@ class MainWindow(QMainWindow):
 
         if name == "ReceiveText":
             self._handle_comms_tts(evt)
+
+        if name in ("ReceiveText", "ShipTargeted"):
+            self._handle_combat_quip(name, evt)
 
     def _farming_arrival_brief(self, state) -> str:
         """Short TTS summary of farming opportunities on FSDJump. Returns '' if nothing relevant."""
@@ -1162,6 +1166,30 @@ class MainWindow(QMainWindow):
             self.cfg_store.save(self.cfg)
         except Exception:
             pass
+
+    def _handle_combat_quip(self, event_type: str, evt: dict):
+        if not getattr(self.cfg, "tts_enabled", False):
+            return
+        now = time.monotonic()
+        if now < self._commander_quip_cooldown_until:
+            return
+        quip = ""
+        if event_type == "ReceiveText":
+            from_raw = evt.get("From") or ""
+            if "$npc_name_decorate" in from_raw:
+                quip = CombatPhrases.npc_challenge()
+        elif event_type == "ShipTargeted":
+            if evt.get("TargetLocked") and int(evt.get("ScanStage", 0) or 0) >= 3:
+                legal = str(evt.get("LegalStatus") or "").strip().lower()
+                if legal == "wanted":
+                    quip = CombatPhrases.wanted_target_scan()
+        if not quip:
+            return
+        self._commander_quip_cooldown_until = now + 30.0
+        if event_type == "ReceiveText":
+            QTimer.singleShot(2000, lambda q=quip: self.tts.speak(q, priority=3))
+        else:
+            self.tts.speak(quip, priority=3)
 
     def _handle_comms_tts(self, evt: dict):
         if not getattr(self.cfg, "comms_enabled", False):

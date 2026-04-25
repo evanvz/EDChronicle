@@ -627,6 +627,27 @@ class EventEngine:
             except Exception:
                 pass
 
+        elif name == "FactionKillBond":
+            reward = event.get("Reward")
+            if isinstance(reward, int):
+                ts = event.get("timestamp") or ""
+                reward_key = f"{ts}|{reward}|{self.state.combat_current_key}"
+                if reward_key not in self.state.counted_combat_keys:
+                    self.state.counted_combat_keys.add(reward_key)
+            try:
+                self.state.session_kills += 1
+            except Exception:
+                pass
+
+            try:
+                cur_key = getattr(self.state, "combat_current_key", "") or ""
+                contacts = getattr(self.state, "combat_contacts", None) or {}
+                if cur_key and cur_key in contacts and isinstance(contacts[cur_key], dict):
+                    contacts[cur_key]["Destroyed"] = True
+                    self.state.combat_contacts = contacts
+            except Exception:
+                pass
+
         elif name == "RedeemVoucher":
             if event.get("Type") == "bounty":
                 try:

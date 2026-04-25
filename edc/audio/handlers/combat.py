@@ -53,6 +53,24 @@ class CombatPhrases:
         "{credits} credits received.",
     ]
 
+    NPC_CHALLENGE = [
+        "Going to try his luck. Let's show him who's boss around here.",
+        "They picked the wrong ship to tangle with today.",
+        "Threatening us? Bold move. Let's remind them why that's a mistake.",
+        "Noted. Arming up. Let's see how brave they really are.",
+        "They want a fight. Happy to oblige.",
+        "Copy that. Targeting solutions ready, Commander.",
+    ]
+
+    WANTED_TARGET_SCAN = [
+        "There's a bounty on that one. Let's collect.",
+        "Wanted. They're worth something to us dead.",
+        "That pilot's got a price on their head. Time to cash in.",
+        "Bounty confirmed. Permission to engage, Commander?",
+        "That one's wanted. Let's make this count.",
+        "Good news, Commander. That target's worth credits.",
+    ]
+
     @staticmethod
     def ship_targeted(ship: str, rank: str, power: str, is_enemy: bool,
                       wanted: bool, bounty: int) -> str:
@@ -102,3 +120,11 @@ class CombatPhrases:
     def kill_bond(credits: int, faction: str) -> str:
         return pick(CombatPhrases.KILL_BOND,
                     credits=f"{credits:,}", faction=faction)
+
+    @staticmethod
+    def npc_challenge() -> str:
+        return pick(CombatPhrases.NPC_CHALLENGE)
+
+    @staticmethod
+    def wanted_target_scan() -> str:
+        return pick(CombatPhrases.WANTED_TARGET_SCAN)
