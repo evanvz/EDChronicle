@@ -16,18 +16,17 @@ from edc.core.spansh_client import SpanshClient, SpanshSystem
 
 log = logging.getLogger(__name__)
 
-_TERRITORY_OPTIONS = [
-    ("Your systems",  "friendly"),
-    ("Enemy systems", "enemy"),
-    ("Contested",     "contested"),
-    ("All PP",        "all"),
+_MISSION_OPTIONS = [
+    ("Reinforcement systems", "reinforcement"),
+    ("Undermining targets",   "undermining"),
+    ("Acquisition systems",   "acquisition"),
+    ("All PP systems",        "all"),
 ]
 
 _FACILITY_OPTIONS = [
     ("Any facility",  "any"),
     ("Has Megaship",  "megaship"),
     ("Has Settlement","settlement"),
-    ("Has Starport",  "starport"),
 ]
 
 
@@ -36,11 +35,11 @@ _FACILITY_OPTIONS = [
 class _SearchWorker(QObject):
     finished = pyqtSignal(list, str)   # (results, error)
 
-    def __init__(self, power, territory, ref_x, ref_y, ref_z,
+    def __init__(self, power, mission, ref_x, ref_y, ref_z,
                  range_ly, facility):
         super().__init__()
-        self._power     = power
-        self._territory = territory
+        self._power   = power
+        self._mission = mission
         self._ref_x     = ref_x
         self._ref_y     = ref_y
         self._ref_z     = ref_z
@@ -51,7 +50,7 @@ class _SearchWorker(QObject):
         client = SpanshClient()
         results, error = client.search_pp_systems(
             power=self._power,
-            territory=self._territory,
+            mission=self._mission,
             ref_x=self._ref_x,
             ref_y=self._ref_y,
             ref_z=self._ref_z,
@@ -111,14 +110,14 @@ class PowerplayFinderPanel(QWidget):
         info_row.addStretch()
         ctrl_layout.addLayout(info_row)
 
-        # Row 2: territory + facility + range + button
+        # Row 2: mission + facility + range + button
         filter_row = QHBoxLayout()
         filter_row.setSpacing(8)
 
-        self._territory_combo = QComboBox()
-        self._territory_combo.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
-        for label, _ in _TERRITORY_OPTIONS:
-            self._territory_combo.addItem(label)
+        self._mission_combo = QComboBox()
+        self._mission_combo.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
+        for label, _ in _MISSION_OPTIONS:
+            self._mission_combo.addItem(label)
 
         self._facility_combo = QComboBox()
         self._facility_combo.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
@@ -144,7 +143,7 @@ class PowerplayFinderPanel(QWidget):
         )
         self._search_btn.clicked.connect(self._start_search)
 
-        filter_row.addWidget(self._territory_combo, 2)
+        filter_row.addWidget(self._mission_combo, 2)
         filter_row.addWidget(self._facility_combo, 2)
         filter_row.addWidget(range_label)
         filter_row.addWidget(self._range_spin, 1)
@@ -201,9 +200,9 @@ class PowerplayFinderPanel(QWidget):
 
     # ── Search ────────────────────────────────────────────────────────────
 
-    def _territory_key(self) -> str:
-        idx = self._territory_combo.currentIndex()
-        return _TERRITORY_OPTIONS[idx][1] if 0 <= idx < len(_TERRITORY_OPTIONS) else "friendly"
+    def _mission_key(self) -> str:
+        idx = self._mission_combo.currentIndex()
+        return _MISSION_OPTIONS[idx][1] if 0 <= idx < len(_MISSION_OPTIONS) else "reinforcement"
 
     def _facility_key(self) -> str:
         idx = self._facility_combo.currentIndex()
@@ -222,7 +221,7 @@ class PowerplayFinderPanel(QWidget):
 
         self._worker = _SearchWorker(
             power=self._power,
-            territory=self._territory_key(),
+            mission=self._mission_key(),
             ref_x=self._ref_x,
             ref_y=self._ref_y,
             ref_z=self._ref_z,

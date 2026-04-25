@@ -56,14 +56,14 @@ class SpanshClient:
 
     def search_pp_systems(
         self,
-        power:     str,
-        territory: str,   # "friendly" | "enemy" | "contested" | "all"
-        ref_x:     float,
-        ref_y:     float,
-        ref_z:     float,
-        range_ly:  int  = 100,
-        facility:  str  = "any",   # "any" | "megaship" | "settlement" | "starport"
-        size:      int  = 50,
+        power:    str,
+        mission:  str,   # "reinforcement" | "undermining" | "acquisition" | "all"
+        ref_x:    float,
+        ref_y:    float,
+        ref_z:    float,
+        range_ly: int = 100,
+        facility: str = "any",   # "any" | "megaship" | "settlement"
+        size:     int = 50,
     ) -> Tuple[List[SpanshSystem], str]:
         """
         Returns (results, error).  error is "" on success.
@@ -71,11 +71,13 @@ class SpanshClient:
         """
         filters: dict = {}
 
-        if territory == "friendly":
+        if mission == "reinforcement":
+            # Systems your pledged power controls — where you reinforce
             filters["controlling_power"] = {"value": power, "comparison": "="}
-        elif territory == "contested":
+        elif mission == "acquisition":
+            # Contested systems — where powers fight for control
             filters["power_state"] = {"value": "Contested", "comparison": "="}
-        # "enemy" and "all" — no controlling_power filter; post-filter below
+        # "undermining" and "all" — no Spansh-side filter; post-filter below
 
         body = {
             "filters":          filters,
@@ -119,11 +121,12 @@ class SpanshClient:
             if dist > range_ly:
                 continue
 
-            # Territory post-filters
-            if territory == "enemy":
+            # Mission post-filters
+            if mission == "undermining":
+                # Enemy-controlled systems only — exclude your own and unoccupied
                 if not ctrl_power or ctrl_power == power:
                     continue
-            if territory in ("friendly", "enemy", "contested") and not ctrl_power:
+            if mission in ("reinforcement", "undermining", "acquisition") and not ctrl_power:
                 continue
 
             station_types = [
@@ -143,8 +146,6 @@ class SpanshClient:
             if facility == "megaship"   and not candidate.has_megaship():
                 continue
             if facility == "settlement" and not candidate.has_settlement():
-                continue
-            if facility == "starport"   and not candidate.has_starport():
                 continue
 
             out.append(candidate)
