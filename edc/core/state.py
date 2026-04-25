@@ -9,6 +9,9 @@ class GameState:
     credits: Optional[int] = None
     system: Optional[str] = None
     system_address: Optional[int] = None
+    system_x: Optional[float] = None
+    system_y: Optional[float] = None
+    system_z: Optional[float] = None
     system_allegiance: Optional[str] = None
     system_economy: Optional[str] = None
     system_economy_secondary: Optional[str] = None

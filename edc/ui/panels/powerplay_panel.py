@@ -8,10 +8,12 @@ from PyQt6.QtWidgets import (
     QHeaderView,
     QScrollArea,
     QFrame,
+    QTabWidget,
 )
 from PyQt6.QtCore import Qt
 
 from edc.ui import formatting as fmt
+from edc.ui.panels.powerplay_finder_panel import PowerplayFinderPanel
 
 log = logging.getLogger(__name__)
 
@@ -26,7 +28,23 @@ class PowerplayPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        outer = QVBoxLayout(self)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        self._tabs = QTabWidget()
+        self._tabs.setStyleSheet(
+            "QTabWidget::pane { border:1px solid #1e3a5a; background:#080f18; }"
+            "QTabBar::tab { background:#0d1a2a; color:#888888; padding:5px 14px;"
+            " border:1px solid #1e3a5a; border-bottom:none; margin-right:2px; }"
+            "QTabBar::tab:selected { background:#080f18; color:#FFB347; border-bottom:1px solid #080f18; }"
+            "QTabBar::tab:hover { color:#c8c8c8; }"
+        )
+        root.addWidget(self._tabs)
+
+        # ── Tab 1: Status (existing content) ──────────────────────────────
+        status_widget = QWidget()
+        outer = QVBoxLayout(status_widget)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
@@ -45,6 +63,12 @@ class PowerplayPanel(QWidget):
         layout.setContentsMargins(8, 6, 8, 8)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         scroll.setWidget(content)
+
+        self._tabs.addTab(status_widget, "Status")
+
+        # ── Tab 2: Target Finder ──────────────────────────────────────────
+        self.finder_panel = PowerplayFinderPanel()
+        self._tabs.addTab(self.finder_panel, "Target Finder")
 
         # ── PP Status card ────────────────────────────────────────────────
         pp_frame = QFrame()
@@ -426,3 +450,8 @@ class PowerplayPanel(QWidget):
                 power_item.setText(f"{p} (Your PP)")
             self.pp_progress.setItem(r, 0, power_item)
             self.pp_progress.setItem(r, 1, pct_item)
+
+        try:
+            self.finder_panel.refresh(state)
+        except Exception:
+            pass

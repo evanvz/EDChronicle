@@ -283,6 +283,15 @@ class EventEngine:
             pw = event.get("Powers")
             self.state.system_powers = [p for p in pw if isinstance(p, str)] if isinstance(pw, list) else []
 
+            star_pos = event.get("StarPos")
+            if isinstance(star_pos, list) and len(star_pos) == 3:
+                try:
+                    self.state.system_x = float(star_pos[0])
+                    self.state.system_y = float(star_pos[1])
+                    self.state.system_z = float(star_pos[2])
+                except (TypeError, ValueError):
+                    pass
+
             # Force PowerPlay UI refresh after Location update
             msgs.append("refresh_powerplay")
             prog = {}
@@ -350,6 +359,15 @@ class EventEngine:
                 self.state.system_conflicts = [c for c in conflicts_raw if isinstance(c, dict)]
             else:
                 self.state.system_conflicts = _derive_conflicts_from_factions(self.state.factions)
+
+            star_pos = event.get("StarPos")
+            if isinstance(star_pos, list) and len(star_pos) == 3:
+                try:
+                    self.state.system_x = float(star_pos[0])
+                    self.state.system_y = float(star_pos[1])
+                    self.state.system_z = float(star_pos[2])
+                except (TypeError, ValueError):
+                    pass
 
             self._apply_external_intel(self.state.system, new_system_address)
             msgs.append("refresh_powerplay")
