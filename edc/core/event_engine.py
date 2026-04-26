@@ -610,6 +610,21 @@ class EventEngine:
                     f"| Session: +{self.state.pp_merits_session:,} "
                     f"| Total: {self.state.pp_merits:,}"
                 )
+                # PP enemy kills (Clean legal status) fire only PowerplayMerits,
+                # not Bounty/FactionKillBond/CommitCrime. Large merit gains = kill.
+                if gained >= 30:
+                    try:
+                        self.state.session_kills += 1
+                    except Exception:
+                        pass
+                    try:
+                        cur_key = getattr(self.state, "combat_current_key", "") or ""
+                        contacts = getattr(self.state, "combat_contacts", None) or {}
+                        if cur_key and cur_key in contacts and isinstance(contacts[cur_key], dict):
+                            contacts[cur_key]["Destroyed"] = True
+                            self.state.combat_contacts = contacts
+                    except Exception:
+                        pass
 
         elif name == "Cargo":
             self.state.cargo_count = event.get("Count")
@@ -665,6 +680,25 @@ class EventEngine:
                     self.state.combat_contacts = contacts
             except Exception:
                 pass
+
+        elif name == "CommitCrime":
+            if event.get("CrimeType") == "murder":
+                ts = event.get("timestamp") or ""
+                kill_key = f"crime_murder|{ts}|{self.state.combat_current_key}"
+                if kill_key not in self.state.counted_combat_keys:
+                    self.state.counted_combat_keys.add(kill_key)
+                    try:
+                        self.state.session_kills += 1
+                    except Exception:
+                        pass
+                try:
+                    cur_key = getattr(self.state, "combat_current_key", "") or ""
+                    contacts = getattr(self.state, "combat_contacts", None) or {}
+                    if cur_key and cur_key in contacts and isinstance(contacts[cur_key], dict):
+                        contacts[cur_key]["Destroyed"] = True
+                        self.state.combat_contacts = contacts
+                except Exception:
+                    pass
 
         elif name == "RedeemVoucher":
             if event.get("Type") == "bounty":

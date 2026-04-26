@@ -522,6 +522,7 @@ class MainWindow(QMainWindow):
         self._tts_ship_cooldown_until: float = 0.0  # monotonic timestamp
         self._comms_cooldown_until: float = 0.0
         self._commander_quip_cooldown_until: float = 0.0
+        self._replaying: bool = False  # True during journal bootstrap; suppresses all TTS
 
         # Voice command listener — only started if enabled in settings
         self._voice_cmd_models_dir = app_dir / "models"
@@ -639,6 +640,14 @@ class MainWindow(QMainWindow):
 
     def _on_event(self, evt: dict):
         name = evt.get("event", "UNKNOWN")
+
+        if name == "_BootstrapStart":
+            self._replaying = True
+            return
+        if name == "_BootstrapEnd":
+            self._replaying = False
+            return
+
         self._append(f"[EVENT] {name}")
 
         old_system_address = getattr(self.state, "system_address", None)
@@ -702,6 +711,9 @@ class MainWindow(QMainWindow):
         # Refresh intel panel when signal data or DSS scan arrives
         if name in ("SAASignalsFound", "FSSBodySignals"):
             self._refresh_intel()
+
+        if self._replaying:
+            return
 
         tts_text = self._tts_router(name, evt, self.state)
 

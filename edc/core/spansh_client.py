@@ -19,7 +19,18 @@ class SpanshSystem:
     distance:          float
     controlling_power: str
     pp_state:          str
+    powers:            List[str] = field(default_factory=list)
     station_types:     List[str] = field(default_factory=list)
+
+    def all_powers(self) -> List[str]:
+        """Deduplicated list: controlling power first, then any additional powers."""
+        seen: set = set()
+        result: List[str] = []
+        for p in ([self.controlling_power] + self.powers):
+            if p and p not in seen:
+                seen.add(p)
+                result.append(p)
+        return result
 
     def has_megaship(self) -> bool:
         return any("megaship" in t.lower() for t in self.station_types)
@@ -72,12 +83,8 @@ class SpanshClient:
         filters: dict = {}
 
         if mission == "reinforcement":
-            # Systems your pledged power controls — where you reinforce
             filters["controlling_power"] = {"value": power, "comparison": "="}
-        elif mission == "acquisition":
-            # Contested systems — where powers fight for control
-            filters["power_state"] = {"value": "Contested", "comparison": "="}
-        # "undermining" and "all" — no Spansh-side filter; post-filter below
+        # acquisition, undermining, all — no server-side power filter; post-filter below
 
         body = {
             "filters":          filters,
@@ -112,6 +119,8 @@ class SpanshClient:
             dist       = sys.get("distance") or 0.0
             ctrl_power = sys.get("controlling_power") or ""
             pp_state   = sys.get("power_state") or ""
+            raw_powers = sys.get("power") or []
+            powers     = [str(p) for p in raw_powers if p] if isinstance(raw_powers, list) else []
 
             # Distance guard
             try:
@@ -122,12 +131,16 @@ class SpanshClient:
                 continue
 
             # Mission post-filters
+            if mission == "reinforcement" and not ctrl_power:
+                continue
             if mission == "undermining":
-                # Enemy-controlled systems only — exclude your own and unoccupied
                 if not ctrl_power or ctrl_power == power:
                     continue
-            if mission in ("reinforcement", "undermining", "acquisition") and not ctrl_power:
-                continue
+            if mission == "acquisition":
+                state_lower = pp_state.lower()
+                is_acq = (not ctrl_power) or (state_lower in ["uncontrolled", "expansion", "contested"])
+                if not is_acq:
+                    continue
 
             station_types = [
                 s.get("type") or ""
@@ -141,6 +154,7 @@ class SpanshClient:
                 distance=dist,
                 controlling_power=ctrl_power,
                 pp_state=pp_state,
+                powers=powers,
                 station_types=station_types,
             )
             if facility == "megaship"   and not candidate.has_megaship():

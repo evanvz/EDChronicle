@@ -13,8 +13,24 @@ from PyQt6.QtWidgets import (
 )
 
 from edc.core.spansh_client import SpanshClient, SpanshSystem
+from edc.core.powerplay_activities import PowerPlayActivityTable
 
 log = logging.getLogger(__name__)
+
+_SHORT_POWER = {
+    "Aisling Duval":        "Aisling",
+    "Arissa Lavigny-Duval": "ALD",
+    "Archon Delaine":       "Archon",
+    "Denton Patreus":       "Patreus",
+    "Edmund Mahon":         "Mahon",
+    "Felicia Winters":      "Winters",
+    "Jerome Archer":        "Archer",
+    "Li Yong-Rui":          "LYR",
+    "Nakato Kaine":         "Kaine",
+    "Pranav Antal":         "Antal",
+    "Yuri Grom":            "Grom",
+    "Zemina Torval":        "Torval",
+}
 
 _MISSION_OPTIONS = [
     ("Reinforcement systems", "reinforcement"),
@@ -75,13 +91,22 @@ class PowerplayFinderPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self._power:     str   = ""
-        self._system:    str   = ""
-        self._ref_x:     float = 0.0
-        self._ref_y:     float = 0.0
-        self._ref_z:     float = 0.0
-        self._thread:    Optional[QThread] = None
-        self._worker:    Optional[_SearchWorker] = None
+        self._power:        str   = ""
+        self._system:       str   = ""
+        self._ref_x:        float = 0.0
+        self._ref_y:        float = 0.0
+        self._ref_z:        float = 0.0
+        self._thread:       Optional[QThread] = None
+        self._worker:       Optional[_SearchWorker] = None
+        self._pp_activities: Optional[PowerPlayActivityTable] = None
+
+        _ETHOS_COLORS = {
+            "Combat":  "#FF6B6B",
+            "Finance": "#FFD93D",
+            "Social":  "#6BCB77",
+            "Covert":  "#C77DFF",
+        }
+        self._ethos_colors = _ETHOS_COLORS
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 8)
@@ -150,6 +175,15 @@ class PowerplayFinderPanel(QWidget):
         filter_row.addWidget(self._search_btn)
         ctrl_layout.addLayout(filter_row)
 
+        # Row 3: ethos bonus hint
+        self._ethos_label = QLabel("")
+        self._ethos_label.setTextFormat(Qt.TextFormat.RichText)
+        self._ethos_label.setStyleSheet("background:transparent; border:none;")
+        self._ethos_label.setVisible(False)
+        ctrl_layout.addWidget(self._ethos_label)
+
+        self._mission_combo.currentIndexChanged.connect(self._update_ethos_label)
+
         root.addWidget(ctrl_frame)
 
         # ── Status label ─────────────────────────────────────────────────
@@ -159,8 +193,8 @@ class PowerplayFinderPanel(QWidget):
 
         # ── Results table ─────────────────────────────────────────────────
         self._table = QTableWidget()
-        self._table.setColumnCount(4)
-        self._table.setHorizontalHeaderLabels(["System", "Dist (ly)", "PP State", "Facilities"])
+        self._table.setColumnCount(5)
+        self._table.setHorizontalHeaderLabels(["System", "Dist (ly)", "PP State", "Powers Present", "Facilities"])
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
@@ -178,6 +212,7 @@ class PowerplayFinderPanel(QWidget):
         h.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        h.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         self._table.cellDoubleClicked.connect(self._copy_system_name)
         root.addWidget(self._table, 1)
 
@@ -187,16 +222,50 @@ class PowerplayFinderPanel(QWidget):
 
     # ── Public API ────────────────────────────────────────────────────────
 
-    def refresh(self, state) -> None:
+    def refresh(self, state, pp_activities: Optional[PowerPlayActivityTable] = None) -> None:
         self._power  = (getattr(state, "pp_power",  None) or "").strip()
         self._system = (getattr(state, "system",    None) or "").strip()
         self._ref_x  = float(getattr(state, "system_x", 0.0) or 0.0)
         self._ref_y  = float(getattr(state, "system_y", 0.0) or 0.0)
         self._ref_z  = float(getattr(state, "system_z", 0.0) or 0.0)
+        if pp_activities is not None:
+            self._pp_activities = pp_activities
 
         self._power_label.setText(f"Power: {self._power or '—'}")
         self._system_label.setText(f"Location: {self._system or '—'}")
-        self._search_btn.setEnabled(bool(self._power and self._system))
+        self._search_btn.setEnabled(bool(self._power))
+        self._update_ethos_label()
+
+    # ── Ethos hint ───────────────────────────────────────────────────────
+
+    def _update_ethos_label(self):
+        mission = self._mission_key()
+        if not self._power or not self._pp_activities or mission == "all":
+            self._ethos_label.setVisible(False)
+            return
+
+        ethos = self._pp_activities.get_power_ethos(self._power, mission)
+        if not ethos:
+            self._ethos_label.setVisible(False)
+            return
+
+        acts = self._pp_activities.get_actions(mission)
+        bonus_names = [
+            a.action for a in acts
+            if self._power in a.bonus_powers and a.merits == "yes" and not a.contested_only
+        ]
+
+        color = self._ethos_colors.get(ethos, "#FFB347")
+        preview = " · ".join(bonus_names[:4])
+        if len(bonus_names) > 4:
+            preview += f" +{len(bonus_names) - 4} more"
+
+        self._ethos_label.setText(
+            f'<span style="color:#888888;font-size:10px;">Your bonus: </span>'
+            f'<span style="color:{color};font-size:10px;font-weight:bold;">{ethos}</span>'
+            f'<span style="color:#666666;font-size:10px;"> — {preview}</span>'
+        )
+        self._ethos_label.setVisible(True)
 
     # ── Search ────────────────────────────────────────────────────────────
 
@@ -211,6 +280,9 @@ class PowerplayFinderPanel(QWidget):
     def _start_search(self):
         if not self._power:
             self._status_label.setText("No pledged power detected — fly somewhere first.")
+            return
+        if not self._system or (self._ref_x == 0.0 and self._ref_y == 0.0 and self._ref_z == 0.0):
+            self._status_label.setText("No system location data yet — jump to a system first.")
             return
         if self._thread and self._thread.isRunning():
             return
@@ -236,6 +308,7 @@ class PowerplayFinderPanel(QWidget):
         self._thread.start()
 
     def _on_results(self, results: List[SpanshSystem], error: str):
+        from PyQt6.QtGui import QColor
         self._search_btn.setEnabled(True)
         if error:
             self._status_label.setText(f"Error: {error}")
@@ -247,32 +320,47 @@ class PowerplayFinderPanel(QWidget):
         )
         self._table.setRowCount(len(results))
         for row, sys in enumerate(results):
-            name_item = QTableWidgetItem(sys.name)
-            dist_item = QTableWidgetItem(f"{sys.distance:.1f}")
+            name_item  = QTableWidgetItem(sys.name)
+            dist_item  = QTableWidgetItem(f"{sys.distance:.1f}")
             state_item = QTableWidgetItem(sys.pp_state or sys.controlling_power or "—")
-            fac_item  = QTableWidgetItem(sys.facility_summary())
+            fac_item   = QTableWidgetItem(sys.facility_summary())
 
             dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
             # Colour the state cell
             state_lower = (sys.pp_state or "").lower()
             if "fortified" in state_lower or "stronghold" in state_lower:
-                state_item.setForeground(
-                    __import__("PyQt6.QtGui", fromlist=["QColor"]).QColor("#4D96FF")
-                )
+                state_item.setForeground(QColor("#4D96FF"))
             elif "contested" in state_lower or "undermining" in state_lower:
-                state_item.setForeground(
-                    __import__("PyQt6.QtGui", fromlist=["QColor"]).QColor("#FF6B6B")
-                )
+                state_item.setForeground(QColor("#FF6B6B"))
             elif "exploited" in state_lower:
-                state_item.setForeground(
-                    __import__("PyQt6.QtGui", fromlist=["QColor"]).QColor("#FFD93D")
-                )
+                state_item.setForeground(QColor("#FFD93D"))
+
+            # Powers present column — each power individually coloured
+            all_p = sys.all_powers()
+            if all_p:
+                parts = []
+                for p in all_p[:3]:
+                    abbr  = _SHORT_POWER.get(p, p.split()[-1])
+                    color = "#4D96FF" if p == self._power else "#FF8C00"
+                    parts.append(f'<span style="color:{color};">{abbr}</span>')
+                if len(all_p) > 3:
+                    parts.append(f'<span style="color:#888888;">+{len(all_p) - 3}</span>')
+                html = ' <span style="color:#444444;">/</span> '.join(parts)
+            else:
+                html = '<span style="color:#555555;">—</span>'
+
+            power_label = QLabel()
+            power_label.setTextFormat(Qt.TextFormat.RichText)
+            power_label.setText(html)
+            power_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            power_label.setStyleSheet("background:transparent; padding:2px;")
 
             self._table.setItem(row, 0, name_item)
             self._table.setItem(row, 1, dist_item)
             self._table.setItem(row, 2, state_item)
-            self._table.setItem(row, 3, fac_item)
+            self._table.setCellWidget(row, 3, power_label)
+            self._table.setItem(row, 4, fac_item)
 
     def _copy_system_name(self, row: int, _col: int):
         item = self._table.item(row, 0)

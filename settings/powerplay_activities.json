@@ -2,74 +2,392 @@
   "game": "Elite Dangerous",
   "version": "Powerplay 2.0",
 
-  "ethos_categories": [
-    "Combat",
-    "Finance",
-    "Social",
-    "Logistics",
-    "Covert"
-  ],
-
-  "state_mapping": {
-    "Stronghold":       "Reinforcing",
-    "Fortified":        "Reinforcing",
-    "Exploited":        "Reinforcing",
-    "Control":          "Reinforcing",
-    "Controlled":       "Reinforcing",
-    "Been Undermined":  "Reinforcing",
-
-    "Undermining":      "Offensive",
-    "Contested":        "Offensive",
-    "Unoccupied":       "Offensive",
-    "Preparation":      "Offensive",
-    "InPrepareRadius":  "Offensive",
-    "Expansion":        "Offensive"
+  "power_ethos": {
+    "Aisling Duval":        {"reinforcement": "Finance", "acquisition": "Social",  "undermining": "Social"},
+    "Arissa Lavigny-Duval": {"reinforcement": "Combat",  "acquisition": "Social",  "undermining": "Combat"},
+    "Archon Delaine":       {"reinforcement": "Combat",  "acquisition": "Combat",  "undermining": "Combat"},
+    "Denton Patreus":       {"reinforcement": "Combat",  "acquisition": "Finance", "undermining": "Combat"},
+    "Edmund Mahon":         {"reinforcement": "Finance", "acquisition": "Finance", "undermining": "Combat"},
+    "Felicia Winters":      {"reinforcement": "Finance", "acquisition": "Social",  "undermining": "Finance"},
+    "Jerome Archer":        {"reinforcement": "Combat",  "acquisition": "Combat",  "undermining": "Covert"},
+    "Li Yong-Rui":          {"reinforcement": "Finance", "acquisition": "Social",  "undermining": "Finance"},
+    "Nakato Kaine":         {"reinforcement": "Covert",  "acquisition": "Social",  "undermining": "Social"},
+    "Pranav Antal":         {"reinforcement": "Covert",  "acquisition": "Social",  "undermining": "Social"},
+    "Yuri Grom":            {"reinforcement": "Combat",  "acquisition": "Covert",  "undermining": "Covert"},
+    "Zemina Torval":        {"reinforcement": "Covert",  "acquisition": "Finance", "undermining": "Finance"}
   },
 
-  "system_states": [
+  "system_types": [
     {
-      "state": "Reinforcing",
-      "context": "Friendly / Stronghold / Fortified / Exploited / Being Undermined",
-      "defensive_multiplier": true,
+      "type": "reinforcement",
+      "label": "Reinforcement",
+      "pp_states": ["Exploited", "Fortified", "Stronghold"],
       "activities": [
-        {"action": "Transport Powerplay Commodities",          "ethos": "Logistics", "ethos_bonus": true},
-        {"action": "Complete Aid and Humanitarian Missions",   "ethos": "Social",    "ethos_bonus": true},
-        {"action": "Hand in Cartography Data",                 "ethos": "Covert",    "ethos_bonus": true},
-        {"action": "Holoscreen Hacking",                       "ethos": "Covert",    "ethos_bonus": true},
-        {"action": "Sell for Large Profits",                   "ethos": "Finance",   "ethos_bonus": true},
-        {"action": "Reboot Mission Completion",                "ethos": "Social",    "ethos_bonus": true},
-        {"action": "Bounty Hunting",                           "ethos": "Combat",    "ethos_bonus": false},
-        {"action": "Hand in Biological Research Samples",      "ethos": "Social",    "ethos_bonus": false},
-        {"action": "Hand in Salvage",                          "ethos": "Logistics", "ethos_bonus": false},
-        {"action": "Power Kills",                              "ethos": "Combat",    "ethos_bonus": false},
-        {"action": "Scan Ships and Wakes",                     "ethos": "Covert",    "ethos_bonus": false},
-        {"action": "Sell Rare Goods",                          "ethos": "Finance",   "ethos_bonus": false},
-        {"action": "Sell Mined Resources",                     "ethos": "Finance",   "ethos_bonus": false},
-        {"action": "Transfer Power Classified Data",           "ethos": "Covert",    "ethos_bonus": false},
-        {"action": "Transfer Power Association and Political Data", "ethos": "Social", "ethos_bonus": false}
+        {
+          "action": "Bounty Hunting",
+          "ethos": "Combat",
+          "bonus_powers": ["Arissa Lavigny-Duval", "Denton Patreus", "Jerome Archer", "Yuri Grom"],
+          "merits": "yes", "platform": "ED"
+        },
+        {
+          "action": "Power Kills",
+          "ethos": "Combat",
+          "bonus_powers": ["Arissa Lavigny-Duval", "Archon Delaine", "Denton Patreus", "Jerome Archer", "Yuri Grom"],
+          "merits": "yes", "platform": "ED"
+        },
+        {
+          "action": "Sell for Large Profits",
+          "ethos": "Finance",
+          "bonus_powers": ["Aisling Duval", "Edmund Mahon", "Li Yong-Rui", "Zemina Torval"],
+          "merits": "yes", "platform": "ED",
+          "notes": "≥40% profit margin; source from any system"
+        },
+        {
+          "action": "Sell Mined Resources",
+          "ethos": "Finance",
+          "bonus_powers": ["Edmund Mahon", "Felicia Winters", "Zemina Torval"],
+          "merits": "yes", "platform": "ED",
+          "notes": "Must mine and sell in same RS"
+        },
+        {
+          "action": "Sell Rare Goods",
+          "ethos": "Finance",
+          "bonus_powers": ["Archon Delaine", "Li Yong-Rui"],
+          "merits": "yes", "platform": "ED",
+          "notes": "Not bought in RS"
+        },
+        {
+          "action": "Hand in Cartography Data",
+          "ethos": "Finance",
+          "bonus_powers": ["Aisling Duval", "Edmund Mahon", "Li Yong-Rui", "Nakato Kaine", "Pranav Antal", "Zemina Torval"],
+          "merits": "yes", "platform": "ED",
+          "notes": "Sell exploration data via Universal Cartographics"
+        },
+        {
+          "action": "Hand in Biological Research Samples",
+          "ethos": "Finance",
+          "bonus_powers": ["Li Yong-Rui", "Pranav Antal"],
+          "merits": "yes", "platform": "ED",
+          "notes": "Exobiology data handed to PC in RS"
+        },
+        {
+          "action": "Transport Powerplay Commodities",
+          "ethos": "Finance",
+          "bonus_powers": [
+            "Aisling Duval", "Arissa Lavigny-Duval", "Archon Delaine", "Denton Patreus",
+            "Edmund Mahon", "Felicia Winters", "Jerome Archer", "Li Yong-Rui",
+            "Nakato Kaine", "Pranav Antal", "Yuri Grom", "Zemina Torval"
+          ],
+          "merits": "yes", "platform": "ED",
+          "notes": "From PC in a Stronghold (not this RS) to PC in RS"
+        },
+        {
+          "action": "Complete Aid and Humanitarian Missions",
+          "ethos": "Social",
+          "bonus_powers": ["Aisling Duval", "Edmund Mahon", "Felicia Winters", "Nakato Kaine", "Pranav Antal"],
+          "merits": "yes", "platform": "ED"
+        },
+        {
+          "action": "Reboot Mission Completion",
+          "ethos": "Social",
+          "bonus_powers": ["Aisling Duval"],
+          "merits": "yes", "platform": "ED"
+        },
+        {
+          "action": "Hand in Salvage",
+          "ethos": "Social",
+          "bonus_powers": [
+            "Archon Delaine", "Denton Patreus", "Edmund Mahon", "Felicia Winters",
+            "Jerome Archer", "Nakato Kaine", "Pranav Antal", "Yuri Grom", "Zemina Torval"
+          ],
+          "merits": "yes", "platform": "ED"
+        },
+        {
+          "action": "Holoscreen Hacking",
+          "ethos": "Covert",
+          "bonus_powers": ["Aisling Duval", "Denton Patreus", "Jerome Archer"],
+          "merits": "yes", "platform": "ED"
+        },
+        {
+          "action": "Scan Datalinks",
+          "ethos": "Covert",
+          "bonus_powers": ["Arissa Lavigny-Duval", "Archon Delaine", "Zemina Torval"],
+          "merits": "yes", "platform": "ED",
+          "notes": "At megaships"
+        },
+        {
+          "action": "Scan Ships and Wakes",
+          "ethos": "Covert",
+          "bonus_powers": [
+            "Arissa Lavigny-Duval", "Archon Delaine", "Denton Patreus", "Felicia Winters",
+            "Jerome Archer", "Nakato Kaine", "Pranav Antal", "Yuri Grom"
+          ],
+          "merits": "yes", "platform": "ED"
+        },
+        {
+          "action": "Transfer Power Classified Data",
+          "ethos": "Covert",
+          "bonus_powers": ["Nakato Kaine"],
+          "merits": "no", "platform": "Odyssey",
+          "notes": "Download from settlements, return to PC in same RS"
+        },
+        {
+          "action": "Transfer Power Association and Political Data",
+          "ethos": "Covert",
+          "bonus_powers": ["Li Yong-Rui", "Yuri Grom"],
+          "merits": "no", "platform": "Odyssey",
+          "notes": "Download from settlements, return to PC in same RS"
+        },
+        {
+          "action": "Collect Escape Pods",
+          "ethos": "Social",
+          "bonus_powers": ["Aisling Duval", "Nakato Kaine"],
+          "merits": "suspended", "platform": "ED"
+        }
       ]
     },
 
     {
-      "state": "Offensive",
-      "context": "Undermining / Unoccupied / Expansion",
-      "defensive_multiplier": false,
+      "type": "acquisition",
+      "label": "Acquisition",
+      "pp_states": ["Uncontrolled", "Expansion", "Contested"],
       "activities": [
-        {"action": "Transport Powerplay Commodities",              "ethos": "Logistics", "ethos_bonus": true},
-        {"action": "Transfer Power Association and Political Data", "ethos": "Social",    "ethos_bonus": true},
-        {"action": "Reboot Mission Completion",                    "ethos": "Social",    "ethos_bonus": true},
-        {"action": "Holoscreen Hacking",                           "ethos": "Covert",    "ethos_bonus": true},
-        {"action": "Sell Rare Goods",                              "ethos": "Finance",   "ethos_bonus": true},
-        {"action": "Bounty Hunting",                               "ethos": "Combat",    "ethos_bonus": false},
-        {"action": "Power Kills",                                  "ethos": "Combat",    "ethos_bonus": false},
-        {"action": "Transfer Power Classified Data",               "ethos": "Covert",    "ethos_bonus": false},
-        {"action": "Scan Datalinks",                               "ethos": "Covert",    "ethos_bonus": false},
-        {"action": "Retrieve Specific Goods",                      "ethos": "Logistics", "ethos_bonus": false},
-        {"action": "Upload Powerplay-Specific Malware",            "ethos": "Covert",    "ethos_bonus": false},
-        {"action": "Hand in Salvage",                              "ethos": "Logistics", "ethos_bonus": false},
-        {"action": "Transfer Power Research and Industrial Data",  "ethos": "Covert",    "ethos_bonus": false},
-        {"action": "Sell for Large Profits",                       "ethos": "Finance",   "ethos_bonus": false},
-        {"action": "Sell Mined Resources",                         "ethos": "Finance",   "ethos_bonus": false}
+        {
+          "action": "Bounty Hunting",
+          "ethos": "Combat",
+          "bonus_powers": ["Arissa Lavigny-Duval", "Denton Patreus", "Jerome Archer", "Yuri Grom"],
+          "contested_only": false, "merits": "yes", "platform": "ED"
+        },
+        {
+          "action": "Power Kills",
+          "ethos": "Combat",
+          "bonus_powers": [],
+          "contested_only": false, "merits": "yes", "platform": "ED"
+        },
+        {
+          "action": "Reboot Mission Completion",
+          "ethos": "Social",
+          "bonus_powers": [],
+          "contested_only": false, "merits": "yes", "platform": "ED"
+        },
+        {
+          "action": "Sell for Large Profits",
+          "ethos": "Finance",
+          "bonus_powers": ["Arissa Lavigny-Duval", "Denton Patreus", "Edmund Mahon", "Li Yong-Rui", "Zemina Torval"],
+          "contested_only": false, "merits": "yes", "platform": "ED",
+          "notes": "Buy in Supporting System (Fortified 20ly / Stronghold 30ly), ≥40% profit"
+        },
+        {
+          "action": "Sell Mined Resources",
+          "ethos": "Finance",
+          "bonus_powers": ["Edmund Mahon", "Felicia Winters", "Nakato Kaine", "Zemina Torval"],
+          "contested_only": false, "merits": "yes", "platform": "ED",
+          "notes": "Mine in Supporting System, sell in AS"
+        },
+        {
+          "action": "Sell Rare Goods",
+          "ethos": "Finance",
+          "bonus_powers": ["Aisling Duval", "Denton Patreus", "Edmund Mahon", "Li Yong-Rui", "Pranav Antal"],
+          "contested_only": false, "merits": "yes", "platform": "ED",
+          "notes": "Not bought in AS"
+        },
+        {
+          "action": "Transport Powerplay Commodities",
+          "ethos": "Finance",
+          "bonus_powers": [
+            "Aisling Duval", "Arissa Lavigny-Duval", "Archon Delaine", "Denton Patreus",
+            "Edmund Mahon", "Felicia Winters", "Jerome Archer", "Li Yong-Rui",
+            "Nakato Kaine", "Pranav Antal", "Yuri Grom", "Zemina Torval"
+          ],
+          "contested_only": false, "merits": "yes", "platform": "ED",
+          "notes": "From PC in Supporting System to PC in AS"
+        },
+        {
+          "action": "Holoscreen Hacking",
+          "ethos": "Covert",
+          "bonus_powers": ["Aisling Duval", "Arissa Lavigny-Duval", "Felicia Winters", "Jerome Archer", "Li Yong-Rui", "Nakato Kaine"],
+          "contested_only": false, "merits": "yes", "platform": "ED"
+        },
+        {
+          "action": "Scan Datalinks",
+          "ethos": "Covert",
+          "bonus_powers": ["Jerome Archer", "Pranav Antal", "Yuri Grom"],
+          "contested_only": false, "merits": "yes", "platform": "ED",
+          "notes": "At megaships"
+        },
+        {
+          "action": "Retrieve Specific Goods",
+          "ethos": "Covert",
+          "bonus_powers": ["Archon Delaine"],
+          "contested_only": false, "merits": "yes", "platform": "Odyssey",
+          "notes": "From Power containers at settlements, return to Supporting System"
+        },
+        {
+          "action": "Upload Powerplay Malware",
+          "ethos": "Covert",
+          "bonus_powers": ["Archon Delaine"],
+          "contested_only": false, "merits": "yes", "platform": "Odyssey",
+          "notes": "Obtain from PC in Supporting System, upload to settlement data port"
+        },
+        {
+          "action": "Transfer Power Classified Data",
+          "ethos": "Covert",
+          "bonus_powers": ["Archon Delaine", "Jerome Archer", "Yuri Grom"],
+          "contested_only": false, "merits": "no", "platform": "Odyssey",
+          "notes": "Download from settlements, deliver to Supporting System"
+        },
+        {
+          "action": "Transfer Power Association and Political Data",
+          "ethos": "Covert",
+          "bonus_powers": ["Aisling Duval", "Arissa Lavigny-Duval", "Archon Delaine", "Li Yong-Rui"],
+          "contested_only": false, "merits": "no", "platform": "Odyssey",
+          "notes": "Download from settlements, deliver to Supporting System"
+        },
+        {
+          "action": "Transfer Power Research and Industrial Data",
+          "ethos": "Covert",
+          "bonus_powers": ["Denton Patreus", "Edmund Mahon", "Pranav Antal", "Yuri Grom", "Zemina Torval"],
+          "contested_only": false, "merits": "no", "platform": "Odyssey",
+          "notes": "Download from settlements, deliver to Supporting System"
+        },
+        {
+          "action": "Complete Aid and Humanitarian Missions",
+          "ethos": "Social",
+          "bonus_powers": ["Felicia Winters", "Nakato Kaine"],
+          "contested_only": true, "merits": "yes", "platform": "ED"
+        },
+        {
+          "action": "Flood Markets with Low Value Goods",
+          "ethos": "Finance",
+          "bonus_powers": [],
+          "contested_only": true, "merits": "yes", "platform": "ED",
+          "notes": "Sell commodities below 500 cr/ton"
+        },
+        {
+          "action": "Scan Ships and Wakes",
+          "ethos": "Covert",
+          "bonus_powers": [],
+          "contested_only": true, "merits": "yes", "platform": "ED"
+        },
+        {
+          "action": "Collect Escape Pods",
+          "ethos": "Social",
+          "bonus_powers": ["Aisling Duval", "Arissa Lavigny-Duval", "Felicia Winters", "Pranav Antal"],
+          "contested_only": false, "merits": "suspended", "platform": "ED",
+          "notes": "Collect in AS, deliver to PC in Supporting System"
+        }
+      ]
+    },
+
+    {
+      "type": "undermining",
+      "label": "Undermining",
+      "pp_states": ["Exploited", "Fortified", "Stronghold"],
+      "activities": [
+        {
+          "action": "Power Kills",
+          "ethos": "Combat",
+          "bonus_powers": ["Arissa Lavigny-Duval", "Archon Delaine", "Denton Patreus", "Jerome Archer", "Yuri Grom"],
+          "merits": "yes", "platform": "ED",
+          "notes": "Only ships of the controlling Power grant merits"
+        },
+        {
+          "action": "Sell Mined Resources",
+          "ethos": "Finance",
+          "bonus_powers": [],
+          "merits": "yes", "platform": "ED",
+          "notes": "Mine and sell in same US"
+        },
+        {
+          "action": "Transport Powerplay Commodities",
+          "ethos": "Finance",
+          "bonus_powers": [
+            "Aisling Duval", "Arissa Lavigny-Duval", "Archon Delaine", "Denton Patreus",
+            "Edmund Mahon", "Felicia Winters", "Jerome Archer", "Li Yong-Rui",
+            "Nakato Kaine", "Pranav Antal", "Yuri Grom", "Zemina Torval"
+          ],
+          "merits": "yes", "platform": "ED",
+          "notes": "From PC in Stronghold to PC in US"
+        },
+        {
+          "action": "Flood Markets with Low Value Goods",
+          "ethos": "Finance",
+          "bonus_powers": ["Aisling Duval", "Li Yong-Rui", "Zemina Torval"],
+          "merits": "yes", "platform": "ED",
+          "notes": "Sell commodities below 500 cr/ton"
+        },
+        {
+          "action": "Complete Aid and Humanitarian Missions",
+          "ethos": "Social",
+          "bonus_powers": ["Edmund Mahon", "Felicia Winters", "Nakato Kaine"],
+          "merits": "yes", "platform": "ED"
+        },
+        {
+          "action": "Hand in Salvage",
+          "ethos": "Social",
+          "bonus_powers": ["Aisling Duval", "Edmund Mahon", "Felicia Winters", "Nakato Kaine", "Pranav Antal"],
+          "merits": "yes", "platform": "ED",
+          "notes": "Collect in US"
+        },
+        {
+          "action": "Holoscreen Hacking",
+          "ethos": "Covert",
+          "bonus_powers": ["Aisling Duval", "Jerome Archer", "Li Yong-Rui"],
+          "merits": "yes", "platform": "ED"
+        },
+        {
+          "action": "Commit Crimes",
+          "ethos": "Covert",
+          "bonus_powers": ["Archon Delaine", "Jerome Archer", "Li Yong-Rui", "Yuri Grom"],
+          "merits": "yes", "platform": "ED"
+        },
+        {
+          "action": "Scan Datalinks",
+          "ethos": "Covert",
+          "bonus_powers": ["Denton Patreus", "Felicia Winters", "Jerome Archer", "Yuri Grom"],
+          "merits": "yes", "platform": "ED",
+          "notes": "At megaships"
+        },
+        {
+          "action": "Retrieve Specific Goods",
+          "ethos": "Covert",
+          "bonus_powers": ["Archon Delaine"],
+          "merits": "yes", "platform": "Odyssey",
+          "notes": "From US settlements, deliver to PC in any controlled system"
+        },
+        {
+          "action": "Upload Powerplay Malware",
+          "ethos": "Covert",
+          "bonus_powers": ["Archon Delaine", "Denton Patreus", "Jerome Archer", "Pranav Antal", "Yuri Grom", "Zemina Torval"],
+          "merits": "yes", "platform": "Odyssey"
+        },
+        {
+          "action": "Transfer Power Classified Data",
+          "ethos": "Covert",
+          "bonus_powers": ["Arissa Lavigny-Duval", "Denton Patreus", "Felicia Winters", "Yuri Grom"],
+          "merits": "no", "platform": "Odyssey",
+          "notes": "Download from US settlements, return to PC in any controlled system"
+        },
+        {
+          "action": "Transfer Power Association and Political Data",
+          "ethos": "Covert",
+          "bonus_powers": ["Aisling Duval", "Edmund Mahon", "Li Yong-Rui", "Nakato Kaine", "Pranav Antal", "Zemina Torval"],
+          "merits": "no", "platform": "Odyssey",
+          "notes": "Download from US settlements, return to PC in any controlled system"
+        },
+        {
+          "action": "Transfer Power Research and Industrial Data",
+          "ethos": "Covert",
+          "bonus_powers": ["Arissa Lavigny-Duval", "Li Yong-Rui", "Nakato Kaine", "Pranav Antal", "Zemina Torval"],
+          "merits": "no", "platform": "Odyssey"
+        },
+        {
+          "action": "Collect Escape Pods",
+          "ethos": "Social",
+          "bonus_powers": ["Aisling Duval", "Edmund Mahon", "Felicia Winters", "Nakato Kaine"],
+          "merits": "suspended", "platform": "ED",
+          "notes": "Awarded on scoop in US"
+        }
       ]
     }
   ]

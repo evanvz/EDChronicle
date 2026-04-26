@@ -361,17 +361,23 @@ class PowerplayPanel(QWidget):
             html_parts.append(safe)
 
         if pp_activities:
-            acts = pp_activities.get_actions(pp_state or "")
+            if ctrl and ctrl == pledged:
+                system_type = "reinforcement"
+            elif ctrl and ctrl != pledged:
+                system_type = "undermining"
+            else:
+                system_type = "acquisition"
+
+            acts = pp_activities.get_actions(system_type, pp_state or "")
             if acts:
                 ethos_colors = {
-                    "Combat":    "#FF6B6B",
-                    "Finance":   "#FFD93D",
-                    "Social":    "#6BCB77",
-                    "Logistics": "#4D96FF",
-                    "Covert":    "#C77DFF",
+                    "Combat":  "#FF6B6B",
+                    "Finance": "#FFD93D",
+                    "Social":  "#6BCB77",
+                    "Covert":  "#C77DFF",
                 }
-                ethos_order = ["Combat", "Finance", "Social", "Logistics", "Covert"]
-                is_defensive = pp_activities.is_defensive(pp_state or "")
+                ethos_order = ["Combat", "Finance", "Social", "Covert"]
+                is_defensive = pp_activities.is_defensive(system_type)
 
                 html_parts.append(
                     '<br><span style="color:#FF8C00;font-weight:700;letter-spacing:1px;">'
@@ -389,8 +395,8 @@ class PowerplayPanel(QWidget):
                     'following activities in this system:</span>'
                 )
 
-                bonus = [a for a in acts if a.ethos_bonus]
-                regular = [a for a in acts if not a.ethos_bonus]
+                bonus = [a for a in acts if pledged and pledged in a.bonus_powers]
+                regular = [a for a in acts if not (pledged and pledged in a.bonus_powers)]
 
                 if bonus:
                     html_parts.append("<br>")
@@ -452,6 +458,6 @@ class PowerplayPanel(QWidget):
             self.pp_progress.setItem(r, 1, pct_item)
 
         try:
-            self.finder_panel.refresh(state)
+            self.finder_panel.refresh(state, pp_activities)
         except Exception:
             pass

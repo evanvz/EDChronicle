@@ -78,7 +78,9 @@ class JournalWatcher(QObject):
         self._cleanup()
         self._current_file = path
         self._fp = path.open("r", encoding="utf-8", errors="replace")
-        self._fp.seek(0, 2)
+        self.event_received.emit({"event": "_BootstrapStart"})
+        self._bootstrap_newest_system()
+        self.event_received.emit({"event": "_BootstrapEnd"})
         self.status.emit(f"Tailing: {path.name}")
 
     def _is_distance_valid(self, lat: float, lon: float, radius: float) -> bool:
