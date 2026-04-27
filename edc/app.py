@@ -241,6 +241,7 @@ def run():
 
     def _launch():
         win.show()
+        QTimer.singleShot(0, win.load_last_system_data)
         QTimer.singleShot(0, win.refresh_from_state)
         QTimer.singleShot(0, win.start_auto_watch)
 

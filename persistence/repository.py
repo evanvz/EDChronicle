@@ -394,6 +394,62 @@ class Repository:
             (system_address,),
         ).fetchall()
 
+    def save_spansh_body(
+        self,
+        system_address: int,
+        body_name: str,
+        planet_class: str | None,
+        distance_ls: float | None,
+        estimated_value: int | None,
+        landable: int | None,
+    ):
+        self.db.execute(
+            """
+            INSERT INTO spansh_bodies (
+                system_address, body_name, planet_class, distance_ls, estimated_value, landable
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(system_address, body_name) DO UPDATE SET
+                planet_class    = excluded.planet_class,
+                distance_ls     = excluded.distance_ls,
+                estimated_value = excluded.estimated_value,
+                landable        = excluded.landable
+            """,
+            (system_address, body_name, planet_class, distance_ls, estimated_value, landable),
+        )
+
+    def get_spansh_bodies(self, system_address: int):
+        return self.db.execute(
+            """
+            SELECT body_name, planet_class, distance_ls, estimated_value, landable
+            FROM spansh_bodies
+            WHERE system_address = ?
+            ORDER BY distance_ls IS NULL, distance_ls, body_name
+            """,
+            (system_address,),
+        ).fetchall()
+
+    def count_spansh_bodies(self, system_address: int) -> int:
+        row = self.db.execute(
+            "SELECT COUNT(*) AS cnt FROM spansh_bodies WHERE system_address = ?",
+            (system_address,),
+        ).fetchone()
+        return int(row["cnt"] or 0) if row else 0
+
+    def count_real_bodies(self, system_address: int) -> int:
+        row = self.db.execute(
+            "SELECT COUNT(*) AS cnt FROM bodies WHERE system_address = ?",
+            (system_address,),
+        ).fetchone()
+        return int(row["cnt"] or 0) if row else 0
+
+    def get_real_body_names(self, system_address: int) -> set:
+        rows = self.db.execute(
+            "SELECT body_name FROM bodies WHERE system_address = ?",
+            (system_address,),
+        ).fetchall()
+        return {r["body_name"] for r in rows if r["body_name"]}
+
     def get_exobiology(self, system_address: int):
         return self.db.execute(
             """

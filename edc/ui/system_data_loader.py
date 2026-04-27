@@ -15,7 +15,8 @@ class SystemDataLoader:
                  on_refresh_exploration,
                  on_refresh_materials_shortlist,
                  on_refresh_exobiology,
-                 planet_value_class_name_fn):
+                 planet_value_class_name_fn,
+                 on_enrichment_needed=None):
         self.state = state
         self.repo = repo
         self.planet_values = planet_values
@@ -23,6 +24,7 @@ class SystemDataLoader:
         self._refresh_materials_shortlist = on_refresh_materials_shortlist
         self._refresh_exobiology = on_refresh_exobiology
         self._planet_value_class_name = planet_value_class_name_fn
+        self._on_enrichment_needed = on_enrichment_needed
 
     def load_last_system_data(self):
         logger.info("SystemDataLoader: loading last system from DB")
@@ -118,6 +120,46 @@ class SystemDataLoader:
 
         if loaded_body_count == 0 and existing_resolved_ids:
             self.state.resolved_body_ids.update(existing_resolved_ids)
+
+        # Merge Spansh-sourced bodies for any body not already known from real scans
+        try:
+            for row in self.repo.get_spansh_bodies(system_address):
+                body_name = row["body_name"]
+                if not body_name or body_name in self.state.bodies:
+                    continue
+                estimated_value = row["estimated_value"]
+                if not isinstance(estimated_value, int) and self.planet_values:
+                    try:
+                        estimated_value = self.planet_values.estimate(
+                            planet_class=self._planet_value_class_name(row["planet_class"] or ""),
+                            terraformable=False,
+                            mapped=False,
+                            first_discovered=False,
+                        )
+                    except Exception:
+                        estimated_value = None
+                self.state.bodies[body_name] = {
+                    "BodyID":        None,
+                    "BodyName":      body_name,
+                    "PlanetClass":   row["planet_class"] or "",
+                    "Terraformable": False,
+                    "DistanceLS":    row["distance_ls"],
+                    "Landable":      None if row["landable"] is None else bool(row["landable"]),
+                    "WasMapped":     False,
+                    "DSSMapped":     False,
+                    "EstimatedValue": estimated_value,
+                    "Volcanism":     "",
+                    "Materials":     {},
+                    "FirstFootfall": False,
+                    "HasFootfall":   False,
+                }
+        except Exception:
+            logger.exception("Failed loading Spansh fallback bodies for %d", system_address)
+
+        expected = getattr(self.state, "system_body_count", None)
+        fully_scanned = isinstance(expected, int) and expected > 0 and loaded_body_count >= expected
+        if not fully_scanned and self._on_enrichment_needed:
+            self._on_enrichment_needed()
 
         for row in self.repo.get_body_signals(system_address):
             body_name = row["body_name"]

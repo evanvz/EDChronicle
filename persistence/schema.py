@@ -71,4 +71,14 @@ CREATE TABLE IF NOT EXISTS processed_journals (
     processed_at TEXT NOT NULL,
     PRIMARY KEY (file_name, file_size)
 );
+
+CREATE TABLE IF NOT EXISTS spansh_bodies (
+    system_address  INTEGER NOT NULL,
+    body_name       TEXT    NOT NULL,
+    planet_class    TEXT,
+    distance_ls     REAL,
+    estimated_value INTEGER,
+    landable        INTEGER,
+    PRIMARY KEY (system_address, body_name)
+);
 """

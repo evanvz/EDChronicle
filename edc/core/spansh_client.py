@@ -165,3 +165,66 @@ class SpanshClient:
             out.append(candidate)
 
         return out, ""
+
+    def fetch_system_bodies(self, system_name: str, system_address: int | None = None) -> Tuple[List[dict], str]:
+        """
+        Returns (body_list, error).  Each body dict has:
+          name, planet_class, distance_ls, estimated_value, landable (int|None).
+        Uses id64 filter when system_address is provided (exact match); falls back to name search.
+        """
+        if isinstance(system_address, int):
+            filters = {"id64": {"value": system_address, "comparison": "="}}
+        else:
+            filters = {"name": {"value": system_name, "comparison": "="}}
+
+        body = {
+            "filters": filters,
+            "sort":    [{"distance": {"direction": "asc"}}],
+            "size":    1,
+            "page":    0,
+        }
+        try:
+            resp = requests.post(_SEARCH_URL, json=body, timeout=_TIMEOUT)
+            resp.raise_for_status()
+            data = resp.json()
+        except requests.RequestException as exc:
+            log.error("Spansh body fetch failed: %s", exc)
+            return [], str(exc)
+        except ValueError:
+            return [], "Invalid response from Spansh"
+
+        results = data.get("results") or []
+        if not results:
+            return [], f"System not found on Spansh: {system_name!r}"
+
+        sys_data = results[0]
+
+        raw_bodies = sys_data.get("bodies") or []
+
+        out: List[dict] = []
+        for b in raw_bodies:
+            if not isinstance(b, dict):
+                continue
+            name = b.get("name") or ""
+            if not name:
+                continue
+            planet_class = b.get("subtype") or ""
+            distance_ls  = b.get("distance_to_arrival") or 0.0
+            est_value    = b.get("estimated_mapping_value") or b.get("estimated_scan_value") or 0
+            landmarks    = b.get("landmarks") or []
+            landable: int | None = None
+            if b.get("type") == "Planet":
+                landable = 1 if landmarks else 0
+            try:
+                distance_ls = float(distance_ls)
+            except (TypeError, ValueError):
+                distance_ls = 0.0
+            out.append({
+                "name":            name,
+                "planet_class":    planet_class,
+                "distance_ls":     distance_ls,
+                "estimated_value": int(est_value),
+                "landable":        landable,
+            })
+
+        return out, ""

@@ -27,7 +27,7 @@ from PyQt6.QtWidgets import (
     QAbstractScrollArea,
     QSizePolicy,
 )
-from PyQt6.QtCore import QThread, Qt, QTimer, QSettings, QPropertyAnimation, QEasingCurve, QSize
+from PyQt6.QtCore import QThread, QObject, pyqtSignal, Qt, QTimer, QSettings, QPropertyAnimation, QEasingCurve, QSize
 from PyQt6.QtGui import QTextCursor, QColor, QIcon
 from pathlib import Path
 
@@ -50,6 +50,7 @@ from edc.core.external_intel import ExternalIntel
 from edc.core.item_catalog import ItemCatalog
 from edc.core.farming_locations import FarmingLocations
 from edc.core.powerplay_activities import PowerPlayActivityTable
+from edc.core.spansh_client import SpanshClient as _SpanshClient
 from edc.ui import formatting as fmt
 from edc.audio.tts_engine import TTSEngine
 from edc.audio.voice_commands import VoiceCommandListener
@@ -67,6 +68,20 @@ from persistence.repository import Repository
 from edc.core.session_ledger import SessionLedger
 
 log = logging.getLogger("edc.ui.main")
+
+
+class _SpanshEnrichWorker(QObject):
+    finished = pyqtSignal(list, str, object)  # object for system_address — avoids 32-bit C++ int truncation
+
+    def __init__(self, system_name: str, system_address: int):
+        super().__init__()
+        self._system_name    = system_name
+        self._system_address = system_address
+
+    def run(self):
+        bodies, error = _SpanshClient().fetch_system_bodies(self._system_name, self._system_address)
+        self.finished.emit(bodies, error, self._system_address)
+
 
 class MainWindow(QMainWindow):
 
@@ -241,6 +256,7 @@ class MainWindow(QMainWindow):
             on_refresh_materials_shortlist=self._refresh_materials_shortlist,
             on_refresh_exobiology=self._refresh_exobiology,
             planet_value_class_name_fn=self._planet_value_class_name,
+            on_enrichment_needed=self._maybe_start_spansh_enrichment,
         )
 
         self.watcher_controller = WatcherController(
@@ -523,6 +539,8 @@ class MainWindow(QMainWindow):
         self._comms_cooldown_until: float = 0.0
         self._commander_quip_cooldown_until: float = 0.0
         self._replaying: bool = False  # True during journal bootstrap; suppresses all TTS
+        self._enrich_thread: QThread | None = None
+        self._enrich_worker: _SpanshEnrichWorker | None = None
 
         # Voice command listener — only started if enabled in settings
         self._voice_cmd_models_dir = app_dir / "models"
@@ -535,6 +553,60 @@ class MainWindow(QMainWindow):
         self._populate_voice_combo()
 
     def load_current_system_data(self):
+        self.system_data_loader.load_current_system_data()
+
+    def _maybe_start_spansh_enrichment(self):
+        system_name    = getattr(self.state, "system",         None) or ""
+        system_address = getattr(self.state, "system_address", None)
+        log.info("Spansh enrich check: system=%r addr=%s", system_name, system_address)
+        if not system_name or not isinstance(system_address, int):
+            return
+
+        real_count     = self.repo.count_real_bodies(system_address)
+        expected_count = getattr(self.state, "system_body_count", None)
+        if isinstance(expected_count, int) and expected_count > 0 and real_count >= expected_count:
+            return
+
+        spansh_cached = self.repo.count_spansh_bodies(system_address)
+        if spansh_cached > 0:
+            return
+
+        if self._enrich_thread and self._enrich_thread.isRunning():
+            return
+
+        log.info("Spansh enrich starting for %r (%d)", system_name, system_address)
+        self._enrich_worker = _SpanshEnrichWorker(system_name, system_address)
+        self._enrich_thread = QThread()
+        self._enrich_worker.moveToThread(self._enrich_thread)
+        self._enrich_thread.started.connect(self._enrich_worker.run)
+        self._enrich_worker.finished.connect(self._on_spansh_enrichment)
+        self._enrich_worker.finished.connect(self._enrich_thread.quit)
+        self._enrich_thread.start()
+
+    def _on_spansh_enrichment(self, bodies: list, error: str, system_address: int):
+        if error:
+            log.warning("Spansh enrichment failed: %s", error)
+        current_address = getattr(self.state, "system_address", None)
+        log.info("Spansh enrichment result: bodies=%d error=%r current_addr=%s worker_addr=%s",
+                 len(bodies), error, current_address, system_address)
+        if current_address != system_address or not bodies:
+            log.info("Spansh enrichment discarded: addr mismatch or empty")
+            return
+        already_scanned = self.repo.get_real_body_names(system_address)
+        saved = 0
+        for b in bodies:
+            if b["name"] in already_scanned:
+                continue
+            self.repo.save_spansh_body(
+                system_address=system_address,
+                body_name=b["name"],
+                planet_class=b.get("planet_class"),
+                distance_ls=b.get("distance_ls"),
+                estimated_value=b.get("estimated_value"),
+                landable=b.get("landable"),
+            )
+            saved += 1
+        log.info("Spansh enrichment saved %d/%d bodies for address %d", saved, len(bodies), system_address)
         self.system_data_loader.load_current_system_data()
 
     def _auto_start_if_configured(self):
@@ -672,6 +744,7 @@ class MainWindow(QMainWindow):
                 self.state.system_address = incoming_system_address
                 self._tts_spoken_ships.clear()
                 self.load_current_system_data()
+                self._maybe_start_spansh_enrichment()
                 self._refresh_hud()
                 self._refresh_exploration()
 
