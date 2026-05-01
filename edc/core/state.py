@@ -35,6 +35,7 @@ class GameState:
     current_contact_alert: str = ""
     combat_contacts: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     combat_current_key: str = ""
+    combat_last_key: str = ""
     cargo_count: Optional[int] = None
     limpets: Optional[int] = None
     system_government: Optional[str] = None

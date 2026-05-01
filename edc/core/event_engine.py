@@ -464,6 +464,7 @@ class EventEngine:
                     self.state.pp_enemy_alerts.clear()
                 except Exception:
                     self.state.pp_enemy_alerts = []
+                self.state.combat_last_key = self.state.combat_current_key
                 self.state.combat_current_key = ""
                 self.state.combat_last_alerted_key = None
                 return self.state, msgs
@@ -618,7 +619,8 @@ class EventEngine:
                     except Exception:
                         pass
                     try:
-                        cur_key = getattr(self.state, "combat_current_key", "") or ""
+                        cur_key = (getattr(self.state, "combat_current_key", "") or
+                                   getattr(self.state, "combat_last_key", "")) or ""
                         contacts = getattr(self.state, "combat_contacts", None) or {}
                         if cur_key and cur_key in contacts and isinstance(contacts[cur_key], dict):
                             contacts[cur_key]["Destroyed"] = True
@@ -652,7 +654,8 @@ class EventEngine:
                     pass
 
             try:
-                cur_key = getattr(self.state, "combat_current_key", "") or ""
+                cur_key = (getattr(self.state, "combat_current_key", "") or
+                           getattr(self.state, "combat_last_key", "")) or ""
                 contacts = getattr(self.state, "combat_contacts", None) or {}
                 if cur_key and cur_key in contacts and isinstance(contacts[cur_key], dict):
                     contacts[cur_key]["Destroyed"] = True
@@ -673,7 +676,8 @@ class EventEngine:
                 pass
 
             try:
-                cur_key = getattr(self.state, "combat_current_key", "") or ""
+                cur_key = (getattr(self.state, "combat_current_key", "") or
+                           getattr(self.state, "combat_last_key", "")) or ""
                 contacts = getattr(self.state, "combat_contacts", None) or {}
                 if cur_key and cur_key in contacts and isinstance(contacts[cur_key], dict):
                     contacts[cur_key]["Destroyed"] = True
@@ -692,7 +696,8 @@ class EventEngine:
                     except Exception:
                         pass
                 try:
-                    cur_key = getattr(self.state, "combat_current_key", "") or ""
+                    cur_key = (getattr(self.state, "combat_current_key", "") or
+                               getattr(self.state, "combat_last_key", "")) or ""
                     contacts = getattr(self.state, "combat_contacts", None) or {}
                     if cur_key and cur_key in contacts and isinstance(contacts[cur_key], dict):
                         contacts[cur_key]["Destroyed"] = True

@@ -778,7 +778,8 @@ class MainWindow(QMainWindow):
             self._refresh_powerplay()
 
         # Refresh exploration panel when signal or scan data arrives
-        if name in ("FSSSignalDiscovered", "FSSDiscoveryScan", "SAASignalsFound"):
+        if name in ("FSSSignalDiscovered", "FSSDiscoveryScan", "SAASignalsFound",
+                    "Scan", "FSSBodySignals"):
             self._refresh_exploration()
 
         # Refresh intel panel when signal data or DSS scan arrives
@@ -829,6 +830,9 @@ class MainWindow(QMainWindow):
 
         if name in ("ReceiveText", "ShipTargeted"):
             self._handle_combat_quip(name, evt)
+
+        if name == "ShipTargeted" and int(evt.get("ScanStage", 0) or 0) >= 3:
+            self._refresh_combat()
 
     def _farming_arrival_brief(self, state) -> str:
         """Short TTS summary of farming opportunities on FSDJump. Returns '' if nothing relevant."""
@@ -909,8 +913,10 @@ class MainWindow(QMainWindow):
                     jumps = getattr(state, "route_remaining_jumps", None)
                     if isinstance(jumps, int) and jumps == 1:
                         parts.append("Last jump.")
-                    elif isinstance(jumps, int) and jumps > 1:
-                        parts.append(f"{jumps} jumps remaining.")
+                    elif isinstance(jumps, int) and jumps == 2:
+                        parts.append("1 jump remaining.")
+                    elif isinstance(jumps, int) and jumps > 2:
+                        parts.append(f"{jumps - 1} jumps remaining.")
                     star_class = str(evt.get("StarClass") or "").strip().upper()
                     if star_class:
                         if star_class[0] in ("K", "G", "B", "F", "O", "A", "M"):
