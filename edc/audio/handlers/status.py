@@ -20,15 +20,15 @@ class StatusPhrases:
     ]
 
     BEING_SCANNED = [
-        "We are being scanned.",
-        "Scan detected. Someone is running a check on us.",
+        "We are being scanned by the enemy.",
+        "Enemy can detected. They are running a check on us.",
         "External scan in progress.",
-        "Ship scan detected, Commander.",
+        "Enemy ship scan detected, Commander.",
     ]
 
     SCAN_COMPLETE = [
-        "{scan_type} scan complete.",
-        "Scan finished. {scan_type}.",
+        "External {scan_type} scan complete.",
+        "External scan finished. {scan_type}.",
         "External {scan_type} scan done.",
     ]
 

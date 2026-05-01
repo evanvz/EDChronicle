@@ -5,7 +5,7 @@ from edc.audio.tts_phrases import pick
 class ExplorationPhrases:
 
     FSD_JUMP = [
-        "Entering next system",
+        "Entering system",
     ]
 
     IN_SYSTEM = [
