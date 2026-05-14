@@ -809,6 +809,9 @@ class MainWindow(QMainWindow):
                 except Exception:
                     pass
 
+        if name == "StartJump":
+            self.tts.drain()
+
         if tts_text:
             if name == "StartJump":
                 _p = self._tts_priority(name)
@@ -946,7 +949,6 @@ class MainWindow(QMainWindow):
                     return ""
                 ctrl     = (getattr(state, "system_controlling_power", None) or "").strip()
                 pp_state = getattr(state, "system_powerplay_state", None) or ""
-                bodies   = getattr(state, "system_body_count", None) or 0
                 security = (getattr(state, "system_security", None) or "").strip()
                 system_powers = [p.strip() for p in (getattr(state, "system_powers", []) or [])]
                 if pledged:
@@ -963,9 +965,9 @@ class MainWindow(QMainWindow):
                         if any(p.lower() == pledged.lower() for p in system_powers):
                             base = PowerPlayPhrases.pp_present(pledged)
                         else:
-                            base = ExplorationPhrases.arrived(bodies)
+                            base = ExplorationPhrases.arrived()
                 else:
-                    base = ExplorationPhrases.arrived(bodies)
+                    base = ExplorationPhrases.arrived()
                 if security:
                     return f"{base} {ExplorationPhrases.security_state(security)}"
                 return base
@@ -1010,29 +1012,18 @@ class MainWindow(QMainWindow):
                 if not rec:
                     return ""  # star or untracked body
                 first_discovered = bool(rec.get("FirstDiscovered"))
-                estimated_value  = rec.get("EstimatedValue")
                 if first_discovered:
                     return ExplorationPhrases.first_discovery(body_name)
-                threshold = getattr(self.cfg, "min_planet_value_100k", 5) * 100_000
-                if isinstance(estimated_value, int) and estimated_value >= threshold:
-                    return ExplorationPhrases.valuable_body()
                 return ""
 
-            if event_type == "SAASignalsFound":
-                body = evt.get("BodyName") or ""
-                bio = geo = 0
-                for sig in (evt.get("Signals") or []):
-                    t  = str(sig.get("Type") or "").lower()
-                    tl = str(sig.get("Type_Localised") or "").lower()
-                    c  = int(sig.get("Count", 0) or 0)
-                    if "biological" in t or tl == "biological":
-                        bio = c
-                    elif "geological" in t or tl == "geological":
-                        geo = c
-                if bio > 0:
-                    return ExplorationPhrases.bio_signals(body, bio)
-                if geo > 0:
-                    return ExplorationPhrases.geo_signals(body, geo)
+            if event_type == "FSSSignalDiscovered":
+                sig_type = (evt.get("SignalType") or "").strip().lower()
+                if sig_type == "megaship":
+                    pledged = (getattr(state, "pp_power", None) or "").strip().lower()
+                    ctrl = (getattr(state, "system_controlling_power", None) or "").strip().lower()
+                    if pledged and ctrl and ctrl != pledged:
+                        return ExplorationPhrases.megaship_pp_merits()
+                return ""
 
             if event_type == "SAAScanComplete":
                 body = evt.get("BodyName") or ""
@@ -1063,26 +1054,33 @@ class MainWindow(QMainWindow):
                 wanted       = legal_status.lower() == "wanted"
                 bounty       = int(evt.get("Bounty") or 0)
                 power        = (evt.get("Power") or "").strip()
+                faction      = (evt.get("Faction") or "").strip().lower()
                 is_friendly  = bool(pledged and power and power.lower() == pledged.lower())
                 top_rank     = rank.lower() in ("dangerous", "deadly", "elite")
 
+                # Never call out law enforcement or our own power's ships
+                if "internal security" in faction or "security service" in faction:
+                    return ""
+                if is_friendly:
+                    return ""
+
                 ctrl          = (getattr(state, "system_controlling_power", None) or "").strip()
                 system_powers = [p.strip() for p in (getattr(state, "system_powers", []) or [])]
-                security      = (getattr(state, "system_security", None) or "").strip().lower()
-                is_anarchy    = "anarchy" in security or "lawless" in security
                 we_control    = bool(pledged and ctrl and ctrl.lower() == pledged.lower())
                 we_present    = bool(pledged and any(p.lower() == pledged.lower() for p in system_powers))
-                ship_from_ctrl = bool(ctrl and power and power.lower() == ctrl.lower())
+                we_active     = we_control or we_present
 
-                # Rule 1: our controlled system — any affiliated non-friendly ship (any rank)
-                if we_control and power and not is_friendly:
+                power_lower = power.lower() if power else ""
+                ship_in_ctrl   = bool(ctrl and power_lower and power_lower == ctrl.lower())
+                ship_in_powers = bool(power and any(p.lower() == power_lower for p in system_powers))
+                ship_active    = ship_in_ctrl or ship_in_powers
+
+                if we_active and power and ship_active:
                     is_enemy = True
-                # Rule 2: we're present but not controlling — only ships of the controlling power (any rank)
-                elif we_present and not we_control and ship_from_ctrl:
-                    is_enemy = True
-                # Rule 3: anarchy/lawless — wanted + bounty > 500k, top rank only
-                elif is_anarchy and top_rank and wanted and bounty > 500_000 and not is_friendly:
+                    is_high_value = False
+                elif wanted and bounty > 500_000 and top_rank:
                     is_enemy = False
+                    is_high_value = True
                 else:
                     return ""
 
@@ -1098,7 +1096,7 @@ class MainWindow(QMainWindow):
                     return ""
                 self._tts_ship_cooldown_until = now + 6.0
                 return CombatPhrases.ship_targeted(
-                    ship, rank, power, is_enemy, wanted, bounty
+                    ship, rank, power, is_enemy, wanted, bounty, is_high_value
                 )
 
             if event_type == "FSSBodySignals":
@@ -1384,6 +1382,7 @@ class MainWindow(QMainWindow):
             "LoadGame":           5,
             "SAASignalsFound":    5,
             "FSSBodySignals":     5,
+            "FSSSignalDiscovered": 5,
             "SAAScanComplete":    6,
             "Disembark":          3,
             "FSSAllBodiesFound":  6,

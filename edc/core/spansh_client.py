@@ -68,12 +68,13 @@ class SpanshClient:
     def search_pp_systems(
         self,
         power:    str,
-        mission:  str,   # "reinforcement" | "undermining" | "acquisition" | "all"
+        mission:  str,    # "reinforcement" | "undermining" | "acquisition" | "all"
         ref_x:    float,
         ref_y:    float,
         ref_z:    float,
         range_ly: int = 100,
-        facility: str = "any",   # "any" | "megaship" | "settlement"
+        facility: str = "any",    # "any" | "megaship" | "settlement"
+        pp_state: str = "any",    # "any" | "stronghold" | "fortified" | "exploited" | "expansion" | "contested" | "uncontrolled"
         size:     int = 50,
     ) -> Tuple[List[SpanshSystem], str]:
         """
@@ -118,7 +119,7 @@ class SpanshClient:
             name       = sys.get("name") or ""
             dist       = sys.get("distance") or 0.0
             ctrl_power = sys.get("controlling_power") or ""
-            pp_state   = sys.get("power_state") or ""
+            sys_state  = sys.get("power_state") or ""
             raw_powers = sys.get("power") or []
             powers     = [str(p) for p in raw_powers if p] if isinstance(raw_powers, list) else []
 
@@ -137,7 +138,10 @@ class SpanshClient:
                 if not ctrl_power or ctrl_power == power:
                     continue
             if mission == "acquisition":
-                state_lower = pp_state.lower()
+                state_lower = sys_state.lower()
+                # Expansion state where another power is controlling = their expansion, not ours
+                if state_lower == "expansion" and ctrl_power and ctrl_power != power:
+                    continue
                 is_acq = (not ctrl_power) or (state_lower in ["uncontrolled", "expansion", "contested"])
                 if not is_acq:
                     continue
@@ -148,12 +152,16 @@ class SpanshClient:
                 if isinstance(s, dict) and s.get("type")
             ]
 
+            # PP state filter
+            if pp_state != "any" and sys_state.lower() != pp_state.lower():
+                continue
+
             # Facility filter
             candidate = SpanshSystem(
                 name=name,
                 distance=dist,
                 controlling_power=ctrl_power,
-                pp_state=pp_state,
+                pp_state=sys_state,
                 powers=powers,
                 station_types=station_types,
             )

@@ -101,6 +101,3 @@ class PowerPlayPhrases:
     def pp_not_present(power: str) -> str:
         return pick(PowerPlayPhrases.PP_NOT_PRESENT, power=power)
 
-    @staticmethod
-    def pp_neutral() -> str:
-        return pick(PowerPlayPhrases.PP_NEUTRAL)

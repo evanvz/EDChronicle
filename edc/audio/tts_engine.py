@@ -1,6 +1,7 @@
 """
 TTS Engine for EDHelper.
-Main alerts use edge-tts (Microsoft Edge neural voices) via subprocess per utterance.
+Main alerts use edge-tts (Microsoft Edge neural voices) synthesised directly
+in-thread and played via sounddevice — no subprocess per utterance.
 Comms channel uses edge-tts with radio DSP effect.
 
 IMPORTANT: pyttsx3 / SAPI5 is intentionally NOT used for audio playback anywhere in
@@ -13,13 +14,15 @@ Python process as a Communications app for the entire session.
 import logging
 import queue
 import random
-import subprocess
-import sys
-from pathlib import Path
+import threading
 
 from PyQt6.QtCore import QThread, QObject, pyqtSlot
 
 log = logging.getLogger(__name__)
+
+# Both TTSWorker and CommsWorker use sounddevice's global stream.
+# PortAudio's global stream is not thread-safe — serialize all sd.play/wait calls.
+_SD_LOCK = threading.Lock()
 
 
 _ALERT_VOICE_POOL = [
@@ -48,34 +51,81 @@ _ALERT_VOICE_DISPLAY = [
     "Emily — IE Female",
 ]
 
-_ALERT_PROC = Path(__file__).parent / "_alert_edge_proc.py"
-
 
 class TTSWorker(QObject):
     """
     Runs inside a QThread.
-    Speaks each queued phrase via edge-tts in an isolated subprocess.
-    SAPI5 voice ID is passed as fallback for offline use.
+    Synthesises speech via edge-tts directly in-thread (no subprocess) and
+    plays through sounddevice.  Eliminates per-utterance Python startup cost.
     """
 
     def __init__(self, q: queue.PriorityQueue, rate: int, volume: float,
                  voice_index: int, voice_name: str):
         super().__init__()
-        self._queue       = q
-        self._rate        = rate
-        self._volume      = volume
-        self._voice_index = voice_index
-        self._voice_name  = voice_name
-        self._running     = True
+        self._queue        = q
+        self._rate         = rate
+        self._volume       = volume
+        self._voice_index  = voice_index
+        self._voice_name   = voice_name
+        self._running      = True
+        self._interrupt    = threading.Event()
+
+    def interrupt(self):
+        """Stop the currently playing phrase so a higher-priority one can play."""
+        self._interrupt.set()
+        try:
+            import sounddevice as sd
+            sd.stop()
+        except Exception:
+            pass
 
     def _speak_edge(self, text: str, voice: str | None = None):
+        import asyncio
+        import io
+        import numpy as np
+        import sounddevice as sd
+        from scipy.io import wavfile
+        from edc.audio._alert_edge_proc import _mp3_to_wav_bytes, _configure_audio_session
+
         rate_pct = f"+{max(0, self._rate - 175)}%" if self._rate >= 175 else f"-{175 - self._rate}%"
         voice = voice or self._voice_name
-        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-        subprocess.run(
-            [sys.executable, str(_ALERT_PROC), rate_pct, str(self._volume), voice, "__none__", text],
-            timeout=30, creationflags=flags,
-        )
+
+        if self._interrupt.is_set():
+            return
+
+        async def _synth():
+            import edge_tts
+            communicate = edge_tts.Communicate(text, voice, rate=rate_pct)
+            chunks = []
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    chunks.append(chunk["data"])
+            return b"".join(chunks)
+
+        try:
+            mp3_bytes = asyncio.run(_synth())
+            if not mp3_bytes or self._interrupt.is_set():
+                return
+            wav_bytes, sr = _mp3_to_wav_bytes(mp3_bytes)
+            buf = io.BytesIO(wav_bytes)
+            _, data = wavfile.read(buf)
+            if data.dtype == "int16":
+                data = data.astype("float32") / 32768.0
+            elif data.dtype == "int32":
+                data = data.astype("float32") / 2147483648.0
+            else:
+                data = data.astype("float32")
+            if data.ndim > 1:
+                data = data[:, 0]
+            data = data * float(self._volume)
+            if self._interrupt.is_set():
+                return
+            with _SD_LOCK:
+                sd.play(data, sr)
+                _configure_audio_session()
+                sd.wait()
+        except Exception as e:
+            log.error("TTS alert speak error: %s", e)
 
     def _speak_one(self, text: str, voice: str | None = None):
         self._speak_edge(text, voice)
@@ -91,6 +141,7 @@ class TTSWorker(QObject):
                 _, _counter, text = self._queue.get(timeout=0.5)
                 if text is None:
                     break
+                self._interrupt.clear()
                 try:
                     self._speak_one(text)
                     log.debug(f"TTS spoke: {text[:60]}")
@@ -141,7 +192,8 @@ class CommsWorker(QObject):
         mp3_bytes = asyncio.run(_synth())
         if mp3_bytes:
             wav_bytes = _mp3_to_wav_bytes(mp3_bytes)
-            _dsp_and_play(wav_bytes, 22050, self._volume, pan)
+            with _SD_LOCK:
+                _dsp_and_play(wav_bytes, 22050, self._volume, pan)
 
     @pyqtSlot()
     def run(self):
@@ -160,6 +212,19 @@ class CommsWorker(QObject):
             except Exception as e:
                 log.debug(f"TTS comms worker loop error: {e}")
         log.debug("TTS comms worker stopped")
+
+    def interrupt(self):
+        """Stop currently playing comms audio and drain the comms queue."""
+        try:
+            import sounddevice as sd
+            sd.stop()
+        except Exception:
+            pass
+        while True:
+            try:
+                self._queue.get_nowait()
+            except queue.Empty:
+                break
 
     def stop(self):
         self._running = False
@@ -255,12 +320,49 @@ class TTSEngine:
     def set_enabled(self, enabled: bool):
         self._enabled = bool(enabled)
 
+    _COMBAT_PRIORITY = 2
+
+    def _drain_non_combat(self):
+        """Remove queued phrases below combat priority so combat speaks next."""
+        survivors = []
+        while True:
+            try:
+                item = self._queue.get_nowait()
+                if item[0] <= self._COMBAT_PRIORITY or item[2] is None:
+                    survivors.append(item)
+            except queue.Empty:
+                break
+        for item in survivors:
+            self._queue.put_nowait(item)
+
+    def drain(self):
+        """Drain all queued main-channel phrases without interrupting current speech."""
+        while True:
+            try:
+                self._queue.get_nowait()
+            except queue.Empty:
+                break
+
+    def clear(self):
+        """Drain all queued phrases and interrupt current speech — hard context wipe."""
+        self.drain()
+        if self._worker:
+            self._worker.interrupt()
+
+    def interrupt_comms(self):
+        """Interrupt comms channel only — leaves main alert channel untouched."""
+        if self._comms_worker:
+            self._comms_worker.interrupt()
+
     def speak(self, text: str, priority: int = 5):
         """Queue a phrase. Lower priority number = spoken sooner."""
         if not self._enabled:
             return
         if not isinstance(text, str) or not text.strip():
             return
+        if priority <= self._COMBAT_PRIORITY:
+            self._drain_non_combat()
+            self.interrupt_comms()
         self._counter += 1
         try:
             self._queue.put_nowait((priority, self._counter, text))

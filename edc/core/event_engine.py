@@ -615,7 +615,13 @@ class EventEngine:
                 # not Bounty/FactionKillBond/CommitCrime. Large merit gains = kill.
                 if gained >= 30:
                     try:
-                        self.state.session_kills += 1
+                        ts = event.get("timestamp") or ""
+                        cur_key = (getattr(self.state, "combat_current_key", "") or
+                                   getattr(self.state, "combat_last_key", "")) or ""
+                        kill_key = f"kill|{ts}|{cur_key}"
+                        if kill_key not in self.state.counted_combat_keys:
+                            self.state.counted_combat_keys.add(kill_key)
+                            self.state.session_kills += 1
                     except Exception:
                         pass
                     try:
@@ -642,16 +648,24 @@ class EventEngine:
             reward = event.get("TotalReward")
             if isinstance(reward, int):
                 ts = event.get("timestamp") or ""
-                reward_key = f"{ts}|{reward}|{self.state.combat_current_key}"
+                cur_key = (getattr(self.state, "combat_current_key", "") or
+                           getattr(self.state, "combat_last_key", "")) or ""
+                reward_key = f"{ts}|{reward}|{cur_key}"
                 if reward_key not in self.state.counted_combat_keys:
                     self.state.counted_combat_keys.add(reward_key)
                     self.state.combat_session_collected += reward
                     self.state.combat_unsold_total += reward
-                try:
-                    self.state.session_bounties += reward
-                    self.state.session_kills += 1
-                except Exception:
-                    pass
+                    try:
+                        self.state.session_bounties += reward
+                    except Exception:
+                        pass
+                kill_key = f"kill|{ts}|{cur_key}"
+                if kill_key not in self.state.counted_combat_keys:
+                    self.state.counted_combat_keys.add(kill_key)
+                    try:
+                        self.state.session_kills += 1
+                    except Exception:
+                        pass
 
             try:
                 cur_key = (getattr(self.state, "combat_current_key", "") or
@@ -667,13 +681,18 @@ class EventEngine:
             reward = event.get("Reward")
             if isinstance(reward, int):
                 ts = event.get("timestamp") or ""
-                reward_key = f"{ts}|{reward}|{self.state.combat_current_key}"
+                cur_key = (getattr(self.state, "combat_current_key", "") or
+                           getattr(self.state, "combat_last_key", "")) or ""
+                reward_key = f"{ts}|{reward}|{cur_key}"
                 if reward_key not in self.state.counted_combat_keys:
                     self.state.counted_combat_keys.add(reward_key)
-            try:
-                self.state.session_kills += 1
-            except Exception:
-                pass
+                kill_key = f"kill|{ts}|{cur_key}"
+                if kill_key not in self.state.counted_combat_keys:
+                    self.state.counted_combat_keys.add(kill_key)
+                    try:
+                        self.state.session_kills += 1
+                    except Exception:
+                        pass
 
             try:
                 cur_key = (getattr(self.state, "combat_current_key", "") or
@@ -688,7 +707,9 @@ class EventEngine:
         elif name == "CommitCrime":
             if event.get("CrimeType") == "murder":
                 ts = event.get("timestamp") or ""
-                kill_key = f"crime_murder|{ts}|{self.state.combat_current_key}"
+                cur_key = (getattr(self.state, "combat_current_key", "") or
+                           getattr(self.state, "combat_last_key", "")) or ""
+                kill_key = f"kill|{ts}|{cur_key}"
                 if kill_key not in self.state.counted_combat_keys:
                     self.state.counted_combat_keys.add(kill_key)
                     try:
@@ -710,7 +731,9 @@ class EventEngine:
                 try:
                     self.state.session_bounties = 0
                     self.state.session_kills = 0
+                    self.state.combat_session_collected = 0
                     self.state.combat_unsold_total = 0
+                    self.state.counted_combat_keys.clear()
                 except Exception:
                     pass
 

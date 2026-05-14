@@ -39,13 +39,6 @@ class ExobiologyPhrases:
         "Data sold. {value} million from {count} organisms.",
     ]
 
-    HIGH_VALUE_SPECIES = [
-        "High value organism. {species}. Worth {value} million credits.",
-        "High value biological contact. {species} — {value} million estimated.",
-        "{species} — exceptional value. {value} million credits.",
-        "Notable organism. {species}. Approximately {value} million credits.",
-    ]
-
     SCAN_CODEX = [
         "Codex scan complete. {species} identified.",
         "{species} — codex entry recorded.",
@@ -97,7 +90,3 @@ class ExobiologyPhrases:
                     value=earnings // 1_000_000,
                     count=species_count)
 
-    @staticmethod
-    def high_value_species(species: str, value: int) -> str:
-        return pick(ExobiologyPhrases.HIGH_VALUE_SPECIES,
-                    species=species, value=value // 1_000_000)

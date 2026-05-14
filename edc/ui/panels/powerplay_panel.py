@@ -221,59 +221,89 @@ class PowerplayPanel(QWidget):
         self, pledged, ctrl, pp_state, control_progress,
         reinforcement, undermining, powers,
     ) -> str:
-        ctrl_txt     = fmt.text(ctrl, default="Unknown")
-        state_txt    = fmt.text(pp_state, default="Active")
-        progress_txt = (
+        ctrl_txt      = fmt.text(ctrl, default="Unknown")
+        state_txt     = fmt.text(pp_state, default="Active")
+        progress_txt  = (
             f"{control_progress * 100:.1f}%"
             if isinstance(control_progress, (int, float)) else "—"
         )
         reinforce_txt = f"{reinforcement:,}" if isinstance(reinforcement, int) else "—"
         undermine_txt = f"{undermining:,}" if isinstance(undermining, int) else "—"
 
+        # Controlling power line — highlight if player's own power
+        pledged_txt = fmt.text(pledged, default="")
+        ctrl_color  = "#4D96FF" if (pledged_txt and ctrl == pledged_txt) else "#FFB347"
+
+        # Other powers present (excluding controller)
         other_powers = [
             p for p in (powers or [])
             if isinstance(p, str) and p and p != ctrl
         ]
-        pledged_txt = fmt.text(pledged, default="")
-        enemy_lines = []
-        for p in other_powers[:5]:
+        power_lines = []
+        for p in other_powers[:4]:
             if pledged_txt and p == pledged_txt:
-                enemy_lines.append(
+                power_lines.append(
                     f'<span style="color:#7CFC98;font-weight:700;">{p} ★</span>'
                 )
             else:
-                enemy_lines.append(p)
-        enemy_txt = "<br>".join(enemy_lines) if enemy_lines else "—"
+                power_lines.append(f'<span style="color:#cc8866;">{p}</span>')
+        powers_html = "<br>".join(power_lines) if power_lines else ""
 
-        return f"""
-<div style="
-    background-color:#0a1520;
-    border:1px solid #1e3a5a;
-    border-radius:6px;
-    padding:8px 10px;
-    margin-top:4px;">
-<table width="100%" cellspacing="0" cellpadding="0">
-    <tr>
-    <td width="33%" valign="top">
-        <div style="color:#ff7043;font-size:22px;font-weight:700;">{undermine_txt}</div>
-        <div style="color:#ff7043;font-size:11px;font-weight:700;letter-spacing:1px;">UNDERMINING</div>
-        <div style="color:#ffb199;font-size:11px;margin-top:4px;">{enemy_txt}</div>
-    </td>
-    <td width="34%" valign="top" align="center">
-        <div style="color:#555555;font-size:10px;font-weight:700;letter-spacing:1px;">POWERPLAY</div>
-        <div style="color:#FFB347;font-size:18px;font-weight:700;margin-top:2px;">{ctrl_txt}</div>
-        <div style="color:#4D96FF;font-size:14px;font-weight:700;margin-top:2px;">{state_txt}</div>
-        <div style="color:#ff7043;font-size:13px;font-weight:700;margin-top:2px;">{progress_txt}</div>
-    </td>
-    <td width="33%" valign="top" align="right">
-        <div style="color:#4D96FF;font-size:22px;font-weight:700;">{reinforce_txt}</div>
-        <div style="color:#4D96FF;font-size:11px;font-weight:700;letter-spacing:1px;">REINFORCEMENT</div>
-        <div style="color:#d0e6ff;font-size:11px;margin-top:4px;">{ctrl_txt}</div>
-    </td>
-    </tr>
-</table>
-</div>
-"""
+        # State name color — acquisition = amber, reinforcement = blue family
+        _state_colors = {
+            "stronghold":   "#7DD4FC",
+            "fortified":    "#4D96FF",
+            "exploited":    "#88AACC",
+            "expansion":    "#FFD93D",
+            "contested":    "#FF8C00",
+            "uncontrolled": "#AAAAAA",
+        }
+        state_color = _state_colors.get((pp_state or "").lower(), "#e0e0e0")
+
+        return (
+            '<div style="border:1px solid #1e3a5a; border-radius:6px;'
+            ' overflow:hidden; margin-top:4px;">'
+            '<table width="100%" cellspacing="0" cellpadding="0"'
+            ' style="border-collapse:collapse;">'
+            '<tr>'
+
+            # ── Left: Undermining ──────────────────────────────────────
+            '<td width="33%" valign="top"'
+            ' style="background-color:#1a0808; padding:10px 12px;">'
+            f'<div style="color:#FF4444;font-size:26px;font-weight:700;'
+            f'line-height:1.1;">{undermine_txt}</div>'
+            f'<div style="color:#FF4444;font-size:10px;font-weight:700;'
+            f'letter-spacing:1px;margin-top:2px;">UNDERMINING</div>'
+            + (f'<div style="margin-top:6px;font-size:11px;line-height:1.5;">'
+               f'{powers_html}</div>' if powers_html else '')
+            + '</td>'
+
+            # ── Center: Power state ────────────────────────────────────
+            '<td width="34%" valign="top" align="center"'
+            ' style="background-color:#080f18; padding:10px 12px;">'
+            '<div style="color:#444444;font-size:10px;font-weight:700;'
+            'letter-spacing:1px;">POWERPLAY</div>'
+            f'<div style="color:{ctrl_color};font-size:12px;font-weight:700;'
+            f'margin-top:4px;">{ctrl_txt} (Controlling)</div>'
+            f'<div style="color:{state_color};font-size:20px;font-weight:700;'
+            f'margin-top:4px;">{state_txt}</div>'
+            f'<div style="color:#FFB347;font-size:12px;font-weight:700;'
+            f'margin-top:4px;">{progress_txt}</div>'
+            '</td>'
+
+            # ── Right: Reinforcement ───────────────────────────────────
+            '<td width="33%" valign="top" align="right"'
+            ' style="background-color:#08101a; padding:10px 12px;">'
+            f'<div style="color:#4D96FF;font-size:26px;font-weight:700;'
+            f'line-height:1.1;">{reinforce_txt}</div>'
+            f'<div style="color:#4D96FF;font-size:10px;font-weight:700;'
+            f'letter-spacing:1px;margin-top:2px;">REINFORCEMENT</div>'
+            f'<div style="color:#88aacc;font-size:11px;margin-top:6px;">'
+            f'{ctrl_txt}</div>'
+            '</td>'
+
+            '</tr></table></div>'
+        )
 
     def refresh(self, state, pp_activities=None):
         pledged  = getattr(state, "pp_power", None)

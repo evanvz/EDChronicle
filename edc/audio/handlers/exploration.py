@@ -22,20 +22,6 @@ class ExplorationPhrases:
         "System entry.",
     ]
 
-    ARRIVED_WITH_BODIES = [
-        "Jump complete. {bodies} bodies detected.",
-        "Arrived. {bodies} stellar bodies in system.",
-        "Sensors detect {bodies} bodies.",
-        "{bodies} bodies on scope.",
-    ]
-
-    VALUABLE_BODY = [
-        "High value planet scan complete.",
-        "High cartographic value detected.",
-        "Notable body scanned. Worth mapping.",
-        "High value body on sensors.",
-    ]
-
     VALUABLE_BODIES_SUMMARY = [
         "{count} high value planets in system.",
         "Cartographic alert. {count} high value bodies detected.",
@@ -153,6 +139,13 @@ class ExplorationPhrases:
         "Probe mapping done. {body} charted.",
     ]
 
+    MEGASHIP_PP_MERITS = [
+        "Megaship detected.",
+        "Megaship on sensors.",
+        "Megaship signal confirmed.",
+        "Megaship in range.",
+    ]
+
     CODEX_ENTRY = [
         "New codex entry. {name}.",
         "Discovery logged. {name}.",
@@ -166,20 +159,12 @@ class ExplorationPhrases:
         return pick(ExplorationPhrases.FSD_JUMP)
 
     @staticmethod
-    def fsd_jump(system: str) -> str:
-        """Pre-jump announcement — kept for back-compat."""
-        return pick(ExplorationPhrases.FSD_JUMP)
-
-    @staticmethod
     def in_system(system: str) -> str:
         """Startup location announcement (already in system)."""
         return pick(ExplorationPhrases.IN_SYSTEM, system=system)
 
     @staticmethod
-    def arrived(bodies: int = 0) -> str:
-        """Post-jump base arrival phrase (FSDJump fired)."""
-        if bodies:
-            return pick(ExplorationPhrases.ARRIVED_WITH_BODIES, bodies=bodies)
+    def arrived() -> str:
         return pick(ExplorationPhrases.ARRIVED)
 
     @staticmethod
@@ -193,10 +178,6 @@ class ExplorationPhrases:
         if "security" in s_lower:
             return s + "."
         return s + " security."
-
-    @staticmethod
-    def valuable_body() -> str:
-        return pick(ExplorationPhrases.VALUABLE_BODY)
 
     @staticmethod
     def valuable_bodies_summary(count: int) -> str:
@@ -270,6 +251,10 @@ class ExplorationPhrases:
         if not parts:
             return ""
         return "System survey: " + ", ".join(parts) + "."
+
+    @staticmethod
+    def megaship_pp_merits() -> str:
+        return pick(ExplorationPhrases.MEGASHIP_PP_MERITS)
 
     @staticmethod
     def codex_entry(name: str) -> str:

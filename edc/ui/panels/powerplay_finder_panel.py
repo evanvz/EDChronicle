@@ -39,11 +39,59 @@ _MISSION_OPTIONS = [
     ("All PP systems",        "all"),
 ]
 
+_PP_STATE_OPTIONS = [
+    ("Any state",    "any"),
+    ("Stronghold",   "stronghold"),
+    ("Fortified",    "fortified"),
+    ("Exploited",    "exploited"),
+    ("Expansion",    "expansion"),
+    ("Contested",    "contested"),
+    ("Uncontrolled", "uncontrolled"),
+]
+
 _FACILITY_OPTIONS = [
     ("Any facility",  "any"),
     ("Has Megaship",  "megaship"),
     ("Has Settlement","settlement"),
 ]
+
+# Color + tooltip per PP state — Acquisition = amber/orange, Reinforcement = blue family
+_STATE_COLORS = {
+    "stronghold":   "#7DD4FC",
+    "fortified":    "#4D96FF",
+    "exploited":    "#88AACC",
+    "expansion":    "#FFD93D",
+    "contested":    "#FF8C00",
+    "uncontrolled": "#AAAAAA",
+}
+
+_STATE_TOOLTIPS = {
+    "stronghold":   "Reinforcement — highest control tier",
+    "fortified":    "Reinforcement — well-defended system",
+    "exploited":    "Reinforcement — basic control level",
+    "expansion":    "Acquisition — power is expanding into this system",
+    "contested":    "Acquisition — multiple powers competing for control",
+    "uncontrolled": "Acquisition — no power controls this system",
+}
+
+_SCOPE_HINTS = {
+    "reinforcement": (
+        ["Exploited", "Fortified", "Stronghold"],
+        "Systems your power controls — defend, supply and reinforce.",
+    ),
+    "undermining": (
+        ["Exploited", "Fortified", "Stronghold"],
+        "Enemy-controlled systems — disrupt and destabilise rival powers.",
+    ),
+    "acquisition": (
+        ["Uncontrolled", "Expansion", "Contested"],
+        "Unclaimed or contested territory — expand your power's reach.",
+    ),
+    "all": (
+        [],
+        "All PowerPlay-active systems within range.",
+    ),
+}
 
 
 # ── Worker ────────────────────────────────────────────────────────────────────
@@ -51,11 +99,12 @@ _FACILITY_OPTIONS = [
 class _SearchWorker(QObject):
     finished = pyqtSignal(list, str)   # (results, error)
 
-    def __init__(self, power, mission, ref_x, ref_y, ref_z,
+    def __init__(self, power, mission, pp_state, ref_x, ref_y, ref_z,
                  range_ly, facility):
         super().__init__()
-        self._power   = power
-        self._mission = mission
+        self._power    = power
+        self._mission  = mission
+        self._pp_state = pp_state
         self._ref_x     = ref_x
         self._ref_y     = ref_y
         self._ref_z     = ref_z
@@ -67,6 +116,7 @@ class _SearchWorker(QObject):
         results, error = client.search_pp_systems(
             power=self._power,
             mission=self._mission,
+            pp_state=self._pp_state,
             ref_x=self._ref_x,
             ref_y=self._ref_y,
             ref_z=self._ref_z,
@@ -135,19 +185,42 @@ class PowerplayFinderPanel(QWidget):
         info_row.addStretch()
         ctrl_layout.addLayout(info_row)
 
-        # Row 2: mission + facility + range + button
-        filter_row = QHBoxLayout()
-        filter_row.setSpacing(8)
+        # Row 2: mission + PP state + facility
+        combo_row = QHBoxLayout()
+        combo_row.setSpacing(8)
 
         self._mission_combo = QComboBox()
         self._mission_combo.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
         for label, _ in _MISSION_OPTIONS:
             self._mission_combo.addItem(label)
 
+        self._state_combo = QComboBox()
+        self._state_combo.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
+        for label, _ in _PP_STATE_OPTIONS:
+            self._state_combo.addItem(label)
+
         self._facility_combo = QComboBox()
         self._facility_combo.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
         for label, _ in _FACILITY_OPTIONS:
             self._facility_combo.addItem(label)
+
+        combo_row.addWidget(self._mission_combo, 1)
+        combo_row.addWidget(self._state_combo, 1)
+        combo_row.addWidget(self._facility_combo, 1)
+        ctrl_layout.addLayout(combo_row)
+
+        # Scope hint — describes which PP states the selected mission covers
+        self._scope_label = QLabel("")
+        self._scope_label.setTextFormat(Qt.TextFormat.RichText)
+        self._scope_label.setWordWrap(True)
+        self._scope_label.setStyleSheet("background:transparent; border:none;")
+        ctrl_layout.addWidget(self._scope_label)
+
+        self._mission_combo.currentIndexChanged.connect(self._update_scope_hint)
+
+        # Row 3: range + search button
+        filter_row = QHBoxLayout()
+        filter_row.setSpacing(8)
 
         range_label = QLabel("Range:")
         range_label.setStyleSheet(self._LABEL_STYLE)
@@ -168,8 +241,7 @@ class PowerplayFinderPanel(QWidget):
         )
         self._search_btn.clicked.connect(self._start_search)
 
-        filter_row.addWidget(self._mission_combo, 2)
-        filter_row.addWidget(self._facility_combo, 2)
+        filter_row.addStretch()
         filter_row.addWidget(range_label)
         filter_row.addWidget(self._range_spin, 1)
         filter_row.addWidget(self._search_btn)
@@ -183,6 +255,8 @@ class PowerplayFinderPanel(QWidget):
         ctrl_layout.addWidget(self._ethos_label)
 
         self._mission_combo.currentIndexChanged.connect(self._update_ethos_label)
+
+        self._update_scope_hint()
 
         root.addWidget(ctrl_frame)
 
@@ -234,7 +308,28 @@ class PowerplayFinderPanel(QWidget):
         self._power_label.setText(f"Power: {self._power or '—'}")
         self._system_label.setText(f"Location: {self._system or '—'}")
         self._search_btn.setEnabled(bool(self._power))
+        self._update_scope_hint()
         self._update_ethos_label()
+
+    # ── Scope hint ───────────────────────────────────────────────────────
+
+    def _update_scope_hint(self):
+        mission = self._mission_key()
+        states, desc = _SCOPE_HINTS.get(mission, ([], ""))
+        if not states:
+            self._scope_label.setText(
+                f'<span style="color:#555555;font-size:10px;">{desc}</span>'
+            )
+            return
+        tags = []
+        for s in states:
+            color = _STATE_COLORS.get(s.lower(), "#888888")
+            tags.append(f'<span style="color:{color};font-weight:bold;">{s}</span>')
+        joined = ' <span style="color:#444444;">·</span> '.join(tags)
+        self._scope_label.setText(
+            f'{joined}'
+            f'<span style="color:#555555;font-size:10px;"> — {desc}</span>'
+        )
 
     # ── Ethos hint ───────────────────────────────────────────────────────
 
@@ -273,6 +368,10 @@ class PowerplayFinderPanel(QWidget):
         idx = self._mission_combo.currentIndex()
         return _MISSION_OPTIONS[idx][1] if 0 <= idx < len(_MISSION_OPTIONS) else "reinforcement"
 
+    def _state_key(self) -> str:
+        idx = self._state_combo.currentIndex()
+        return _PP_STATE_OPTIONS[idx][1] if 0 <= idx < len(_PP_STATE_OPTIONS) else "any"
+
     def _facility_key(self) -> str:
         idx = self._facility_combo.currentIndex()
         return _FACILITY_OPTIONS[idx][1] if 0 <= idx < len(_FACILITY_OPTIONS) else "any"
@@ -294,6 +393,7 @@ class PowerplayFinderPanel(QWidget):
         self._worker = _SearchWorker(
             power=self._power,
             mission=self._mission_key(),
+            pp_state=self._state_key(),
             ref_x=self._ref_x,
             ref_y=self._ref_y,
             ref_z=self._ref_z,
@@ -327,34 +427,48 @@ class PowerplayFinderPanel(QWidget):
 
             dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
-            # Colour the state cell
+            # Colour the state cell using consistent Acquisition/Reinforcement palette
             state_lower = (sys.pp_state or "").lower()
-            if "fortified" in state_lower or "stronghold" in state_lower:
-                state_item.setForeground(QColor("#4D96FF"))
-            elif "contested" in state_lower or "undermining" in state_lower:
-                state_item.setForeground(QColor("#FF6B6B"))
-            elif "exploited" in state_lower:
-                state_item.setForeground(QColor("#FFD93D"))
+            state_color = _STATE_COLORS.get(state_lower)
+            if state_color:
+                state_item.setForeground(QColor(state_color))
+            state_tip = _STATE_TOOLTIPS.get(state_lower)
+            if state_tip:
+                state_item.setToolTip(state_tip)
 
-            # Powers present column — each power individually coloured
+            # Powers present column
             all_p = sys.all_powers()
+            ctrl  = sys.controlling_power
             if all_p:
                 parts = []
-                for p in all_p[:3]:
-                    abbr  = _SHORT_POWER.get(p, p.split()[-1])
-                    color = "#4D96FF" if p == self._power else "#FF8C00"
-                    parts.append(f'<span style="color:{color};">{abbr}</span>')
-                if len(all_p) > 3:
-                    parts.append(f'<span style="color:#888888;">+{len(all_p) - 3}</span>')
-                html = ' <span style="color:#444444;">/</span> '.join(parts)
+                tip_lines = []
+                for p in all_p:
+                    abbr      = _SHORT_POWER.get(p, p.split()[-1])
+                    is_ctrl   = bool(ctrl) and p == ctrl
+                    is_player = p == self._power
+                    if is_player:
+                        color = "#4D96FF"
+                    elif is_ctrl:
+                        color = "#FF6B6B"
+                    else:
+                        color = "#FF8C00"
+                    tag = f"<b>{abbr}★</b>" if is_ctrl else abbr
+                    parts.append(f'<span style="color:{color};">{tag}</span>')
+                    role = " (controls)" if is_ctrl else (" (yours)" if is_player else "")
+                    tip_lines.append(f"{p}{role}")
+                html    = ' <span style="color:#3a3a3a;">/</span> '.join(parts)
+                tooltip = "\n".join(tip_lines)
             else:
-                html = '<span style="color:#555555;">—</span>'
+                html    = '<span style="color:#555555;">—</span>'
+                tooltip = ""
 
             power_label = QLabel()
             power_label.setTextFormat(Qt.TextFormat.RichText)
             power_label.setText(html)
             power_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             power_label.setStyleSheet("background:transparent; padding:2px;")
+            if tooltip:
+                power_label.setToolTip(tooltip)
 
             self._table.setItem(row, 0, name_item)
             self._table.setItem(row, 1, dist_item)

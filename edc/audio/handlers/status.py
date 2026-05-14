@@ -19,38 +19,10 @@ class StatusPhrases:
         "Mission accomplished. {credits} credits.",
     ]
 
-    BEING_SCANNED = [
-        "We are being scanned by the enemy.",
-        "Enemy can detected. They are running a check on us.",
-        "External scan in progress.",
-        "Enemy ship scan detected, Commander.",
-    ]
-
     SCAN_COMPLETE = [
         "External {scan_type} scan complete.",
         "External scan finished. {scan_type}.",
         "External {scan_type} scan done.",
-    ]
-
-    MATERIALS_LOW = [
-        "Low materials warning. {material} stock is depleted.",
-        "{material} running low, Commander.",
-        "Material alert. {material} below threshold.",
-        "Stock warning. {material} is low.",
-    ]
-
-    DOCKED = [
-        "Docked at {station}.",
-        "Welcome to {station}.",
-        "Docking complete. {station}.",
-        "Ship secured at {station}.",
-    ]
-
-    UNDOCKED = [
-        "Undocking from {station}.",
-        "Cleared from {station}. Good flying.",
-        "Leaving {station}.",
-        "Undocked. Fly safe, Commander.",
     ]
 
     @staticmethod
@@ -64,21 +36,6 @@ class StatusPhrases:
                     credits=f"{credits:,}", faction=faction)
 
     @staticmethod
-    def being_scanned() -> str:
-        return pick(StatusPhrases.BEING_SCANNED)
-
-    @staticmethod
     def scan_complete(scan_type: str = "") -> str:
         return pick(StatusPhrases.SCAN_COMPLETE, scan_type=scan_type)
 
-    @staticmethod
-    def materials_low(material: str) -> str:
-        return pick(StatusPhrases.MATERIALS_LOW, material=material)
-
-    @staticmethod
-    def docked(station: str) -> str:
-        return pick(StatusPhrases.DOCKED, station=station)
-
-    @staticmethod
-    def undocked(station: str) -> str:
-        return pick(StatusPhrases.UNDOCKED, station=station)
