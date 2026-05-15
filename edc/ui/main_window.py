@@ -210,6 +210,9 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(QIcon("assets/edc_icon.ico"))
         self.resize(1200, 700)
 
+        if getattr(cfg, "always_on_top", False):
+            self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+
         self.state = GameState()
 
         # Canonical paths: app_dir for shipped assets, settings_dir for writable JSON/caches.
@@ -496,6 +499,12 @@ class MainWindow(QMainWindow):
         self.voice_cmd_check.toggled.connect(self._on_voice_commands_toggled)
         st.addWidget(self.voice_cmd_check)
 
+        # --- Window behaviour ---
+        self.always_on_top_check = QCheckBox("Keep window always on top")
+        self.always_on_top_check.setChecked(bool(getattr(self.cfg, "always_on_top", False)))
+        self.always_on_top_check.toggled.connect(self._on_always_on_top_changed)
+        st.addWidget(self.always_on_top_check)
+
         st.addStretch(1)
         self.stack.addWidget(tab_settings)
         self.sidebar.addItem("Settings")
@@ -535,6 +544,7 @@ class MainWindow(QMainWindow):
         self.tts.load_from_config(self.cfg)
         self.tts.start()
         self._tts_spoken_ships: set = set()  # pilot|ship keys spoken this system
+        self._tts_spoken_signal_bodies: set = set()  # body keys with signals already announced this system
         self._tts_ship_cooldown_until: float = 0.0  # monotonic timestamp
         self._comms_cooldown_until: float = 0.0
         self._commander_quip_cooldown_until: float = 0.0
@@ -743,6 +753,7 @@ class MainWindow(QMainWindow):
             if isinstance(incoming_system_address, int) and incoming_system_address != old_system_address:
                 self.state.system_address = incoming_system_address
                 self._tts_spoken_ships.clear()
+                self._tts_spoken_signal_bodies.clear()
                 self.load_current_system_data()
                 self._maybe_start_spansh_enrichment()
                 self._refresh_hud()
@@ -1101,6 +1112,9 @@ class MainWindow(QMainWindow):
 
             if event_type == "FSSBodySignals":
                 body = evt.get("BodyName") or ""
+                if body in self._tts_spoken_signal_bodies:
+                    return ""
+                self._tts_spoken_signal_bodies.add(body)
                 thargoid = (getattr(state, "thargoid_signals", {}) or {}).get(body, 0)
                 if thargoid > 0:
                     return ExplorationPhrases.thargoid_signals(body, thargoid)
@@ -1196,6 +1210,17 @@ class MainWindow(QMainWindow):
             self.voice_combo.addItem(vname)
         self.voice_combo.setCurrentIndex(int(getattr(self.cfg, "tts_voice_index", 0)))
         self.voice_combo.blockSignals(False)
+
+    def _on_always_on_top_changed(self, checked: bool):
+        self.cfg.always_on_top = bool(checked)
+        self.cfg_store.save(self.cfg)
+        flags = self.windowFlags()
+        if checked:
+            flags |= Qt.WindowType.WindowStaysOnTopHint
+        else:
+            flags &= ~Qt.WindowType.WindowStaysOnTopHint
+        self.setWindowFlags(flags)
+        self.show()
 
     def _on_voice_commands_toggled(self, checked: bool):
         self.cfg.voice_commands_enabled = checked

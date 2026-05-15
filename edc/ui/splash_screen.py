@@ -364,10 +364,11 @@ class SplashScreen(QWidget):
         self._import_total = 0
         self._import_done = False
 
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
         self.setFixedSize(W, H)
         self._center()
+        self._drag_pos = None
         self.setStyleSheet("background-color: #000000;")
 
         self._canvas = _BackgroundCanvas(self)
@@ -426,6 +427,17 @@ class SplashScreen(QWidget):
 
         if self._import_runner is not None:
             self._start_import_thread()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+
+    def mouseMoveEvent(self, event):
+        if self._drag_pos is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            self.move(event.globalPosition().toPoint() - self._drag_pos)
+
+    def mouseReleaseEvent(self, event):
+        self._drag_pos = None
 
     def _center(self):
         screen = QApplication.primaryScreen().availableGeometry()

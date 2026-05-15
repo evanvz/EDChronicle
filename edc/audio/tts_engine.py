@@ -69,6 +69,7 @@ class TTSWorker(QObject):
         self._voice_name   = voice_name
         self._running      = True
         self._interrupt    = threading.Event()
+        self._loop         = None  # created once in run()
 
     def interrupt(self):
         """Stop the currently playing phrase so a higher-priority one can play."""
@@ -80,12 +81,11 @@ class TTSWorker(QObject):
             pass
 
     def _speak_edge(self, text: str, voice: str | None = None):
-        import asyncio
         import io
         import numpy as np
         import sounddevice as sd
         from scipy.io import wavfile
-        from edc.audio._alert_edge_proc import _mp3_to_wav_bytes, _configure_audio_session
+        from edc.audio._alert_edge_proc import _mp3_to_wav_bytes
 
         rate_pct = f"+{max(0, self._rate - 175)}%" if self._rate >= 175 else f"-{175 - self._rate}%"
         voice = voice or self._voice_name
@@ -103,7 +103,7 @@ class TTSWorker(QObject):
             return b"".join(chunks)
 
         try:
-            mp3_bytes = asyncio.run(_synth())
+            mp3_bytes = self._loop.run_until_complete(_synth())
             if not mp3_bytes or self._interrupt.is_set():
                 return
             wav_bytes, sr = _mp3_to_wav_bytes(mp3_bytes)
@@ -122,7 +122,6 @@ class TTSWorker(QObject):
                 return
             with _SD_LOCK:
                 sd.play(data, sr)
-                _configure_audio_session()
                 sd.wait()
         except Exception as e:
             log.error("TTS alert speak error: %s", e)
@@ -132,27 +131,32 @@ class TTSWorker(QObject):
 
     @pyqtSlot()
     def run(self):
+        import asyncio
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
         log.info(
             f"TTS worker started — rate={self._rate} "
             f"volume={self._volume} voice={self._voice_name}"
         )
-        while self._running:
-            try:
-                _, _counter, text = self._queue.get(timeout=0.5)
-                if text is None:
-                    break
-                self._interrupt.clear()
+        try:
+            while self._running:
                 try:
-                    self._speak_one(text)
-                    log.debug(f"TTS spoke: {text[:60]}")
-                except subprocess.TimeoutExpired:
-                    log.warning("TTS subprocess timed out")
+                    _, _counter, text = self._queue.get(timeout=0.5)
+                    if text is None:
+                        break
+                    self._interrupt.clear()
+                    try:
+                        self._speak_one(text)
+                        log.debug(f"TTS spoke: {text[:60]}")
+                    except Exception as e:
+                        log.error(f"TTS speak error: {e}")
+                except queue.Empty:
+                    continue
                 except Exception as e:
-                    log.error(f"TTS speak error: {e}")
-            except queue.Empty:
-                continue
-            except Exception as e:
-                log.debug(f"TTS worker loop error: {e}")
+                    log.debug(f"TTS worker loop error: {e}")
+        finally:
+            self._loop.close()
+            self._loop = None
 
         log.debug("TTS worker stopped")
 
@@ -172,9 +176,10 @@ class CommsWorker(QObject):
         self._rate    = rate
         self._volume  = volume
         self._running = True
+        self._loop    = None  # created once in run()
 
     def _speak_one(self, text: str, voice_id: str | None):
-        import asyncio, random as _random
+        import random as _random
         from edc.audio._comms_edge_proc import _mp3_to_wav_bytes, _dsp_and_play
 
         pan = _random.uniform(-0.7, 0.7)
@@ -189,7 +194,7 @@ class CommsWorker(QObject):
                     chunks.append(chunk["data"])
             return b"".join(chunks)
 
-        mp3_bytes = asyncio.run(_synth())
+        mp3_bytes = self._loop.run_until_complete(_synth())
         if mp3_bytes:
             wav_bytes = _mp3_to_wav_bytes(mp3_bytes)
             with _SD_LOCK:
@@ -197,20 +202,27 @@ class CommsWorker(QObject):
 
     @pyqtSlot()
     def run(self):
+        import asyncio
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
         log.info(f"TTS comms worker started — rate={self._rate} volume={self._volume}")
-        while self._running:
-            try:
-                _, _counter, text, voice_id = self._queue.get(timeout=0.5)
-                if text is None:
-                    break
+        try:
+            while self._running:
                 try:
-                    self._speak_one(text, voice_id)
+                    _, _counter, text, voice_id = self._queue.get(timeout=0.5)
+                    if text is None:
+                        break
+                    try:
+                        self._speak_one(text, voice_id)
+                    except Exception as e:
+                        log.error(f"TTS comms speak error: {e}")
+                except queue.Empty:
+                    continue
                 except Exception as e:
-                    log.error(f"TTS comms speak error: {e}")
-            except queue.Empty:
-                continue
-            except Exception as e:
-                log.debug(f"TTS comms worker loop error: {e}")
+                    log.debug(f"TTS comms worker loop error: {e}")
+        finally:
+            self._loop.close()
+            self._loop = None
         log.debug("TTS comms worker stopped")
 
     def interrupt(self):
@@ -412,10 +424,22 @@ class TTSEngine:
 
     def speak_test(self, text: str, voice_index: int):
         """Speak a test phrase using the exact selected voice. Runs in a daemon thread."""
+        import asyncio
         import threading
         voice_name = _ALERT_VOICE_POOL[voice_index] if voice_index < len(_ALERT_VOICE_POOL) else _ALERT_VOICE_POOL[0]
         worker = TTSWorker(queue.PriorityQueue(), self._rate, self._volume, voice_index, voice_name)
-        threading.Thread(target=lambda: worker._speak_edge(text, voice_name), daemon=True).start()
+
+        def _run_test():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            worker._loop = loop
+            try:
+                worker._speak_edge(text, voice_name)
+            finally:
+                loop.close()
+                worker._loop = None
+
+        threading.Thread(target=_run_test, daemon=True).start()
 
     def get_available_voices(self) -> list:
         """Returns list of (index, display_name) for settings dialog — edge-tts voices."""

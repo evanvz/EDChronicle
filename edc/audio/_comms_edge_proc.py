@@ -151,7 +151,6 @@ def _dsp_and_play(pcm_bytes: bytes, sample_rate: int, volume: float, pan: float)
     ])
 
     sd.play(full, sr)
-    _configure_audio_session()
     sd.wait()
 
 
