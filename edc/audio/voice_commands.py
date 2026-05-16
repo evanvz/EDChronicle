@@ -121,47 +121,44 @@ class VoiceCommandListener(QObject):
         blackout_until   = 0.0
         log.info("Voice command listener active — say 'which to [tab]' to switch tabs")
 
-        audio_q: queue.Queue = queue.Queue()
-
-        def _audio_cb(indata, frames, time_info, status):
-            if self._running:
-                audio_q.put(bytes(indata))
-
         try:
-            import sounddevice as sd
-            with sd.RawInputStream(
-                samplerate=self.SAMPLE_RATE,
-                blocksize=self.BLOCK_SIZE,
-                dtype="int16",
-                channels=1,
-                callback=_audio_cb,
-            ):
+            import miniaudio
+
+            def _capture_gen():
+                nonlocal blackout_until
+                received = yield b""
                 while self._running:
-                    try:
-                        data = audio_q.get(timeout=0.5)
-                    except queue.Empty:
-                        continue
+                    if received:
+                        if rec.AcceptWaveform(bytes(received)):
+                            result = json.loads(rec.Result())
+                            words  = self._clean(result.get("text", ""))
+                            if words:
+                                now = time.monotonic()
+                                if now >= blackout_until:
+                                    tab = self._match(words)
+                                    if tab:
+                                        log.debug("Voice command: %s → %s", words, tab)
+                                        self.command_detected.emit(tab)
+                                        blackout_until = now + _POST_SWITCH_BLACKOUT
+                                else:
+                                    log.debug("Blackout active — ignoring: %s", words)
+                    received = yield
 
-                    if not rec.AcceptWaveform(data):
-                        continue
+            gen = _capture_gen()
+            next(gen)
 
-                    result = json.loads(rec.Result())
-                    words  = self._clean(result.get("text", ""))
-                    if not words:
-                        continue
-
-                    now = time.monotonic()
-                    if now < blackout_until:
-                        log.debug("Blackout active — ignoring: %s", words)
-                        continue
-
-                    tab = self._match(words)
-                    if not tab:
-                        continue
-
-                    log.debug("Voice command: %s → %s", words, tab)
-                    self.command_detected.emit(tab)
-                    blackout_until = now + _POST_SWITCH_BLACKOUT
+            device = miniaudio.CaptureDevice(
+                input_format=miniaudio.SampleFormat.SIGNED16,
+                nchannels=1,
+                sample_rate=self.SAMPLE_RATE,
+                buffersize_msec=int(self.BLOCK_SIZE / self.SAMPLE_RATE * 1000),
+            )
+            device.start(gen)
+            try:
+                while self._running:
+                    time.sleep(0.2)
+            finally:
+                device.stop()
 
         except Exception as exc:
             log.error("Voice command listener error: %s", exc)
