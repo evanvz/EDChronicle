@@ -20,9 +20,10 @@ from PyQt6.QtCore import QThread, QObject, pyqtSlot
 
 log = logging.getLogger(__name__)
 
-# Both TTSWorker and CommsWorker use sounddevice's global stream.
-# PortAudio's global stream is not thread-safe — serialize all sd.play/wait calls.
-_SD_LOCK = threading.Lock()
+# Covers both miniaudio decode and sounddevice playback — neither is safe for
+# concurrent use across threads (miniaudio releases GIL, PortAudio has a single
+# global stream). Synthesis (edge-tts network call) still runs outside this lock.
+_AUDIO_LOCK = threading.Lock()
 
 
 _ALERT_VOICE_POOL = [
@@ -106,21 +107,21 @@ class TTSWorker(QObject):
             mp3_bytes = self._loop.run_until_complete(_synth())
             if not mp3_bytes or self._interrupt.is_set():
                 return
-            wav_bytes, sr = _mp3_to_wav_bytes(mp3_bytes)
-            buf = io.BytesIO(wav_bytes)
-            _, data = wavfile.read(buf)
-            if data.dtype == "int16":
-                data = data.astype("float32") / 32768.0
-            elif data.dtype == "int32":
-                data = data.astype("float32") / 2147483648.0
-            else:
-                data = data.astype("float32")
-            if data.ndim > 1:
-                data = data[:, 0]
-            data = data * float(self._volume)
-            if self._interrupt.is_set():
-                return
-            with _SD_LOCK:
+            with _AUDIO_LOCK:
+                if self._interrupt.is_set():
+                    return
+                wav_bytes, sr = _mp3_to_wav_bytes(mp3_bytes)
+                buf = io.BytesIO(wav_bytes)
+                _, data = wavfile.read(buf)
+                if data.dtype == "int16":
+                    data = data.astype("float32") / 32768.0
+                elif data.dtype == "int32":
+                    data = data.astype("float32") / 2147483648.0
+                else:
+                    data = data.astype("float32")
+                if data.ndim > 1:
+                    data = data[:, 0]
+                data = data * float(self._volume)
                 sd.play(data, sr)
                 sd.wait()
         except Exception as e:
@@ -196,8 +197,8 @@ class CommsWorker(QObject):
 
         mp3_bytes = self._loop.run_until_complete(_synth())
         if mp3_bytes:
-            wav_bytes = _mp3_to_wav_bytes(mp3_bytes)
-            with _SD_LOCK:
+            with _AUDIO_LOCK:
+                wav_bytes = _mp3_to_wav_bytes(mp3_bytes)
                 _dsp_and_play(wav_bytes, 22050, self._volume, pan)
 
     @pyqtSlot()
