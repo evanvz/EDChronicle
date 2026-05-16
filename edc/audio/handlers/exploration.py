@@ -59,29 +59,16 @@ class ExplorationPhrases:
     ]
 
     BIO_SIGNALS = [
-        "{count} biological signal detected.",
-        "Bio signal on planet. {count} signal.",
-        "Life signs detected. {count} bio signal.",
-        "{count} biological signal detected.",
-    ]
-
-    BIO_SIGNALS_MULTIPLE = [
-        "{count} biological signals detected.",
-        "Multiple exobiological signals. {count} on planet.",
-        "{count} exobiological signals detected. Good exobiology opportunity.",
-        "Biological diversity detected. {count} signals.",
+        "Biological signals detected.",
+        "Bio signals on this planet.",
+        "Life signs detected.",
+        "Biological activity detected.",
     ]
 
     GEO_SIGNALS = [
-        "{count} geological signal detected.",
-        "Geo signal on planet. {count} signal.",
-        "Geological activity detected. {count} signal.",
-    ]
-
-    GEO_SIGNALS_MULTIPLE = [
-        "{count} geological signals detected.",
-        "Multiple geo signals. {count} on planet.",
-        "Geological activity detected. {count} signals.",
+        "Geological signals detected.",
+        "Geo signals on this planet.",
+        "Geological activity detected.",
     ]
 
     GUARDIAN_SIGNALS = [
@@ -121,15 +108,9 @@ class ExplorationPhrases:
     ]
 
     HUMAN_SIGNALS = [
-        "{count} human signal detected on planet.",
-        "Human presence on planet. {count} signal.",
-        "{count} human site signal detected.",
-    ]
-
-    HUMAN_SIGNALS_MULTIPLE = [
-        "{count} human signals detected.",
-        "Multiple human signals. {count} on planet.",
-        "Human activity detected. {count} signals.",
+        "Human signals detected.",
+        "Human presence on this planet.",
+        "Human activity detected.",
     ]
 
     SAA_COMPLETE = [
@@ -201,15 +182,11 @@ class ExplorationPhrases:
 
     @staticmethod
     def bio_signals(body: str, count: int) -> str:
-        pool = (ExplorationPhrases.BIO_SIGNALS_MULTIPLE
-                if count > 1 else ExplorationPhrases.BIO_SIGNALS)
-        return pick(pool, count=count)
+        return pick(ExplorationPhrases.BIO_SIGNALS)
 
     @staticmethod
     def geo_signals(body: str, count: int) -> str:
-        pool = (ExplorationPhrases.GEO_SIGNALS_MULTIPLE
-                if count > 1 else ExplorationPhrases.GEO_SIGNALS)
-        return pick(pool, count=count)
+        return pick(ExplorationPhrases.GEO_SIGNALS)
 
     @staticmethod
     def guardian_signals(body: str, count: int) -> str:
@@ -231,9 +208,7 @@ class ExplorationPhrases:
 
     @staticmethod
     def human_signals(body: str, count: int) -> str:
-        pool = (ExplorationPhrases.HUMAN_SIGNALS_MULTIPLE
-                if count > 1 else ExplorationPhrases.HUMAN_SIGNALS)
-        return pick(pool, count=count)
+        return pick(ExplorationPhrases.HUMAN_SIGNALS)
 
     @staticmethod
     def saa_complete(body: str) -> str:

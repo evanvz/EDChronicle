@@ -1389,6 +1389,16 @@ class MainWindow(QMainWindow):
                     ExplorationPhrases.signals_summary(bio_bodies, geo_bodies, human_bodies),
                     priority=5
                 )
+                # Mark all signal bodies as announced so FSSBodySignals doesn't repeat them
+                for body in bio_signals:
+                    if int(bio_signals.get(body) or 0) > 0:
+                        self._tts_spoken_signal_bodies.add(body)
+                for body in geo_signals:
+                    if int(geo_signals.get(body) or 0) > 0:
+                        self._tts_spoken_signal_bodies.add(body)
+                for body in human_signals:
+                    if int(human_signals.get(body) or 0) > 0:
+                        self._tts_spoken_signal_bodies.add(body)
 
     def _tts_priority(self, event_type: str) -> int:
         """Lower number = higher urgency."""
