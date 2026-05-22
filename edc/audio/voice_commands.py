@@ -124,24 +124,13 @@ class VoiceCommandListener(QObject):
         try:
             import miniaudio
 
+            audio_q: queue.Queue = queue.Queue()
+
             def _capture_gen():
-                nonlocal blackout_until
                 received = yield b""
                 while self._running:
                     if received:
-                        if rec.AcceptWaveform(bytes(received)):
-                            result = json.loads(rec.Result())
-                            words  = self._clean(result.get("text", ""))
-                            if words:
-                                now = time.monotonic()
-                                if now >= blackout_until:
-                                    tab = self._match(words)
-                                    if tab:
-                                        log.debug("Voice command: %s → %s", words, tab)
-                                        self.command_detected.emit(tab)
-                                        blackout_until = now + _POST_SWITCH_BLACKOUT
-                                else:
-                                    log.debug("Blackout active — ignoring: %s", words)
+                        audio_q.put(bytes(received))
                     received = yield
 
             gen = _capture_gen()
@@ -156,7 +145,26 @@ class VoiceCommandListener(QObject):
             device.start(gen)
             try:
                 while self._running:
-                    time.sleep(0.2)
+                    try:
+                        data = audio_q.get(timeout=0.5)
+                    except queue.Empty:
+                        continue
+                    if not rec.AcceptWaveform(data):
+                        continue
+                    result = json.loads(rec.Result())
+                    words  = self._clean(result.get("text", ""))
+                    if not words:
+                        continue
+                    now = time.monotonic()
+                    if now < blackout_until:
+                        log.debug("Blackout active — ignoring: %s", words)
+                        continue
+                    tab = self._match(words)
+                    if not tab:
+                        continue
+                    log.debug("Voice command: %s → %s", words, tab)
+                    self.command_detected.emit(tab)
+                    blackout_until = now + _POST_SWITCH_BLACKOUT
             finally:
                 device.stop()
 
