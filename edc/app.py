@@ -17,10 +17,33 @@ from persistence.database import Database
 from persistence.repository import Repository
 
 def _install_exception_hook():
-    def hook(exc_type, exc_value, exc_tb):
-        log = logging.getLogger("edc.unhandled")
-        log.error("Unhandled exception:\n%s", "".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
-    sys.excepthook = hook
+    import threading
+
+    _log = logging.getLogger("edc.unhandled")
+
+    def main_hook(exc_type, exc_value, exc_tb):
+        _log.critical("Unhandled exception in main thread:\n%s",
+                      "".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
+    sys.excepthook = main_hook
+
+    def thread_hook(args):
+        _log.critical("Unhandled exception in thread '%s':\n%s",
+                      args.thread.name if args.thread else "unknown",
+                      "".join(traceback.format_exception(args.exc_type, args.exc_value, args.exc_tb)))
+    threading.excepthook = thread_hook
+
+    try:
+        from PyQt6.QtCore import qInstallMessageHandler, QtMsgType
+        def qt_msg_handler(mode, context, message):
+            if mode == QtMsgType.QtFatalMsg:
+                _log.critical("Qt fatal: %s", message)
+            elif mode == QtMsgType.QtCriticalMsg:
+                _log.error("Qt critical: %s", message)
+            elif mode == QtMsgType.QtWarningMsg:
+                _log.warning("Qt warning: %s", message)
+        qInstallMessageHandler(qt_msg_handler)
+    except Exception:
+        pass
 
 def parse_args():
     parser = argparse.ArgumentParser(description="EDC Application")

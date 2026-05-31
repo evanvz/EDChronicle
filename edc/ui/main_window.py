@@ -709,6 +709,8 @@ class MainWindow(QMainWindow):
         self.watcher_controller.stop_watching()
 
     def closeEvent(self, event):
+        import traceback
+        log.info("closeEvent triggered:\n%s", "".join(traceback.format_stack()))
         self.stop_watching()
         self._stop_voice_commands()
         super().closeEvent(event)
