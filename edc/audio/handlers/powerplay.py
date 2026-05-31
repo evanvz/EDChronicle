@@ -4,21 +4,52 @@ from edc.audio.tts_phrases import pick
 
 class PowerPlayPhrases:
 
-    PP_FRIENDLY = [
-        "Friendly PowerPlay space. {power} controls this system.",
-        "{power} territory. We are safe here.",
-        "Friendly space. {power} is our power.",
-        "PowerPlay friendly. {power} system.",
-        "We are in {power} space. All clear.",
+    PP_REINFORCEMENT = [
+        "Reinforcement system. {power} controls here.",
+        "{power} space. Reinforcement target.",
+        "Friendly system. {power} — reinforcement available.",
+        "{power} territory. We can reinforce here.",
     ]
 
-    PP_ENEMY = [
-        "Caution. Enemy PowerPlay territory. {power} controls this system.",
-        "Enemy space. {power} controls here. Stay alert.",
-        "{power} territory. Expect opposition.",
-        "Hostile PowerPlay zone. {power}.",
-        "Enemy space, Commander. {power} is our opposition here.",
-        "Warning. {power} controlled system. Eyes open.",
+    PP_REINFORCEMENT_FORTIFIED = [
+        "Reinforcement system. {power} stronghold.",
+        "{power} fortified system. Reinforcement target.",
+        "Friendly stronghold. {power} controls here.",
+        "{power} stronghold. Reinforce and defend.",
+    ]
+
+    PP_UNDERMINING = [
+        "Undermining system. {power} controls here.",
+        "{power} territory. Undermining target.",
+        "Enemy controlled. {power}. Undermining available.",
+        "{power} system. Undermining possible.",
+    ]
+
+    PP_UNDERMINING_FORTIFIED = [
+        "Enemy stronghold. {power} has fortified this system.",
+        "{power} stronghold. High resistance — undermining target.",
+        "Fortified undermining system. {power} controls here.",
+        "{power} has fortified this system. Undermining available.",
+    ]
+
+    PP_ACQUISITION = [
+        "Acquisition target. Uncontrolled system.",
+        "Uncontrolled space. Acquisition available.",
+        "No controlling power. Acquisition system.",
+        "Acquisition target. System is open.",
+    ]
+
+    PP_ACQUISITION_EXPANSION = [
+        "Expansion system. Acquisition in progress.",
+        "Active acquisition system. Expansion underway.",
+        "Expansion target. Acquisition available.",
+    ]
+
+    PP_ACQUISITION_CONTESTED = [
+        "Contested acquisition target.",
+        "Contested system. Acquisition available.",
+        "PowerPlay contest in progress. Acquisition target.",
+        "Contested space. Multiple powers competing.",
     ]
 
     PP_NEUTRAL = [
@@ -28,29 +59,10 @@ class PowerPlayPhrases:
         "Neutral territory.",
     ]
 
-    PP_FORTIFIED = [
-        "Caution. Enemy stronghold. {power} has fortified this system.",
-        "{power} stronghold detected. High resistance expected.",
-        "Enemy fortified system. {power} controls here.",
-        "This system is a {power} stronghold. Proceed with caution.",
-    ]
-
-    PP_EXPLOITED = [
-        "Entering {power} exploited system.",
-        "{power} exploited space. Stay alert.",
-        "This system is exploited by {power}.",
-    ]
-
     PP_POWER_PRESENT = [
         "{power} has presence here. Not the controlling faction.",
         "Our power active in this system. Operating without control.",
         "{power} operating here. No system control.",
-    ]
-
-    PP_CONTESTED = [
-        "Contested system. PowerPlay conflict in progress.",
-        "This system is under PowerPlay contest.",
-        "Contested space. Multiple powers present.",
     ]
 
     PP_UNDERMINING_PRESENT = [
@@ -67,26 +79,37 @@ class PowerPlayPhrases:
 
     @staticmethod
     def pp_space(power: str, pp_state: str, pledged: str) -> str:
-        """Generate PP arrival phrase based on state and allegiance."""
-        if not power or power.lower() in ("", "unoccupied"):
-            return pick(PowerPlayPhrases.PP_NEUTRAL)
+        """Generate PP arrival phrase based on controlling power, state and allegiance."""
+        if not power or power.strip().lower() in ("", "unoccupied"):
+            state_low = str(pp_state or "").lower()
+            if "contested" in state_low:
+                return pick(PowerPlayPhrases.PP_ACQUISITION_CONTESTED)
+            if "expansion" in state_low:
+                return pick(PowerPlayPhrases.PP_ACQUISITION_EXPANSION)
+            if state_low and state_low not in ("uncontrolled",):
+                return pick(PowerPlayPhrases.PP_NEUTRAL)
+            return pick(PowerPlayPhrases.PP_ACQUISITION)
 
-        is_friendly = bool(
-            pledged and power.strip().lower() == pledged.strip().lower()
-        )
+        is_friendly = bool(pledged and power.strip().lower() == pledged.strip().lower())
         state_low = str(pp_state or "").lower()
+        is_fortified = "fortified" in state_low or "stronghold" in state_low
+        is_contested = "contested" in state_low
+        is_expansion = "expansion" in state_low
 
-        if "fortified" in state_low or "stronghold" in state_low:
-            if not is_friendly:
-                return pick(PowerPlayPhrases.PP_FORTIFIED, power=power)
+        if is_contested:
+            return pick(PowerPlayPhrases.PP_ACQUISITION_CONTESTED)
 
-        if "contested" in state_low:
-            return pick(PowerPlayPhrases.PP_CONTESTED)
+        if is_expansion:
+            return pick(PowerPlayPhrases.PP_ACQUISITION_EXPANSION)
 
         if is_friendly:
-            return pick(PowerPlayPhrases.PP_FRIENDLY, power=power)
+            if is_fortified:
+                return pick(PowerPlayPhrases.PP_REINFORCEMENT_FORTIFIED, power=power)
+            return pick(PowerPlayPhrases.PP_REINFORCEMENT, power=power)
         else:
-            return pick(PowerPlayPhrases.PP_ENEMY, power=power)
+            if is_fortified:
+                return pick(PowerPlayPhrases.PP_UNDERMINING_FORTIFIED, power=power)
+            return pick(PowerPlayPhrases.PP_UNDERMINING, power=power)
 
     @staticmethod
     def pp_present(power: str) -> str:
@@ -100,4 +123,3 @@ class PowerPlayPhrases:
     @staticmethod
     def pp_not_present(power: str) -> str:
         return pick(PowerPlayPhrases.PP_NOT_PRESENT, power=power)
-

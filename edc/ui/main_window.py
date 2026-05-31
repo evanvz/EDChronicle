@@ -958,25 +958,17 @@ class MainWindow(QMainWindow):
                 system = getattr(state, "system", None) or ""
                 if not system:
                     return ""
-                ctrl     = (getattr(state, "system_controlling_power", None) or "").strip()
-                pp_state = getattr(state, "system_powerplay_state", None) or ""
-                security = (getattr(state, "system_security", None) or "").strip()
+                ctrl          = (getattr(state, "system_controlling_power", None) or "").strip()
+                pp_state      = getattr(state, "system_powerplay_state", None) or ""
+                security      = (getattr(state, "system_security", None) or "").strip()
                 system_powers = [p.strip() for p in (getattr(state, "system_powers", []) or [])]
                 if pledged:
-                    if ctrl:
+                    if ctrl or pp_state:
                         base = PowerPlayPhrases.pp_space(ctrl, pp_state, pledged)
-                        is_enemy_ctrl = ctrl.lower() != pledged.lower()
-                        if is_enemy_ctrl:
-                            we_present = any(p.lower() == pledged.lower() for p in system_powers)
-                            if we_present:
-                                base = f"{base} {PowerPlayPhrases.pp_undermining_present(pledged)}"
-                            else:
-                                base = f"{base} {PowerPlayPhrases.pp_not_present(pledged)}"
+                    elif any(p.lower() == pledged.lower() for p in system_powers):
+                        base = PowerPlayPhrases.pp_present(pledged)
                     else:
-                        if any(p.lower() == pledged.lower() for p in system_powers):
-                            base = PowerPlayPhrases.pp_present(pledged)
-                        else:
-                            base = ExplorationPhrases.arrived()
+                        base = ExplorationPhrases.arrived()
                 else:
                     base = ExplorationPhrases.arrived()
                 if security:
