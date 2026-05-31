@@ -168,6 +168,8 @@ class VoiceCommandListener(QObject):
             finally:
                 device.stop()
 
+        except SystemExit as exc:
+            log.critical("Voice command listener SystemExit — suppressing to keep app alive: %r", exc, exc_info=True)
         except Exception as exc:
             log.error("Voice command listener error: %s", exc)
 

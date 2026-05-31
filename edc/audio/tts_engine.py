@@ -155,6 +155,11 @@ class TTSWorker(QObject):
                     continue
                 except Exception as e:
                     log.debug(f"TTS worker loop error: {e}")
+        except SystemExit as e:
+            log.critical("TTS worker SystemExit (asyncio/IOCP error) — suppressing to keep app alive: %r", e, exc_info=True)
+        except BaseException as e:
+            log.critical("TTS worker fatal BaseException: %r", e, exc_info=True)
+            raise
         finally:
             self._loop.close()
             self._loop = None
@@ -221,6 +226,11 @@ class CommsWorker(QObject):
                     continue
                 except Exception as e:
                     log.debug(f"TTS comms worker loop error: {e}")
+        except SystemExit as e:
+            log.critical("TTS comms worker SystemExit (asyncio/IOCP error) — suppressing to keep app alive: %r", e, exc_info=True)
+        except BaseException as e:
+            log.critical("TTS comms worker fatal BaseException: %r", e, exc_info=True)
+            raise
         finally:
             self._loop.close()
             self._loop = None
