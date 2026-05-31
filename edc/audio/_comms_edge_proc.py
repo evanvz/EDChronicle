@@ -96,11 +96,12 @@ def _configure_audio_session():
         time.sleep(0.05)
 
 
-def _dsp_and_play(pcm_bytes: bytes, sample_rate: int, volume: float, pan: float):
+def _dsp_and_play(pcm_bytes: bytes, sample_rate: int, volume: float, pan: float, interrupt=None):
+    import time as _time
     import numpy as np
+    import miniaudio
     from scipy.io import wavfile
     from scipy.signal import butter, sosfilt
-    import sounddevice as sd
 
     buf = io.BytesIO(pcm_bytes)
     sr, data = wavfile.read(buf)
@@ -150,8 +151,30 @@ def _dsp_and_play(pcm_bytes: bytes, sample_rate: int, volume: float, pan: float)
         _to_stereo(end_click,  pan_end,   left_g_e, right_g_e),
     ])
 
-    sd.play(full, sr)
-    sd.wait()
+    pcm = full.astype("float32").tobytes()
+
+    def _gen():
+        pos = 0
+        while pos < len(pcm):
+            if interrupt is not None and interrupt.is_set():
+                return
+            yield pcm[pos:pos + 4096]
+            pos += 4096
+
+    device = miniaudio.PlaybackDevice(
+        output_format=miniaudio.SampleFormat.FLOAT32,
+        nchannels=2,
+        sample_rate=sr,
+        buffersize_msec=100,
+    )
+    device.start(_gen())
+    try:
+        while device.running:
+            if interrupt is not None and interrupt.is_set():
+                break
+            _time.sleep(0.05)
+    finally:
+        device.stop()
 
 
 async def _synthesise(voice: str, rate_pct: str, text: str) -> bytes:

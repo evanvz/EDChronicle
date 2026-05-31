@@ -15,6 +15,7 @@ import logging
 import queue
 import random
 import threading
+import time
 
 from PyQt6.QtCore import QThread, QObject, pyqtSlot
 
@@ -68,23 +69,25 @@ class TTSWorker(QObject):
         self._volume       = volume
         self._voice_index  = voice_index
         self._voice_name   = voice_name
-        self._running      = True
-        self._interrupt    = threading.Event()
-        self._loop         = None  # created once in run()
+        self._running          = True
+        self._interrupt        = threading.Event()
+        self._loop             = None  # created once in run()
+        self._playback_device  = None  # current miniaudio PlaybackDevice
 
     def interrupt(self):
         """Stop the currently playing phrase so a higher-priority one can play."""
         self._interrupt.set()
-        try:
-            import sounddevice as sd
-            sd.stop()
-        except Exception:
-            pass
+        device = self._playback_device
+        if device is not None:
+            try:
+                device.stop()
+            except Exception:
+                pass
 
     def _speak_edge(self, text: str, voice: str | None = None):
         import io
         import numpy as np
-        import sounddevice as sd
+        import miniaudio
         from scipy.io import wavfile
         from edc.audio._alert_edge_proc import _mp3_to_wav_bytes
 
@@ -121,9 +124,32 @@ class TTSWorker(QObject):
                     data = data.astype("float32")
                 if data.ndim > 1:
                     data = data[:, 0]
-                data = data * float(self._volume)
-                sd.play(data, sr)
-                sd.wait()
+                pcm = (np.clip(data * float(self._volume), -1.0, 1.0) * 32767).astype("int16").tobytes()
+
+                interrupt = self._interrupt
+
+                def _gen():
+                    pos = 0
+                    while pos < len(pcm):
+                        if interrupt.is_set():
+                            return
+                        yield pcm[pos:pos + 4096]
+                        pos += 4096
+
+                device = miniaudio.PlaybackDevice(
+                    output_format=miniaudio.SampleFormat.SIGNED16,
+                    nchannels=1,
+                    sample_rate=sr,
+                    buffersize_msec=100,
+                )
+                self._playback_device = device
+                device.start(_gen())
+                try:
+                    while device.running and not interrupt.is_set():
+                        time.sleep(0.05)
+                finally:
+                    device.stop()
+                    self._playback_device = None
         except Exception as e:
             log.error("TTS alert speak error: %s", e)
 
@@ -178,11 +204,12 @@ class CommsWorker(QObject):
 
     def __init__(self, q: queue.PriorityQueue, rate: int, volume: float):
         super().__init__()
-        self._queue   = q
-        self._rate    = rate
-        self._volume  = volume
-        self._running = True
-        self._loop    = None  # created once in run()
+        self._queue     = q
+        self._rate      = rate
+        self._volume    = volume
+        self._running   = True
+        self._loop      = None  # created once in run()
+        self._interrupt = threading.Event()
 
     def _speak_one(self, text: str, voice_id: str | None):
         import random as _random
@@ -203,8 +230,9 @@ class CommsWorker(QObject):
         mp3_bytes = self._loop.run_until_complete(_synth())
         if mp3_bytes:
             with _AUDIO_LOCK:
+                self._interrupt.clear()
                 wav_bytes = _mp3_to_wav_bytes(mp3_bytes)
-                _dsp_and_play(wav_bytes, 22050, self._volume, pan)
+                _dsp_and_play(wav_bytes, 22050, self._volume, pan, self._interrupt)
 
     @pyqtSlot()
     def run(self):
@@ -238,11 +266,7 @@ class CommsWorker(QObject):
 
     def interrupt(self):
         """Stop currently playing comms audio and drain the comms queue."""
-        try:
-            import sounddevice as sd
-            sd.stop()
-        except Exception:
-            pass
+        self._interrupt.set()
         while True:
             try:
                 self._queue.get_nowait()

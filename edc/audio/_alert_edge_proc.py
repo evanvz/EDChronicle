@@ -66,9 +66,10 @@ def _configure_audio_session():
 
 
 def _play_wav(wav_bytes: bytes, sample_rate: int, volume: float):
+    import time as _time
     import numpy as np
+    import miniaudio
     from scipy.io import wavfile
-    import sounddevice as sd
 
     buf = io.BytesIO(wav_bytes)
     sr, data = wavfile.read(buf)
@@ -82,10 +83,26 @@ def _play_wav(wav_bytes: bytes, sample_rate: int, volume: float):
     if data.ndim > 1:
         data = data[:, 0]
 
-    data = data * float(volume)
-    sd.play(data, sr)
-    _configure_audio_session()
-    sd.wait()
+    pcm = (np.clip(data * float(volume), -1.0, 1.0) * 32767).astype("int16").tobytes()
+
+    def _gen():
+        pos = 0
+        while pos < len(pcm):
+            yield pcm[pos:pos + 4096]
+            pos += 4096
+
+    device = miniaudio.PlaybackDevice(
+        output_format=miniaudio.SampleFormat.SIGNED16,
+        nchannels=1,
+        sample_rate=sr,
+        buffersize_msec=100,
+    )
+    device.start(_gen())
+    try:
+        while device.running:
+            _time.sleep(0.05)
+    finally:
+        device.stop()
 
 
 def _run(rate_pct: str, volume: float, voice: str, sapi_voice_id: str | None, text: str):
