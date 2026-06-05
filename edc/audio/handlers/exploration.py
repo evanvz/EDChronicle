@@ -121,10 +121,28 @@ class ExplorationPhrases:
     ]
 
     MEGASHIP_PP_MERITS = [
-        "Megaship detected.",
-        "Megaship on sensors.",
-        "Megaship signal confirmed.",
-        "Megaship in range.",
+        "Megaship detected. PowerPlay merits available.",
+        "Megaship on sensors. Scan for merits.",
+        "Megaship signal confirmed. Worth scanning.",
+        "Megaship in range. PowerPlay merits available.",
+    ]
+
+    MEGASHIP_PP_UNDERMINING = [
+        "Megaship detected. Scan for undermining merits.",
+        "Megaship on sensors. Undermining merits available.",
+        "Megaship signal. Undermining target — scan it.",
+    ]
+
+    MEGASHIP_PP_REINFORCEMENT = [
+        "Megaship detected. Scan for reinforcement merits.",
+        "Megaship on sensors. Reinforcement merits available.",
+        "Megaship signal. Reinforce — scan the megaship.",
+    ]
+
+    MEGASHIP_PP_ACQUISITION = [
+        "Megaship detected. Scan for acquisition merits.",
+        "Megaship on sensors. Acquisition merits available.",
+        "Megaship signal. Acquisition target — scan it.",
     ]
 
     CODEX_ENTRY = [
@@ -228,7 +246,13 @@ class ExplorationPhrases:
         return "System survey: " + ", ".join(parts) + "."
 
     @staticmethod
-    def megaship_pp_merits() -> str:
+    def megaship_pp_merits(activity: str = "") -> str:
+        if activity == "undermining":
+            return pick(ExplorationPhrases.MEGASHIP_PP_UNDERMINING)
+        if activity == "reinforcement":
+            return pick(ExplorationPhrases.MEGASHIP_PP_REINFORCEMENT)
+        if activity == "acquisition":
+            return pick(ExplorationPhrases.MEGASHIP_PP_ACQUISITION)
         return pick(ExplorationPhrases.MEGASHIP_PP_MERITS)
 
     @staticmethod

@@ -1024,10 +1024,12 @@ class MainWindow(QMainWindow):
             if event_type == "FSSSignalDiscovered":
                 sig_type = (evt.get("SignalType") or "").strip().lower()
                 if sig_type == "megaship":
-                    pledged = (getattr(state, "pp_power", None) or "").strip().lower()
-                    ctrl = (getattr(state, "system_controlling_power", None) or "").strip().lower()
-                    if pledged and ctrl and ctrl != pledged:
-                        return ExplorationPhrases.megaship_pp_merits()
+                    pledged = (getattr(state, "pp_power", None) or "").strip()
+                    ctrl = (getattr(state, "system_controlling_power", None) or "").strip()
+                    pp_state_val = (getattr(state, "system_powerplay_state", None) or "").strip()
+                    # Only announce in acquisition-type systems (no controlling power, but PP-active)
+                    if pledged and not ctrl and pp_state_val:
+                        return ExplorationPhrases.megaship_pp_merits("acquisition")
                 return ""
 
             if event_type == "SAAScanComplete":
