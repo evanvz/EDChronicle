@@ -85,11 +85,22 @@ def _play_wav(wav_bytes: bytes, sample_rate: int, volume: float):
 
     pcm = (np.clip(data * float(volume), -1.0, 1.0) * 32767).astype("int16").tobytes()
 
+    import threading as _threading
+    done = _threading.Event()
+
     def _gen():
         pos = 0
-        while pos < len(pcm):
-            yield pcm[pos:pos + 4096]
-            pos += 4096
+        try:
+            num_frames = yield b""
+            while pos < len(pcm):
+                end = min(pos + num_frames * 2, len(pcm))  # SIGNED16 mono = 2 bytes/frame
+                chunk = pcm[pos:end]
+                pos = end
+                num_frames = yield chunk
+        except Exception:
+            pass
+        finally:
+            done.set()
 
     device = miniaudio.PlaybackDevice(
         output_format=miniaudio.SampleFormat.SIGNED16,
@@ -97,10 +108,12 @@ def _play_wav(wav_bytes: bytes, sample_rate: int, volume: float):
         sample_rate=sr,
         buffersize_msec=100,
     )
-    device.start(_gen())
+    gen = _gen()
+    next(gen)
+    device.start(gen)
+    _configure_audio_session()
     try:
-        while device.running:
-            _time.sleep(0.05)
+        done.wait(timeout=len(pcm) / (2 * sr) + 5.0)
     finally:
         device.stop()
 

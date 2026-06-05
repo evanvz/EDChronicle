@@ -126,47 +126,66 @@ class VoiceCommandListener(QObject):
 
             audio_q: queue.Queue = queue.Queue()
 
-            def _capture_gen():
-                received = yield b""
-                while self._running:
-                    if received:
-                        audio_q.put(bytes(received))
-                    received = yield
+            while self._running:
+                def _capture_gen():
+                    received = yield b""
+                    while self._running:
+                        try:
+                            if received:
+                                audio_q.put(bytes(received))
+                        except Exception:
+                            pass
+                        try:
+                            received = yield
+                        except Exception:
+                            return
 
-            gen = _capture_gen()
-            next(gen)
+                gen = _capture_gen()
+                next(gen)
 
-            device = miniaudio.CaptureDevice(
-                input_format=miniaudio.SampleFormat.SIGNED16,
-                nchannels=1,
-                sample_rate=self.SAMPLE_RATE,
-                buffersize_msec=int(self.BLOCK_SIZE / self.SAMPLE_RATE * 1000),
-            )
-            device.start(gen)
-            try:
-                while self._running:
+                try:
+                    device = miniaudio.CaptureDevice(
+                        input_format=miniaudio.SampleFormat.SIGNED16,
+                        nchannels=1,
+                        sample_rate=self.SAMPLE_RATE,
+                        buffersize_msec=int(self.BLOCK_SIZE / self.SAMPLE_RATE * 1000),
+                    )
+                    device.start(gen)
+                except Exception as exc:
+                    log.warning("Voice capture device unavailable, retrying in 3s: %s", exc)
+                    time.sleep(3)
+                    continue
+
+                try:
+                    while self._running:
+                        try:
+                            data = audio_q.get(timeout=0.5)
+                        except queue.Empty:
+                            continue
+                        if not rec.AcceptWaveform(data):
+                            continue
+                        result = json.loads(rec.Result())
+                        words  = self._clean(result.get("text", ""))
+                        if not words:
+                            continue
+                        now = time.monotonic()
+                        if now < blackout_until:
+                            log.debug("Blackout active — ignoring: %s", words)
+                            continue
+                        tab = self._match(words)
+                        if not tab:
+                            continue
+                        log.debug("Voice command: %s → %s", words, tab)
+                        self.command_detected.emit(tab)
+                        blackout_until = now + _POST_SWITCH_BLACKOUT
+                except Exception as exc:
+                    log.warning("Voice capture error, restarting in 3s: %s", exc)
+                    time.sleep(3)
+                finally:
                     try:
-                        data = audio_q.get(timeout=0.5)
-                    except queue.Empty:
-                        continue
-                    if not rec.AcceptWaveform(data):
-                        continue
-                    result = json.loads(rec.Result())
-                    words  = self._clean(result.get("text", ""))
-                    if not words:
-                        continue
-                    now = time.monotonic()
-                    if now < blackout_until:
-                        log.debug("Blackout active — ignoring: %s", words)
-                        continue
-                    tab = self._match(words)
-                    if not tab:
-                        continue
-                    log.debug("Voice command: %s → %s", words, tab)
-                    self.command_detected.emit(tab)
-                    blackout_until = now + _POST_SWITCH_BLACKOUT
-            finally:
-                device.stop()
+                        device.stop()
+                    except Exception:
+                        pass
 
         except SystemExit as exc:
             log.critical("Voice command listener SystemExit — suppressing to keep app alive: %r", exc, exc_info=True)

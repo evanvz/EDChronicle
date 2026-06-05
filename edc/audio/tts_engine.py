@@ -26,6 +26,33 @@ log = logging.getLogger(__name__)
 # global stream). Synthesis (edge-tts network call) still runs outside this lock.
 _AUDIO_LOCK = threading.Lock()
 
+_ducking_opted_out = False  # only need to do this once per process
+
+
+def _opt_out_of_ducking():
+    """Tell Windows not to duck other apps' audio when our WASAPI session is active."""
+    global _ducking_opted_out
+    if _ducking_opted_out:
+        return
+    import os
+    pid = os.getpid()
+    for _ in range(5):
+        try:
+            from pycaw.pycaw import AudioUtilities, IAudioSessionControl2
+            for session in AudioUtilities.GetAllSessions():
+                try:
+                    ctrl2 = session._ctl.QueryInterface(IAudioSessionControl2)
+                    if ctrl2.GetProcessId() != pid:
+                        continue
+                    ctrl2.SetDuckingPreference(True)
+                    _ducking_opted_out = True
+                    return
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        time.sleep(0.05)
+
 
 _ALERT_VOICE_POOL = [
     "en-US-AriaNeural",
@@ -107,51 +134,66 @@ class TTSWorker(QObject):
             return b"".join(chunks)
 
         try:
+            log.info("TTS _speak_edge: synthesising %r", text[:50])
             mp3_bytes = self._loop.run_until_complete(_synth())
+            log.info("TTS _speak_edge: synth done — %d bytes", len(mp3_bytes) if mp3_bytes else 0)
             if not mp3_bytes or self._interrupt.is_set():
+                log.info("TTS _speak_edge: skipped (empty or interrupted)")
                 return
-            with _AUDIO_LOCK:
-                if self._interrupt.is_set():
-                    return
-                wav_bytes, sr = _mp3_to_wav_bytes(mp3_bytes)
-                buf = io.BytesIO(wav_bytes)
-                _, data = wavfile.read(buf)
-                if data.dtype == "int16":
-                    data = data.astype("float32") / 32768.0
-                elif data.dtype == "int32":
-                    data = data.astype("float32") / 2147483648.0
-                else:
-                    data = data.astype("float32")
-                if data.ndim > 1:
-                    data = data[:, 0]
-                pcm = (np.clip(data * float(self._volume), -1.0, 1.0) * 32767).astype("int16").tobytes()
+            if self._interrupt.is_set():
+                return
+            wav_bytes, sr = _mp3_to_wav_bytes(mp3_bytes)
+            buf = io.BytesIO(wav_bytes)
+            _, data = wavfile.read(buf)
+            if data.dtype == "int16":
+                data = data.astype("float32") / 32768.0
+            elif data.dtype == "int32":
+                data = data.astype("float32") / 2147483648.0
+            else:
+                data = data.astype("float32")
+            if data.ndim > 1:
+                data = data[:, 0]
+            pcm = (np.clip(data * float(self._volume), -1.0, 1.0) * 32767).astype("int16").tobytes()
 
-                interrupt = self._interrupt
+            interrupt = self._interrupt
+            done = threading.Event()
 
-                def _gen():
-                    pos = 0
+            def _gen():
+                pos = 0
+                try:
+                    num_frames = yield b""
                     while pos < len(pcm):
                         if interrupt.is_set():
                             return
-                        yield pcm[pos:pos + 4096]
-                        pos += 4096
-
-                device = miniaudio.PlaybackDevice(
-                    output_format=miniaudio.SampleFormat.SIGNED16,
-                    nchannels=1,
-                    sample_rate=sr,
-                    buffersize_msec=100,
-                )
-                self._playback_device = device
-                device.start(_gen())
-                try:
-                    while device.running and not interrupt.is_set():
-                        time.sleep(0.05)
+                        end = min(pos + num_frames * 2, len(pcm))  # SIGNED16 mono = 2 bytes/frame
+                        chunk = pcm[pos:end]
+                        pos = end
+                        num_frames = yield chunk
+                except Exception:
+                    pass
                 finally:
-                    device.stop()
-                    self._playback_device = None
+                    done.set()
+
+            device = miniaudio.PlaybackDevice(
+                output_format=miniaudio.SampleFormat.SIGNED16,
+                nchannels=1,
+                sample_rate=sr,
+                buffersize_msec=100,
+            )
+            self._playback_device = device
+            gen = _gen()
+            next(gen)
+            device.start(gen)
+            log.info("TTS _speak_edge: device started sr=%d pcm=%d bytes", sr, len(pcm))
+            try:
+                while not done.is_set() and not interrupt.is_set():
+                    done.wait(timeout=0.1)
+            finally:
+                device.stop()
+                self._playback_device = None
+            log.info("TTS _speak_edge: device stopped")
         except Exception as e:
-            log.error("TTS alert speak error: %s", e)
+            log.error("TTS alert speak error: %s", e, exc_info=True)
 
     def _speak_one(self, text: str, voice: str | None = None):
         self._speak_edge(text, voice)
@@ -229,10 +271,9 @@ class CommsWorker(QObject):
 
         mp3_bytes = self._loop.run_until_complete(_synth())
         if mp3_bytes:
-            with _AUDIO_LOCK:
-                self._interrupt.clear()
-                wav_bytes = _mp3_to_wav_bytes(mp3_bytes)
-                _dsp_and_play(wav_bytes, 22050, self._volume, pan, self._interrupt)
+            self._interrupt.clear()
+            wav_bytes = _mp3_to_wav_bytes(mp3_bytes)
+            _dsp_and_play(wav_bytes, 22050, self._volume, pan, self._interrupt)
 
     @pyqtSlot()
     def run(self):

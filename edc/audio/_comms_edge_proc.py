@@ -97,6 +97,7 @@ def _configure_audio_session():
 
 
 def _dsp_and_play(pcm_bytes: bytes, sample_rate: int, volume: float, pan: float, interrupt=None):
+    import threading as _threading
     import time as _time
     import numpy as np
     import miniaudio
@@ -153,13 +154,23 @@ def _dsp_and_play(pcm_bytes: bytes, sample_rate: int, volume: float, pan: float,
 
     pcm = full.astype("float32").tobytes()
 
+    done = _threading.Event()
+
     def _gen():
         pos = 0
-        while pos < len(pcm):
-            if interrupt is not None and interrupt.is_set():
-                return
-            yield pcm[pos:pos + 4096]
-            pos += 4096
+        try:
+            num_frames = yield b""
+            while pos < len(pcm):
+                if interrupt is not None and interrupt.is_set():
+                    return
+                end = min(pos + num_frames * 8, len(pcm))  # FLOAT32 stereo = 8 bytes/frame
+                chunk = pcm[pos:end]
+                pos = end
+                num_frames = yield chunk
+        except Exception:
+            pass
+        finally:
+            done.set()
 
     device = miniaudio.PlaybackDevice(
         output_format=miniaudio.SampleFormat.FLOAT32,
@@ -167,12 +178,15 @@ def _dsp_and_play(pcm_bytes: bytes, sample_rate: int, volume: float, pan: float,
         sample_rate=sr,
         buffersize_msec=100,
     )
-    device.start(_gen())
+    gen = _gen()
+    next(gen)
+    device.start(gen)
+    _configure_audio_session()
     try:
-        while device.running:
+        while not done.is_set():
             if interrupt is not None and interrupt.is_set():
                 break
-            _time.sleep(0.05)
+            done.wait(timeout=0.1)
     finally:
         device.stop()
 
