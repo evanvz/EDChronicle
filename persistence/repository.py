@@ -60,49 +60,61 @@ class Repository:
         distance_ls,
         volcanism: str = None,
         materials: str = None,
+        mass_em=None,
+        radius=None,
+        surface_gravity=None,
+        surface_temperature=None,
+        surface_pressure=None,
+        atmosphere_type: str = None,
+        atmosphere: str = None,
+        atmosphere_composition: str = None,
+        composition: str = None,
+        tidal_lock=None,
+        first_discovered=None,
+        first_mapped=None,
     ):
         self.db.execute(
             """
             INSERT INTO bodies (
-                system_address,
-                body_id,
-                body_name,
-                planet_class,
-                terraformable,
-                landable,
-                was_mapped,
-                dss_mapped,
-                estimated_value,
-                distance_ls,
-                volcanism,
-                materials
+                system_address, body_id, body_name, planet_class, terraformable,
+                landable, was_mapped, dss_mapped, estimated_value, distance_ls,
+                volcanism, materials, mass_em, radius, surface_gravity,
+                surface_temperature, surface_pressure, atmosphere_type, atmosphere,
+                atmosphere_composition, composition, tidal_lock, first_discovered,
+                first_mapped
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(system_address, body_id) DO UPDATE SET
-                body_name       = excluded.body_name,
-                planet_class    = excluded.planet_class,
-                terraformable   = excluded.terraformable,
-                landable        = excluded.landable,
-                was_mapped      = excluded.was_mapped,
-                dss_mapped      = excluded.dss_mapped,
-                estimated_value = excluded.estimated_value,
-                distance_ls     = excluded.distance_ls,
-                volcanism       = COALESCE(excluded.volcanism, bodies.volcanism),
-                materials       = COALESCE(excluded.materials, bodies.materials)
+                body_name               = excluded.body_name,
+                planet_class            = excluded.planet_class,
+                terraformable           = excluded.terraformable,
+                landable                = excluded.landable,
+                was_mapped              = excluded.was_mapped,
+                dss_mapped              = excluded.dss_mapped,
+                estimated_value         = excluded.estimated_value,
+                distance_ls             = excluded.distance_ls,
+                volcanism               = COALESCE(excluded.volcanism, bodies.volcanism),
+                materials               = COALESCE(excluded.materials, bodies.materials),
+                mass_em                 = COALESCE(excluded.mass_em, bodies.mass_em),
+                radius                  = COALESCE(excluded.radius, bodies.radius),
+                surface_gravity         = COALESCE(excluded.surface_gravity, bodies.surface_gravity),
+                surface_temperature     = COALESCE(excluded.surface_temperature, bodies.surface_temperature),
+                surface_pressure        = COALESCE(excluded.surface_pressure, bodies.surface_pressure),
+                atmosphere_type         = COALESCE(excluded.atmosphere_type, bodies.atmosphere_type),
+                atmosphere              = COALESCE(excluded.atmosphere, bodies.atmosphere),
+                atmosphere_composition  = COALESCE(excluded.atmosphere_composition, bodies.atmosphere_composition),
+                composition             = COALESCE(excluded.composition, bodies.composition),
+                tidal_lock              = COALESCE(excluded.tidal_lock, bodies.tidal_lock),
+                first_discovered        = COALESCE(excluded.first_discovered, bodies.first_discovered),
+                first_mapped            = COALESCE(excluded.first_mapped, bodies.first_mapped)
             """,
             (
-                system_address,
-                body_id,
-                body_name,
-                planet_class,
-                terraformable,
-                landable,
-                was_mapped,
-                dss_mapped,
-                estimated_value,
-                distance_ls,
-                volcanism,
-                materials,
+                system_address, body_id, body_name, planet_class, terraformable,
+                landable, was_mapped, dss_mapped, estimated_value, distance_ls,
+                volcanism, materials, mass_em, radius, surface_gravity,
+                surface_temperature, surface_pressure, atmosphere_type, atmosphere,
+                atmosphere_composition, composition, tidal_lock, first_discovered,
+                first_mapped,
             ),
         )
 
@@ -370,7 +382,19 @@ class Repository:
                 volcanism,
                 materials,
                 first_footfall,
-                has_footfall
+                has_footfall,
+                mass_em,
+                radius,
+                surface_gravity,
+                surface_temperature,
+                surface_pressure,
+                atmosphere_type,
+                atmosphere,
+                atmosphere_composition,
+                composition,
+                tidal_lock,
+                first_discovered,
+                first_mapped
             FROM bodies
             WHERE system_address = ?
             ORDER BY distance_ls IS NULL, distance_ls, body_name
@@ -402,26 +426,50 @@ class Repository:
         distance_ls: float | None,
         estimated_value: int | None,
         landable: int | None,
+        surface_gravity: float | None = None,
+        radius: float | None = None,
+        mass_em: float | None = None,
+        surface_temperature: float | None = None,
+        surface_pressure: float | None = None,
+        atmosphere_type: str | None = None,
+        volcanism: str | None = None,
+        tidal_lock: int | None = None,
     ):
         self.db.execute(
             """
             INSERT INTO spansh_bodies (
-                system_address, body_name, planet_class, distance_ls, estimated_value, landable
+                system_address, body_name, planet_class, distance_ls, estimated_value, landable,
+                surface_gravity, radius, mass_em, surface_temperature, surface_pressure,
+                atmosphere_type, volcanism, tidal_lock
             )
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(system_address, body_name) DO UPDATE SET
-                planet_class    = excluded.planet_class,
-                distance_ls     = excluded.distance_ls,
-                estimated_value = excluded.estimated_value,
-                landable        = excluded.landable
+                planet_class        = excluded.planet_class,
+                distance_ls         = excluded.distance_ls,
+                estimated_value     = excluded.estimated_value,
+                landable            = excluded.landable,
+                surface_gravity     = COALESCE(excluded.surface_gravity,     spansh_bodies.surface_gravity),
+                radius              = COALESCE(excluded.radius,              spansh_bodies.radius),
+                mass_em             = COALESCE(excluded.mass_em,             spansh_bodies.mass_em),
+                surface_temperature = COALESCE(excluded.surface_temperature, spansh_bodies.surface_temperature),
+                surface_pressure    = COALESCE(excluded.surface_pressure,    spansh_bodies.surface_pressure),
+                atmosphere_type     = COALESCE(excluded.atmosphere_type,     spansh_bodies.atmosphere_type),
+                volcanism           = COALESCE(excluded.volcanism,           spansh_bodies.volcanism),
+                tidal_lock          = COALESCE(excluded.tidal_lock,          spansh_bodies.tidal_lock)
             """,
-            (system_address, body_name, planet_class, distance_ls, estimated_value, landable),
+            (
+                system_address, body_name, planet_class, distance_ls, estimated_value, landable,
+                surface_gravity, radius, mass_em, surface_temperature, surface_pressure,
+                atmosphere_type, volcanism, tidal_lock,
+            ),
         )
 
     def get_spansh_bodies(self, system_address: int):
         return self.db.execute(
             """
-            SELECT body_name, planet_class, distance_ls, estimated_value, landable
+            SELECT body_name, planet_class, distance_ls, estimated_value, landable,
+                   surface_gravity, radius, mass_em, surface_temperature, surface_pressure,
+                   atmosphere_type, volcanism, tidal_lock
             FROM spansh_bodies
             WHERE system_address = ?
             ORDER BY distance_ls IS NULL, distance_ls, body_name

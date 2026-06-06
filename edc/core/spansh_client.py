@@ -227,12 +227,40 @@ class SpanshClient:
                 distance_ls = float(distance_ls)
             except (TypeError, ValueError):
                 distance_ls = 0.0
+
+            # Physical stats — convert Spansh units to journal-compatible units
+            # gravity: Spansh stores in G → journal stores in m/s²
+            _g = b.get("gravity")
+            gravity_ms2 = float(_g) * 9.80665 if isinstance(_g, (int, float)) else None
+            # radius: Spansh stores in km → journal stores in m
+            _r = b.get("radius")
+            radius_m = float(_r) * 1000.0 if isinstance(_r, (int, float)) else None
+            _em = b.get("earth_masses")
+            mass_em = float(_em) if isinstance(_em, (int, float)) else None
+            _t = b.get("surface_temperature")
+            surface_temperature = float(_t) if isinstance(_t, (int, float)) else None
+            # surface_pressure: Spansh stores in Pa (same as journal)
+            _p = b.get("surface_pressure")
+            surface_pressure = float(_p) if isinstance(_p, (int, float)) else None
+            atmosphere_type = b.get("atmosphere_type") or None
+            volcanism = b.get("volcanism_type") or None
+            _tl = b.get("is_rotational_period_tidally_locked")
+            tidal_lock = int(bool(_tl)) if isinstance(_tl, bool) else None
+
             out.append({
-                "name":            name,
-                "planet_class":    planet_class,
-                "distance_ls":     distance_ls,
-                "estimated_value": int(est_value),
-                "landable":        landable,
+                "name":               name,
+                "planet_class":       planet_class,
+                "distance_ls":        distance_ls,
+                "estimated_value":    int(est_value),
+                "landable":           landable,
+                "surface_gravity":    gravity_ms2,
+                "radius":             radius_m,
+                "mass_em":            mass_em,
+                "surface_temperature": surface_temperature,
+                "surface_pressure":   surface_pressure,
+                "atmosphere_type":    atmosphere_type,
+                "volcanism":          volcanism,
+                "tidal_lock":         tidal_lock,
             })
 
         return out, ""

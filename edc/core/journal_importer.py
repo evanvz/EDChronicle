@@ -436,10 +436,10 @@ class JournalImporter:
             or event.get("Volcanism")
             or None
         )
+        import json
         materials_raw = event.get("Materials") or []
         materials_json = None
         if isinstance(materials_raw, list) and materials_raw:
-            import json
             try:
                 mat_dict = {
                     str(m.get("Name", "") or "").strip().lower(): float(m.get("Percent", 0) or 0)
@@ -450,6 +450,51 @@ class JournalImporter:
                     materials_json = json.dumps(mat_dict)
             except Exception:
                 materials_json = None
+
+        mass_em = event.get("MassEM")
+        if not isinstance(mass_em, (int, float)):
+            mass_em = None
+
+        radius = event.get("Radius")
+        if not isinstance(radius, (int, float)):
+            radius = None
+
+        surface_gravity = event.get("SurfaceGravity")
+        if not isinstance(surface_gravity, (int, float)):
+            surface_gravity = None
+
+        surface_temperature = event.get("SurfaceTemperature")
+        if not isinstance(surface_temperature, (int, float)):
+            surface_temperature = None
+
+        surface_pressure = event.get("SurfacePressure")
+        if not isinstance(surface_pressure, (int, float)):
+            surface_pressure = None
+
+        atmosphere_type = event.get("AtmosphereType") or None
+        atmosphere = event.get("Atmosphere_Localised") or event.get("Atmosphere") or None
+
+        atmo_comp_raw = event.get("AtmosphereComposition")
+        atmo_comp_json = None
+        if isinstance(atmo_comp_raw, list) and atmo_comp_raw:
+            try:
+                atmo_comp_json = json.dumps(atmo_comp_raw)
+            except Exception:
+                pass
+
+        comp_raw = event.get("Composition")
+        comp_json = None
+        if isinstance(comp_raw, dict) and comp_raw:
+            try:
+                comp_json = json.dumps(comp_raw)
+            except Exception:
+                pass
+
+        tidal_lock_raw = event.get("TidalLock")
+        tidal_lock = int(bool(tidal_lock_raw)) if isinstance(tidal_lock_raw, bool) else None
+
+        was_discovered = event.get("WasDiscovered")
+        first_discovered = int(not bool(was_discovered)) if isinstance(was_discovered, bool) else None
 
         self.repo.save_body(
             system_address=system_address,
@@ -464,6 +509,17 @@ class JournalImporter:
             distance_ls=float(distance_ls) if distance_ls is not None else None,
             volcanism=volcanism_raw,
             materials=materials_json,
+            mass_em=float(mass_em) if mass_em is not None else None,
+            radius=float(radius) if radius is not None else None,
+            surface_gravity=float(surface_gravity) if surface_gravity is not None else None,
+            surface_temperature=float(surface_temperature) if surface_temperature is not None else None,
+            surface_pressure=float(surface_pressure) if surface_pressure is not None else None,
+            atmosphere_type=atmosphere_type,
+            atmosphere=atmosphere,
+            atmosphere_composition=atmo_comp_json,
+            composition=comp_json,
+            tidal_lock=tidal_lock,
+            first_discovered=first_discovered,
         )
 
         self.bodies_by_name[body_name] = CachedBody(
@@ -493,6 +549,7 @@ class JournalImporter:
         if cached is None or not isinstance(cached.body_id, int) or cached.body_id < 0:
             return
 
+        first_mapped = int(not bool(cached.was_mapped))
         cached.dss_mapped = 1
 
         self.repo.save_body(
@@ -506,6 +563,7 @@ class JournalImporter:
             dss_mapped=cached.dss_mapped,
             estimated_value=cached.estimated_value,
             distance_ls=cached.distance_ls,
+            first_mapped=first_mapped,
         )
 
     def _handle_disembark(self, event: dict[str, Any]) -> None:

@@ -601,11 +601,8 @@ class MainWindow(QMainWindow):
         if current_address != system_address or not bodies:
             log.info("Spansh enrichment discarded: addr mismatch or empty")
             return
-        already_scanned = self.repo.get_real_body_names(system_address)
         saved = 0
         for b in bodies:
-            if b["name"] in already_scanned:
-                continue
             self.repo.save_spansh_body(
                 system_address=system_address,
                 body_name=b["name"],
@@ -613,6 +610,14 @@ class MainWindow(QMainWindow):
                 distance_ls=b.get("distance_ls"),
                 estimated_value=b.get("estimated_value"),
                 landable=b.get("landable"),
+                surface_gravity=b.get("surface_gravity"),
+                radius=b.get("radius"),
+                mass_em=b.get("mass_em"),
+                surface_temperature=b.get("surface_temperature"),
+                surface_pressure=b.get("surface_pressure"),
+                atmosphere_type=b.get("atmosphere_type"),
+                volcanism=b.get("volcanism"),
+                tidal_lock=b.get("tidal_lock"),
             )
             saved += 1
         log.info("Spansh enrichment saved %d/%d bodies for address %d", saved, len(bodies), system_address)

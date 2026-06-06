@@ -31,6 +31,26 @@ class Database:
                 landable        INTEGER,
                 PRIMARY KEY (system_address, body_name)
             )""",
+            "ALTER TABLE bodies ADD COLUMN mass_em REAL",
+            "ALTER TABLE bodies ADD COLUMN radius REAL",
+            "ALTER TABLE bodies ADD COLUMN surface_gravity REAL",
+            "ALTER TABLE bodies ADD COLUMN surface_temperature REAL",
+            "ALTER TABLE bodies ADD COLUMN surface_pressure REAL",
+            "ALTER TABLE bodies ADD COLUMN atmosphere_type TEXT",
+            "ALTER TABLE bodies ADD COLUMN atmosphere TEXT",
+            "ALTER TABLE bodies ADD COLUMN atmosphere_composition TEXT",
+            "ALTER TABLE bodies ADD COLUMN composition TEXT",
+            "ALTER TABLE bodies ADD COLUMN tidal_lock INTEGER",
+            "ALTER TABLE bodies ADD COLUMN first_discovered INTEGER",
+            "ALTER TABLE bodies ADD COLUMN first_mapped INTEGER",
+            "ALTER TABLE spansh_bodies ADD COLUMN surface_gravity REAL",
+            "ALTER TABLE spansh_bodies ADD COLUMN radius REAL",
+            "ALTER TABLE spansh_bodies ADD COLUMN mass_em REAL",
+            "ALTER TABLE spansh_bodies ADD COLUMN surface_temperature REAL",
+            "ALTER TABLE spansh_bodies ADD COLUMN surface_pressure REAL",
+            "ALTER TABLE spansh_bodies ADD COLUMN atmosphere_type TEXT",
+            "ALTER TABLE spansh_bodies ADD COLUMN volcanism TEXT",
+            "ALTER TABLE spansh_bodies ADD COLUMN tidal_lock INTEGER",
         ]
         for sql in migrations:
             try:
@@ -38,6 +58,35 @@ class Database:
                 self.conn.commit()
             except Exception:
                 pass  # column/table already exists
+
+        self._apply_version_migrations()
+
+    # Bump this constant whenever a migration requires journals to be re-imported.
+    _REQUIRED_SCHEMA_VERSION = 2
+
+    def _apply_version_migrations(self):
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)"
+        )
+        self.conn.commit()
+
+        row = self.conn.execute("SELECT version FROM schema_version LIMIT 1").fetchone()
+        current = row[0] if row else 0
+
+        if current < self._REQUIRED_SCHEMA_VERSION:
+            # Body physical-stat columns were added — re-import all journals to populate them.
+            self.conn.execute("DELETE FROM processed_journals")
+            if current == 0:
+                self.conn.execute(
+                    "INSERT INTO schema_version (version) VALUES (?)",
+                    (self._REQUIRED_SCHEMA_VERSION,),
+                )
+            else:
+                self.conn.execute(
+                    "UPDATE schema_version SET version = ?",
+                    (self._REQUIRED_SCHEMA_VERSION,),
+                )
+            self.conn.commit()
 
     def close(self):
         self.conn.close()

@@ -95,6 +95,18 @@ class SystemDataLoader:
             except Exception:
                 _materials = {}
 
+            _atmo_comp_raw = row["atmosphere_composition"] if "atmosphere_composition" in row.keys() else None
+            try:
+                _atmo_comp = _json.loads(_atmo_comp_raw) if _atmo_comp_raw else None
+            except Exception:
+                _atmo_comp = None
+
+            _comp_raw = row["composition"] if "composition" in row.keys() else None
+            try:
+                _comp = _json.loads(_comp_raw) if _comp_raw else None
+            except Exception:
+                _comp = None
+
             rec = {
                 "BodyID": body_id if isinstance(body_id, int) else None,
                 "BodyName": body_name,
@@ -109,6 +121,18 @@ class SystemDataLoader:
                 "Materials":      _materials,
                 "FirstFootfall":  bool(row["first_footfall"]) if "first_footfall" in row.keys() else False,
                 "HasFootfall":    bool(row["has_footfall"])    if "has_footfall"    in row.keys() else False,
+                "MassEM":              row["mass_em"]             if "mass_em"             in row.keys() else None,
+                "Radius":              row["radius"]              if "radius"              in row.keys() else None,
+                "SurfaceGravity":      row["surface_gravity"]     if "surface_gravity"     in row.keys() else None,
+                "SurfaceTemperature":  row["surface_temperature"] if "surface_temperature" in row.keys() else None,
+                "SurfacePressure":     row["surface_pressure"]    if "surface_pressure"    in row.keys() else None,
+                "AtmosphereType":      row["atmosphere_type"]     if "atmosphere_type"     in row.keys() else None,
+                "Atmosphere":          row["atmosphere"]          if "atmosphere"          in row.keys() else None,
+                "AtmosphereComposition": _atmo_comp,
+                "Composition":         _comp,
+                "TidalLock":           bool(row["tidal_lock"])    if row["tidal_lock"] is not None else None,
+                "FirstDiscovered":     bool(row["first_discovered"]) if row["first_discovered"] is not None else None,
+                "FirstMapped":         bool(row["first_mapped"])     if row["first_mapped"]      is not None else None,
             }
 
             self.state.bodies[body_name] = rec
@@ -121,11 +145,32 @@ class SystemDataLoader:
         if loaded_body_count == 0 and existing_resolved_ids:
             self.state.resolved_body_ids.update(existing_resolved_ids)
 
-        # Merge Spansh-sourced bodies for any body not already known from real scans
+        # Merge Spansh data: new bodies added, existing bodies get NULL physical stats filled in
+        _SPANSH_PHYS = (
+            ("SurfaceGravity",    "surface_gravity"),
+            ("Radius",            "radius"),
+            ("MassEM",            "mass_em"),
+            ("SurfaceTemperature","surface_temperature"),
+            ("SurfacePressure",   "surface_pressure"),
+            ("AtmosphereType",    "atmosphere_type"),
+            ("Volcanism",         "volcanism"),
+            ("TidalLock",         "tidal_lock"),
+        )
         try:
             for row in self.repo.get_spansh_bodies(system_address):
                 body_name = row["body_name"]
-                if not body_name or body_name in self.state.bodies:
+                if not body_name:
+                    continue
+
+                if body_name in self.state.bodies:
+                    # Body already loaded from journal scan — patch any NULL physical stats
+                    existing = self.state.bodies[body_name]
+                    for rec_key, col in _SPANSH_PHYS:
+                        if existing.get(rec_key) is None and col in row.keys() and row[col] is not None:
+                            val = row[col]
+                            if rec_key == "TidalLock":
+                                val = bool(val)
+                            existing[rec_key] = val
                     continue
                 estimated_value = row["estimated_value"]
                 if not isinstance(estimated_value, int) and self.planet_values:
@@ -148,10 +193,17 @@ class SystemDataLoader:
                     "WasMapped":     False,
                     "DSSMapped":     False,
                     "EstimatedValue": estimated_value,
-                    "Volcanism":     "",
+                    "Volcanism":     row["volcanism"] if "volcanism" in row.keys() else "",
                     "Materials":     {},
                     "FirstFootfall": False,
                     "HasFootfall":   False,
+                    "SurfaceGravity":     row["surface_gravity"]     if "surface_gravity"     in row.keys() else None,
+                    "Radius":             row["radius"]              if "radius"              in row.keys() else None,
+                    "MassEM":             row["mass_em"]             if "mass_em"             in row.keys() else None,
+                    "SurfaceTemperature": row["surface_temperature"] if "surface_temperature" in row.keys() else None,
+                    "SurfacePressure":    row["surface_pressure"]    if "surface_pressure"    in row.keys() else None,
+                    "AtmosphereType":     row["atmosphere_type"]     if "atmosphere_type"     in row.keys() else None,
+                    "TidalLock":          bool(row["tidal_lock"])    if row["tidal_lock"] is not None else None,
                 }
         except Exception:
             logger.exception("Failed loading Spansh fallback bodies for %d", system_address)
