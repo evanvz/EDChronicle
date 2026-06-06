@@ -546,7 +546,6 @@ class MainWindow(QMainWindow):
         self._tts_spoken_ships: set = set()  # pilot|ship keys spoken this system
         self._tts_spoken_signal_bodies: set = set()  # body keys with signals already announced this system
         self._tts_ship_cooldown_until: float = 0.0  # monotonic timestamp
-        self._comms_cooldown_until: float = 0.0
         self._commander_quip_cooldown_until: float = 0.0
         self._replaying: bool = False  # True during journal bootstrap; suppresses all TTS
         self._enrich_thread: QThread | None = None
@@ -1347,10 +1346,6 @@ class MainWindow(QMainWindow):
         msg = (evt.get("Message_Localised") or evt.get("Message") or "").strip()
         if not msg or msg.startswith("$"):
             return
-        now = time.monotonic()
-        if now < self._comms_cooldown_until:
-            return
-        self._comms_cooldown_until = now + 4.0
         self.tts.speak_comms(msg)
 
     def _announce_loaded_system_bodies(self):
