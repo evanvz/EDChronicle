@@ -839,7 +839,7 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(8000, self._announce_loaded_system_bodies)
             farm_brief = self._farming_arrival_brief(self.state)
             if farm_brief:
-                QTimer.singleShot(13500, lambda t=farm_brief: self.tts.speak(t, priority=2))
+                QTimer.singleShot(13500, lambda t=farm_brief: self.tts.speak(t, priority=5))
 
         if name == "ReceiveText":
             self._handle_comms_tts(evt)
@@ -1408,9 +1408,9 @@ class MainWindow(QMainWindow):
             "ScanOrganic":        3,
             "SellOrganicData":    3,
             "StartJump":          4,
-            "FSDJump":            5,
-            "Location":           5,
-            "LoadGame":           5,
+            "FSDJump":            4,
+            "Location":           4,
+            "LoadGame":           4,
             "SAASignalsFound":    5,
             "FSSBodySignals":     5,
             "FSSSignalDiscovered": 5,
