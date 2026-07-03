@@ -2,7 +2,7 @@
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/bobrogers_solo)
 
-EDChronicle is a Python desktop companion app for Elite Dangerous built for the solo player, with a focus on Exploration, Exobiology, Combat, and PowerPlay. It monitors live journal entries and imports historical journals into a local SQLite database. All data is derived exclusively from in-game journal entries — no external APIs or third-party data sources are used.
+EDChronicle is a Python desktop companion app for Elite Dangerous built for the solo player, with a focus on Exploration, Exobiology, Combat, and PowerPlay. It monitors live journal entries and imports historical journals into a local SQLite database. Body enrichment data is optionally fetched from [Spansh](https://spansh.co.uk) when local journal data is insufficient.
 
 ## Inspiration
 
@@ -10,21 +10,43 @@ Inspired by [EDCoPilot](https://www.razzafrag.com/) by CMDR RazzaFrag.
 
 ## What the app currently does
 
-EDChronicle currently includes:
+### Exploration
+- Live journal monitoring and in-memory game state tracking
+- Historical journal import with full backfill into local SQLite database
+- Tracks all scanned bodies per system: planet class, distance, estimated value, landable status
+- Detects and displays body signals: biological, geological, Guardian, Thargoid, human
+- Tracks first discovery, first mapping, and first footfall status per body
+- Planet detail popup with full physical stats: gravity, radius, surface temperature, pressure, atmosphere type and composition, volcanism, tidal lock, mass
+- Physical stats backfilled from Spansh when original journal files are no longer on disk
+- Full system scan (FSS) progress tracking
 
-- Live journal monitoring
-- Live status monitoring
-- In-memory game state tracking
-- UI updates driven by incoming events
-- Historical journal import
-- Local SQLite persistence for selected imported data
-- Exploration-related state handling
-- Exobiology-related state handling
-- PowerPlay-related state handling
-- Item/material metadata support
-- User settings management
-- Text-to-speech voice alerts for in-game events
-- Panel switching for Exploration, Exobiology, Combat, and PowerPlay views
+### Exobiology
+- Tracks genus, species, and variant per body
+- Sample progress tracking (1 / 2 / 3 per organism)
+- Estimated credit value per species with configurable high-value multiplier
+- Codex entry logging and DSS genus discovery tracking
+
+### Combat
+- Kill tracking and bounty logging per session
+- Unsold combat total with persistent session ledger
+
+### PowerPlay
+- Live system type detection on every jump: reinforcement, undermining, or acquisition
+- Displays controlling power, PP state, reinforcement score, and undermining score
+- PowerPlay Finder tab — searches Spansh for nearby systems by mission type (reinforcement, undermining, acquisition) with distance and value filters
+- Activity guide per system type driven by a local `powerplay_activities.json` config
+- TTS megaship merit alert when a megaship is detected in a reinforcement or acquisition system
+
+### Voice / TTS alerts
+- Text-to-speech announcements via Edge TTS (Microsoft neural voices)
+- Priority queue — combat alerts interrupt lower-priority exploration cues
+- Per-event TTS toggle in Settings (each event type can be enabled/disabled independently)
+- NPC and system text comms read aloud via a dedicated comms audio channel
+- Voice command recognition via Vosk (offline, no cloud dependency)
+- Announcement examples: FSD jump, arrival, system PP type, first discovery, first mapping, first footfall, SAA complete, FSS complete, bio/geo/Guardian/Thargoid signals, exobiology scan progress, combat under attack
+
+### Overview panel
+- Single-screen HUD showing current system, body count, PP state, active signals, unresolved bodies, and recommended actions
 
 ## Screenshots
 
@@ -38,38 +60,50 @@ EDChronicle currently includes:
 
 ## Current architecture at a glance
 
-The application currently has two important runtime paths:
+The application has three main runtime paths:
 
 ### 1. Live runtime path
 
-This path handles what happens while the game is running.
+Handles all in-game events while playing.
 
 Flow:
 
 1. `edc/app.py` bootstraps the application
 2. `edc/ui/main_window.py` creates the main UI
-3. `MainWindow.start_auto_watch()` starts live watchers
+3. `MainWindow.start_auto_watch()` starts live journal and status watchers
 4. `edc/core/journal_watcher.py` watches journal files and emits events
 5. `edc/ui/main_window.py::_on_event(evt)` receives live events
 6. `edc/core/event_engine.py::process(event)` updates in-memory state
-7. `MainWindow` updates logging and refreshes UI elements
+7. `MainWindow` refreshes UI panels and routes events to TTS
 
 ### 2. Historical import path
 
-This path handles backfilling historical journal data into local persistence.
+Backfills historical journal data into local SQLite on startup.
 
 Flow:
 
-1. `edc/app.py::run()` instantiates `JournalImporter`
-2. `edc/core/journal_importer.py::import_all()` starts import processing
-3. Journal files are parsed and normalized
-4. Repository methods in `persistence/repository.py` persist imported data
-5. Processed journal files are marked as imported
+1. `edc/app.py` prepares an `import_runner` and passes it to `SplashScreen`
+2. `SplashScreen` runs the import in a background thread, showing live progress
+3. `edc/core/journal_importer.py::import_all()` processes all unprocessed journal files
+4. Repository methods in `persistence/repository.py` persist systems, bodies, exobiology, and signals
+5. Processed journal files are marked to prevent re-import on subsequent startups
+6. Main window only opens after the import completes
+
+### 3. Spansh enrichment path
+
+Fetches body data for the current system when local journal data is missing or incomplete.
+
+Flow:
+
+1. On `FSDJump` or `Location`, `MainWindow` triggers a background `SpanshWorker`
+2. `edc/core/spansh_client.py` queries the Spansh API for the current system
+3. Physical stats (gravity, radius, temperature, pressure, atmosphere, etc.) are saved to `spansh_bodies` for all bodies — including already-scanned ones — so they can backfill NULL fields in older records
+4. `edc/ui/system_data_loader.py` merges Spansh stats into existing body recs for any fields that are still NULL after journal loading
 
 ## Current top-level module ownership
 
 ### `edc/core`
-Core runtime behavior, state management, live watchers, importer logic, and item catalog support.
+Core runtime: state management, live watchers, journal importer, Spansh client, PowerPlay activity table.
 
 Notable files:
 - `event_engine.py`
@@ -77,10 +111,12 @@ Notable files:
 - `journal_watcher.py`
 - `status_watcher.py`
 - `state.py`
+- `spansh_client.py`
+- `powerplay_activities.py`
 - `item_catalog.py`
 
 ### `edc/engine/handlers`
-Feature-specific event handling logic.
+Feature-specific event handling logic (state mutations driven by journal events).
 
 Notable files:
 - `exploration.py`
@@ -88,33 +124,68 @@ Notable files:
 - `inventory.py`
 - `powerplay.py`
 
+### `edc/audio`
+TTS engine, audio playback, voice command recognition, and per-feature phrase banks.
+
+Notable files:
+- `tts_engine.py` — Edge TTS synthesis, priority queue, miniaudio playback
+- `_alert_edge_proc.py` — alert audio playback subprocess
+- `_comms_edge_proc.py` — comms channel audio subprocess
+- `voice_commands.py` — Vosk offline voice recognition
+- `handlers/exploration.py` — exploration TTS phrase pools
+- `handlers/powerplay.py` — PowerPlay TTS phrase pools
+- `handlers/combat.py` — combat TTS phrase pools
+- `handlers/exobiology.py` — exobiology TTS phrase pools
+
 ### `edc/ui`
-Main UI, formatting helpers, and settings dialog.
+Main window, splash screen, system data loader, formatting helpers, and settings dialog.
 
 Notable files:
 - `main_window.py`
+- `splash_screen.py`
+- `system_data_loader.py`
+- `planet_detail_dialog.py`
 - `settings_dialog.py`
 - `formatting.py`
 
-### `persistence`
-SQLite schema, connection layer, and repository/data access layer.
+### `edc/ui/panels`
+Individual tab panels rendered within the main window.
 
 Notable files:
-- `database.py`
-- `repository.py`
-- `schema.py`
+- `overview_panel.py`
+- `exploration_panel.py`
+- `exobiology_panel.py`
+- `combat_panel.py`
+- `powerplay_panel.py`
+- `powerplay_finder_panel.py`
+
+### `persistence`
+SQLite schema, connection layer, repository/data access layer, and schema version migrations.
+
+Notable files:
+- `database.py` — connection management and `run_migrations()` for schema upgrades
+- `repository.py` — all read/write operations
+- `schema.py` — table definitions
 
 ## Persistence model
 
-The historical importer currently persists data through repository methods such as:
+### Tables
 
-- `save_system(...)`
-- `save_body(...)`
-- `save_body_signals(...)`
-- `save_exobiology(...)`
-- `mark_journal_processed(...)`
+| Table | Contents |
+|-------|----------|
+| `systems` | Visited systems: name, body count, FSS complete, first/last visit, visit count |
+| `bodies` | Scanned planets: class, distance, value, signals, physical stats (gravity, radius, temp, pressure, atmosphere, composition, tidal lock, first discovered/mapped) |
+| `body_signals` | Bio, geo, and human signal counts per body |
+| `spansh_bodies` | Spansh-sourced body data used when journal data is missing |
+| `exobiology` | Genus, species, variant, and sample count per body |
+| `codex_entries` | Codex entry ID, name, and base value per organism |
+| `dss_genus_discovery` | Genus discoveries recorded via DSS scan |
+| `processed_journals` | Journal files already imported (file name + size) |
+| `schema_version` | Tracks DB schema version for controlled migrations |
 
-Live event processing currently updates in-memory state through `EventEngine` and UI logic through `MainWindow`. Historical import is the main confirmed persistence path.
+### Schema migrations
+
+`database.py::run_migrations()` runs on every startup and applies any pending `ALTER TABLE` statements safely (wrapped in try/except so already-existing columns are silently skipped). A `schema_version` table tracks which version the DB is on. Version upgrades can trigger one-time actions such as clearing `processed_journals` to force a full journal re-import when new columns need backfilling.
 
 ## Development tooling
 
@@ -123,7 +194,7 @@ Live event processing currently updates in-memory state through `EventEngine` an
 | Visual Studio Code | Primary IDE |
 | Claude Code (VS Code extension) | AI-assisted analysis, architecture discussion, and code changes |
 | Python venv (Windows) | Isolated runtime environment |
-| Git | Version control with branch-based workflow |
+| Git | Version control |
 | GitHub | Remote repository and release tracking |
 
 ## Installation
@@ -183,4 +254,3 @@ MIT License — free to use, modify and distribute, provided the original copyri
 Copyright © 2026 Evan van Zyl (bobrogers_solo)
 
 See [LICENSE](../LICENSE) for the full license text.
-
