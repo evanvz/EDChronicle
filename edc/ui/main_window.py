@@ -1279,6 +1279,9 @@ class MainWindow(QMainWindow):
                         daemon=True,
                     ).start()
                     log.info("Ship command fired: '%s' → %s (×%d)", phrase, cmd.get("action"), repeat)
+                    confirm = cmd.get("confirm", "").strip()
+                    if confirm:
+                        self.tts.speak(confirm, priority=3)
                 return
 
     def _on_tts_enabled_changed(self, checked: bool):

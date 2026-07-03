@@ -44,7 +44,7 @@ class _AddEditDialog(QDialog):
 
     def __init__(self, parent, bindings: dict[str, ActionBinding],
                  phrase: str = "", action: str = "", enabled: bool = True,
-                 repeat: int = 1, input_pref: str = "controller"):
+                 repeat: int = 1, confirm: str = "", input_pref: str = "controller"):
         super().__init__(parent)
         self.setWindowTitle("Voice Command")
         self.setMinimumWidth(420)
@@ -80,6 +80,11 @@ class _AddEditDialog(QDialog):
             self._repeat_combo.addItem(str(i), i)
         self._repeat_combo.setCurrentIndex(repeat - 1)
         layout.addWidget(self._repeat_combo)
+
+        layout.addWidget(QLabel("Confirm phrase (TTS spoken after command fires, blank = silent):"))
+        self._confirm_edit = QLineEdit(confirm)
+        self._confirm_edit.setPlaceholderText("e.g. Boosting.")
+        layout.addWidget(self._confirm_edit)
 
         self._enabled_check = QCheckBox("Enabled")
         self._enabled_check.setChecked(enabled)
@@ -119,6 +124,7 @@ class _AddEditDialog(QDialog):
             "action":   self._action_combo.currentText().strip(),
             "enabled":  self._enabled_check.isChecked(),
             "repeat":   self._repeat_combo.currentData(),
+            "confirm":  self._confirm_edit.text().strip(),
         }
 
 
@@ -385,6 +391,7 @@ class VoiceCommandsPanel(QWidget):
             action=cmd.get("action", ""),
             enabled=cmd.get("enabled", True),
             repeat=cmd.get("repeat", 1),
+            confirm=cmd.get("confirm", ""),
             input_pref=self._input_pref(),
         )
         if dlg.exec() != QDialog.DialogCode.Accepted:
