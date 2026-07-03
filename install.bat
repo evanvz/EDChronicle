@@ -1,4 +1,5 @@
 @echo off
+cd /d "%~dp0"
 echo EDChronicle - Install
 echo =====================
 
@@ -10,17 +11,20 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo Creating virtual environment...
-if exist .venv rmdir /s /q .venv >nul 2>&1
-python -m venv .venv >nul 2>&1
-if not exist .venv\Scripts\python.exe (
-    echo ERROR: Failed to create virtual environment.
-    pause
-    exit /b 1
+if exist .venv\Scripts\python.exe (
+    echo Virtual environment already exists. Skipping creation.
+) else (
+    echo Creating virtual environment...
+    python -m venv .venv
+    if not exist .venv\Scripts\python.exe (
+        echo ERROR: Failed to create virtual environment.
+        pause
+        exit /b 1
+    )
 )
 
-echo Installing dependencies...
-.venv\Scripts\python.exe -m pip install -r requirements.txt
+echo Installing / updating dependencies...
+.venv\Scripts\python.exe -m pip install --upgrade -r requirements.txt
 
 echo.
 echo Installation complete. Run launch.bat to start EDChronicle.
