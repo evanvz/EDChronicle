@@ -8,3 +8,5 @@ edge-tts>=6.1
 miniaudio>=1.8
 vosk>=0.3.45
 pycaw>=20230407
+pydirectinput>=1.0.4
+vgamepad>=0.1.0

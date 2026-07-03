@@ -1,8 +1,13 @@
 """
-Voice command listener — offline speech recognition via vosk.
-Requires the trigger word "navigate" before a tab name to prevent false positives
-from game audio or background speech. Fires immediately on recognition.
-Post-switch mic blackout prevents TTS echo from re-triggering.
+Voice command listener — offline speech recognition via Vosk.
+
+Two command domains:
+
+  App navigation  — "which to [tab]" switches the active panel
+  Ship commands   — "[trigger] [phrase]" fires an in-game action
+
+Both share a single Vosk recogniser with a combined grammar built from all
+active phrases.  Post-action mic blackout prevents TTS echo re-triggering.
 """
 import json
 import logging
@@ -16,6 +21,8 @@ from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 
 log = logging.getLogger(__name__)
 
+# ── App navigation ─────────────────────────────────────────────────────────────
+
 TAB_PHRASES: dict[str, str] = {
     "overview":     "Overview",
     "hud":          "Overview",
@@ -27,15 +34,14 @@ TAB_PHRASES: dict[str, str] = {
     "intel":        "Intel",
 }
 
-_TRIGGER_WORDS = {"which", "to"}
+_NAV_TRIGGER_WORDS = {"which", "to"}
 
-_VOCAB_WORDS = sorted({w for phrase in TAB_PHRASES for w in phrase.split()} | _TRIGGER_WORDS)
-_GRAMMAR     = json.dumps(_VOCAB_WORDS + ["[unk]"])
+# ── Vosk model ────────────────────────────────────────────────────────────────
 
 MODEL_URL      = "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
 MODEL_DIR_NAME = "vosk"
 
-_POST_SWITCH_BLACKOUT = 3.0
+_POST_ACTION_BLACKOUT = 3.0
 
 
 def ensure_model(models_dir: Path) -> Path | None:
@@ -51,7 +57,6 @@ def ensure_model(models_dir: Path) -> Path | None:
             top_dirs = {Path(name).parts[0] for name in zf.namelist()}
             zf.extractall(models_dir)
         zip_path.unlink(missing_ok=True)
-        # Rename extracted folder to the expected MODEL_DIR_NAME
         for extracted in top_dirs:
             src = models_dir / extracted
             if src.exists() and src != model_path:
@@ -70,39 +75,98 @@ def ensure_model(models_dir: Path) -> Path | None:
 
 class VoiceCommandListener(QObject):
     """
-    Say "which to [tab]" to switch tabs immediately.
-    Both "which" and "to" must appear in the same utterance as the tab name.
-    8-second mic blackout after each switch prevents TTS echo re-triggering.
+    Listens for voice commands and emits signals for both domains.
+
+    App navigation:  say "which to [tab]"
+    Ship commands:   say "[trigger_word] [phrase]"  e.g. "ship boost"
+
+    Call update_ship_commands() whenever the command list or trigger word changes.
     """
 
-    command_detected = pyqtSignal(str)
+    command_detected      = pyqtSignal(str)   # tab name for app navigation
+    ship_command_detected = pyqtSignal(str)   # phrase for ship commands
 
     SAMPLE_RATE = 16000
     BLOCK_SIZE  = 8000
 
     def __init__(self, models_dir: Path):
         super().__init__()
-        self._models_dir = models_dir
-        self._running    = False
+        self._models_dir    = models_dir
+        self._running       = False
+        self._trigger_word  = "ship"
+        self._ship_commands: list[dict] = []   # list of {phrase, _binding, repeat}
+        self._grammar_json  = self._build_grammar()
+
+    # ── Public config API ─────────────────────────────────────────────────────
+
+    def update_ship_commands(self, commands: list[dict], trigger_word: str = "ship"):
+        """Called from main thread whenever voice_commands.json changes."""
+        self._ship_commands = commands
+        self._trigger_word  = trigger_word.lower().strip() or "ship"
+        self._grammar_json  = self._build_grammar()
+        log.info("Ship commands updated: %d active, trigger='%s'",
+                 len(commands), self._trigger_word)
+
+    # ── Grammar ───────────────────────────────────────────────────────────────
+
+    def _build_grammar(self) -> str:
+        words: set[str] = set()
+        # Navigation words
+        words.update(TAB_PHRASES.keys())
+        words.update(_NAV_TRIGGER_WORDS)
+        # Ship trigger + all phrase words
+        words.add(self._trigger_word)
+        for cmd in self._ship_commands:
+            for w in cmd.get("phrase", "").lower().split():
+                words.add(w)
+        vocab = sorted(words) + ["[unk]"]
+        return json.dumps(vocab)
+
+    # ── Matching ──────────────────────────────────────────────────────────────
 
     def _clean(self, text: str) -> list[str]:
         return [w for w in text.lower().split() if w != "[unk]"]
 
-    def _match(self, words: list[str]) -> str | None:
+    def _match_nav(self, words: list[str]) -> str | None:
         word_set = set(words)
-        if not _TRIGGER_WORDS.issubset(word_set):
+        if not _NAV_TRIGGER_WORDS.issubset(word_set):
             return None
         for word in words:
             if word in TAB_PHRASES:
                 return TAB_PHRASES[word]
         return None
 
+    def _match_ship(self, words: list[str]) -> dict | None:
+        if self._trigger_word not in words:
+            return None
+        # Words after the trigger
+        try:
+            idx = words.index(self._trigger_word)
+            tail = words[idx + 1:]
+        except ValueError:
+            return None
+        if not tail:
+            return None
+        tail_str = " ".join(tail)
+        # Exact phrase match first
+        for cmd in self._ship_commands:
+            if cmd.get("phrase", "").lower() == tail_str:
+                return cmd
+        # Partial: all phrase words present in tail
+        for cmd in self._ship_commands:
+            phrase_words = set(cmd.get("phrase", "").lower().split())
+            if phrase_words and phrase_words.issubset(set(tail)):
+                return cmd
+        return None
+
+    # ── Main loop ─────────────────────────────────────────────────────────────
+
     @pyqtSlot()
     def run(self):
         try:
             from vosk import Model, KaldiRecognizer
         except ImportError:
-            log.error("vosk not installed — voice commands unavailable. Run: pip install vosk")
+            log.error("vosk not installed — voice commands unavailable")
             return
 
         model_path = ensure_model(self._models_dir)
@@ -112,14 +176,14 @@ class VoiceCommandListener(QObject):
 
         try:
             model = Model(str(model_path))
-            rec   = KaldiRecognizer(model, self.SAMPLE_RATE, _GRAMMAR)
         except Exception as exc:
-            log.error("vosk init failed: %s", exc)
+            log.error("vosk model init failed: %s", exc)
             return
 
-        self._running    = True
-        blackout_until   = 0.0
-        log.info("Voice command listener active — say 'which to [tab]' to switch tabs")
+        self._running  = True
+        blackout_until = 0.0
+        log.info("Voice command listener active — trigger='%s', %d ship commands",
+                 self._trigger_word, len(self._ship_commands))
 
         try:
             import miniaudio
@@ -127,6 +191,13 @@ class VoiceCommandListener(QObject):
             audio_q: queue.Queue = queue.Queue()
 
             while self._running:
+                # Rebuild recogniser each loop so grammar picks up any updates
+                try:
+                    rec = KaldiRecognizer(model, self.SAMPLE_RATE, self._grammar_json)
+                except Exception as exc:
+                    log.error("KaldiRecognizer init failed: %s", exc)
+                    break
+
                 def _capture_gen():
                     received = yield b""
                     while self._running:
@@ -168,16 +239,28 @@ class VoiceCommandListener(QObject):
                         words  = self._clean(result.get("text", ""))
                         if not words:
                             continue
+
                         now = time.monotonic()
                         if now < blackout_until:
                             log.debug("Blackout active — ignoring: %s", words)
                             continue
-                        tab = self._match(words)
-                        if not tab:
+
+                        # Try ship command first
+                        ship_cmd = self._match_ship(words)
+                        if ship_cmd:
+                            phrase = ship_cmd.get("phrase", "")
+                            log.debug("Ship command: %s → %s", words, phrase)
+                            self.ship_command_detected.emit(phrase)
+                            blackout_until = now + _POST_ACTION_BLACKOUT
                             continue
-                        log.debug("Voice command: %s → %s", words, tab)
-                        self.command_detected.emit(tab)
-                        blackout_until = now + _POST_SWITCH_BLACKOUT
+
+                        # Try app navigation
+                        tab = self._match_nav(words)
+                        if tab:
+                            log.debug("Nav command: %s → %s", words, tab)
+                            self.command_detected.emit(tab)
+                            blackout_until = now + _POST_ACTION_BLACKOUT
+
                 except Exception as exc:
                     log.warning("Voice capture error, restarting in 3s: %s", exc)
                     time.sleep(3)
@@ -188,7 +271,7 @@ class VoiceCommandListener(QObject):
                         pass
 
         except SystemExit as exc:
-            log.critical("Voice command listener SystemExit — suppressing to keep app alive: %r", exc, exc_info=True)
+            log.critical("Voice command listener SystemExit — suppressing: %r", exc, exc_info=True)
         except Exception as exc:
             log.error("Voice command listener error: %s", exc)
 

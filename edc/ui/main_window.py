@@ -54,6 +54,8 @@ from edc.core.spansh_client import SpanshClient as _SpanshClient
 from edc.ui import formatting as fmt
 from edc.audio.tts_engine import TTSEngine
 from edc.audio.voice_commands import VoiceCommandListener
+from edc.core.ship_command_dispatcher import ShipCommandDispatcher
+from edc.ui.panels.voice_commands_panel import VoiceCommandsPanel
 from edc.audio.handlers.exploration import ExplorationPhrases
 from edc.audio.handlers.exobiology import ExobiologyPhrases
 from edc.audio.handlers.combat import CombatPhrases
@@ -419,6 +421,13 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.materials_panel)
         self.sidebar.addItem("Materials")
 
+        # Voice Commands tab
+        _vc_config_path = app_dir / "settings" / "voice_commands.json"
+        self.voice_commands_panel = VoiceCommandsPanel(_vc_config_path)
+        self.voice_commands_panel.commands_changed.connect(self._on_voice_commands_config_changed)
+        self.stack.addWidget(self.voice_commands_panel)
+        self.sidebar.addItem("Voice Cmds")
+
         # Settings tab
         tab_settings = QWidget()
         st = QVBoxLayout(tab_settings)
@@ -555,6 +564,7 @@ class MainWindow(QMainWindow):
         self._voice_cmd_models_dir = app_dir / "models"
         self._voice_cmd_worker = None
         self._voice_cmd_thread = None
+        self._ship_dispatcher = ShipCommandDispatcher()
         if bool(getattr(self.cfg, "voice_commands_enabled", False)):
             self._start_voice_commands()
 
@@ -1190,12 +1200,26 @@ class MainWindow(QMainWindow):
         if self._voice_cmd_thread and self._voice_cmd_thread.isRunning():
             return
         self._voice_cmd_worker = VoiceCommandListener(self._voice_cmd_models_dir)
+        # Push current ship commands into the listener before starting
+        self._sync_ship_commands_to_listener()
         self._voice_cmd_thread = QThread()
         self._voice_cmd_worker.moveToThread(self._voice_cmd_thread)
         self._voice_cmd_thread.started.connect(self._voice_cmd_worker.run)
         self._voice_cmd_worker.command_detected.connect(self._on_voice_command)
+        self._voice_cmd_worker.ship_command_detected.connect(self._on_ship_voice_command)
         self._voice_cmd_thread.start()
         log.info("Voice commands started")
+
+    def _sync_ship_commands_to_listener(self):
+        if not self._voice_cmd_worker:
+            return
+        cmds    = self.voice_commands_panel.active_commands()
+        trigger = self.voice_commands_panel.trigger_word()
+        self._voice_cmd_worker.update_ship_commands(cmds, trigger)
+
+    def _on_voice_commands_config_changed(self):
+        """Called when the user edits the Voice Commands panel."""
+        self._sync_ship_commands_to_listener()
 
     def _stop_voice_commands(self):
         if self._voice_cmd_worker:
@@ -1239,6 +1263,23 @@ class MainWindow(QMainWindow):
         if idx is None:
             return
         self.sidebar.setCurrentRow(idx)
+
+    def _on_ship_voice_command(self, phrase: str):
+        """Dispatch a recognised ship voice command via pydirectinput / vgamepad."""
+        cmds = self.voice_commands_panel.active_commands()
+        for cmd in cmds:
+            if cmd.get("phrase", "").lower() == phrase.lower():
+                binding = cmd.get("_binding")
+                repeat  = int(cmd.get("repeat", 1))
+                if binding:
+                    import threading
+                    threading.Thread(
+                        target=self._ship_dispatcher.dispatch,
+                        args=(binding, repeat),
+                        daemon=True,
+                    ).start()
+                    log.info("Ship command fired: '%s' → %s (×%d)", phrase, cmd.get("action"), repeat)
+                return
 
     def _on_tts_enabled_changed(self, checked: bool):
         try:
