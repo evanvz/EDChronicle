@@ -208,13 +208,15 @@ Requires Python 3.10 or later — download from [python.org](https://www.python.
 install.bat
 ```
 
-This creates a virtual environment and installs all dependencies.
+This creates a Python virtual environment and installs all dependencies. It is safe to run more than once — if the virtual environment already exists it is left untouched and only new or changed dependencies are installed.
 
 ## Running the application
 
 ```
 launch.bat
 ```
+
+Double-click `launch.bat` from anywhere — it always resolves paths relative to the project folder. If the virtual environment is not found it will tell you to run `install.bat` first.
 
 > **First launch note:** On first run, EDChronicle will import all your existing journal files into its local database. This can take a minute or two depending on how many journals you have. Progress is shown on the startup screen. Subsequent launches are fast — only new journals are processed.
 
@@ -224,6 +226,8 @@ launch.bat
 git pull
 install.bat
 ```
+
+`install.bat` is safe to re-run after an update — it will not recreate the virtual environment, only install any newly added dependencies.
 
 ## Feedback, suggestions and issues
 
