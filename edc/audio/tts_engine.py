@@ -100,6 +100,10 @@ class TTSWorker(QObject):
         self._interrupt        = threading.Event()
         self._loop             = None  # created once in run()
         self._playback_device  = None  # current miniaudio PlaybackDevice
+        self._output_device_name: str | None = None
+
+    def set_output_device(self, device_name: str | None):
+        self._output_device_name = device_name
 
     def interrupt(self):
         """Stop the currently playing phrase so a higher-priority one can play."""
@@ -111,7 +115,7 @@ class TTSWorker(QObject):
             except Exception:
                 pass
 
-    def _speak_edge(self, text: str, voice: str | None = None):
+    def _speak_edge(self, text: str, voice: str | None = None, vol_scale: float = 1.0):
         import io
         import numpy as np
         import miniaudio
@@ -153,7 +157,7 @@ class TTSWorker(QObject):
                 data = data.astype("float32")
             if data.ndim > 1:
                 data = data[:, 0]
-            pcm = (np.clip(data * float(self._volume), -1.0, 1.0) * 32767).astype("int16").tobytes()
+            pcm = (np.clip(data * float(self._volume) * float(vol_scale), -1.0, 1.0) * 32767).astype("int16").tobytes()
 
             interrupt = self._interrupt
             done = threading.Event()
@@ -174,11 +178,13 @@ class TTSWorker(QObject):
                 finally:
                     done.set()
 
+            from edc.audio.audio_devices import resolve_playback_device_id
             device = miniaudio.PlaybackDevice(
                 output_format=miniaudio.SampleFormat.SIGNED16,
                 nchannels=1,
                 sample_rate=sr,
                 buffersize_msec=100,
+                device_id=resolve_playback_device_id(self._output_device_name),
             )
             self._playback_device = device
             gen = _gen()
@@ -195,8 +201,8 @@ class TTSWorker(QObject):
         except Exception as e:
             log.error("TTS alert speak error: %s", e, exc_info=True)
 
-    def _speak_one(self, text: str, voice: str | None = None):
-        self._speak_edge(text, voice)
+    def _speak_one(self, text: str, voice: str | None = None, vol_scale: float = 1.0):
+        self._speak_edge(text, voice, vol_scale)
 
     @pyqtSlot()
     def run(self):
@@ -210,12 +216,14 @@ class TTSWorker(QObject):
         try:
             while self._running:
                 try:
-                    _, _counter, text = self._queue.get(timeout=0.5)
+                    item = self._queue.get(timeout=0.5)
+                    text = item[2]
+                    vol_scale = item[3] if len(item) > 3 else 1.0
                     if text is None:
                         break
                     self._interrupt.clear()
                     try:
-                        self._speak_one(text)
+                        self._speak_one(text, vol_scale=vol_scale)
                         log.debug(f"TTS spoke: {text[:60]}")
                     except Exception as e:
                         log.error(f"TTS speak error: {e}")
@@ -252,10 +260,15 @@ class CommsWorker(QObject):
         self._running   = True
         self._loop      = None  # created once in run()
         self._interrupt = threading.Event()
+        self._output_device_name: str | None = None
+
+    def set_output_device(self, device_name: str | None):
+        self._output_device_name = device_name
 
     def _speak_one(self, text: str, voice_id: str | None):
         import random as _random
         from edc.audio._comms_edge_proc import _mp3_to_wav_bytes, _dsp_and_play
+        from edc.audio.audio_devices import resolve_playback_device_id
 
         pan = _random.uniform(-0.7, 0.7)
         voice = voice_id or "en-US-GuyNeural"
@@ -273,7 +286,8 @@ class CommsWorker(QObject):
         if mp3_bytes:
             self._interrupt.clear()
             wav_bytes = _mp3_to_wav_bytes(mp3_bytes)
-            _dsp_and_play(wav_bytes, 22050, self._volume, pan, self._interrupt)
+            device_id = resolve_playback_device_id(self._output_device_name)
+            _dsp_and_play(wav_bytes, 22050, self._volume, pan, self._interrupt, device_id)
 
     @pyqtSlot()
     def run(self):
@@ -344,6 +358,15 @@ class TTSEngine:
         self._comms_worker       = None
         self._comms_thread       = None
         self._comms_voice_pool: list[str] = []
+        self._output_device_name: str | None = None
+
+    def set_output_device(self, device_name: str | None):
+        """Set the audio output device by name (None = OS default). Applies immediately."""
+        self._output_device_name = device_name
+        if self._worker:
+            self._worker.set_output_device(device_name)
+        if self._comms_worker:
+            self._comms_worker.set_output_device(device_name)
 
     def start(self):
         """Start the TTS worker thread."""
@@ -354,6 +377,7 @@ class TTSEngine:
             self._queue, self._rate, self._volume,
             self._voice_index, voice_name
         )
+        self._worker.set_output_device(self._output_device_name)
         self._thread = QThread()
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
@@ -377,6 +401,7 @@ class TTSEngine:
         self._comms_worker = CommsWorker(
             self._comms_queue, self._comms_rate, self._comms_volume
         )
+        self._comms_worker.set_output_device(self._output_device_name)
         self._comms_thread = QThread()
         self._comms_worker.moveToThread(self._comms_thread)
         self._comms_thread.started.connect(self._comms_worker.run)
@@ -388,7 +413,7 @@ class TTSEngine:
         if self._worker:
             self._worker.stop()
         try:
-            self._queue.put_nowait((0, 0, None))
+            self._queue.put_nowait((0, 0, None, 1.0))
         except Exception:
             pass
         if self._thread:
@@ -442,8 +467,10 @@ class TTSEngine:
         if self._comms_worker:
             self._comms_worker.interrupt()
 
-    def speak(self, text: str, priority: int = 5):
-        """Queue a phrase. Lower priority number = spoken sooner."""
+    def speak(self, text: str, priority: int = 5, volume_scale: float = 1.0):
+        """Queue a phrase. Lower priority number = spoken sooner.
+        volume_scale multiplies the configured TTS volume for this phrase only
+        (e.g. 0.5 = half volume for softer notifications)."""
         if not self._enabled:
             return
         if not isinstance(text, str) or not text.strip():
@@ -453,7 +480,7 @@ class TTSEngine:
             self.interrupt_comms()
         self._counter += 1
         try:
-            self._queue.put_nowait((priority, self._counter, text))
+            self._queue.put_nowait((priority, self._counter, text, volume_scale))
         except Exception:
             pass
 

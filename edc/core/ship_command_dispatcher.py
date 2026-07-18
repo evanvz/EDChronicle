@@ -1,9 +1,14 @@
 """
-Dispatches ship commands to Elite Dangerous by simulating keyboard or
-controller input based on the resolved binding.
+Dispatches ship commands to Elite Dangerous by simulating keyboard input
+based on the resolved binding.
 
 Keyboard: pydirectinput (low-level SendInput — works in games)
-Controller: vgamepad virtual Xbox 360 controller via ViGEmBus driver
+
+Controller dispatch is intentionally not supported: Elite Dangerous binds
+gamepad actions to a specific physical device (e.g. a Steam Input virtual
+controller), and a separately created virtual controller is not recognised
+as that device. Actions without a keyboard binding cannot be voice-dispatched
+until one is added in ED's own Controls settings.
 """
 from __future__ import annotations
 
@@ -15,19 +20,8 @@ from edc.core.binds_reader import Binding
 
 log = logging.getLogger(__name__)
 
-_PRESS_DURATION = 0.05   # seconds to hold key/button
-_MOD_SETTLE    = 0.02    # seconds between modifier down and main key
-
-
-def _check_vigem() -> bool:
-    """Return True if ViGEmBus driver is installed and vgamepad is usable."""
-    try:
-        import vgamepad as vg
-        pad = vg.VX360Gamepad()
-        del pad
-        return True
-    except Exception:
-        return False
+_PRESS_DURATION = 0.08   # seconds to hold key/button
+_MOD_SETTLE    = 0.06    # seconds between modifier down and main key — ED can miss fast chords
 
 
 def _check_pydirectinput() -> bool:
@@ -38,6 +32,26 @@ def _check_pydirectinput() -> bool:
         return False
 
 
+def game_window_focused() -> bool:
+    """
+    True if Elite Dangerous is the foreground window. Dispatched keystrokes go
+    to whatever window has focus — sending them anywhere else (including our
+    own UI, where arrow keys move the sidebar selection) does the wrong thing.
+    Fails open: if the check itself errors, dispatch proceeds.
+    """
+    try:
+        import ctypes
+        hwnd = ctypes.windll.user32.GetForegroundWindow()
+        if not hwnd:
+            return False
+        length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
+        buf = ctypes.create_unicode_buffer(length + 1)
+        ctypes.windll.user32.GetWindowTextW(hwnd, buf, length + 1)
+        return "elite" in buf.value.lower()
+    except Exception:
+        return True
+
+
 class ShipCommandDispatcher:
     """
     Thread-safe dispatcher.  Call dispatch() from any thread — it never
@@ -45,62 +59,15 @@ class ShipCommandDispatcher:
     """
 
     def __init__(self):
-        self._vgamepad = None
-        self._vigem_available: Optional[bool] = None
         self._pydirect_available: Optional[bool] = None
 
     # ── Capability checks ────────────────────────────────────────────────────
-
-    @property
-    def vigem_available(self) -> bool:
-        if self._vigem_available is None:
-            self._vigem_available = _check_vigem()
-        return self._vigem_available
 
     @property
     def pydirectinput_available(self) -> bool:
         if self._pydirect_available is None:
             self._pydirect_available = _check_pydirectinput()
         return self._pydirect_available
-
-    def install_vigem(self) -> bool:
-        """
-        Download and run the ViGEmBus installer.
-        Returns True if the install appears to have succeeded.
-        """
-        import urllib.request, subprocess, tempfile, os
-        url = "https://github.com/nefarius/ViGEmBus/releases/latest/download/ViGEmBus_Setup_x64.exe"
-        log.info("Downloading ViGEmBus installer from %s", url)
-        try:
-            with tempfile.NamedTemporaryFile(suffix=".exe", delete=False) as tmp:
-                urllib.request.urlretrieve(url, tmp.name)
-                installer = tmp.name
-            log.info("Launching ViGEmBus installer: %s", installer)
-            result = subprocess.run([installer, "/silent"], timeout=120)
-            os.unlink(installer)
-            # Reset cached state so next check re-probes
-            self._vigem_available = None
-            self._vgamepad = None
-            return self.vigem_available
-        except Exception as exc:
-            log.error("ViGEmBus install failed: %s", exc)
-            return False
-
-    # ── Virtual gamepad lifecycle ────────────────────────────────────────────
-
-    def _get_gamepad(self):
-        if self._vgamepad is not None:
-            return self._vgamepad
-        if not self.vigem_available:
-            return None
-        try:
-            import vgamepad as vg
-            self._vgamepad = vg.VX360Gamepad()
-            log.info("vgamepad virtual Xbox 360 controller created")
-            return self._vgamepad
-        except Exception as exc:
-            log.error("Failed to create vgamepad: %s", exc)
-            return None
 
     # ── Dispatch ─────────────────────────────────────────────────────────────
 
@@ -110,7 +77,9 @@ class ShipCommandDispatcher:
         repeat > 1 is used for pip commands (tap N times).
         """
         if binding.is_controller:
-            return self._dispatch_controller(binding, repeat)
+            log.warning("Controller dispatch not supported — add a keyboard "
+                        "binding in ED Controls for this action")
+            return False
         return self._dispatch_keyboard(binding, repeat)
 
     def _dispatch_keyboard(self, binding: Binding, repeat: int) -> bool:
@@ -137,52 +106,9 @@ class ShipCommandDispatcher:
                 if repeat > 1:
                     time.sleep(_MOD_SETTLE)
 
-            log.debug("Keyboard dispatch: %s (×%d)", binding.key, repeat)
+            mod_str = "+".join(binding.modifiers + [binding.key]) if binding.modifiers else binding.key
+            log.info("Keyboard dispatch: %s (×%d)", mod_str, repeat)
             return True
         except Exception as exc:
             log.error("Keyboard dispatch failed: %s", exc)
-            return False
-
-    def _dispatch_controller(self, binding: Binding, repeat: int) -> bool:
-        pad = self._get_gamepad()
-        if pad is None:
-            log.warning("Controller dispatch failed: ViGEmBus not available")
-            return False
-        try:
-            import vgamepad as vg
-
-            def _button_const(name: str):
-                return getattr(vg.XUSB_BUTTON, name, None)
-
-            main_btn = _button_const(binding.key)
-            mod_btns = [_button_const(m) for m in binding.modifiers]
-            mod_btns = [b for b in mod_btns if b is not None]
-
-            if main_btn is None:
-                log.warning("Unknown controller button: %s", binding.key)
-                return False
-
-            for _ in range(repeat):
-                # Press modifiers first
-                for btn in mod_btns:
-                    pad.press_button(button=btn)
-                if mod_btns:
-                    pad.update()
-                    time.sleep(_MOD_SETTLE)
-                # Press main button
-                pad.press_button(button=main_btn)
-                pad.update()
-                time.sleep(_PRESS_DURATION)
-                # Release all
-                pad.release_button(button=main_btn)
-                for btn in mod_btns:
-                    pad.release_button(button=btn)
-                pad.update()
-                if repeat > 1:
-                    time.sleep(_MOD_SETTLE)
-
-            log.debug("Controller dispatch: %s (×%d)", binding.key, repeat)
-            return True
-        except Exception as exc:
-            log.error("Controller dispatch failed: %s", exc)
             return False

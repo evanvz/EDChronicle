@@ -27,5 +27,13 @@ echo Installing / updating dependencies...
 .venv\Scripts\python.exe -m pip install --upgrade -r requirements.txt
 
 echo.
+echo Downloading voice command model...
+.venv\Scripts\python.exe download_models.py
+if errorlevel 1 (
+    echo WARNING: Voice command model download failed. Voice commands will be
+    echo unavailable until you re-run install.bat successfully.
+)
+
+echo.
 echo Installation complete. Run launch.bat to start EDChronicle.
 pause

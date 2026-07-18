@@ -1,26 +1,122 @@
 {
   "trigger_word": "ship",
-  "input_preference": "controller",
+  "input_preference": "keyboard",
   "commands": [
-    { "phrase": "boost",           "action": "UseBoostJuice",             "enabled": true,  "repeat": 1, "confirm": "Boosting." },
-    { "phrase": "landing gear",    "action": "LandingGearToggle",         "enabled": true,  "repeat": 1, "confirm": "Landing gear." },
-    { "phrase": "cargo scoop",     "action": "ToggleCargoScoop",          "enabled": true,  "repeat": 1, "confirm": "Cargo scoop." },
-    { "phrase": "hardpoints",      "action": "DeployHardpointToggle",     "enabled": true,  "repeat": 1, "confirm": "Hardpoints." },
-    { "phrase": "silent running",  "action": "ToggleSilentRunning",       "enabled": true,  "repeat": 1, "confirm": "Silent running." },
-    { "phrase": "lights",          "action": "ShipLightsToggle",          "enabled": true,  "repeat": 1, "confirm": "Lights." },
-    { "phrase": "flight assist",   "action": "ToggleFlightAssist",        "enabled": true,  "repeat": 1, "confirm": "Flight assist." },
-    { "phrase": "jump",            "action": "HyperSuperCombination",     "enabled": true,  "repeat": 1, "confirm": "Jumping." },
-    { "phrase": "supercruise",     "action": "Supercruise",               "enabled": true,  "repeat": 1, "confirm": "Supercruise." },
-    { "phrase": "full engines",    "action": "IncreaseEnginesPower",      "enabled": true,  "repeat": 4, "confirm": "Full engines." },
-    { "phrase": "full shields",    "action": "IncreaseShieldsPower",      "enabled": true,  "repeat": 4, "confirm": "Full shields." },
-    { "phrase": "full systems",    "action": "IncreaseSystemsPower",      "enabled": true,  "repeat": 4, "confirm": "Full systems." },
-    { "phrase": "full weapons",    "action": "IncreaseWeaponsPower",      "enabled": true,  "repeat": 4, "confirm": "Full weapons." },
-    { "phrase": "balance power",   "action": "ResetPowerDistribution",    "enabled": true,  "repeat": 1, "confirm": "Power balanced." },
-    { "phrase": "next target",     "action": "CycleNextTarget",           "enabled": true,  "repeat": 1, "confirm": "" },
-    { "phrase": "next hostile",    "action": "CycleNextHostileTarget",    "enabled": true,  "repeat": 1, "confirm": "Hostile targeted." },
-    { "phrase": "highest threat",  "action": "SelectHighestThreat",       "enabled": true,  "repeat": 1, "confirm": "Highest threat." },
-    { "phrase": "shield cell",     "action": "UseShieldCell",             "enabled": true,  "repeat": 1, "confirm": "Shield cell." },
-    { "phrase": "chaff",           "action": "FireChaffLauncher",         "enabled": true,  "repeat": 1, "confirm": "Chaff." },
-    { "phrase": "fire countermeasure", "action": "DeployCountermeasure",  "enabled": false, "repeat": 1, "confirm": "Countermeasure." }
-  ]
+    {
+      "phrase": "power balanced",
+      "action": "ResetPowerDistribution",
+      "enabled": true,
+      "repeat": 1,
+      "confirm": ""
+    },
+    {
+      "phrase": "cargo scoop",
+      "action": "ToggleCargoScoop",
+      "enabled": true,
+      "repeat": 1,
+      "confirm": "Cargo scoop."
+    },
+    {
+      "phrase": "power to engines",
+      "action": "IncreaseEnginesPower",
+      "enabled": true,
+      "repeat": 4,
+      "confirm": "Full engines."
+    },
+    {
+      "phrase": "power to systems",
+      "action": "IncreaseSystemsPower",
+      "enabled": true,
+      "repeat": 4,
+      "confirm": "Full systems."
+    },
+    {
+      "phrase": "power to weapons",
+      "action": "IncreaseWeaponsPower",
+      "enabled": true,
+      "repeat": 4,
+      "confirm": "Full weapons."
+    },
+    {
+      "phrase": "boost",
+      "action": "UseBoostJuice",
+      "enabled": true,
+      "repeat": 1,
+      "confirm": "Boosting."
+    },
+    {
+      "phrase": "open system scanner",
+      "action": "ExplorationFSSEnter",
+      "enabled": true,
+      "repeat": 1,
+      "confirm": ""
+    },
+    {
+      "phrase": "flight assist",
+      "action": "ToggleFlightAssist",
+      "enabled": true,
+      "repeat": 1,
+      "confirm": "Flight assist."
+    },
+    {
+      "phrase": "jump",
+      "action": "HyperSuperCombination",
+      "enabled": true,
+      "repeat": 1,
+      "confirm": ""
+    },
+    {
+      "phrase": "open galaxy map",
+      "action": "GalaxyMapOpen",
+      "enabled": true,
+      "repeat": 1,
+      "confirm": ""
+    },
+    {
+      "phrase": "land",
+      "action": "LandingGearToggle",
+      "enabled": true,
+      "repeat": 1,
+      "confirm": "Landing gear."
+    },
+    {
+      "phrase": "next hostile",
+      "action": "SelectHighestThreat",
+      "enabled": true,
+      "repeat": 1,
+      "confirm": "Hostile targeted."
+    },
+    {
+      "phrase": "all stop",
+      "action": "SetSpeedZero",
+      "enabled": true,
+      "repeat": 1,
+      "confirm": ""
+    },
+    {
+      "phrase": "cruise speed",
+      "action": "SetSpeed75",
+      "enabled": true,
+      "repeat": 1,
+      "confirm": ""
+    },
+    {
+      "phrase": "switch mode",
+      "action": "PlayerHUDModeToggle",
+      "enabled": true,
+      "repeat": 1,
+      "confirm": ""
+    },
+    {
+      "phrase": "open system map",
+      "action": "SystemMapOpen",
+      "enabled": true,
+      "repeat": 1,
+      "confirm": ""
+    }
+  ],
+  "input_device": "Microphone Array (Realtek(R) Audio)",
+  "output_device": "Headphones (Realtek(R) Audio)",
+  "nav_trigger_word": "menu",
+  "feedback_volume": 0.1
 }

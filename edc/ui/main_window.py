@@ -423,8 +423,9 @@ class MainWindow(QMainWindow):
 
         # Voice Commands tab
         _vc_config_path = app_dir / "settings" / "voice_commands.json"
-        self.voice_commands_panel = VoiceCommandsPanel(_vc_config_path)
+        self.voice_commands_panel = VoiceCommandsPanel(_vc_config_path, app_dir / "models")
         self.voice_commands_panel.commands_changed.connect(self._on_voice_commands_config_changed)
+        self.voice_commands_panel.feedback_test_requested.connect(self._on_feedback_volume_test)
         self.stack.addWidget(self.voice_commands_panel)
         self.sidebar.addItem("Voice Cmds")
 
@@ -551,6 +552,7 @@ class MainWindow(QMainWindow):
             voice_index=getattr(self.cfg, "tts_voice_index", 0),
         )
         self.tts.load_from_config(self.cfg)
+        self.tts.set_output_device(self.voice_commands_panel.output_device())
         self.tts.start()
         self._tts_spoken_ships: set = set()  # pilot|ship keys spoken this system
         self._tts_spoken_signal_bodies: set = set()  # body keys with signals already announced this system
@@ -565,6 +567,13 @@ class MainWindow(QMainWindow):
         self._voice_cmd_worker = None
         self._voice_cmd_thread = None
         self._ship_dispatcher = ShipCommandDispatcher()
+        # "All systems online." must wait for BOTH the full startup sequence
+        # (splash closed, window shown, watchers started) AND the voice
+        # listener — announcing during the loading screen would falsely
+        # signal that all module loads had already completed.
+        self._startup_complete   = False
+        self._voice_ready        = False
+        self._online_announced   = False
         if bool(getattr(self.cfg, "voice_commands_enabled", False)):
             self._start_voice_commands()
 
@@ -1207,6 +1216,9 @@ class MainWindow(QMainWindow):
         self._voice_cmd_thread.started.connect(self._voice_cmd_worker.run)
         self._voice_cmd_worker.command_detected.connect(self._on_voice_command)
         self._voice_cmd_worker.ship_command_detected.connect(self._on_ship_voice_command)
+        self._voice_cmd_worker.listener_ready.connect(self._on_voice_listener_ready)
+        self._voice_cmd_worker.trigger_heard.connect(self._on_voice_trigger_heard)
+        self._voice_cmd_worker.command_unrecognised.connect(self._on_voice_unrecognised)
         self._voice_cmd_thread.start()
         log.info("Voice commands started")
 
@@ -1216,10 +1228,22 @@ class MainWindow(QMainWindow):
         cmds    = self.voice_commands_panel.active_commands()
         trigger = self.voice_commands_panel.trigger_word()
         self._voice_cmd_worker.update_ship_commands(cmds, trigger)
+        self._voice_cmd_worker.set_nav_trigger_word(self.voice_commands_panel.nav_trigger_word())
+        self._voice_cmd_worker.set_input_device(self.voice_commands_panel.input_device())
 
     def _on_voice_commands_config_changed(self):
         """Called when the user edits the Voice Commands panel."""
+        new_device = self.voice_commands_panel.input_device()
+        mic_changed = (
+            self._voice_cmd_worker is not None
+            and getattr(self._voice_cmd_worker, "_input_device_name", None) != new_device
+        )
         self._sync_ship_commands_to_listener()
+        if mic_changed and self.cfg.voice_commands_enabled:
+            log.info("Microphone selection changed — restarting voice commands")
+            self._stop_voice_commands()
+            self._start_voice_commands()
+        self.tts.set_output_device(self.voice_commands_panel.output_device())
 
     def _stop_voice_commands(self):
         if self._voice_cmd_worker:
@@ -1258,6 +1282,119 @@ class MainWindow(QMainWindow):
         else:
             self._stop_voice_commands()
 
+    def _on_feedback_volume_test(self):
+        """Voice Cmds panel Test button — play the cue tone at the currently
+        configured feedback volume."""
+        self._play_beep(880, 140)
+
+    def _feedback_volume(self) -> float:
+        """Voice-command feedback volume from the Voice Cmds panel slider —
+        independent of the main voice and comms volumes."""
+        try:
+            return float(self.voice_commands_panel.feedback_volume())
+        except Exception:
+            return 0.5
+
+    def _feedback_tts_scale(self) -> float:
+        """Scale factor so feedback phrases play at the feedback volume
+        regardless of the main voice volume the TTS engine applies."""
+        main_vol = float(getattr(self.cfg, "tts_volume", 0.6))
+        if main_vol <= 0:
+            return 0.0
+        return self._feedback_volume() / main_vol
+
+    def _play_beep(self, freq: int, duration_ms: int):
+        """Play a soft sine tone through the normal audio output at the
+        Voice Cmds feedback volume. winsound.Beep is deliberately not used —
+        it's a raw system square wave that ignores all volume control and is
+        painfully loud through headphones."""
+        def _worker():
+            try:
+                import numpy as np
+                import miniaudio
+                import threading as _threading
+                from edc.audio.audio_devices import resolve_playback_device_id
+
+                sr  = 22050
+                n   = int(sr * duration_ms / 1000)
+                vol = self._feedback_volume()
+                t    = np.arange(n) / sr
+                wave = np.sin(2 * np.pi * freq * t)
+                # Short fade in/out to avoid clicks
+                fade = max(1, int(sr * 0.005))
+                env  = np.ones(n)
+                env[:fade]  = np.linspace(0.0, 1.0, fade)
+                env[-fade:] = np.linspace(1.0, 0.0, fade)
+                pcm = (np.clip(wave * env * vol, -1.0, 1.0) * 32767).astype(np.int16).tobytes()
+
+                done = _threading.Event()
+
+                def _gen():
+                    pos = 0
+                    try:
+                        num_frames = yield b""
+                        while pos < len(pcm):
+                            chunk = pcm[pos:pos + num_frames * 2]
+                            pos += num_frames * 2
+                            num_frames = yield chunk
+                    except Exception:
+                        pass
+                    finally:
+                        done.set()
+
+                device = miniaudio.PlaybackDevice(
+                    output_format=miniaudio.SampleFormat.SIGNED16,
+                    nchannels=1,
+                    sample_rate=sr,
+                    buffersize_msec=40,
+                    device_id=resolve_playback_device_id(
+                        self.voice_commands_panel.output_device()),
+                )
+                gen = _gen()
+                next(gen)
+                device.start(gen)
+                try:
+                    done.wait(timeout=duration_ms / 1000 + 0.5)
+                finally:
+                    device.stop()
+            except Exception:
+                pass
+
+        import threading
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_voice_listener_ready(self):
+        self._voice_ready = True
+        self._maybe_announce_online()
+
+    def notify_startup_complete(self):
+        """Called from app.py once the launch sequence has run (splash closed,
+        window shown, data load and watchers kicked off)."""
+        self._startup_complete = True
+        self._maybe_announce_online()
+
+    def _maybe_announce_online(self):
+        """Speak the one-time startup cue only when everything is actually up.
+        Spoken via TTS rather than winsound.Beep: Beep is a raw system tone that
+        ignores volume settings entirely, which made startup jarringly loud.
+        Half the main voice volume so startup stays unobtrusive."""
+        if self._online_announced or not self._startup_complete:
+            return
+        voice_enabled = bool(getattr(self.cfg, "voice_commands_enabled", False))
+        if voice_enabled and not self._voice_ready:
+            return
+        self._online_announced = True
+        self.tts.speak("All systems online.", priority=5, volume_scale=self._feedback_tts_scale())
+
+    def _on_voice_trigger_heard(self):
+        """Trigger word heard — 'now listening for the command' cue."""
+        self._play_beep(880, 140)
+
+    def _on_voice_unrecognised(self):
+        """Trigger word was heard but the phrase matched nothing — low tone so
+        the user knows to just retry instead of wondering if the system hung."""
+        self._play_beep(320, 200)
+
     def _on_voice_command(self, tab_name: str):
         idx = self._TAB_INDEX.get(tab_name)
         if idx is None:
@@ -1265,7 +1402,15 @@ class MainWindow(QMainWindow):
         self.sidebar.setCurrentRow(idx)
 
     def _on_ship_voice_command(self, phrase: str):
-        """Dispatch a recognised ship voice command via pydirectinput / vgamepad."""
+        """Dispatch a recognised ship voice command via pydirectinput."""
+        from edc.core.ship_command_dispatcher import game_window_focused
+        if not game_window_focused():
+            # Keystrokes land in whatever window has focus — sending them while
+            # the game isn't foreground would type into our own UI (arrow keys
+            # move the sidebar = "menu changed by itself") or another app.
+            log.info("Ship command '%s' skipped — Elite Dangerous is not the focused window", phrase)
+            self._play_beep(320, 200)
+            return
         cmds = self.voice_commands_panel.active_commands()
         for cmd in cmds:
             if cmd.get("phrase", "").lower() == phrase.lower():
@@ -1281,7 +1426,7 @@ class MainWindow(QMainWindow):
                     log.info("Ship command fired: '%s' → %s (×%d)", phrase, cmd.get("action"), repeat)
                     confirm = cmd.get("confirm", "").strip()
                     if confirm:
-                        self.tts.speak(confirm, priority=3)
+                        self.tts.speak(confirm, priority=3, volume_scale=self._feedback_tts_scale())
                 return
 
     def _on_tts_enabled_changed(self, checked: bool):

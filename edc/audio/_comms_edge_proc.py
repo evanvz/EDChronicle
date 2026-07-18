@@ -96,7 +96,7 @@ def _configure_audio_session():
         time.sleep(0.05)
 
 
-def _dsp_and_play(pcm_bytes: bytes, sample_rate: int, volume: float, pan: float, interrupt=None):
+def _dsp_and_play(pcm_bytes: bytes, sample_rate: int, volume: float, pan: float, interrupt=None, device_id=None):
     import threading as _threading
     import time as _time
     import numpy as np
@@ -177,6 +177,7 @@ def _dsp_and_play(pcm_bytes: bytes, sample_rate: int, volume: float, pan: float,
         nchannels=2,
         sample_rate=sr,
         buffersize_msec=100,
+        device_id=device_id,
     )
     gen = _gen()
     next(gen)

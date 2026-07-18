@@ -17,7 +17,8 @@ import xml.etree.ElementTree as ET
 
 log = logging.getLogger(__name__)
 
-# Maps GamePad key names from .binds to vgamepad XUSB button constants
+# Maps GamePad key names from .binds — used only to detect that a controller
+# binding exists (for status display); controller dispatch is not supported.
 GAMEPAD_KEY_MAP: dict[str, str] = {
     "GamePad_FaceDown":    "XUSB_GAMEPAD_A",
     "GamePad_FaceRight":   "XUSB_GAMEPAD_B",
@@ -112,8 +113,103 @@ class ActionBinding:
         return self.keyboard or self.controller
 
 
+# In-game menu names for common actions. Frontier's internal action codes
+# rarely match what Options → Controls displays (UseBoostJuice = "Engine
+# Boost"), so the picker uses these; anything unmapped falls back to a
+# CamelCase split of the code.
+FRIENDLY_NAMES: dict[str, str] = {
+    # Flight
+    "UseBoostJuice":                "Engine Boost",
+    "HyperSuperCombination":        "Frame Shift Drive Combined",
+    "Supercruise":                  "Supercruise",
+    "Hyperspace":                   "Hyperspace Jump",
+    "ToggleFlightAssist":           "Flight Assist",
+    "ToggleReverseThrottleInput":   "Reverse Throttle",
+    "UseAlternateFlightValuesToggle": "Alternate Flight Controls",
+    "DisableRotationCorrectToggle": "Rotational Correction",
+    "OrbitLinesToggle":             "Orbit Lines",
+    "SetSpeedMinus100":             "Set Speed -100%",
+    "SetSpeedMinus75":              "Set Speed -75%",
+    "SetSpeedMinus50":              "Set Speed -50%",
+    "SetSpeedMinus25":              "Set Speed -25%",
+    "SetSpeedZero":                 "Set Speed 0%",
+    "SetSpeed25":                   "Set Speed 25%",
+    "SetSpeed50":                   "Set Speed 50%",
+    "SetSpeed75":                   "Set Speed 75%",
+    "SetSpeed100":                  "Set Speed 100%",
+    # Ship systems
+    "LandingGearToggle":            "Landing Gear",
+    "ToggleCargoScoop":             "Cargo Scoop",
+    "ShipSpotLightToggle":          "Ship Lights",
+    "NightVisionToggle":            "Night Vision",
+    "ToggleButtonUpInput":          "Silent Running",
+    "DeployHeatSink":               "Heat Sink",
+    "FireChaffLauncher":            "Chaff Launcher",
+    "ChargeECM":                    "ECM",
+    "UseShieldCell":                "Shield Cell",
+    "EjectAllCargo":                "Eject All Cargo",
+    "RadarIncreaseRange":           "Increase Sensor Range",
+    "RadarDecreaseRange":           "Decrease Sensor Range",
+    # Targeting
+    "SelectTarget":                 "Select Target Ahead",
+    "CycleNextTarget":              "Cycle Next Ship",
+    "CyclePreviousTarget":          "Cycle Previous Ship",
+    "SelectHighestThreat":          "Select Highest Threat",
+    "CycleNextHostileTarget":       "Cycle Next Hostile Ship",
+    "CyclePreviousHostileTarget":   "Cycle Previous Hostile Ship",
+    "CycleNextSubsystem":           "Cycle Next Subsystem",
+    "CyclePreviousSubsystem":       "Cycle Previous Subsystem",
+    "TargetNextRouteSystem":        "Next System in Route",
+    "TargetWingman0":               "Wingman 1",
+    "TargetWingman1":               "Wingman 2",
+    "TargetWingman2":               "Wingman 3",
+    "SelectTargetsTarget":          "Select Wingman's Target",
+    "WingNavLock":                  "Wingman Nav-Lock",
+    # Weapons
+    "PrimaryFire":                  "Primary Fire",
+    "SecondaryFire":                "Secondary Fire",
+    "CycleFireGroupNext":           "Next Fire Group",
+    "CycleFireGroupPrevious":       "Previous Fire Group",
+    "DeployHardpointToggle":        "Deploy Hardpoints",
+    # Power distribution
+    "IncreaseEnginesPower":         "Divert Power to Engines",
+    "IncreaseWeaponsPower":         "Divert Power to Weapons",
+    "IncreaseSystemsPower":         "Divert Power to Systems",
+    "ResetPowerDistribution":       "Balance Power Distribution",
+    # Fighter orders
+    "OrderDefensiveBehaviour":      "Fighter: Defend",
+    "OrderAggressiveBehaviour":     "Fighter: Attack",
+    "OrderFocusTarget":             "Fighter: Attack My Target",
+    "OrderHoldFire":                "Fighter: Hold Fire",
+    "OrderHoldPosition":            "Fighter: Hold Position",
+    "OrderFollow":                  "Fighter: Follow Me",
+    "OrderRequestDock":             "Fighter: Dock",
+    # Interface / panels / maps
+    "FocusLeftPanel":               "External Panel",
+    "FocusRightPanel":              "Internal Panel",
+    "FocusCommsPanel":              "Comms Panel",
+    "QuickCommsPanel":              "Quick Comms",
+    "FocusRadarPanel":              "Role Panel",
+    "GalaxyMapOpen":                "Galaxy Map",
+    "SystemMapOpen":                "System Map",
+    "Pause":                        "Pause Menu",
+    "FriendsMenu":                  "Friends Menu",
+    "OpenCodexGoToDiscovery":       "Codex",
+    "PlayerHUDModeToggle":          "Switch HUD Mode",
+    "HeadLookToggle":               "Toggle Headlook",
+    "MicrophoneMute":               "Mute Microphone",
+    # Exploration
+    "ExplorationFSSEnter":          "Enter FSS Mode",
+    "ExplorationFSSQuit":           "Exit FSS Mode",
+    "ExplorationFSSDiscoveryScan":  "Discovery Scan",
+}
+
+
 def _action_display_name(action: str) -> str:
-    """LandingGearToggle → 'Landing Gear Toggle'"""
+    """In-game menu name where known, else 'LandingGearToggle' → 'Landing Gear Toggle'."""
+    friendly = FRIENDLY_NAMES.get(action)
+    if friendly:
+        return friendly
     return re.sub(r'([A-Z])', r' \1', action).strip()
 
 
@@ -173,6 +269,7 @@ def _active_preset_name(bindings_dir: Path) -> str:
     if not start_file.exists():
         return "Custom"
     lines = [l.strip() for l in start_file.read_text(encoding="utf-8").splitlines() if l.strip()]
+    log.info("StartPreset.4.start categories: %s", lines)
     return lines[1] if len(lines) > 1 else (lines[0] if lines else "Custom")
 
 
@@ -201,29 +298,13 @@ def _find_active_binds_file(bindings_dir: Path, preset_name: str) -> Optional[Pa
     return candidates[0][2]
 
 
-def load_bindings(bindings_dir: Optional[Path] = None) -> dict[str, ActionBinding]:
-    """
-    Parse the active .binds file and return a dict of action → ActionBinding.
-    Returns empty dict on any failure.
-    """
-    if bindings_dir is None:
-        bindings_dir = _find_bindings_dir()
-    if not bindings_dir:
-        log.warning("Elite Dangerous bindings folder not found")
-        return {}
-
-    preset = _active_preset_name(bindings_dir)
-    binds_file = _find_active_binds_file(bindings_dir, preset)
-    if not binds_file:
-        log.warning("No .binds file found for preset '%s' in %s", preset, bindings_dir)
-        return {}
-
-    log.info("Loading bindings from %s", binds_file)
+def _parse_binds_file(binds_file: Path) -> dict[str, ActionBinding]:
+    """Parse one .binds file into a dict of action → ActionBinding."""
     try:
         tree = ET.parse(binds_file)
         root = tree.getroot()
     except Exception as exc:
-        log.error("Failed to parse binds file: %s", exc)
+        log.error("Failed to parse binds file %s: %s", binds_file, exc)
         return {}
 
     result: dict[str, ActionBinding] = {}
@@ -262,5 +343,28 @@ def load_bindings(bindings_dir: Optional[Path] = None) -> dict[str, ActionBindin
             controller=ctrl,
         )
 
+    return result
+
+
+def load_bindings(bindings_dir: Optional[Path] = None) -> dict[str, ActionBinding]:
+    """
+    Parse the user's active .binds file (highest version of the ship preset in
+    the game's Bindings folder, e.g. Custom.4.2.binds) and return a dict of
+    action → ActionBinding. Returns empty dict on any failure.
+    """
+    if bindings_dir is None:
+        bindings_dir = _find_bindings_dir()
+    if not bindings_dir:
+        log.warning("Elite Dangerous bindings folder not found")
+        return {}
+
+    preset = _active_preset_name(bindings_dir)
+    binds_file = _find_active_binds_file(bindings_dir, preset)
+    if not binds_file:
+        log.warning("No .binds file found for preset '%s' in %s", preset, bindings_dir)
+        return {}
+
+    log.info("Loading bindings from %s", binds_file)
+    result = _parse_binds_file(binds_file)
     log.info("Loaded %d bound actions from %s", len(result), binds_file.name)
     return result
