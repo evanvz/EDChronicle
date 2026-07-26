@@ -156,6 +156,39 @@ class EngineeringPanel(QWidget):
         dh.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         root.addWidget(self._detail_table, 1)
 
+        # ── Available-from engineer table (for selected wishlist row) ─────
+        eng_hdr = QLabel("AVAILABLE FROM — CLOSEST FIRST")
+        eng_hdr.setStyleSheet(self._HDR_STYLE)
+        root.addWidget(eng_hdr)
+
+        self._engineer_table = QTableWidget()
+        self._engineer_table.setColumnCount(4)
+        self._engineer_table.setHorizontalHeaderLabels(["Engineer", "System", "Dist (ly)", "Unlock Status"])
+        self._engineer_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._engineer_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._engineer_table.verticalHeader().setVisible(False)
+        self._engineer_table.setAlternatingRowColors(True)
+        self._engineer_table.setStyleSheet(
+            "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
+            " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
+            "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
+            " padding:3px; font-size:10px; font-weight:bold; letter-spacing:1px; }"
+        )
+        eh = self._engineer_table.horizontalHeader()
+        eh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        eh.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        eh.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        eh.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        root.addWidget(self._engineer_table, 1)
+
+        self._engineer_note = QLabel(
+            "Coverage of which engineer offers which blueprint is community-sourced "
+            "and not 100% complete — an empty list means unknown, not unavailable."
+        )
+        self._engineer_note.setWordWrap(True)
+        self._engineer_note.setStyleSheet("color:#555555; font-size:9px; background:transparent; border:none;")
+        root.addWidget(self._engineer_note)
+
     # ── Helpers ──────────────────────────────────────────────────────────
 
     def _on_blueprint_changed(self):
@@ -239,6 +272,7 @@ class EngineeringPanel(QWidget):
         row = self._wl_table.currentRow()
         if row < 0 or row >= len(self._wishlist):
             self._detail_table.setRowCount(0)
+            self._refresh_engineer_table()
             return
         entry = self._wishlist[row]
         reqs = self._blueprints.cumulative_requirements(entry["fdname"], entry["grade"])
@@ -262,6 +296,64 @@ class EngineeringPanel(QWidget):
             self._detail_table.setItem(r, 1, type_item)
             self._detail_table.setItem(r, 2, held_item)
             self._detail_table.setItem(r, 3, req_item)
+
+        self._refresh_engineer_table()
+
+    def _refresh_engineer_table(self):
+        row = self._wl_table.currentRow()
+        if row < 0 or row >= len(self._wishlist):
+            self._engineer_table.setRowCount(0)
+            return
+        entry = self._wishlist[row]
+        engineers = self._blueprints.engineers_for(entry["fdname"], entry["grade"])
+
+        ref_x = getattr(self._state, "system_x", 0.0) if self._state else 0.0
+        ref_y = getattr(self._state, "system_y", 0.0) if self._state else 0.0
+        ref_z = getattr(self._state, "system_z", 0.0) if self._state else 0.0
+        progress = getattr(self._state, "engineer_progress", {}) or {} if self._state else {}
+
+        rows = []  # (distance_or_None, engineer, system_name, status_text, status_color)
+        for eng_name in engineers:
+            home = self._blueprints.engineer_home(eng_name)
+            dist = None
+            system_name = "—"
+            if home and isinstance(home.get("x"), (int, float)):
+                dist = ((home["x"] - ref_x) ** 2 + (home["y"] - ref_y) ** 2 + (home["z"] - ref_z) ** 2) ** 0.5
+                system_name = home.get("system_name") or "—"
+
+            rec = progress.get(eng_name)
+            target_grade = entry["grade"]
+            if not rec:
+                status_text, status_color = "Not encountered", "#888888"
+            else:
+                rank = rec.get("rank")
+                prog = rec.get("progress") or ""
+                if isinstance(rank, int) and rank >= target_grade:
+                    status_text, status_color = f"Rank {rank} — ready for grade {target_grade}", "#6BCB77"
+                elif isinstance(rank, int):
+                    status_text, status_color = f"Rank {rank} — need Rank {target_grade}", "#FF8C00"
+                elif prog:
+                    status_text, status_color = f"{prog} — not yet unlocked", "#FFB347"
+                else:
+                    status_text, status_color = "Not encountered", "#888888"
+
+            rows.append((dist, eng_name, system_name, status_text, status_color))
+
+        rows.sort(key=lambda r: (r[0] is None, r[0] if r[0] is not None else 0.0))
+
+        self._engineer_table.setRowCount(len(rows))
+        for r, (dist, eng_name, system_name, status_text, status_color) in enumerate(rows):
+            name_item = QTableWidgetItem(eng_name)
+            sys_item = QTableWidgetItem(system_name)
+            dist_item = QTableWidgetItem(f"{dist:.1f}" if dist is not None else "—")
+            dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            status_item = QTableWidgetItem(status_text)
+            status_item.setForeground(QColor(status_color))
+
+            self._engineer_table.setItem(r, 0, name_item)
+            self._engineer_table.setItem(r, 1, sys_item)
+            self._engineer_table.setItem(r, 2, dist_item)
+            self._engineer_table.setItem(r, 3, status_item)
 
     # ── Public API ────────────────────────────────────────────────────────
 

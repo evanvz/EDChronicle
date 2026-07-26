@@ -28,6 +28,30 @@
           "compoundshielding": 1,
           "tungsten": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Bill Turner",
+          "Lori Jameson",
+          "Petra Olmanova"
+        ],
+        "2": [
+          "Bill Turner",
+          "Lori Jameson",
+          "Petra Olmanova"
+        ],
+        "3": [
+          "Bill Turner",
+          "Lori Jameson",
+          "Petra Olmanova"
+        ],
+        "4": [
+          "Lori Jameson",
+          "Petra Olmanova"
+        ],
+        "5": [
+          "Petra Olmanova"
+        ]
       }
     },
     "Armour_Advanced": {
@@ -56,6 +80,28 @@
           "militarygradealloys": 1,
           "tin": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "2": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "3": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "4": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "5": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ]
       }
     },
     "Armour_Explosive": {
@@ -83,6 +129,29 @@
           "phasealloys": 1,
           "ruthenium": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Liz Ryder",
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "2": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "3": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "4": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "5": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ]
       }
     },
     "Armour_HeavyDuty": {
@@ -111,6 +180,29 @@
           "fedcorecomposites": 1,
           "tungsten": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Liz Ryder",
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "2": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "3": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "4": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "5": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ]
       }
     },
     "Armour_Kinetic": {
@@ -139,6 +231,29 @@
           "molybdenum": 1,
           "phasealloys": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Liz Ryder",
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "2": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "3": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "4": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "5": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ]
       }
     },
     "Armour_Thermic": {
@@ -167,6 +282,29 @@
           "phasealloys": 1,
           "protoheatradiators": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Liz Ryder",
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "2": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "3": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "4": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "5": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ]
       }
     },
     "Misc_LightWeight": {
@@ -195,6 +333,28 @@
           "protolightalloys": 1,
           "protoradiolicalloys": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "2": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "3": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "4": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "5": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ]
       }
     },
     "Misc_Reinforced": {
@@ -223,6 +383,28 @@
           "molybdenum": 1,
           "technetium": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "2": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "3": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "4": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "5": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ]
       }
     },
     "Misc_Shielded": {
@@ -251,6 +433,28 @@
           "fedcorecomposites": 1,
           "tungsten": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "2": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "3": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "4": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "5": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ]
       }
     },
     "Misc_ChaffCapacity": {
@@ -262,6 +466,12 @@
           "niobium": 1,
           "vanadium": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ]
       }
     },
     "CollectionLimpet_LightWeight": {
@@ -290,6 +500,28 @@
           "protolightalloys": 1,
           "protoradiolicalloys": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "2": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "3": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "4": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "5": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ]
       }
     },
     "CollectionLimpet_Reinforced": {
@@ -318,6 +550,37 @@
           "molybdenum": 1,
           "technetium": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "2": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "3": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "4": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "5": [
+          "Marsha Hicks",
+          "The Sarge",
+          "Tiana Fortune"
+        ]
       }
     },
     "CollectionLimpet_Shielded": {
@@ -346,6 +609,37 @@
           "fedcorecomposites": 1,
           "tungsten": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "2": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "3": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "4": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "5": [
+          "Marsha Hicks",
+          "The Sarge",
+          "Tiana Fortune"
+        ]
       }
     },
     "Engine_Dirty": {
@@ -374,6 +668,38 @@
           "industrialfirmware": 1,
           "pharmaceuticalisolators": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Chloe Sedesi",
+          "Elvira Martuuk",
+          "Felicity Farseer",
+          "Mel Brandon",
+          "Professor Palin"
+        ],
+        "2": [
+          "Chloe Sedesi",
+          "Elvira Martuuk",
+          "Felicity Farseer",
+          "Mel Brandon",
+          "Professor Palin"
+        ],
+        "3": [
+          "Chloe Sedesi",
+          "Felicity Farseer",
+          "Mel Brandon",
+          "Professor Palin"
+        ],
+        "4": [
+          "Chloe Sedesi",
+          "Mel Brandon",
+          "Professor Palin"
+        ],
+        "5": [
+          "Chloe Sedesi",
+          "Mel Brandon",
+          "Professor Palin"
+        ]
       }
     },
     "Engine_Reinforced": {
@@ -402,6 +728,38 @@
           "imperialshielding": 1,
           "fedproprietarycomposites": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Chloe Sedesi",
+          "Elvira Martuuk",
+          "Felicity Farseer",
+          "Mel Brandon",
+          "Professor Palin"
+        ],
+        "2": [
+          "Chloe Sedesi",
+          "Elvira Martuuk",
+          "Felicity Farseer",
+          "Mel Brandon",
+          "Professor Palin"
+        ],
+        "3": [
+          "Chloe Sedesi",
+          "Felicity Farseer",
+          "Mel Brandon",
+          "Professor Palin"
+        ],
+        "4": [
+          "Chloe Sedesi",
+          "Mel Brandon",
+          "Professor Palin"
+        ],
+        "5": [
+          "Chloe Sedesi",
+          "Mel Brandon",
+          "Professor Palin"
+        ]
       }
     },
     "Engine_Tuned": {
@@ -430,6 +788,38 @@
           "conductiveceramics": 1,
           "tin": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Chloe Sedesi",
+          "Elvira Martuuk",
+          "Felicity Farseer",
+          "Mel Brandon",
+          "Professor Palin"
+        ],
+        "2": [
+          "Chloe Sedesi",
+          "Elvira Martuuk",
+          "Felicity Farseer",
+          "Mel Brandon",
+          "Professor Palin"
+        ],
+        "3": [
+          "Chloe Sedesi",
+          "Felicity Farseer",
+          "Mel Brandon",
+          "Professor Palin"
+        ],
+        "4": [
+          "Chloe Sedesi",
+          "Mel Brandon",
+          "Professor Palin"
+        ],
+        "5": [
+          "Chloe Sedesi",
+          "Mel Brandon",
+          "Professor Palin"
+        ]
       }
     },
     "FSD_FastBoot": {
@@ -458,6 +848,42 @@
           "heatvanes": 1,
           "tellurium": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Chloe Sedesi",
+          "Colonel Bris Dekker",
+          "Elvira Martuuk",
+          "Felicity Farseer",
+          "Mel Brandon",
+          "Professor Palin"
+        ],
+        "2": [
+          "Chloe Sedesi",
+          "Colonel Bris Dekker",
+          "Elvira Martuuk",
+          "Felicity Farseer",
+          "Mel Brandon",
+          "Professor Palin"
+        ],
+        "3": [
+          "Chloe Sedesi",
+          "Colonel Bris Dekker",
+          "Elvira Martuuk",
+          "Felicity Farseer",
+          "Mel Brandon",
+          "Professor Palin"
+        ],
+        "4": [
+          "Elvira Martuuk",
+          "Felicity Farseer",
+          "Mel Brandon"
+        ],
+        "5": [
+          "Elvira Martuuk",
+          "Felicity Farseer",
+          "Mel Brandon"
+        ]
       }
     },
     "FSD_LongRange": {
@@ -486,6 +912,42 @@
           "chemicalmanipulators": 1,
           "dataminedwake": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Chloe Sedesi",
+          "Colonel Bris Dekker",
+          "Elvira Martuuk",
+          "Felicity Farseer",
+          "Mel Brandon",
+          "Professor Palin"
+        ],
+        "2": [
+          "Chloe Sedesi",
+          "Colonel Bris Dekker",
+          "Elvira Martuuk",
+          "Felicity Farseer",
+          "Mel Brandon",
+          "Professor Palin"
+        ],
+        "3": [
+          "Chloe Sedesi",
+          "Colonel Bris Dekker",
+          "Elvira Martuuk",
+          "Felicity Farseer",
+          "Mel Brandon",
+          "Professor Palin"
+        ],
+        "4": [
+          "Elvira Martuuk",
+          "Felicity Farseer",
+          "Mel Brandon"
+        ],
+        "5": [
+          "Elvira Martuuk",
+          "Felicity Farseer",
+          "Mel Brandon"
+        ]
       }
     },
     "FSD_Shielded": {
@@ -514,6 +976,42 @@
           "fedproprietarycomposites": 1,
           "tungsten": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Chloe Sedesi",
+          "Colonel Bris Dekker",
+          "Elvira Martuuk",
+          "Felicity Farseer",
+          "Mel Brandon",
+          "Professor Palin"
+        ],
+        "2": [
+          "Chloe Sedesi",
+          "Colonel Bris Dekker",
+          "Elvira Martuuk",
+          "Felicity Farseer",
+          "Mel Brandon",
+          "Professor Palin"
+        ],
+        "3": [
+          "Chloe Sedesi",
+          "Colonel Bris Dekker",
+          "Elvira Martuuk",
+          "Felicity Farseer",
+          "Mel Brandon",
+          "Professor Palin"
+        ],
+        "4": [
+          "Elvira Martuuk",
+          "Felicity Farseer",
+          "Mel Brandon"
+        ],
+        "5": [
+          "Elvira Martuuk",
+          "Felicity Farseer",
+          "Mel Brandon"
+        ]
       }
     },
     "FSDinterdictor_Expanded": {
@@ -542,6 +1040,31 @@
           "hyperspacetrajectories": 1,
           "classifiedscandata": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Colonel Bris Dekker",
+          "Felicity Farseer",
+          "Mel Brandon",
+          "Tiana Fortune"
+        ],
+        "2": [
+          "Colonel Bris Dekker",
+          "Mel Brandon",
+          "Tiana Fortune"
+        ],
+        "3": [
+          "Colonel Bris Dekker",
+          "Mel Brandon",
+          "Tiana Fortune"
+        ],
+        "4": [
+          "Colonel Bris Dekker",
+          "Mel Brandon"
+        ],
+        "5": [
+          "Mel Brandon"
+        ]
       }
     },
     "FSDinterdictor_LongRange": {
@@ -570,6 +1093,31 @@
           "hyperspacetrajectories": 1,
           "adaptiveencryptors": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Colonel Bris Dekker",
+          "Felicity Farseer",
+          "Mel Brandon",
+          "Tiana Fortune"
+        ],
+        "2": [
+          "Colonel Bris Dekker",
+          "Mel Brandon",
+          "Tiana Fortune"
+        ],
+        "3": [
+          "Colonel Bris Dekker",
+          "Mel Brandon",
+          "Tiana Fortune"
+        ],
+        "4": [
+          "Colonel Bris Dekker",
+          "Mel Brandon"
+        ],
+        "5": [
+          "Mel Brandon"
+        ]
       }
     },
     "FuelScoop_Shielded": {
@@ -598,6 +1146,30 @@
           "compoundshielding": 1,
           "tungsten": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Bill Turner",
+          "Lori Jameson",
+          "Marsha Hicks"
+        ],
+        "2": [
+          "Bill Turner",
+          "Lori Jameson",
+          "Marsha Hicks"
+        ],
+        "3": [
+          "Bill Turner",
+          "Lori Jameson",
+          "Marsha Hicks"
+        ],
+        "4": [
+          "Lori Jameson",
+          "Marsha Hicks"
+        ],
+        "5": [
+          "Marsha Hicks"
+        ]
       }
     },
     "FuelTransferLimpet_LightWeight": {
@@ -626,6 +1198,28 @@
           "protolightalloys": 1,
           "protoradiolicalloys": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "2": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "3": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "4": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "5": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ]
       }
     },
     "FuelTransferLimpet_Reinforced": {
@@ -654,6 +1248,37 @@
           "molybdenum": 1,
           "technetium": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "2": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "3": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "4": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "5": [
+          "Marsha Hicks",
+          "The Sarge",
+          "Tiana Fortune"
+        ]
       }
     },
     "FuelTransferLimpet_Shielded": {
@@ -682,6 +1307,37 @@
           "fedcorecomposites": 1,
           "tungsten": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "2": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "3": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "4": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "5": [
+          "Marsha Hicks",
+          "The Sarge",
+          "Tiana Fortune"
+        ]
       }
     },
     "HatchBreakerLimpet_LightWeight": {
@@ -710,6 +1366,28 @@
           "protolightalloys": 1,
           "protoradiolicalloys": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "2": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "3": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "4": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "5": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ]
       }
     },
     "HatchBreakerLimpet_Reinforced": {
@@ -738,6 +1416,36 @@
           "molybdenum": 1,
           "technetium": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "2": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "3": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "4": [
+          "Marsha Hicks",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "5": [
+          "Marsha Hicks",
+          "The Sarge",
+          "Tiana Fortune"
+        ]
       }
     },
     "HatchBreakerLimpet_Shielded": {
@@ -766,6 +1474,36 @@
           "fedcorecomposites": 1,
           "tungsten": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "2": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "3": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "4": [
+          "Marsha Hicks",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "5": [
+          "Marsha Hicks",
+          "The Sarge",
+          "Tiana Fortune"
+        ]
       }
     },
     "Misc_HeatSinkCapacity": {
@@ -777,6 +1515,12 @@
           "niobium": 1,
           "vanadium": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ]
       }
     },
     "HullReinforcement_Advanced": {
@@ -805,6 +1549,29 @@
           "militarygradealloys": 1,
           "tin": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Liz Ryder",
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "2": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "3": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "4": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "5": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ]
       }
     },
     "HullReinforcement_Explosive": {
@@ -833,6 +1600,29 @@
           "phasealloys": 1,
           "ruthenium": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Liz Ryder",
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "2": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "3": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "4": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "5": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ]
       }
     },
     "HullReinforcement_HeavyDuty": {
@@ -861,6 +1651,29 @@
           "fedcorecomposites": 1,
           "tungsten": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Liz Ryder",
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "2": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "3": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "4": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "5": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ]
       }
     },
     "HullReinforcement_Kinetic": {
@@ -889,6 +1702,29 @@
           "molybdenum": 1,
           "phasealloys": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Liz Ryder",
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "2": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "3": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "4": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "5": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ]
       }
     },
     "HullReinforcement_Thermic": {
@@ -917,6 +1753,29 @@
           "phasealloys": 1,
           "protoheatradiators": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Liz Ryder",
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "2": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "3": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "4": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ],
+        "5": [
+          "Petra Olmanova",
+          "Selene Jean"
+        ]
       }
     },
     "LifeSupport_LightWeight": {
@@ -945,6 +1804,30 @@
           "protoradiolicalloys": 1,
           "protolightalloys": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Lori Jameson"
+        ],
+        "2": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Lori Jameson"
+        ],
+        "3": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Lori Jameson"
+        ],
+        "4": [
+          "Etienne Dorn",
+          "Lori Jameson"
+        ],
+        "5": [
+          "Etienne Dorn"
+        ]
       }
     },
     "LifeSupport_Reinforced": {
@@ -973,6 +1856,31 @@
           "molybdenum": 1,
           "technetium": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Lori Jameson"
+        ],
+        "2": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Lori Jameson"
+        ],
+        "3": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Lori Jameson"
+        ],
+        "4": [
+          "Etienne Dorn",
+          "Lori Jameson"
+        ],
+        "5": [
+          "Etienne Dorn",
+          "Lori Jameson"
+        ]
       }
     },
     "LifeSupport_Shielded": {
@@ -1001,6 +1909,31 @@
           "compoundshielding": 1,
           "fedcorecomposites": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Lori Jameson"
+        ],
+        "2": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Lori Jameson"
+        ],
+        "3": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Lori Jameson"
+        ],
+        "4": [
+          "Etienne Dorn",
+          "Lori Jameson"
+        ],
+        "5": [
+          "Etienne Dorn",
+          "Lori Jameson"
+        ]
       }
     },
     "Misc_PointDefenseCapacity": {
@@ -1012,6 +1945,12 @@
           "niobium": 1,
           "vanadium": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ]
       }
     },
     "PowerDistributor_HighCapacity": {
@@ -1040,6 +1979,34 @@
           "militarysupercapacitors": 1,
           "fedproprietarycomposites": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Etienne Dorn",
+          "Hera Tani",
+          "Marco Qwent",
+          "The Dweller"
+        ],
+        "2": [
+          "Etienne Dorn",
+          "Hera Tani",
+          "Marco Qwent",
+          "The Dweller"
+        ],
+        "3": [
+          "Etienne Dorn",
+          "Hera Tani",
+          "Marco Qwent",
+          "The Dweller"
+        ],
+        "4": [
+          "Etienne Dorn",
+          "The Dweller"
+        ],
+        "5": [
+          "Etienne Dorn",
+          "The Dweller"
+        ]
       }
     },
     "PowerDistributor_HighFrequency": {
@@ -1068,6 +2035,34 @@
           "industrialfirmware": 1,
           "exquisitefocuscrystals": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Etienne Dorn",
+          "Hera Tani",
+          "Marco Qwent",
+          "The Dweller"
+        ],
+        "2": [
+          "Etienne Dorn",
+          "Hera Tani",
+          "Marco Qwent",
+          "The Dweller"
+        ],
+        "3": [
+          "Etienne Dorn",
+          "Hera Tani",
+          "Marco Qwent",
+          "The Dweller"
+        ],
+        "4": [
+          "Etienne Dorn",
+          "The Dweller"
+        ],
+        "5": [
+          "Etienne Dorn",
+          "The Dweller"
+        ]
       }
     },
     "PowerDistributor_PriorityEngines": {
@@ -1096,6 +2091,34 @@
           "cadmium": 1,
           "militarysupercapacitors": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Etienne Dorn",
+          "Hera Tani",
+          "Marco Qwent",
+          "The Dweller"
+        ],
+        "2": [
+          "Etienne Dorn",
+          "Hera Tani",
+          "Marco Qwent",
+          "The Dweller"
+        ],
+        "3": [
+          "Etienne Dorn",
+          "Hera Tani",
+          "Marco Qwent",
+          "The Dweller"
+        ],
+        "4": [
+          "Etienne Dorn",
+          "The Dweller"
+        ],
+        "5": [
+          "Etienne Dorn",
+          "The Dweller"
+        ]
       }
     },
     "PowerDistributor_PrioritySystems": {
@@ -1124,6 +2147,34 @@
           "cadmium": 1,
           "militarysupercapacitors": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Etienne Dorn",
+          "Hera Tani",
+          "Marco Qwent",
+          "The Dweller"
+        ],
+        "2": [
+          "Etienne Dorn",
+          "Hera Tani",
+          "Marco Qwent",
+          "The Dweller"
+        ],
+        "3": [
+          "Etienne Dorn",
+          "Hera Tani",
+          "Marco Qwent",
+          "The Dweller"
+        ],
+        "4": [
+          "Etienne Dorn",
+          "The Dweller"
+        ],
+        "5": [
+          "Etienne Dorn",
+          "The Dweller"
+        ]
       }
     },
     "PowerDistributor_PriorityWeapons": {
@@ -1152,6 +2203,34 @@
           "polymercapacitors": 1,
           "tellurium": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Etienne Dorn",
+          "Hera Tani",
+          "Marco Qwent",
+          "The Dweller"
+        ],
+        "2": [
+          "Etienne Dorn",
+          "Hera Tani",
+          "Marco Qwent",
+          "The Dweller"
+        ],
+        "3": [
+          "Etienne Dorn",
+          "Hera Tani",
+          "Marco Qwent",
+          "The Dweller"
+        ],
+        "4": [
+          "Etienne Dorn",
+          "The Dweller"
+        ],
+        "5": [
+          "Etienne Dorn",
+          "The Dweller"
+        ]
       }
     },
     "PowerDistributor_Shielded": {
@@ -1180,6 +2259,34 @@
           "fedcorecomposites": 1,
           "tungsten": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Etienne Dorn",
+          "Hera Tani",
+          "Marco Qwent",
+          "The Dweller"
+        ],
+        "2": [
+          "Etienne Dorn",
+          "Hera Tani",
+          "Marco Qwent",
+          "The Dweller"
+        ],
+        "3": [
+          "Etienne Dorn",
+          "Hera Tani",
+          "Marco Qwent",
+          "The Dweller"
+        ],
+        "4": [
+          "Etienne Dorn",
+          "The Dweller"
+        ],
+        "5": [
+          "Etienne Dorn",
+          "The Dweller"
+        ]
       }
     },
     "PowerPlant_Armoured": {
@@ -1208,6 +2315,33 @@
           "fedcorecomposites": 1,
           "tungsten": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Etienne Dorn",
+          "Felicity Farseer",
+          "Hera Tani",
+          "Marco Qwent"
+        ],
+        "2": [
+          "Etienne Dorn",
+          "Hera Tani",
+          "Marco Qwent"
+        ],
+        "3": [
+          "Etienne Dorn",
+          "Hera Tani",
+          "Marco Qwent"
+        ],
+        "4": [
+          "Etienne Dorn",
+          "Hera Tani",
+          "Marco Qwent"
+        ],
+        "5": [
+          "Etienne Dorn",
+          "Hera Tani"
+        ]
       }
     },
     "PowerPlant_Boosted": {
@@ -1236,6 +2370,33 @@
           "conductiveceramics": 1,
           "tellurium": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Etienne Dorn",
+          "Felicity Farseer",
+          "Hera Tani",
+          "Marco Qwent"
+        ],
+        "2": [
+          "Etienne Dorn",
+          "Hera Tani",
+          "Marco Qwent"
+        ],
+        "3": [
+          "Etienne Dorn",
+          "Hera Tani",
+          "Marco Qwent"
+        ],
+        "4": [
+          "Etienne Dorn",
+          "Hera Tani",
+          "Marco Qwent"
+        ],
+        "5": [
+          "Etienne Dorn",
+          "Hera Tani"
+        ]
       }
     },
     "PowerPlant_Stealth": {
@@ -1264,6 +2425,33 @@
           "niobium": 1,
           "decodedemissiondata": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Etienne Dorn",
+          "Felicity Farseer",
+          "Hera Tani",
+          "Marco Qwent"
+        ],
+        "2": [
+          "Etienne Dorn",
+          "Hera Tani",
+          "Marco Qwent"
+        ],
+        "3": [
+          "Etienne Dorn",
+          "Hera Tani",
+          "Marco Qwent"
+        ],
+        "4": [
+          "Etienne Dorn",
+          "Hera Tani",
+          "Marco Qwent"
+        ],
+        "5": [
+          "Etienne Dorn",
+          "Hera Tani"
+        ]
       }
     },
     "ProspectingLimpet_LightWeight": {
@@ -1292,6 +2480,28 @@
           "protolightalloys": 1,
           "protoradiolicalloys": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "2": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "3": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "4": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "5": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ]
       }
     },
     "ProspectingLimpet_Reinforced": {
@@ -1320,6 +2530,37 @@
           "molybdenum": 1,
           "technetium": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "2": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "3": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "4": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "5": [
+          "Marsha Hicks",
+          "The Sarge",
+          "Tiana Fortune"
+        ]
       }
     },
     "ProspectingLimpet_Shielded": {
@@ -1348,6 +2589,37 @@
           "fedcorecomposites": 1,
           "tungsten": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "2": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "3": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "4": [
+          "Marsha Hicks",
+          "Ram Tah",
+          "The Sarge",
+          "Tiana Fortune"
+        ],
+        "5": [
+          "Marsha Hicks",
+          "The Sarge",
+          "Tiana Fortune"
+        ]
       }
     },
     "Refineries_Shielded": {
@@ -1376,6 +2648,30 @@
           "compoundshielding": 1,
           "tungsten": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Bill Turner",
+          "Lori Jameson",
+          "Marsha Hicks"
+        ],
+        "2": [
+          "Bill Turner",
+          "Lori Jameson",
+          "Marsha Hicks"
+        ],
+        "3": [
+          "Bill Turner",
+          "Lori Jameson",
+          "Marsha Hicks"
+        ],
+        "4": [
+          "Lori Jameson",
+          "Marsha Hicks"
+        ],
+        "5": [
+          "Marsha Hicks"
+        ]
       }
     },
     "Sensor_FastScan": {
@@ -1404,6 +2700,34 @@
           "arsenic": 1,
           "refinedfocuscrystals": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Lori Jameson",
+          "Tiana Fortune"
+        ],
+        "2": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Lori Jameson",
+          "Tiana Fortune"
+        ],
+        "3": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Lori Jameson",
+          "Tiana Fortune"
+        ],
+        "4": [
+          "Etienne Dorn",
+          "Tiana Fortune"
+        ],
+        "5": [
+          "Etienne Dorn",
+          "Tiana Fortune"
+        ]
       }
     },
     "Scanner_LongRange": {
@@ -1432,6 +2756,34 @@
           "niobium": 1,
           "polymercapacitors": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Lori Jameson",
+          "Tiana Fortune"
+        ],
+        "2": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Lori Jameson",
+          "Tiana Fortune"
+        ],
+        "3": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Lori Jameson",
+          "Tiana Fortune"
+        ],
+        "4": [
+          "Etienne Dorn",
+          "Tiana Fortune"
+        ],
+        "5": [
+          "Etienne Dorn",
+          "Tiana Fortune"
+        ]
       }
     },
     "Scanner_WideAngle": {
@@ -1460,6 +2812,34 @@
           "mechanicalcomponents": 1,
           "tin": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Lori Jameson",
+          "Tiana Fortune"
+        ],
+        "2": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Lori Jameson",
+          "Tiana Fortune"
+        ],
+        "3": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Lori Jameson",
+          "Tiana Fortune"
+        ],
+        "4": [
+          "Etienne Dorn",
+          "Tiana Fortune"
+        ],
+        "5": [
+          "Etienne Dorn",
+          "Tiana Fortune"
+        ]
       }
     },
     "Sensor_LightWeight": {
@@ -1488,6 +2868,54 @@
           "protolightalloys": 1,
           "protoradiolicalloys": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Felicity Farseer",
+          "Hera Tani",
+          "Juri Ishmaak",
+          "Lei Cheung",
+          "Lori Jameson",
+          "Tiana Fortune"
+        ],
+        "2": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Felicity Farseer",
+          "Hera Tani",
+          "Juri Ishmaak",
+          "Lei Cheung",
+          "Lori Jameson",
+          "Tiana Fortune"
+        ],
+        "3": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Felicity Farseer",
+          "Hera Tani",
+          "Juri Ishmaak",
+          "Lei Cheung",
+          "Lori Jameson",
+          "Tiana Fortune"
+        ],
+        "4": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Juri Ishmaak",
+          "Lei Cheung",
+          "Lori Jameson",
+          "Tiana Fortune"
+        ],
+        "5": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Juri Ishmaak",
+          "Lei Cheung",
+          "Lori Jameson",
+          "Tiana Fortune"
+        ]
       }
     },
     "Sensor_LongRange": {
@@ -1516,6 +2944,54 @@
           "niobium": 1,
           "polymercapacitors": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Felicity Farseer",
+          "Hera Tani",
+          "Juri Ishmaak",
+          "Lei Cheung",
+          "Lori Jameson",
+          "Tiana Fortune"
+        ],
+        "2": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Felicity Farseer",
+          "Hera Tani",
+          "Juri Ishmaak",
+          "Lei Cheung",
+          "Lori Jameson",
+          "Tiana Fortune"
+        ],
+        "3": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Felicity Farseer",
+          "Hera Tani",
+          "Juri Ishmaak",
+          "Lei Cheung",
+          "Lori Jameson",
+          "Tiana Fortune"
+        ],
+        "4": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Juri Ishmaak",
+          "Lei Cheung",
+          "Lori Jameson",
+          "Tiana Fortune"
+        ],
+        "5": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Juri Ishmaak",
+          "Lei Cheung",
+          "Lori Jameson",
+          "Tiana Fortune"
+        ]
       }
     },
     "Sensor_WideAngle": {
@@ -1544,6 +3020,54 @@
           "mechanicalcomponents": 1,
           "tin": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Felicity Farseer",
+          "Hera Tani",
+          "Juri Ishmaak",
+          "Lei Cheung",
+          "Lori Jameson",
+          "Tiana Fortune"
+        ],
+        "2": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Felicity Farseer",
+          "Hera Tani",
+          "Juri Ishmaak",
+          "Lei Cheung",
+          "Lori Jameson",
+          "Tiana Fortune"
+        ],
+        "3": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Felicity Farseer",
+          "Hera Tani",
+          "Juri Ishmaak",
+          "Lei Cheung",
+          "Lori Jameson",
+          "Tiana Fortune"
+        ],
+        "4": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Juri Ishmaak",
+          "Lei Cheung",
+          "Lori Jameson",
+          "Tiana Fortune"
+        ],
+        "5": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Juri Ishmaak",
+          "Lei Cheung",
+          "Lori Jameson",
+          "Tiana Fortune"
+        ]
       }
     },
     "Sensor_Expanded": {
@@ -1600,6 +3124,32 @@
           "exquisitefocuscrystals": 1,
           "niobium": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Didi Vatermann",
+          "Felicity Farseer",
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "2": [
+          "Didi Vatermann",
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "3": [
+          "Didi Vatermann",
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "4": [
+          "Didi Vatermann",
+          "Mel Brandon"
+        ],
+        "5": [
+          "Didi Vatermann",
+          "Mel Brandon"
+        ]
       }
     },
     "ShieldBooster_HeavyDuty": {
@@ -1628,6 +3178,32 @@
           "polymercapacitors": 1,
           "shielddensityreports": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Didi Vatermann",
+          "Felicity Farseer",
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "2": [
+          "Didi Vatermann",
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "3": [
+          "Didi Vatermann",
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "4": [
+          "Didi Vatermann",
+          "Mel Brandon"
+        ],
+        "5": [
+          "Didi Vatermann",
+          "Mel Brandon"
+        ]
       }
     },
     "ShieldBooster_Kinetic": {
@@ -1656,6 +3232,32 @@
           "exquisitefocuscrystals": 1,
           "phasealloys": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Didi Vatermann",
+          "Felicity Farseer",
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "2": [
+          "Didi Vatermann",
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "3": [
+          "Didi Vatermann",
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "4": [
+          "Didi Vatermann",
+          "Mel Brandon"
+        ],
+        "5": [
+          "Didi Vatermann",
+          "Mel Brandon"
+        ]
       }
     },
     "ShieldBooster_Resistive": {
@@ -1684,6 +3286,32 @@
           "imperialshielding": 1,
           "refinedfocuscrystals": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Didi Vatermann",
+          "Felicity Farseer",
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "2": [
+          "Didi Vatermann",
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "3": [
+          "Didi Vatermann",
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "4": [
+          "Didi Vatermann",
+          "Mel Brandon"
+        ],
+        "5": [
+          "Didi Vatermann",
+          "Mel Brandon"
+        ]
       }
     },
     "ShieldBooster_Thermic": {
@@ -1712,6 +3340,32 @@
           "exquisitefocuscrystals": 1,
           "heatexchangers": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Didi Vatermann",
+          "Felicity Farseer",
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "2": [
+          "Didi Vatermann",
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "3": [
+          "Didi Vatermann",
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "4": [
+          "Didi Vatermann",
+          "Mel Brandon"
+        ],
+        "5": [
+          "Didi Vatermann",
+          "Mel Brandon"
+        ]
       }
     },
     "ShieldCellBank_Rapid": {
@@ -1735,6 +3389,21 @@
           "precipitatedalloys": 1,
           "sulphur": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Elvira Martuuk",
+          "Lori Jameson",
+          "Mel Brandon"
+        ],
+        "2": [
+          "Lori Jameson",
+          "Mel Brandon"
+        ],
+        "3": [
+          "Lori Jameson",
+          "Mel Brandon"
+        ]
       }
     },
     "ShieldCellBank_Specialised": {
@@ -1758,6 +3427,21 @@
           "industrialfirmware": 1,
           "yttrium": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Elvira Martuuk",
+          "Lori Jameson",
+          "Mel Brandon"
+        ],
+        "2": [
+          "Lori Jameson",
+          "Mel Brandon"
+        ],
+        "3": [
+          "Lori Jameson",
+          "Mel Brandon"
+        ]
       }
     },
     "ShieldGenerator_Kinetic": {
@@ -1786,6 +3470,34 @@
           "ruthenium": 1,
           "shielddensityreports": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Didi Vatermann",
+          "Elvira Martuuk",
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "2": [
+          "Didi Vatermann",
+          "Elvira Martuuk",
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "3": [
+          "Didi Vatermann",
+          "Elvira Martuuk",
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "4": [
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "5": [
+          "Lei Cheung",
+          "Mel Brandon"
+        ]
       }
     },
     "ShieldGenerator_Optimised": {
@@ -1814,6 +3526,34 @@
           "tin": 1,
           "shielddensityreports": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Didi Vatermann",
+          "Elvira Martuuk",
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "2": [
+          "Didi Vatermann",
+          "Elvira Martuuk",
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "3": [
+          "Didi Vatermann",
+          "Elvira Martuuk",
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "4": [
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "5": [
+          "Lei Cheung",
+          "Mel Brandon"
+        ]
       }
     },
     "ShieldGenerator_Reinforced": {
@@ -1842,6 +3582,34 @@
           "conductivepolymers": 1,
           "improvisedcomponents": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Didi Vatermann",
+          "Elvira Martuuk",
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "2": [
+          "Didi Vatermann",
+          "Elvira Martuuk",
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "3": [
+          "Didi Vatermann",
+          "Elvira Martuuk",
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "4": [
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "5": [
+          "Lei Cheung",
+          "Mel Brandon"
+        ]
       }
     },
     "ShieldGenerator_Thermic": {
@@ -1870,6 +3638,34 @@
           "ruthenium": 1,
           "shielddensityreports": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Didi Vatermann",
+          "Elvira Martuuk",
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "2": [
+          "Didi Vatermann",
+          "Elvira Martuuk",
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "3": [
+          "Didi Vatermann",
+          "Elvira Martuuk",
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "4": [
+          "Lei Cheung",
+          "Mel Brandon"
+        ],
+        "5": [
+          "Lei Cheung",
+          "Mel Brandon"
+        ]
       }
     },
     "Weapon_DoubleShot": {
@@ -1898,6 +3694,31 @@
           "highdensitycomposites": 1,
           "embeddedfirmware": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Marsha Hicks",
+          "Tod McQuinn",
+          "Zacariah Nemo"
+        ],
+        "2": [
+          "Marsha Hicks",
+          "Tod McQuinn",
+          "Zacariah Nemo"
+        ],
+        "3": [
+          "Marsha Hicks",
+          "Tod McQuinn",
+          "Zacariah Nemo"
+        ],
+        "4": [
+          "Marsha Hicks",
+          "Zacariah Nemo"
+        ],
+        "5": [
+          "Marsha Hicks",
+          "Zacariah Nemo"
+        ]
       }
     },
     "Weapon_Efficient": {
@@ -1926,6 +3747,31 @@
           "protoheatradiators": 1,
           "emissiondata": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Broo Tarquin",
+          "Mel Brandon",
+          "The Dweller"
+        ],
+        "2": [
+          "Broo Tarquin",
+          "Mel Brandon",
+          "The Dweller"
+        ],
+        "3": [
+          "Broo Tarquin",
+          "Mel Brandon",
+          "The Dweller"
+        ],
+        "4": [
+          "Broo Tarquin",
+          "Mel Brandon"
+        ],
+        "5": [
+          "Broo Tarquin",
+          "Mel Brandon"
+        ]
       }
     },
     "Weapon_Focused": {
@@ -1954,6 +3800,32 @@
           "niobium": 1,
           "refinedfocuscrystals": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Broo Tarquin",
+          "Mel Brandon",
+          "The Dweller"
+        ],
+        "2": [
+          "Broo Tarquin",
+          "Mel Brandon",
+          "The Dweller"
+        ],
+        "3": [
+          "Broo Tarquin",
+          "Mel Brandon",
+          "The Dweller"
+        ],
+        "4": [
+          "Broo Tarquin",
+          "Mel Brandon",
+          "The Dweller"
+        ],
+        "5": [
+          "Broo Tarquin",
+          "Mel Brandon"
+        ]
       }
     },
     "Weapon_HighCapacity": {
@@ -1982,6 +3854,31 @@
           "militarysupercapacitors": 1,
           "fedproprietarycomposites": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Juri Ishmaak",
+          "Liz Ryder",
+          "Petra Olmanova"
+        ],
+        "2": [
+          "Juri Ishmaak",
+          "Liz Ryder",
+          "Petra Olmanova"
+        ],
+        "3": [
+          "Juri Ishmaak",
+          "Liz Ryder",
+          "Petra Olmanova"
+        ],
+        "4": [
+          "Liz Ryder",
+          "Petra Olmanova"
+        ],
+        "5": [
+          "Liz Ryder",
+          "Petra Olmanova"
+        ]
       }
     },
     "Weapon_LightWeight": {
@@ -2010,6 +3907,28 @@
           "protolightalloys": 1,
           "protoradiolicalloys": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "2": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "3": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "4": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ],
+        "5": [
+          "Petra Olmanova",
+          "Ram Tah"
+        ]
       }
     },
     "Weapon_LongRange": {
@@ -2038,6 +3957,31 @@
           "industrialfirmware": 1,
           "thermicalloys": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Broo Tarquin",
+          "Mel Brandon",
+          "The Dweller"
+        ],
+        "2": [
+          "Broo Tarquin",
+          "Mel Brandon",
+          "The Dweller"
+        ],
+        "3": [
+          "Broo Tarquin",
+          "Mel Brandon",
+          "The Dweller"
+        ],
+        "4": [
+          "Broo Tarquin",
+          "Mel Brandon"
+        ],
+        "5": [
+          "Broo Tarquin",
+          "Mel Brandon"
+        ]
       }
     },
     "MC_Overcharged": {
@@ -2094,6 +4038,31 @@
           "embeddedfirmware": 1,
           "zirconium": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Broo Tarquin",
+          "Mel Brandon",
+          "The Dweller"
+        ],
+        "2": [
+          "Broo Tarquin",
+          "Mel Brandon",
+          "The Dweller"
+        ],
+        "3": [
+          "Broo Tarquin",
+          "Mel Brandon",
+          "The Dweller"
+        ],
+        "4": [
+          "Broo Tarquin",
+          "Mel Brandon"
+        ],
+        "5": [
+          "Broo Tarquin",
+          "Mel Brandon"
+        ]
       }
     },
     "Weapon_RapidFire": {
@@ -2122,6 +4091,30 @@
           "precipitatedalloys": 1,
           "technetium": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Zacariah Nemo"
+        ],
+        "2": [
+          "Bill Turner",
+          "Etienne Dorn",
+          "Zacariah Nemo"
+        ],
+        "3": [
+          "Bill Turner",
+          "Etienne Dorn"
+        ],
+        "4": [
+          "Bill Turner",
+          "Etienne Dorn"
+        ],
+        "5": [
+          "Bill Turner",
+          "Etienne Dorn"
+        ]
       }
     },
     "Weapon_ShortRange": {
@@ -2150,6 +4143,31 @@
           "configurablecomponents": 1,
           "industrialfirmware": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Broo Tarquin",
+          "Mel Brandon",
+          "The Dweller"
+        ],
+        "2": [
+          "Broo Tarquin",
+          "Mel Brandon",
+          "The Dweller"
+        ],
+        "3": [
+          "Broo Tarquin",
+          "Mel Brandon",
+          "The Dweller"
+        ],
+        "4": [
+          "Broo Tarquin",
+          "Mel Brandon"
+        ],
+        "5": [
+          "Broo Tarquin",
+          "Mel Brandon"
+        ]
       }
     },
     "Weapon_Sturdy": {
@@ -2178,6 +4196,31 @@
           "molybdenum": 1,
           "technetium": 1
         }
+      },
+      "grade_engineers": {
+        "1": [
+          "Juri Ishmaak",
+          "Liz Ryder",
+          "Petra Olmanova"
+        ],
+        "2": [
+          "Juri Ishmaak",
+          "Liz Ryder",
+          "Petra Olmanova"
+        ],
+        "3": [
+          "Juri Ishmaak",
+          "Liz Ryder",
+          "Petra Olmanova"
+        ],
+        "4": [
+          "Liz Ryder",
+          "Petra Olmanova"
+        ],
+        "5": [
+          "Liz Ryder",
+          "Petra Olmanova"
+        ]
       }
     },
     "CargoRack_IncreasedCapacity": {
@@ -2185,6 +4228,12 @@
       "short_name": "Expanded Capacity",
       "grades": {
         "5": {}
+      },
+      "grade_engineers": {
+        "5": [
+          "Liz Ryder",
+          "Petra Olmanova"
+        ]
       }
     }
   },
@@ -2736,6 +4785,350 @@
     "boron": {
       "name": "Boron",
       "type": "Raw"
+    }
+  },
+  "engineer_locations": {
+    "Didi Vatermann": {
+      "id": 300000,
+      "system_address": 3932277478114,
+      "market_id": 128673927,
+      "x": 72.75,
+      "y": 48.75,
+      "z": 68.25,
+      "system_name": "Leesti"
+    },
+    "Bill Turner": {
+      "id": 300010,
+      "system_address": 1109989017963,
+      "market_id": 128674183,
+      "x": -33.65625,
+      "y": 72.46875,
+      "z": -20.65625,
+      "system_name": "Alioth"
+    },
+    "Broo Tarquin": {
+      "id": 300030,
+      "system_address": 4481966019282,
+      "market_id": 128674695,
+      "x": 17.03125,
+      "y": -172.78125,
+      "z": -3.46875,
+      "system_name": "Muang"
+    },
+    "The Sarge": {
+      "id": 300040,
+      "system_address": 2827992680811,
+      "market_id": 128674951,
+      "x": 32.25,
+      "y": -55.1875,
+      "z": 23.875,
+      "system_name": "Beta-3 Tucani"
+    },
+    "Zacariah Nemo": {
+      "id": 300050,
+      "system_address": 6131367744226,
+      "market_id": 128675207,
+      "x": 97.875,
+      "y": -86.90625,
+      "z": 64.125,
+      "system_name": "Yoru"
+    },
+    "Liz Ryder": {
+      "id": 300080,
+      "system_address": 1458309141194,
+      "market_id": 128675975,
+      "x": 51.40625,
+      "y": -54.40625,
+      "z": -30.5,
+      "system_name": "Eurybia"
+    },
+    "Hera Tani": {
+      "id": 300090,
+      "system_address": 1733321102034,
+      "market_id": 128676231,
+      "x": 134.65625,
+      "y": -226.90625,
+      "z": -7.8125,
+      "system_name": "Kuwemaki"
+    },
+    "Felicity Farseer": {
+      "id": 300100,
+      "system_address": 6681123623626,
+      "market_id": 128676487,
+      "x": 122.625,
+      "y": -0.8125,
+      "z": -47.28125,
+      "system_name": "Deciat"
+    },
+    "Ram Tah": {
+      "id": 300110,
+      "system_address": 3790082132323,
+      "market_id": 128676743,
+      "x": 118.78125,
+      "y": -56.4375,
+      "z": -97.1875,
+      "system_name": "Meene"
+    },
+    "Lei Cheung": {
+      "id": 300120,
+      "system_address": 4305444669811,
+      "market_id": 128676999,
+      "x": -21.53125,
+      "y": -6.3125,
+      "z": 116.03125,
+      "system_name": "Laksak"
+    },
+    "Petra Olmanova": {
+      "id": 300130,
+      "system_address": 12274907287851,
+      "market_id": 128677255,
+      "x": -9550.28125,
+      "y": -916.65625,
+      "z": 19816.1875,
+      "system_name": "Asura"
+    },
+    "Colonel Bris Dekker": {
+      "id": 300140,
+      "system_address": 10477373803,
+      "market_id": 128677511,
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "system_name": "Sol"
+    },
+    "Marsha Hicks": {
+      "id": 300150,
+      "system_address": 48996147307082,
+      "market_id": 128677767,
+      "x": -9532.9375,
+      "y": -923.4375,
+      "z": 19799.125,
+      "system_name": "Tir"
+    },
+    "Elvira Martuuk": {
+      "id": 300160,
+      "system_address": 3107241104074,
+      "market_id": 128678023,
+      "x": -171.59375,
+      "y": 19.96875,
+      "z": -56.96875,
+      "system_name": "Khun"
+    },
+    "The Dweller": {
+      "id": 300180,
+      "system_address": 5031654888146,
+      "market_id": 128678535,
+      "x": -11.625,
+      "y": 31.53125,
+      "z": -3.9375,
+      "system_name": "Wyrd"
+    },
+    "Marco Qwent": {
+      "id": 300200,
+      "system_address": 121569805492,
+      "market_id": 128679047,
+      "x": 6.25,
+      "y": -1.28125,
+      "z": -5.75,
+      "system_name": "Sirius"
+    },
+    "Selene Jean": {
+      "id": 300210,
+      "system_address": 24859942069665,
+      "market_id": 128679303,
+      "x": -21.28125,
+      "y": 69.09375,
+      "z": -16.3125,
+      "system_name": "Kuk"
+    },
+    "Professor Palin": {
+      "id": 300220,
+      "system_address": 113573366131,
+      "market_id": 128679559,
+      "x": 66.5,
+      "y": 38.0625,
+      "z": 61.125,
+      "system_name": "Arque"
+    },
+    "Lori Jameson": {
+      "id": 300230,
+      "system_address": 3932277478106,
+      "market_id": 128679815,
+      "x": 55.71875,
+      "y": 17.59375,
+      "z": 27.15625,
+      "system_name": "Shinrarta Dezhra"
+    },
+    "Juri Ishmaak": {
+      "id": 300250,
+      "system_address": 4481899074282,
+      "market_id": 128680327,
+      "x": 14.6875,
+      "y": 27.65625,
+      "z": 108.65625,
+      "system_name": "Giryak"
+    },
+    "Tod 'The Blaster' McQuinn": {
+      "id": 300260,
+      "system_address": 3107576681170,
+      "market_id": 128680583,
+      "x": 40.0,
+      "y": 79.21875,
+      "z": -10.40625,
+      "system_name": "Wolf 397"
+    },
+    "Tiana Fortune": {
+      "id": 300270,
+      "system_address": 164098653,
+      "market_id": 128680839,
+      "x": 67.5,
+      "y": -119.46875,
+      "z": 24.84375,
+      "system_name": "Achenar"
+    },
+    "Mel Brandon": {
+      "id": 300280,
+      "system_address": 66038577537618,
+      "market_id": 128681095,
+      "x": -9523.3125,
+      "y": -914.46875,
+      "z": 19825.90625,
+      "system_name": "Luchtaine"
+    },
+    "Etienne Dorn": {
+      "id": 300290,
+      "system_address": 11887629902418,
+      "market_id": 128681351,
+      "x": -9509.34375,
+      "y": -886.3125,
+      "z": 19820.125,
+      "system_name": "Los"
+    },
+    "Chloe Sedesi": {
+      "id": 300300,
+      "system_address": 594676730147,
+      "market_id": 128954244,
+      "x": 351.96875,
+      "y": -373.46875,
+      "z": -711.09375,
+      "system_name": "Shenve"
+    },
+    "Jude Navarro": {
+      "id": 400001,
+      "system_address": 7268024067513,
+      "market_id": 128972903,
+      "x": 0.9375,
+      "y": -47.8125,
+      "z": 46.28125,
+      "system_name": "Aurai"
+    },
+    "Domino Green": {
+      "id": 400002,
+      "system_address": 5068464399785,
+      "market_id": 128973159,
+      "x": -31.0,
+      "y": 93.96875,
+      "z": -3.5625,
+      "system_name": "Orishis"
+    },
+    "Hero Ferrari": {
+      "id": 400003,
+      "system_address": 7269634614689,
+      "market_id": 128973415,
+      "x": 131.0625,
+      "y": -73.59375,
+      "z": -11.25,
+      "system_name": "Siris"
+    },
+    "Kit Fowler": {
+      "id": 400004,
+      "system_address": 2827975936355,
+      "market_id": 128973671,
+      "x": -60.65625,
+      "y": 82.4375,
+      "z": -45.0625,
+      "system_name": "Capoya"
+    },
+    "Wellington Beck": {
+      "id": 400005,
+      "system_address": 2832832893634,
+      "market_id": 128973927,
+      "x": 100.1875,
+      "y": -41.34375,
+      "z": -78.0,
+      "system_name": "Jolapa"
+    },
+    "Terra Velasquez": {
+      "id": 400006,
+      "system_address": 3721329101171,
+      "market_id": 128974183,
+      "x": -16.28125,
+      "y": -44.53125,
+      "z": 94.375,
+      "system_name": "Shou Xing"
+    },
+    "Uma Laszlo": {
+      "id": 400007,
+      "system_address": 16065190962585,
+      "market_id": 128974439,
+      "x": 93.875,
+      "y": -9.25,
+      "z": -32.53125,
+      "system_name": "Xuane"
+    },
+    "Oden Geiger": {
+      "id": 400008,
+      "system_address": 8879744226018,
+      "market_id": 128974695,
+      "x": -113.5,
+      "y": -4.9375,
+      "z": 66.84375,
+      "system_name": "Candiaei"
+    },
+    "Yarden Bond": {
+      "id": 400009,
+      "system_address": 670686455169,
+      "market_id": 128974951,
+      "x": -19.96875,
+      "y": 117.625,
+      "z": -90.46875,
+      "system_name": "Bayan"
+    },
+    "Baltanos": {
+      "id": 400010,
+      "system_address": 71536135676490,
+      "market_id": 128986843,
+      "x": -9520.3125,
+      "y": -909.5,
+      "z": 19808.75,
+      "system_name": "Deriso"
+    },
+    "Eleanor Bresa": {
+      "id": 400011,
+      "system_address": 38001031029322,
+      "market_id": 128987099,
+      "x": -9534.21875,
+      "y": -912.21875,
+      "z": 19792.375,
+      "system_name": "Desy"
+    },
+    "Rosa Dayette": {
+      "id": 400012,
+      "system_address": 59166629864010,
+      "market_id": 128986587,
+      "x": -9513.09375,
+      "y": -908.84375,
+      "z": 19814.28125,
+      "system_name": "Kojeara"
+    },
+    "Yi Shen": {
+      "id": 400013,
+      "system_address": 13736779007129,
+      "market_id": 128987355,
+      "x": -9557.8125,
+      "y": -880.1875,
+      "z": 19801.5625,
+      "system_name": "Einheriar"
     }
   }
 }

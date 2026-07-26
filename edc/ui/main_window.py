@@ -77,6 +77,7 @@ from persistence.schema import SCHEMA_SQL
 from persistence.repository import Repository
 
 from edc.core.session_ledger import SessionLedger
+from edc.core.engineer_progress_store import EngineerProgressStore
 
 log = logging.getLogger("edc.ui.main")
 
@@ -251,6 +252,9 @@ class MainWindow(QMainWindow):
 
         self.session_ledger = SessionLedger(data_dir / "session_ledger.json")
         ledger = self.session_ledger.load()
+
+        self.engineer_progress_store = EngineerProgressStore(data_dir / "engineer_progress.json")
+        self.state.engineer_progress = self.engineer_progress_store.load()
         self.state.combat_unsold_total = int(ledger.get("combat_unsold_total", 0) or 0)
         self.state.exploration_unsold_total_est = int(ledger.get("exploration_unsold_total_est", 0) or 0)
         self.state.exobiology_unsold_total_est = int(ledger.get("exobiology_unsold_total_est", 0) or 0)
@@ -908,6 +912,9 @@ class MainWindow(QMainWindow):
             "SellOrganicData",
         ):
             self._save_session_ledger()
+
+        if name == "EngineerProgress":
+            self.engineer_progress_store.save(self.state.engineer_progress)
 
         incoming_system_address = evt.get("SystemAddress")
 

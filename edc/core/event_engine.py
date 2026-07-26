@@ -6,7 +6,7 @@ from pathlib import Path
 from .planet_values import PlanetValueTable
 from .exo_values import ExoValueTable
 from .external_intel import ExternalIntel
-from edc.engine.handlers import exploration, exobio, inventory, powerplay, misc, fleet_carrier, mining
+from edc.engine.handlers import exploration, exobio, inventory, powerplay, misc, fleet_carrier, mining, engineers
 
 log = logging.getLogger("edc.event_engine")
 
@@ -1615,6 +1615,7 @@ class EventEngine:
             powerplay.handle,
             fleet_carrier.handle,
             mining.handle,
+            engineers.handle,
             misc.handle,
         ):
             try:

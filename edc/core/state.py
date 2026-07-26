@@ -167,4 +167,8 @@ class GameState:
     mining_last_prospect_materials: List[Dict[str, Any]] = field(default_factory=list)  # [{"Name":..., "Proportion":...}]
     mining_last_prospect_content: Optional[str] = None       # High/Medium/Low
     mining_last_motherlode_material: Optional[str] = None
+
+    # Engineer unlock progress (journal-derived, EngineerProgress)
+    # name -> {"engineer_id": int, "rank": int|None, "progress": str, "rank_progress": int|None}
+    engineer_progress: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     counted_exobiology_keys: Set[str] = field(default_factory=set)
