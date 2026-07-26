@@ -19,3 +19,6 @@ CLAUDE.md
 docs/ProjectPlan.md
 docs/ProjectStructure.md
 logs/
+settings/edsm_powerplay_cache.json
+settings/eddn_powerplay_cache.json
+settings/powerPlay.json
