@@ -3,14 +3,31 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import requests
 
 log = logging.getLogger(__name__)
 
-_SEARCH_URL = "https://spansh.co.uk/api/systems/search"
+_SEARCH_URL        = "https://spansh.co.uk/api/systems/search"
+_BODIES_SEARCH_URL = "https://spansh.co.uk/api/bodies/search"
 _TIMEOUT    = 15
+_BODIES_TIMEOUT = 30
+
+# Best mining reserve tiers, worth prioritising over Common/Low/Depleted.
+_GOOD_RESERVE_LEVELS = ["Pristine", "Major"]
+
+
+@dataclass
+class MiningRingResult:
+    system_name:   str
+    body_name:     str
+    ring_name:     str
+    ring_type:     str
+    reserve_level: str
+    distance:      float
+    material:      str
+    hotspot_count: int
 
 
 @dataclass
@@ -21,6 +38,7 @@ class SpanshSystem:
     pp_state:          str
     powers:            List[str] = field(default_factory=list)
     station_types:     List[str] = field(default_factory=list)
+    id64:              Optional[int] = None
 
     def all_powers(self) -> List[str]:
         """Deduplicated list: controlling power first, then any additional powers."""
@@ -122,6 +140,7 @@ class SpanshClient:
             sys_state  = sys.get("power_state") or ""
             raw_powers = sys.get("power") or []
             powers     = [str(p) for p in raw_powers if p] if isinstance(raw_powers, list) else []
+            id64       = sys.get("id64") if isinstance(sys.get("id64"), int) else None
 
             # Distance guard
             try:
@@ -164,6 +183,7 @@ class SpanshClient:
                 pp_state=sys_state,
                 powers=powers,
                 station_types=station_types,
+                id64=id64,
             )
             if facility == "megaship"   and not candidate.has_megaship():
                 continue
@@ -263,4 +283,94 @@ class SpanshClient:
                 "tidal_lock":         tidal_lock,
             })
 
+        return out, ""
+
+    def search_mining_rings(
+        self,
+        material: str,
+        ref_x: float,
+        ref_y: float,
+        ref_z: float,
+        range_ly: int = 100,
+        reserve_levels: List[str] | None = None,
+        candidate_size: int = 500,
+    ) -> Tuple[List["MiningRingResult"], str]:
+        """
+        Finds rings containing a hotspot for `material`, sorted by distance.
+
+        Spansh's bodies/search does not appear to support server-side
+        filtering by ring hotspot material (extensively tested — every
+        filter shape tried returns an unfiltered/capped result). This
+        works around that by server-side filtering on reserve_level
+        (confirmed working) sorted by distance, fetching up to
+        `candidate_size` candidates, then matching the material client-side.
+
+        Limitation: only the closest `candidate_size` good-reserve ring
+        bodies are scanned, so a rare material near the edge of a large
+        range_ly could be missed if it falls outside that window.
+
+        Returns (results, error). error is "" on success.
+        """
+        levels = reserve_levels if reserve_levels else _GOOD_RESERVE_LEVELS
+        body = {
+            "filters":          {"reserve_level": {"value": levels}},
+            "reference_coords": {"x": ref_x, "y": ref_y, "z": ref_z},
+            "sort":             [{"distance": {"direction": "asc"}}],
+            "size":             candidate_size,
+            "page":             0,
+        }
+        try:
+            resp = requests.post(_BODIES_SEARCH_URL, json=body, timeout=_BODIES_TIMEOUT)
+            resp.raise_for_status()
+            data = resp.json()
+        except requests.RequestException as exc:
+            log.error("Spansh mining ring search failed: %s", exc)
+            return [], str(exc)
+        except ValueError:
+            return [], "Invalid response from Spansh"
+
+        raw_results = data.get("results") or []
+        if not isinstance(raw_results, list):
+            return [], f"Unexpected response shape. Keys: {list(data.keys())}"
+
+        material_lower = material.strip().lower()
+        out: List[MiningRingResult] = []
+        for rec in raw_results:
+            if not isinstance(rec, dict):
+                continue
+            dist = rec.get("distance")
+            try:
+                dist = float(dist)
+            except (TypeError, ValueError):
+                dist = 0.0
+            if dist > range_ly:
+                continue
+
+            rings = rec.get("rings")
+            if not isinstance(rings, list):
+                continue
+            for ring in rings:
+                if not isinstance(ring, dict):
+                    continue
+                signals = ring.get("signals")
+                if not isinstance(signals, list):
+                    continue
+                for sig in signals:
+                    if not isinstance(sig, dict):
+                        continue
+                    sig_name = str(sig.get("name") or "")
+                    if sig_name.strip().lower() != material_lower:
+                        continue
+                    out.append(MiningRingResult(
+                        system_name=str(rec.get("system_name") or ""),
+                        body_name=str(rec.get("name") or ""),
+                        ring_name=str(ring.get("name") or ""),
+                        ring_type=str(ring.get("type") or ""),
+                        reserve_level=str(rec.get("reserve_level") or ""),
+                        distance=dist,
+                        material=sig_name,
+                        hotspot_count=int(sig.get("count") or 0),
+                    ))
+
+        out.sort(key=lambda r: r.distance)
         return out, ""

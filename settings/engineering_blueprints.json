@@ -1,0 +1,2741 @@
+{
+  "last_updated": "2026-07-26",
+  "source": "EDCD/coriolis-data (modifications/blueprints.json) + EDCD/FDevIDs (material.csv) — MIT licensed",
+  "blueprints": {
+    "AFM_Shielded": {
+      "display_name": "Auto field mainentance unit",
+      "short_name": "Shielded",
+      "grades": {
+        "1": {
+          "wornshieldemitters": 1
+        },
+        "2": {
+          "carbon": 1,
+          "shieldemitters": 1
+        },
+        "3": {
+          "carbon": 1,
+          "highdensitycomposites": 1,
+          "shieldemitters": 1
+        },
+        "4": {
+          "fedproprietarycomposites": 1,
+          "shieldingsensors": 1,
+          "vanadium": 1
+        },
+        "5": {
+          "fedcorecomposites": 1,
+          "compoundshielding": 1,
+          "tungsten": 1
+        }
+      }
+    },
+    "Armour_Advanced": {
+      "display_name": "Bulkheads",
+      "short_name": "Lightweight",
+      "grades": {
+        "1": {
+          "iron": 1
+        },
+        "2": {
+          "conductivecomponents": 1,
+          "iron": 1
+        },
+        "3": {
+          "conductivecomponents": 1,
+          "highdensitycomposites": 1,
+          "iron": 1
+        },
+        "4": {
+          "conductiveceramics": 1,
+          "germanium": 1,
+          "fedproprietarycomposites": 1
+        },
+        "5": {
+          "conductiveceramics": 1,
+          "militarygradealloys": 1,
+          "tin": 1
+        }
+      }
+    },
+    "Armour_Explosive": {
+      "display_name": "Bulkheads",
+      "short_name": "Blast resistant",
+      "grades": {
+        "1": {
+          "nickel": 1
+        },
+        "2": {
+          "carbon": 1,
+          "zinc": 1
+        },
+        "3": {
+          "salvagedalloys": 1,
+          "vanadium": 1
+        },
+        "4": {
+          "galvanisingalloys": 1,
+          "mercury": 1,
+          "tungsten": 1
+        },
+        "5": {
+          "molybdenum": 1,
+          "phasealloys": 1,
+          "ruthenium": 1
+        }
+      }
+    },
+    "Armour_HeavyDuty": {
+      "display_name": "Bulkheads",
+      "short_name": "Heavy duty",
+      "grades": {
+        "1": {
+          "carbon": 1
+        },
+        "2": {
+          "carbon": 1,
+          "shieldemitters": 1
+        },
+        "3": {
+          "carbon": 1,
+          "highdensitycomposites": 1,
+          "shieldemitters": 1
+        },
+        "4": {
+          "fedproprietarycomposites": 1,
+          "shieldingsensors": 1,
+          "vanadium": 1
+        },
+        "5": {
+          "compoundshielding": 1,
+          "fedcorecomposites": 1,
+          "tungsten": 1
+        }
+      }
+    },
+    "Armour_Kinetic": {
+      "display_name": "Bulkheads",
+      "short_name": "Kinetic resistant",
+      "grades": {
+        "1": {
+          "nickel": 1
+        },
+        "2": {
+          "nickel": 1,
+          "vanadium": 1
+        },
+        "3": {
+          "highdensitycomposites": 1,
+          "salvagedalloys": 1,
+          "vanadium": 1
+        },
+        "4": {
+          "galvanisingalloys": 1,
+          "fedproprietarycomposites": 1,
+          "tungsten": 1
+        },
+        "5": {
+          "fedcorecomposites": 1,
+          "molybdenum": 1,
+          "phasealloys": 1
+        }
+      }
+    },
+    "Armour_Thermic": {
+      "display_name": "Bulkheads",
+      "short_name": "Thermal resistant",
+      "grades": {
+        "1": {
+          "heatconductionwiring": 1
+        },
+        "2": {
+          "heatdispersionplate": 1,
+          "nickel": 1
+        },
+        "3": {
+          "heatexchangers": 1,
+          "salvagedalloys": 1,
+          "vanadium": 1
+        },
+        "4": {
+          "galvanisingalloys": 1,
+          "heatvanes": 1,
+          "tungsten": 1
+        },
+        "5": {
+          "molybdenum": 1,
+          "phasealloys": 1,
+          "protoheatradiators": 1
+        }
+      }
+    },
+    "Misc_LightWeight": {
+      "display_name": "Chaff launcher",
+      "short_name": "Lightweight",
+      "grades": {
+        "1": {
+          "phosphorus": 1
+        },
+        "2": {
+          "manganese": 1,
+          "salvagedalloys": 1
+        },
+        "3": {
+          "conductiveceramics": 1,
+          "manganese": 1,
+          "salvagedalloys": 1
+        },
+        "4": {
+          "conductivecomponents": 1,
+          "phasealloys": 1,
+          "protolightalloys": 1
+        },
+        "5": {
+          "conductiveceramics": 1,
+          "protolightalloys": 1,
+          "protoradiolicalloys": 1
+        }
+      }
+    },
+    "Misc_Reinforced": {
+      "display_name": "Chaff launcher",
+      "short_name": "Reinforced",
+      "grades": {
+        "1": {
+          "nickel": 1
+        },
+        "2": {
+          "nickel": 1,
+          "shieldemitters": 1
+        },
+        "3": {
+          "nickel": 1,
+          "shieldemitters": 1,
+          "tungsten": 1
+        },
+        "4": {
+          "molybdenum": 1,
+          "tungsten": 1,
+          "zinc": 1
+        },
+        "5": {
+          "highdensitycomposites": 1,
+          "molybdenum": 1,
+          "technetium": 1
+        }
+      }
+    },
+    "Misc_Shielded": {
+      "display_name": "Chaff launcher",
+      "short_name": "Shielded",
+      "grades": {
+        "1": {
+          "wornshieldemitters": 1
+        },
+        "2": {
+          "carbon": 1,
+          "shieldemitters": 1
+        },
+        "3": {
+          "carbon": 1,
+          "highdensitycomposites": 1,
+          "shieldemitters": 1
+        },
+        "4": {
+          "fedproprietarycomposites": 1,
+          "shieldingsensors": 1,
+          "vanadium": 1
+        },
+        "5": {
+          "compoundshielding": 1,
+          "fedcorecomposites": 1,
+          "tungsten": 1
+        }
+      }
+    },
+    "Misc_ChaffCapacity": {
+      "display_name": "Chaff launcher",
+      "short_name": "Ammo capacity",
+      "grades": {
+        "1": {
+          "mechanicalscrap": 1,
+          "niobium": 1,
+          "vanadium": 1
+        }
+      }
+    },
+    "CollectionLimpet_LightWeight": {
+      "display_name": "Collector limpet controller",
+      "short_name": "Lightweight",
+      "grades": {
+        "1": {
+          "phosphorus": 1
+        },
+        "2": {
+          "manganese": 1,
+          "salvagedalloys": 1
+        },
+        "3": {
+          "conductiveceramics": 1,
+          "manganese": 1,
+          "salvagedalloys": 1
+        },
+        "4": {
+          "conductivecomponents": 1,
+          "phasealloys": 1,
+          "protolightalloys": 1
+        },
+        "5": {
+          "conductiveceramics": 1,
+          "protolightalloys": 1,
+          "protoradiolicalloys": 1
+        }
+      }
+    },
+    "CollectionLimpet_Reinforced": {
+      "display_name": "Collector limpet controller",
+      "short_name": "Reinforced",
+      "grades": {
+        "1": {
+          "nickel": 1
+        },
+        "2": {
+          "nickel": 1,
+          "shieldemitters": 1
+        },
+        "3": {
+          "nickel": 1,
+          "shieldemitters": 1,
+          "tungsten": 1
+        },
+        "4": {
+          "molybdenum": 1,
+          "tungsten": 1,
+          "zinc": 1
+        },
+        "5": {
+          "highdensitycomposites": 1,
+          "molybdenum": 1,
+          "technetium": 1
+        }
+      }
+    },
+    "CollectionLimpet_Shielded": {
+      "display_name": "Collector limpet controller",
+      "short_name": "Shielded",
+      "grades": {
+        "1": {
+          "wornshieldemitters": 1
+        },
+        "2": {
+          "carbon": 1,
+          "shieldemitters": 1
+        },
+        "3": {
+          "carbon": 1,
+          "highdensitycomposites": 1,
+          "shieldemitters": 1
+        },
+        "4": {
+          "fedproprietarycomposites": 1,
+          "shieldingsensors": 1,
+          "vanadium": 1
+        },
+        "5": {
+          "compoundshielding": 1,
+          "fedcorecomposites": 1,
+          "tungsten": 1
+        }
+      }
+    },
+    "Engine_Dirty": {
+      "display_name": "Thrusters",
+      "short_name": "Dirty",
+      "grades": {
+        "1": {
+          "legacyfirmware": 1
+        },
+        "2": {
+          "mechanicalequipment": 1,
+          "legacyfirmware": 1
+        },
+        "3": {
+          "chromium": 1,
+          "mechanicalcomponents": 1,
+          "legacyfirmware": 1
+        },
+        "4": {
+          "configurablecomponents": 1,
+          "consumerfirmware": 1,
+          "selenium": 1
+        },
+        "5": {
+          "cadmium": 1,
+          "industrialfirmware": 1,
+          "pharmaceuticalisolators": 1
+        }
+      }
+    },
+    "Engine_Reinforced": {
+      "display_name": "Thrusters",
+      "short_name": "Reinforced",
+      "grades": {
+        "1": {
+          "carbon": 1
+        },
+        "2": {
+          "heatconductionwiring": 1,
+          "vanadium": 1
+        },
+        "3": {
+          "heatconductionwiring": 1,
+          "shieldingsensors": 1,
+          "vanadium": 1
+        },
+        "4": {
+          "compoundshielding": 1,
+          "heatdispersionplate": 1,
+          "highdensitycomposites": 1
+        },
+        "5": {
+          "heatexchangers": 1,
+          "imperialshielding": 1,
+          "fedproprietarycomposites": 1
+        }
+      }
+    },
+    "Engine_Tuned": {
+      "display_name": "Thrusters",
+      "short_name": "Clean",
+      "grades": {
+        "1": {
+          "sulphur": 1
+        },
+        "2": {
+          "conductivecomponents": 1,
+          "legacyfirmware": 1
+        },
+        "3": {
+          "conductivecomponents": 1,
+          "legacyfirmware": 1,
+          "emissiondata": 1
+        },
+        "4": {
+          "conductiveceramics": 1,
+          "decodedemissiondata": 1,
+          "consumerfirmware": 1
+        },
+        "5": {
+          "compactemissionsdata": 1,
+          "conductiveceramics": 1,
+          "tin": 1
+        }
+      }
+    },
+    "FSD_FastBoot": {
+      "display_name": "Frame shift drive",
+      "short_name": "Faster boot sequence",
+      "grades": {
+        "1": {
+          "gridresistors": 1
+        },
+        "2": {
+          "chromium": 1,
+          "gridresistors": 1
+        },
+        "3": {
+          "gridresistors": 1,
+          "heatdispersionplate": 1,
+          "selenium": 1
+        },
+        "4": {
+          "cadmium": 1,
+          "heatexchangers": 1,
+          "hybridcapacitors": 1
+        },
+        "5": {
+          "electrochemicalarrays": 1,
+          "heatvanes": 1,
+          "tellurium": 1
+        }
+      }
+    },
+    "FSD_LongRange": {
+      "display_name": "Frame shift drive",
+      "short_name": "Increased range",
+      "grades": {
+        "1": {
+          "disruptedwakeechoes": 1
+        },
+        "2": {
+          "disruptedwakeechoes": 1,
+          "chemicalprocessors": 1
+        },
+        "3": {
+          "chemicalprocessors": 1,
+          "phosphorus": 1,
+          "wakesolutions": 1
+        },
+        "4": {
+          "chemicaldistillery": 1,
+          "hyperspacetrajectories": 1,
+          "manganese": 1
+        },
+        "5": {
+          "arsenic": 1,
+          "chemicalmanipulators": 1,
+          "dataminedwake": 1
+        }
+      }
+    },
+    "FSD_Shielded": {
+      "display_name": "Frame shift drive",
+      "short_name": "Shielded",
+      "grades": {
+        "1": {
+          "nickel": 1
+        },
+        "2": {
+          "carbon": 1,
+          "shieldemitters": 1
+        },
+        "3": {
+          "carbon": 1,
+          "shieldingsensors": 1,
+          "zinc": 1
+        },
+        "4": {
+          "compoundshielding": 1,
+          "highdensitycomposites": 1,
+          "vanadium": 1
+        },
+        "5": {
+          "imperialshielding": 1,
+          "fedproprietarycomposites": 1,
+          "tungsten": 1
+        }
+      }
+    },
+    "FSDinterdictor_Expanded": {
+      "display_name": "Frame shift drive interdictor",
+      "short_name": "Expanded capture arc",
+      "grades": {
+        "1": {
+          "mechanicalscrap": 1
+        },
+        "2": {
+          "mechanicalequipment": 1,
+          "encryptedfiles": 1
+        },
+        "3": {
+          "gridresistors": 1,
+          "mechanicalcomponents": 1,
+          "encryptioncodes": 1
+        },
+        "4": {
+          "encodedscandata": 1,
+          "mechanicalequipment": 1,
+          "wakesolutions": 1
+        },
+        "5": {
+          "mechanicalcomponents": 1,
+          "hyperspacetrajectories": 1,
+          "classifiedscandata": 1
+        }
+      }
+    },
+    "FSDinterdictor_LongRange": {
+      "display_name": "Frame shift drive interdictor",
+      "short_name": "Long range",
+      "grades": {
+        "1": {
+          "encryptedfiles": 1
+        },
+        "2": {
+          "disruptedwakeechoes": 1,
+          "encryptioncodes": 1
+        },
+        "3": {
+          "bulkscandata": 1,
+          "fsdtelemetry": 1,
+          "symmetrickeys": 1
+        },
+        "4": {
+          "scanarchives": 1,
+          "wakesolutions": 1,
+          "encryptionarchives": 1
+        },
+        "5": {
+          "scandatabanks": 1,
+          "hyperspacetrajectories": 1,
+          "adaptiveencryptors": 1
+        }
+      }
+    },
+    "FuelScoop_Shielded": {
+      "display_name": "Fuel scoop",
+      "short_name": "Shielded",
+      "grades": {
+        "1": {
+          "wornshieldemitters": 1
+        },
+        "2": {
+          "carbon": 1,
+          "shieldemitters": 1
+        },
+        "3": {
+          "carbon": 1,
+          "highdensitycomposites": 1,
+          "shieldemitters": 1
+        },
+        "4": {
+          "fedproprietarycomposites": 1,
+          "shieldingsensors": 1,
+          "vanadium": 1
+        },
+        "5": {
+          "fedcorecomposites": 1,
+          "compoundshielding": 1,
+          "tungsten": 1
+        }
+      }
+    },
+    "FuelTransferLimpet_LightWeight": {
+      "display_name": "Fuel transfer limpet controller",
+      "short_name": "Lightweight",
+      "grades": {
+        "1": {
+          "phosphorus": 1
+        },
+        "2": {
+          "manganese": 1,
+          "salvagedalloys": 1
+        },
+        "3": {
+          "conductiveceramics": 1,
+          "manganese": 1,
+          "salvagedalloys": 1
+        },
+        "4": {
+          "conductivecomponents": 1,
+          "phasealloys": 1,
+          "protolightalloys": 1
+        },
+        "5": {
+          "conductiveceramics": 1,
+          "protolightalloys": 1,
+          "protoradiolicalloys": 1
+        }
+      }
+    },
+    "FuelTransferLimpet_Reinforced": {
+      "display_name": "Fuel transfer limpet controller",
+      "short_name": "Reinforced",
+      "grades": {
+        "1": {
+          "nickel": 1
+        },
+        "2": {
+          "nickel": 1,
+          "shieldemitters": 1
+        },
+        "3": {
+          "nickel": 1,
+          "shieldemitters": 1,
+          "tungsten": 1
+        },
+        "4": {
+          "molybdenum": 1,
+          "tungsten": 1,
+          "zinc": 1
+        },
+        "5": {
+          "highdensitycomposites": 1,
+          "molybdenum": 1,
+          "technetium": 1
+        }
+      }
+    },
+    "FuelTransferLimpet_Shielded": {
+      "display_name": "Fuel transfer limpet controller",
+      "short_name": "Shielded",
+      "grades": {
+        "1": {
+          "wornshieldemitters": 1
+        },
+        "2": {
+          "carbon": 1,
+          "shieldemitters": 1
+        },
+        "3": {
+          "carbon": 1,
+          "highdensitycomposites": 1,
+          "shieldemitters": 1
+        },
+        "4": {
+          "fedproprietarycomposites": 1,
+          "shieldingsensors": 1,
+          "vanadium": 1
+        },
+        "5": {
+          "compoundshielding": 1,
+          "fedcorecomposites": 1,
+          "tungsten": 1
+        }
+      }
+    },
+    "HatchBreakerLimpet_LightWeight": {
+      "display_name": "Hatch breaker limpet controller",
+      "short_name": "Lightweight",
+      "grades": {
+        "1": {
+          "phosphorus": 1
+        },
+        "2": {
+          "manganese": 1,
+          "salvagedalloys": 1
+        },
+        "3": {
+          "conductiveceramics": 1,
+          "manganese": 1,
+          "salvagedalloys": 1
+        },
+        "4": {
+          "conductivecomponents": 1,
+          "phasealloys": 1,
+          "protolightalloys": 1
+        },
+        "5": {
+          "conductiveceramics": 1,
+          "protolightalloys": 1,
+          "protoradiolicalloys": 1
+        }
+      }
+    },
+    "HatchBreakerLimpet_Reinforced": {
+      "display_name": "Hatch breaker limpet controller",
+      "short_name": "Reinforced",
+      "grades": {
+        "1": {
+          "nickel": 1
+        },
+        "2": {
+          "nickel": 1,
+          "shieldemitters": 1
+        },
+        "3": {
+          "nickel": 1,
+          "shieldemitters": 1,
+          "tungsten": 1
+        },
+        "4": {
+          "molybdenum": 1,
+          "tungsten": 1,
+          "zinc": 1
+        },
+        "5": {
+          "highdensitycomposites": 1,
+          "molybdenum": 1,
+          "technetium": 1
+        }
+      }
+    },
+    "HatchBreakerLimpet_Shielded": {
+      "display_name": "Hatch breaker limpet controller",
+      "short_name": "Shielded",
+      "grades": {
+        "1": {
+          "wornshieldemitters": 1
+        },
+        "2": {
+          "carbon": 1,
+          "shieldemitters": 1
+        },
+        "3": {
+          "carbon": 1,
+          "highdensitycomposites": 1,
+          "shieldemitters": 1
+        },
+        "4": {
+          "fedproprietarycomposites": 1,
+          "shieldingsensors": 1,
+          "vanadium": 1
+        },
+        "5": {
+          "compoundshielding": 1,
+          "fedcorecomposites": 1,
+          "tungsten": 1
+        }
+      }
+    },
+    "Misc_HeatSinkCapacity": {
+      "display_name": "Heat sink launcher",
+      "short_name": "Ammo capacity",
+      "grades": {
+        "1": {
+          "mechanicalscrap": 1,
+          "niobium": 1,
+          "vanadium": 1
+        }
+      }
+    },
+    "HullReinforcement_Advanced": {
+      "display_name": "Hull reinforcement",
+      "short_name": "Lightweight",
+      "grades": {
+        "1": {
+          "iron": 1
+        },
+        "2": {
+          "conductivecomponents": 1,
+          "iron": 1
+        },
+        "3": {
+          "conductivecomponents": 1,
+          "highdensitycomposites": 1,
+          "iron": 1
+        },
+        "4": {
+          "conductiveceramics": 1,
+          "germanium": 1,
+          "fedproprietarycomposites": 1
+        },
+        "5": {
+          "conductiveceramics": 1,
+          "militarygradealloys": 1,
+          "tin": 1
+        }
+      }
+    },
+    "HullReinforcement_Explosive": {
+      "display_name": "Hull reinforcement",
+      "short_name": "Blast resistant",
+      "grades": {
+        "1": {
+          "nickel": 1
+        },
+        "2": {
+          "carbon": 1,
+          "zinc": 1
+        },
+        "3": {
+          "salvagedalloys": 1,
+          "vanadium": 1,
+          "zirconium": 1
+        },
+        "4": {
+          "galvanisingalloys": 1,
+          "mercury": 1,
+          "tungsten": 1
+        },
+        "5": {
+          "molybdenum": 1,
+          "phasealloys": 1,
+          "ruthenium": 1
+        }
+      }
+    },
+    "HullReinforcement_HeavyDuty": {
+      "display_name": "Hull reinforcement",
+      "short_name": "Heavy duty",
+      "grades": {
+        "1": {
+          "carbon": 1
+        },
+        "2": {
+          "carbon": 1,
+          "shieldemitters": 1
+        },
+        "3": {
+          "carbon": 1,
+          "highdensitycomposites": 1,
+          "shieldemitters": 1
+        },
+        "4": {
+          "fedproprietarycomposites": 1,
+          "shieldingsensors": 1,
+          "vanadium": 1
+        },
+        "5": {
+          "compoundshielding": 1,
+          "fedcorecomposites": 1,
+          "tungsten": 1
+        }
+      }
+    },
+    "HullReinforcement_Kinetic": {
+      "display_name": "Hull reinforcement",
+      "short_name": "Kinetic resistant",
+      "grades": {
+        "1": {
+          "nickel": 1
+        },
+        "2": {
+          "nickel": 1,
+          "vanadium": 1
+        },
+        "3": {
+          "highdensitycomposites": 1,
+          "salvagedalloys": 1,
+          "vanadium": 1
+        },
+        "4": {
+          "galvanisingalloys": 1,
+          "fedproprietarycomposites": 1,
+          "tungsten": 1
+        },
+        "5": {
+          "fedcorecomposites": 1,
+          "molybdenum": 1,
+          "phasealloys": 1
+        }
+      }
+    },
+    "HullReinforcement_Thermic": {
+      "display_name": "Hull reinforcement",
+      "short_name": "Thermal resistant",
+      "grades": {
+        "1": {
+          "heatconductionwiring": 1
+        },
+        "2": {
+          "heatdispersionplate": 1,
+          "nickel": 1
+        },
+        "3": {
+          "heatexchangers": 1,
+          "salvagedalloys": 1,
+          "vanadium": 1
+        },
+        "4": {
+          "galvanisingalloys": 1,
+          "heatvanes": 1,
+          "tungsten": 1
+        },
+        "5": {
+          "molybdenum": 1,
+          "phasealloys": 1,
+          "protoheatradiators": 1
+        }
+      }
+    },
+    "LifeSupport_LightWeight": {
+      "display_name": "Life support",
+      "short_name": "Lightweight",
+      "grades": {
+        "1": {
+          "phosphorus": 1
+        },
+        "2": {
+          "manganese": 1,
+          "salvagedalloys": 1
+        },
+        "3": {
+          "conductiveceramics": 1,
+          "manganese": 1,
+          "salvagedalloys": 1
+        },
+        "4": {
+          "conductivecomponents": 1,
+          "phasealloys": 1,
+          "protolightalloys": 1
+        },
+        "5": {
+          "conductiveceramics": 1,
+          "protoradiolicalloys": 1,
+          "protolightalloys": 1
+        }
+      }
+    },
+    "LifeSupport_Reinforced": {
+      "display_name": "Life support",
+      "short_name": "Reinforced",
+      "grades": {
+        "1": {
+          "nickel": 1
+        },
+        "2": {
+          "nickel": 1,
+          "shieldemitters": 1
+        },
+        "3": {
+          "nickel": 1,
+          "shieldemitters": 1,
+          "tungsten": 1
+        },
+        "4": {
+          "molybdenum": 1,
+          "tungsten": 1,
+          "zinc": 1
+        },
+        "5": {
+          "highdensitycomposites": 1,
+          "molybdenum": 1,
+          "technetium": 1
+        }
+      }
+    },
+    "LifeSupport_Shielded": {
+      "display_name": "Life support",
+      "short_name": "Shielded",
+      "grades": {
+        "1": {
+          "wornshieldemitters": 1
+        },
+        "2": {
+          "carbon": 1,
+          "shieldemitters": 1
+        },
+        "3": {
+          "carbon": 1,
+          "highdensitycomposites": 1,
+          "shieldemitters": 1
+        },
+        "4": {
+          "fedproprietarycomposites": 1,
+          "shieldingsensors": 1,
+          "vanadium": 1
+        },
+        "5": {
+          "tungsten": 1,
+          "compoundshielding": 1,
+          "fedcorecomposites": 1
+        }
+      }
+    },
+    "Misc_PointDefenseCapacity": {
+      "display_name": "Point defence",
+      "short_name": "Ammo capacity",
+      "grades": {
+        "1": {
+          "mechanicalscrap": 1,
+          "niobium": 1,
+          "vanadium": 1
+        }
+      }
+    },
+    "PowerDistributor_HighCapacity": {
+      "display_name": "Power distributor",
+      "short_name": "High charge capacity",
+      "grades": {
+        "1": {
+          "sulphur": 1
+        },
+        "2": {
+          "chromium": 1,
+          "legacyfirmware": 1
+        },
+        "3": {
+          "chromium": 1,
+          "highdensitycomposites": 1,
+          "legacyfirmware": 1
+        },
+        "4": {
+          "consumerfirmware": 1,
+          "fedproprietarycomposites": 1,
+          "selenium": 1
+        },
+        "5": {
+          "industrialfirmware": 1,
+          "militarysupercapacitors": 1,
+          "fedproprietarycomposites": 1
+        }
+      }
+    },
+    "PowerDistributor_HighFrequency": {
+      "display_name": "Power distributor",
+      "short_name": "Charge enhanced",
+      "grades": {
+        "1": {
+          "legacyfirmware": 1
+        },
+        "2": {
+          "chemicalprocessors": 1,
+          "legacyfirmware": 1
+        },
+        "3": {
+          "chemicaldistillery": 1,
+          "gridresistors": 1,
+          "consumerfirmware": 1
+        },
+        "4": {
+          "chemicalmanipulators": 1,
+          "industrialfirmware": 1,
+          "hybridcapacitors": 1
+        },
+        "5": {
+          "chemicalmanipulators": 1,
+          "industrialfirmware": 1,
+          "exquisitefocuscrystals": 1
+        }
+      }
+    },
+    "PowerDistributor_PriorityEngines": {
+      "display_name": "Power distributor",
+      "short_name": "Engine focused",
+      "grades": {
+        "1": {
+          "sulphur": 1
+        },
+        "2": {
+          "conductivecomponents": 1,
+          "sulphur": 1
+        },
+        "3": {
+          "bulkscandata": 1,
+          "chromium": 1,
+          "electrochemicalarrays": 1
+        },
+        "4": {
+          "scanarchives": 1,
+          "selenium": 1,
+          "polymercapacitors": 1
+        },
+        "5": {
+          "scandatabanks": 1,
+          "cadmium": 1,
+          "militarysupercapacitors": 1
+        }
+      }
+    },
+    "PowerDistributor_PrioritySystems": {
+      "display_name": "Power distributor",
+      "short_name": "System focused",
+      "grades": {
+        "1": {
+          "sulphur": 1
+        },
+        "2": {
+          "conductivecomponents": 1,
+          "sulphur": 1
+        },
+        "3": {
+          "bulkscandata": 1,
+          "chromium": 1,
+          "electrochemicalarrays": 1
+        },
+        "4": {
+          "scanarchives": 1,
+          "selenium": 1,
+          "polymercapacitors": 1
+        },
+        "5": {
+          "scandatabanks": 1,
+          "cadmium": 1,
+          "militarysupercapacitors": 1
+        }
+      }
+    },
+    "PowerDistributor_PriorityWeapons": {
+      "display_name": "Power distributor",
+      "short_name": "Weapon focused",
+      "grades": {
+        "1": {
+          "sulphur": 1
+        },
+        "2": {
+          "conductivecomponents": 1,
+          "sulphur": 1
+        },
+        "3": {
+          "bulkscandata": 1,
+          "hybridcapacitors": 1,
+          "selenium": 1
+        },
+        "4": {
+          "scanarchives": 1,
+          "electrochemicalarrays": 1,
+          "cadmium": 1
+        },
+        "5": {
+          "scandatabanks": 1,
+          "polymercapacitors": 1,
+          "tellurium": 1
+        }
+      }
+    },
+    "PowerDistributor_Shielded": {
+      "display_name": "Power distributor",
+      "short_name": "Shielded",
+      "grades": {
+        "1": {
+          "wornshieldemitters": 1
+        },
+        "2": {
+          "carbon": 1,
+          "shieldemitters": 1
+        },
+        "3": {
+          "carbon": 1,
+          "highdensitycomposites": 1,
+          "shieldemitters": 1
+        },
+        "4": {
+          "fedproprietarycomposites": 1,
+          "shieldingsensors": 1,
+          "vanadium": 1
+        },
+        "5": {
+          "compoundshielding": 1,
+          "fedcorecomposites": 1,
+          "tungsten": 1
+        }
+      }
+    },
+    "PowerPlant_Armoured": {
+      "display_name": "Power plant",
+      "short_name": "Armoured",
+      "grades": {
+        "1": {
+          "wornshieldemitters": 1
+        },
+        "2": {
+          "carbon": 1,
+          "shieldemitters": 1
+        },
+        "3": {
+          "carbon": 1,
+          "highdensitycomposites": 1,
+          "shieldemitters": 1
+        },
+        "4": {
+          "fedproprietarycomposites": 1,
+          "shieldingsensors": 1,
+          "vanadium": 1
+        },
+        "5": {
+          "compoundshielding": 1,
+          "fedcorecomposites": 1,
+          "tungsten": 1
+        }
+      }
+    },
+    "PowerPlant_Boosted": {
+      "display_name": "Power plant",
+      "short_name": "Overcharged",
+      "grades": {
+        "1": {
+          "sulphur": 1
+        },
+        "2": {
+          "conductivecomponents": 1,
+          "heatconductionwiring": 1
+        },
+        "3": {
+          "conductivecomponents": 1,
+          "heatconductionwiring": 1,
+          "selenium": 1
+        },
+        "4": {
+          "cadmium": 1,
+          "conductiveceramics": 1,
+          "heatdispersionplate": 1
+        },
+        "5": {
+          "chemicalmanipulators": 1,
+          "conductiveceramics": 1,
+          "tellurium": 1
+        }
+      }
+    },
+    "PowerPlant_Stealth": {
+      "display_name": "Power plant",
+      "short_name": "Low emissions",
+      "grades": {
+        "1": {
+          "iron": 1
+        },
+        "2": {
+          "iron": 1,
+          "archivedemissiondata": 1
+        },
+        "3": {
+          "heatexchangers": 1,
+          "iron": 1,
+          "archivedemissiondata": 1
+        },
+        "4": {
+          "heatvanes": 1,
+          "germanium": 1,
+          "emissiondata": 1
+        },
+        "5": {
+          "protoheatradiators": 1,
+          "niobium": 1,
+          "decodedemissiondata": 1
+        }
+      }
+    },
+    "ProspectingLimpet_LightWeight": {
+      "display_name": "Prospector limpet controller",
+      "short_name": "Lightweight",
+      "grades": {
+        "1": {
+          "phosphorus": 1
+        },
+        "2": {
+          "manganese": 1,
+          "salvagedalloys": 1
+        },
+        "3": {
+          "conductiveceramics": 1,
+          "manganese": 1,
+          "salvagedalloys": 1
+        },
+        "4": {
+          "conductivecomponents": 1,
+          "phasealloys": 1,
+          "protolightalloys": 1
+        },
+        "5": {
+          "conductiveceramics": 1,
+          "protolightalloys": 1,
+          "protoradiolicalloys": 1
+        }
+      }
+    },
+    "ProspectingLimpet_Reinforced": {
+      "display_name": "Prospector limpet controller",
+      "short_name": "Reinforced",
+      "grades": {
+        "1": {
+          "nickel": 1
+        },
+        "2": {
+          "nickel": 1,
+          "shieldemitters": 1
+        },
+        "3": {
+          "nickel": 1,
+          "shieldemitters": 1,
+          "tungsten": 1
+        },
+        "4": {
+          "molybdenum": 1,
+          "tungsten": 1,
+          "zinc": 1
+        },
+        "5": {
+          "highdensitycomposites": 1,
+          "molybdenum": 1,
+          "technetium": 1
+        }
+      }
+    },
+    "ProspectingLimpet_Shielded": {
+      "display_name": "Prospector limpet controller",
+      "short_name": "Shielded",
+      "grades": {
+        "1": {
+          "wornshieldemitters": 1
+        },
+        "2": {
+          "carbon": 1,
+          "shieldemitters": 1
+        },
+        "3": {
+          "carbon": 1,
+          "highdensitycomposites": 1,
+          "shieldemitters": 1
+        },
+        "4": {
+          "fedproprietarycomposites": 1,
+          "shieldingsensors": 1,
+          "vanadium": 1
+        },
+        "5": {
+          "compoundshielding": 1,
+          "fedcorecomposites": 1,
+          "tungsten": 1
+        }
+      }
+    },
+    "Refineries_Shielded": {
+      "display_name": "Refinery",
+      "short_name": "Shielded",
+      "grades": {
+        "1": {
+          "wornshieldemitters": 1
+        },
+        "2": {
+          "carbon": 1,
+          "shieldemitters": 1
+        },
+        "3": {
+          "carbon": 1,
+          "highdensitycomposites": 1,
+          "shieldemitters": 1
+        },
+        "4": {
+          "fedproprietarycomposites": 1,
+          "shieldingsensors": 1,
+          "vanadium": 1
+        },
+        "5": {
+          "fedcorecomposites": 1,
+          "compoundshielding": 1,
+          "tungsten": 1
+        }
+      }
+    },
+    "Sensor_FastScan": {
+      "display_name": "Wake scanner",
+      "short_name": "Fast scan",
+      "grades": {
+        "1": {
+          "phosphorus": 1
+        },
+        "2": {
+          "uncutfocuscrystals": 1,
+          "phosphorus": 1
+        },
+        "3": {
+          "uncutfocuscrystals": 1,
+          "symmetrickeys": 1,
+          "phosphorus": 1
+        },
+        "4": {
+          "encryptionarchives": 1,
+          "focuscrystals": 1,
+          "manganese": 1
+        },
+        "5": {
+          "adaptiveencryptors": 1,
+          "arsenic": 1,
+          "refinedfocuscrystals": 1
+        }
+      }
+    },
+    "Scanner_LongRange": {
+      "display_name": "Wake scanner",
+      "short_name": "Long range",
+      "grades": {
+        "1": {
+          "iron": 1
+        },
+        "2": {
+          "hybridcapacitors": 1,
+          "iron": 1
+        },
+        "3": {
+          "hybridcapacitors": 1,
+          "iron": 1,
+          "emissiondata": 1
+        },
+        "4": {
+          "decodedemissiondata": 1,
+          "electrochemicalarrays": 1,
+          "germanium": 1
+        },
+        "5": {
+          "compactemissionsdata": 1,
+          "niobium": 1,
+          "polymercapacitors": 1
+        }
+      }
+    },
+    "Scanner_WideAngle": {
+      "display_name": "Wake scanner",
+      "short_name": "Wide angle",
+      "grades": {
+        "1": {
+          "mechanicalscrap": 1
+        },
+        "2": {
+          "germanium": 1,
+          "mechanicalscrap": 1
+        },
+        "3": {
+          "scandatabanks": 1,
+          "germanium": 1,
+          "mechanicalscrap": 1
+        },
+        "4": {
+          "encodedscandata": 1,
+          "mechanicalequipment": 1,
+          "niobium": 1
+        },
+        "5": {
+          "classifiedscandata": 1,
+          "mechanicalcomponents": 1,
+          "tin": 1
+        }
+      }
+    },
+    "Sensor_LightWeight": {
+      "display_name": "Sensors",
+      "short_name": "Lightweight",
+      "grades": {
+        "1": {
+          "phosphorus": 1
+        },
+        "2": {
+          "manganese": 1,
+          "salvagedalloys": 1
+        },
+        "3": {
+          "conductiveceramics": 1,
+          "manganese": 1,
+          "salvagedalloys": 1
+        },
+        "4": {
+          "conductivecomponents": 1,
+          "phasealloys": 1,
+          "protolightalloys": 1
+        },
+        "5": {
+          "conductiveceramics": 1,
+          "protolightalloys": 1,
+          "protoradiolicalloys": 1
+        }
+      }
+    },
+    "Sensor_LongRange": {
+      "display_name": "Sensors",
+      "short_name": "Long range",
+      "grades": {
+        "1": {
+          "iron": 1
+        },
+        "2": {
+          "hybridcapacitors": 1,
+          "iron": 1
+        },
+        "3": {
+          "hybridcapacitors": 1,
+          "iron": 1,
+          "emissiondata": 1
+        },
+        "4": {
+          "decodedemissiondata": 1,
+          "electrochemicalarrays": 1,
+          "germanium": 1
+        },
+        "5": {
+          "compactemissionsdata": 1,
+          "niobium": 1,
+          "polymercapacitors": 1
+        }
+      }
+    },
+    "Sensor_WideAngle": {
+      "display_name": "Sensors",
+      "short_name": "Wide angle",
+      "grades": {
+        "1": {
+          "mechanicalscrap": 1
+        },
+        "2": {
+          "germanium": 1,
+          "mechanicalscrap": 1
+        },
+        "3": {
+          "scandatabanks": 1,
+          "germanium": 1,
+          "mechanicalscrap": 1
+        },
+        "4": {
+          "encodedscandata": 1,
+          "mechanicalequipment": 1,
+          "niobium": 1
+        },
+        "5": {
+          "classifiedscandata": 1,
+          "mechanicalcomponents": 1,
+          "tin": 1
+        }
+      }
+    },
+    "Sensor_Expanded": {
+      "display_name": "Detailed surface scanner",
+      "short_name": "Expanded Probe Scanning Radius",
+      "grades": {
+        "1": {
+          "mechanicalscrap": 1
+        },
+        "2": {
+          "mechanicalscrap": 1,
+          "germanium": 1
+        },
+        "3": {
+          "mechanicalscrap": 1,
+          "germanium": 1,
+          "phasealloys": 1
+        },
+        "4": {
+          "mechanicalequipment": 1,
+          "niobium": 1,
+          "protolightalloys": 1
+        },
+        "5": {
+          "mechanicalcomponents": 1,
+          "tin": 1,
+          "protoradiolicalloys": 1
+        }
+      }
+    },
+    "ShieldBooster_Explosive": {
+      "display_name": "Shield booster",
+      "short_name": "Blast resistant",
+      "grades": {
+        "1": {
+          "iron": 1
+        },
+        "2": {
+          "conductivecomponents": 1,
+          "iron": 1
+        },
+        "3": {
+          "conductivecomponents": 1,
+          "focuscrystals": 1,
+          "iron": 1
+        },
+        "4": {
+          "germanium": 1,
+          "refinedfocuscrystals": 1,
+          "shielddensityreports": 1
+        },
+        "5": {
+          "shieldpatternanalysis": 1,
+          "exquisitefocuscrystals": 1,
+          "niobium": 1
+        }
+      }
+    },
+    "ShieldBooster_HeavyDuty": {
+      "display_name": "Shield booster",
+      "short_name": "Heavy duty",
+      "grades": {
+        "1": {
+          "gridresistors": 1
+        },
+        "2": {
+          "shieldcyclerecordings": 1,
+          "hybridcapacitors": 1
+        },
+        "3": {
+          "shieldcyclerecordings": 1,
+          "hybridcapacitors": 1,
+          "niobium": 1
+        },
+        "4": {
+          "electrochemicalarrays": 1,
+          "shieldsoakanalysis": 1,
+          "tin": 1
+        },
+        "5": {
+          "antimony": 1,
+          "polymercapacitors": 1,
+          "shielddensityreports": 1
+        }
+      }
+    },
+    "ShieldBooster_Kinetic": {
+      "display_name": "Shield booster",
+      "short_name": "Kinetic resistant",
+      "grades": {
+        "1": {
+          "iron": 1
+        },
+        "2": {
+          "germanium": 1,
+          "gridresistors": 1
+        },
+        "3": {
+          "focuscrystals": 1,
+          "hybridcapacitors": 1,
+          "salvagedalloys": 1
+        },
+        "4": {
+          "galvanisingalloys": 1,
+          "refinedfocuscrystals": 1,
+          "shielddensityreports": 1
+        },
+        "5": {
+          "shieldpatternanalysis": 1,
+          "exquisitefocuscrystals": 1,
+          "phasealloys": 1
+        }
+      }
+    },
+    "ShieldBooster_Resistive": {
+      "display_name": "Shield booster",
+      "short_name": "Resistance augmented",
+      "grades": {
+        "1": {
+          "phosphorus": 1
+        },
+        "2": {
+          "conductivecomponents": 1,
+          "phosphorus": 1
+        },
+        "3": {
+          "conductivecomponents": 1,
+          "focuscrystals": 1,
+          "phosphorus": 1
+        },
+        "4": {
+          "conductiveceramics": 1,
+          "manganese": 1,
+          "refinedfocuscrystals": 1
+        },
+        "5": {
+          "conductiveceramics": 1,
+          "imperialshielding": 1,
+          "refinedfocuscrystals": 1
+        }
+      }
+    },
+    "ShieldBooster_Thermic": {
+      "display_name": "Shield booster",
+      "short_name": "Thermal resistant",
+      "grades": {
+        "1": {
+          "iron": 1
+        },
+        "2": {
+          "germanium": 1,
+          "heatconductionwiring": 1
+        },
+        "3": {
+          "focuscrystals": 1,
+          "heatconductionwiring": 1,
+          "heatdispersionplate": 1
+        },
+        "4": {
+          "heatdispersionplate": 1,
+          "refinedfocuscrystals": 1,
+          "shielddensityreports": 1
+        },
+        "5": {
+          "shieldpatternanalysis": 1,
+          "exquisitefocuscrystals": 1,
+          "heatexchangers": 1
+        }
+      }
+    },
+    "ShieldCellBank_Rapid": {
+      "display_name": "Shield cell bank",
+      "short_name": "Rapid charge",
+      "grades": {
+        "1": {
+          "sulphur": 1
+        },
+        "2": {
+          "chromium": 1,
+          "gridresistors": 1
+        },
+        "3": {
+          "hybridcapacitors": 1,
+          "precipitatedalloys": 1,
+          "sulphur": 1
+        },
+        "4": {
+          "hybridcapacitors": 1,
+          "precipitatedalloys": 1,
+          "sulphur": 1
+        }
+      }
+    },
+    "ShieldCellBank_Specialised": {
+      "display_name": "Shield cell bank",
+      "short_name": "Specialised",
+      "grades": {
+        "1": {
+          "legacyfirmware": 1
+        },
+        "2": {
+          "conductivecomponents": 1,
+          "legacyfirmware": 1
+        },
+        "3": {
+          "conductivecomponents": 1,
+          "industrialfirmware": 1,
+          "scrambledemissiondata": 1
+        },
+        "4": {
+          "conductivecomponents": 1,
+          "industrialfirmware": 1,
+          "yttrium": 1
+        }
+      }
+    },
+    "ShieldGenerator_Kinetic": {
+      "display_name": "Shield generator",
+      "short_name": "Kinetic resistant",
+      "grades": {
+        "1": {
+          "shieldcyclerecordings": 1
+        },
+        "2": {
+          "shieldcyclerecordings": 1,
+          "consumerfirmware": 1
+        },
+        "3": {
+          "shieldcyclerecordings": 1,
+          "consumerfirmware": 1,
+          "selenium": 1
+        },
+        "4": {
+          "focuscrystals": 1,
+          "shieldsoakanalysis": 1,
+          "mercury": 1
+        },
+        "5": {
+          "refinedfocuscrystals": 1,
+          "ruthenium": 1,
+          "shielddensityreports": 1
+        }
+      }
+    },
+    "ShieldGenerator_Optimised": {
+      "display_name": "Shield generator",
+      "short_name": "Enhanced low power",
+      "grades": {
+        "1": {
+          "shieldcyclerecordings": 1
+        },
+        "2": {
+          "shieldcyclerecordings": 1,
+          "germanium": 1
+        },
+        "3": {
+          "shieldcyclerecordings": 1,
+          "germanium": 1,
+          "precipitatedalloys": 1
+        },
+        "4": {
+          "shieldsoakanalysis": 1,
+          "niobium": 1,
+          "thermicalloys": 1
+        },
+        "5": {
+          "militarygradealloys": 1,
+          "tin": 1,
+          "shielddensityreports": 1
+        }
+      }
+    },
+    "ShieldGenerator_Reinforced": {
+      "display_name": "Shield generator",
+      "short_name": "Reinforced",
+      "grades": {
+        "1": {
+          "phosphorus": 1
+        },
+        "2": {
+          "conductivecomponents": 1,
+          "phosphorus": 1
+        },
+        "3": {
+          "conductivecomponents": 1,
+          "mechanicalcomponents": 1,
+          "phosphorus": 1
+        },
+        "4": {
+          "conductiveceramics": 1,
+          "configurablecomponents": 1,
+          "manganese": 1
+        },
+        "5": {
+          "arsenic": 1,
+          "conductivepolymers": 1,
+          "improvisedcomponents": 1
+        }
+      }
+    },
+    "ShieldGenerator_Thermic": {
+      "display_name": "Shield generator",
+      "short_name": "Thermal resistant",
+      "grades": {
+        "1": {
+          "shieldcyclerecordings": 1
+        },
+        "2": {
+          "shieldcyclerecordings": 1,
+          "germanium": 1
+        },
+        "3": {
+          "shieldcyclerecordings": 1,
+          "germanium": 1,
+          "selenium": 1
+        },
+        "4": {
+          "focuscrystals": 1,
+          "shieldsoakanalysis": 1,
+          "mercury": 1
+        },
+        "5": {
+          "refinedfocuscrystals": 1,
+          "ruthenium": 1,
+          "shielddensityreports": 1
+        }
+      }
+    },
+    "Weapon_DoubleShot": {
+      "display_name": "Weapon",
+      "short_name": "Double shot",
+      "grades": {
+        "1": {
+          "carbon": 1
+        },
+        "2": {
+          "carbon": 1,
+          "mechanicalequipment": 1
+        },
+        "3": {
+          "carbon": 1,
+          "industrialfirmware": 1,
+          "mechanicalequipment": 1
+        },
+        "4": {
+          "mechanicalcomponents": 1,
+          "securityfirmware": 1,
+          "vanadium": 1
+        },
+        "5": {
+          "configurablecomponents": 1,
+          "highdensitycomposites": 1,
+          "embeddedfirmware": 1
+        }
+      }
+    },
+    "Weapon_Efficient": {
+      "display_name": "Weapon",
+      "short_name": "Efficient",
+      "grades": {
+        "1": {
+          "sulphur": 1
+        },
+        "2": {
+          "heatdispersionplate": 1,
+          "sulphur": 1
+        },
+        "3": {
+          "chromium": 1,
+          "scrambledemissiondata": 1,
+          "heatexchangers": 1
+        },
+        "4": {
+          "heatvanes": 1,
+          "archivedemissiondata": 1,
+          "selenium": 1
+        },
+        "5": {
+          "cadmium": 1,
+          "protoheatradiators": 1,
+          "emissiondata": 1
+        }
+      }
+    },
+    "Weapon_Focused": {
+      "display_name": "Weapon",
+      "short_name": "Focused",
+      "grades": {
+        "1": {
+          "iron": 1
+        },
+        "2": {
+          "conductivecomponents": 1,
+          "iron": 1
+        },
+        "3": {
+          "chromium": 1,
+          "conductiveceramics": 1,
+          "iron": 1
+        },
+        "4": {
+          "focuscrystals": 1,
+          "germanium": 1,
+          "polymercapacitors": 1
+        },
+        "5": {
+          "militarysupercapacitors": 1,
+          "niobium": 1,
+          "refinedfocuscrystals": 1
+        }
+      }
+    },
+    "Weapon_HighCapacity": {
+      "display_name": "Weapon",
+      "short_name": "High capacity",
+      "grades": {
+        "1": {
+          "mechanicalscrap": 1
+        },
+        "2": {
+          "mechanicalscrap": 1,
+          "vanadium": 1
+        },
+        "3": {
+          "mechanicalscrap": 1,
+          "niobium": 1,
+          "vanadium": 1
+        },
+        "4": {
+          "highdensitycomposites": 1,
+          "mechanicalequipment": 1,
+          "tin": 1
+        },
+        "5": {
+          "mechanicalcomponents": 1,
+          "militarysupercapacitors": 1,
+          "fedproprietarycomposites": 1
+        }
+      }
+    },
+    "Weapon_LightWeight": {
+      "display_name": "Weapon",
+      "short_name": "Lightweight",
+      "grades": {
+        "1": {
+          "phosphorus": 1
+        },
+        "2": {
+          "manganese": 1,
+          "salvagedalloys": 1
+        },
+        "3": {
+          "conductiveceramics": 1,
+          "manganese": 1,
+          "salvagedalloys": 1
+        },
+        "4": {
+          "conductivecomponents": 1,
+          "phasealloys": 1,
+          "protolightalloys": 1
+        },
+        "5": {
+          "conductiveceramics": 1,
+          "protolightalloys": 1,
+          "protoradiolicalloys": 1
+        }
+      }
+    },
+    "Weapon_LongRange": {
+      "display_name": "Weapon",
+      "short_name": "Long range",
+      "grades": {
+        "1": {
+          "sulphur": 1
+        },
+        "2": {
+          "consumerfirmware": 1,
+          "sulphur": 1
+        },
+        "3": {
+          "focuscrystals": 1,
+          "consumerfirmware": 1,
+          "sulphur": 1
+        },
+        "4": {
+          "conductivepolymers": 1,
+          "focuscrystals": 1,
+          "consumerfirmware": 1
+        },
+        "5": {
+          "biotechconductors": 1,
+          "industrialfirmware": 1,
+          "thermicalloys": 1
+        }
+      }
+    },
+    "MC_Overcharged": {
+      "display_name": "Weapon",
+      "short_name": "Overcharged",
+      "grades": {
+        "1": {
+          "nickel": 1
+        },
+        "2": {
+          "conductivecomponents": 1,
+          "nickel": 1
+        },
+        "3": {
+          "conductivecomponents": 1,
+          "electrochemicalarrays": 1,
+          "nickel": 1
+        },
+        "4": {
+          "conductiveceramics": 1,
+          "polymercapacitors": 1,
+          "zinc": 1
+        },
+        "5": {
+          "conductivepolymers": 1,
+          "embeddedfirmware": 1,
+          "zirconium": 1
+        }
+      }
+    },
+    "Weapon_Overcharged": {
+      "display_name": "Weapon",
+      "short_name": "Overcharged",
+      "grades": {
+        "1": {
+          "nickel": 1
+        },
+        "2": {
+          "conductivecomponents": 1,
+          "nickel": 1
+        },
+        "3": {
+          "conductivecomponents": 1,
+          "electrochemicalarrays": 1,
+          "nickel": 1
+        },
+        "4": {
+          "conductiveceramics": 1,
+          "polymercapacitors": 1,
+          "zinc": 1
+        },
+        "5": {
+          "conductivepolymers": 1,
+          "embeddedfirmware": 1,
+          "zirconium": 1
+        }
+      }
+    },
+    "Weapon_RapidFire": {
+      "display_name": "Weapon",
+      "short_name": "Rapid fire",
+      "grades": {
+        "1": {
+          "mechanicalscrap": 1
+        },
+        "2": {
+          "heatdispersionplate": 1,
+          "mechanicalscrap": 1
+        },
+        "3": {
+          "mechanicalequipment": 1,
+          "precipitatedalloys": 1,
+          "legacyfirmware": 1
+        },
+        "4": {
+          "mechanicalcomponents": 1,
+          "consumerfirmware": 1,
+          "thermicalloys": 1
+        },
+        "5": {
+          "configurablecomponents": 1,
+          "precipitatedalloys": 1,
+          "technetium": 1
+        }
+      }
+    },
+    "Weapon_ShortRange": {
+      "display_name": "Weapon",
+      "short_name": "Short range",
+      "grades": {
+        "1": {
+          "nickel": 1
+        },
+        "2": {
+          "consumerfirmware": 1,
+          "nickel": 1
+        },
+        "3": {
+          "electrochemicalarrays": 1,
+          "consumerfirmware": 1,
+          "nickel": 1
+        },
+        "4": {
+          "conductivepolymers": 1,
+          "electrochemicalarrays": 1,
+          "consumerfirmware": 1
+        },
+        "5": {
+          "biotechconductors": 1,
+          "configurablecomponents": 1,
+          "industrialfirmware": 1
+        }
+      }
+    },
+    "Weapon_Sturdy": {
+      "display_name": "Weapon",
+      "short_name": "Sturdy",
+      "grades": {
+        "1": {
+          "nickel": 1
+        },
+        "2": {
+          "nickel": 1,
+          "shieldemitters": 1
+        },
+        "3": {
+          "nickel": 1,
+          "shieldemitters": 1,
+          "tungsten": 1
+        },
+        "4": {
+          "molybdenum": 1,
+          "tungsten": 1,
+          "zinc": 1
+        },
+        "5": {
+          "highdensitycomposites": 1,
+          "molybdenum": 1,
+          "technetium": 1
+        }
+      }
+    },
+    "CargoRack_IncreasedCapacity": {
+      "display_name": "Expanded Capacity Cargo Rack",
+      "short_name": "Expanded Capacity",
+      "grades": {
+        "5": {}
+      }
+    }
+  },
+  "materials": {
+    "iron": {
+      "name": "Iron",
+      "type": "Raw"
+    },
+    "nickel": {
+      "name": "Nickel",
+      "type": "Raw"
+    },
+    "tin": {
+      "name": "Tin",
+      "type": "Raw"
+    },
+    "zinc": {
+      "name": "Zinc",
+      "type": "Raw"
+    },
+    "carbon": {
+      "name": "Carbon",
+      "type": "Raw"
+    },
+    "sulphur": {
+      "name": "Sulphur",
+      "type": "Raw"
+    },
+    "phosphorus": {
+      "name": "Phosphorus",
+      "type": "Raw"
+    },
+    "manganese": {
+      "name": "Manganese",
+      "type": "Raw"
+    },
+    "selenium": {
+      "name": "Selenium",
+      "type": "Raw"
+    },
+    "chromium": {
+      "name": "Chromium",
+      "type": "Raw"
+    },
+    "vanadium": {
+      "name": "Vanadium",
+      "type": "Raw"
+    },
+    "germanium": {
+      "name": "Germanium",
+      "type": "Raw"
+    },
+    "cadmium": {
+      "name": "Cadmium",
+      "type": "Raw"
+    },
+    "tungsten": {
+      "name": "Tungsten",
+      "type": "Raw"
+    },
+    "arsenic": {
+      "name": "Arsenic",
+      "type": "Raw"
+    },
+    "molybdenum": {
+      "name": "Molybdenum",
+      "type": "Raw"
+    },
+    "niobium": {
+      "name": "Niobium",
+      "type": "Raw"
+    },
+    "zirconium": {
+      "name": "Zirconium",
+      "type": "Raw"
+    },
+    "mercury": {
+      "name": "Mercury",
+      "type": "Raw"
+    },
+    "yttrium": {
+      "name": "Yttrium",
+      "type": "Raw"
+    },
+    "tellurium": {
+      "name": "Tellurium",
+      "type": "Raw"
+    },
+    "polonium": {
+      "name": "Polonium",
+      "type": "Raw"
+    },
+    "technetium": {
+      "name": "Technetium",
+      "type": "Raw"
+    },
+    "ruthenium": {
+      "name": "Ruthenium",
+      "type": "Raw"
+    },
+    "antimony": {
+      "name": "Antimony",
+      "type": "Raw"
+    },
+    "gridresistors": {
+      "name": "Grid Resistors",
+      "type": "Manufactured"
+    },
+    "crystalshards": {
+      "name": "Crystal Shards",
+      "type": "Manufactured"
+    },
+    "temperedalloys": {
+      "name": "Tempered Alloys",
+      "type": "Manufactured"
+    },
+    "basicconductors": {
+      "name": "Basic Conductors",
+      "type": "Manufactured"
+    },
+    "mechanicalscrap": {
+      "name": "Mechanical Scrap",
+      "type": "Manufactured"
+    },
+    "heatconductionwiring": {
+      "name": "Heat Conduction Wiring",
+      "type": "Manufactured"
+    },
+    "wornshieldemitters": {
+      "name": "Worn Shield Emitters",
+      "type": "Manufactured"
+    },
+    "compactcomposites": {
+      "name": "Compact Composites",
+      "type": "Manufactured"
+    },
+    "salvagedalloys": {
+      "name": "Salvaged Alloys",
+      "type": "Manufactured"
+    },
+    "chemicalstorageunits": {
+      "name": "Chemical Storage Units",
+      "type": "Manufactured"
+    },
+    "hybridcapacitors": {
+      "name": "Hybrid Capacitors",
+      "type": "Manufactured"
+    },
+    "uncutfocuscrystals": {
+      "name": "Flawed Focus Crystals",
+      "type": "Manufactured"
+    },
+    "heatresistantceramics": {
+      "name": "Heat Resistant Ceramics",
+      "type": "Manufactured"
+    },
+    "conductivecomponents": {
+      "name": "Conductive Components",
+      "type": "Manufactured"
+    },
+    "mechanicalequipment": {
+      "name": "Mechanical Equipment",
+      "type": "Manufactured"
+    },
+    "heatdispersionplate": {
+      "name": "Heat Dispersion Plate",
+      "type": "Manufactured"
+    },
+    "shieldemitters": {
+      "name": "Shield Emitters",
+      "type": "Manufactured"
+    },
+    "filamentcomposites": {
+      "name": "Filament Composites",
+      "type": "Manufactured"
+    },
+    "galvanisingalloys": {
+      "name": "Galvanising Alloys",
+      "type": "Manufactured"
+    },
+    "chemicalprocessors": {
+      "name": "Chemical Processors",
+      "type": "Manufactured"
+    },
+    "electrochemicalarrays": {
+      "name": "Electrochemical Arrays",
+      "type": "Manufactured"
+    },
+    "focuscrystals": {
+      "name": "Focus Crystals",
+      "type": "Manufactured"
+    },
+    "precipitatedalloys": {
+      "name": "Precipitated Alloys",
+      "type": "Manufactured"
+    },
+    "conductiveceramics": {
+      "name": "Conductive Ceramics",
+      "type": "Manufactured"
+    },
+    "mechanicalcomponents": {
+      "name": "Mechanical Components",
+      "type": "Manufactured"
+    },
+    "heatexchangers": {
+      "name": "Heat Exchangers",
+      "type": "Manufactured"
+    },
+    "shieldingsensors": {
+      "name": "Shielding Sensors",
+      "type": "Manufactured"
+    },
+    "highdensitycomposites": {
+      "name": "High Density Composites",
+      "type": "Manufactured"
+    },
+    "phasealloys": {
+      "name": "Phase Alloys",
+      "type": "Manufactured"
+    },
+    "chemicaldistillery": {
+      "name": "Chemical Distillery",
+      "type": "Manufactured"
+    },
+    "polymercapacitors": {
+      "name": "Polymer Capacitors",
+      "type": "Manufactured"
+    },
+    "refinedfocuscrystals": {
+      "name": "Refined Focus Crystals",
+      "type": "Manufactured"
+    },
+    "thermicalloys": {
+      "name": "Thermic Alloys",
+      "type": "Manufactured"
+    },
+    "conductivepolymers": {
+      "name": "Conductive Polymers",
+      "type": "Manufactured"
+    },
+    "configurablecomponents": {
+      "name": "Configurable Components",
+      "type": "Manufactured"
+    },
+    "heatvanes": {
+      "name": "Heat Vanes",
+      "type": "Manufactured"
+    },
+    "compoundshielding": {
+      "name": "Compound Shielding",
+      "type": "Manufactured"
+    },
+    "fedproprietarycomposites": {
+      "name": "Proprietary Composites",
+      "type": "Manufactured"
+    },
+    "protolightalloys": {
+      "name": "Proto Light Alloys",
+      "type": "Manufactured"
+    },
+    "chemicalmanipulators": {
+      "name": "Chemical Manipulators",
+      "type": "Manufactured"
+    },
+    "militarysupercapacitors": {
+      "name": "Military Supercapacitors",
+      "type": "Manufactured"
+    },
+    "exquisitefocuscrystals": {
+      "name": "Exquisite Focus Crystals",
+      "type": "Manufactured"
+    },
+    "militarygradealloys": {
+      "name": "Military Grade Alloys",
+      "type": "Manufactured"
+    },
+    "biotechconductors": {
+      "name": "Biotech Conductors",
+      "type": "Manufactured"
+    },
+    "improvisedcomponents": {
+      "name": "Improvised Components",
+      "type": "Manufactured"
+    },
+    "protoheatradiators": {
+      "name": "Proto Heat Radiators",
+      "type": "Manufactured"
+    },
+    "imperialshielding": {
+      "name": "Imperial Shielding",
+      "type": "Manufactured"
+    },
+    "fedcorecomposites": {
+      "name": "Core Dynamics Composites",
+      "type": "Manufactured"
+    },
+    "protoradiolicalloys": {
+      "name": "Proto Radiolic Alloys",
+      "type": "Manufactured"
+    },
+    "pharmaceuticalisolators": {
+      "name": "Pharmaceutical Isolators",
+      "type": "Manufactured"
+    },
+    "legacyfirmware": {
+      "name": "Specialised Legacy Firmware",
+      "type": "Encoded"
+    },
+    "encryptedfiles": {
+      "name": "Unusual Encrypted Files",
+      "type": "Encoded"
+    },
+    "bulkscandata": {
+      "name": "Anomalous Bulk Scan Data",
+      "type": "Encoded"
+    },
+    "disruptedwakeechoes": {
+      "name": "Atypical Disrupted Wake Echoes",
+      "type": "Encoded"
+    },
+    "scrambledemissiondata": {
+      "name": "Exceptional Scrambled Emission Data",
+      "type": "Encoded"
+    },
+    "shieldcyclerecordings": {
+      "name": "Distorted Shield Cycle Recordings",
+      "type": "Encoded"
+    },
+    "consumerfirmware": {
+      "name": "Modified Consumer Firmware",
+      "type": "Encoded"
+    },
+    "encryptioncodes": {
+      "name": "Tagged Encryption Codes",
+      "type": "Encoded"
+    },
+    "scanarchives": {
+      "name": "Unidentified Scan Archives",
+      "type": "Encoded"
+    },
+    "fsdtelemetry": {
+      "name": "Anomalous FSD Telemetry",
+      "type": "Encoded"
+    },
+    "archivedemissiondata": {
+      "name": "Irregular Emission Data",
+      "type": "Encoded"
+    },
+    "shieldsoakanalysis": {
+      "name": "Inconsistent Shield Soak Analysis",
+      "type": "Encoded"
+    },
+    "industrialfirmware": {
+      "name": "Cracked Industrial Firmware",
+      "type": "Encoded"
+    },
+    "symmetrickeys": {
+      "name": "Open Symmetric Keys",
+      "type": "Encoded"
+    },
+    "scandatabanks": {
+      "name": "Classified Scan Databanks",
+      "type": "Encoded"
+    },
+    "wakesolutions": {
+      "name": "Strange Wake Solutions",
+      "type": "Encoded"
+    },
+    "emissiondata": {
+      "name": "Unexpected Emission Data",
+      "type": "Encoded"
+    },
+    "shielddensityreports": {
+      "name": "Untypical Shield Scans",
+      "type": "Encoded"
+    },
+    "securityfirmware": {
+      "name": "Security Firmware Patch",
+      "type": "Encoded"
+    },
+    "encryptionarchives": {
+      "name": "Atypical Encryption Archives",
+      "type": "Encoded"
+    },
+    "encodedscandata": {
+      "name": "Divergent Scan Data",
+      "type": "Encoded"
+    },
+    "hyperspacetrajectories": {
+      "name": "Eccentric Hyperspace Trajectories",
+      "type": "Encoded"
+    },
+    "decodedemissiondata": {
+      "name": "Decoded Emission Data",
+      "type": "Encoded"
+    },
+    "shieldpatternanalysis": {
+      "name": "Aberrant Shield Pattern Analysis",
+      "type": "Encoded"
+    },
+    "embeddedfirmware": {
+      "name": "Modified Embedded Firmware",
+      "type": "Encoded"
+    },
+    "adaptiveencryptors": {
+      "name": "Adaptive Encryptors Capture",
+      "type": "Encoded"
+    },
+    "classifiedscandata": {
+      "name": "Classified Scan Fragment",
+      "type": "Encoded"
+    },
+    "dataminedwake": {
+      "name": "Datamined Wake Exceptions",
+      "type": "Encoded"
+    },
+    "compactemissionsdata": {
+      "name": "Abnormal Compact Emissions Data",
+      "type": "Encoded"
+    },
+    "shieldfrequencydata": {
+      "name": "Peculiar Shield Frequency Data",
+      "type": "Encoded"
+    },
+    "unknownenergysource": {
+      "name": "Sensor Fragment",
+      "type": "Manufactured"
+    },
+    "unknownshipsignature": {
+      "name": "Thargoid Ship Signature",
+      "type": "Encoded"
+    },
+    "unknownwakedata": {
+      "name": "Thargoid Wake Data",
+      "type": "Encoded"
+    },
+    "ancientlanguagedata": {
+      "name": "Pattern Delta Obelisk Data",
+      "type": "Encoded"
+    },
+    "ancientbiologicaldata": {
+      "name": "Pattern Alpha Obelisk Data",
+      "type": "Encoded"
+    },
+    "ancientculturaldata": {
+      "name": "Pattern Beta Obelisk Data",
+      "type": "Encoded"
+    },
+    "ancienthistoricaldata": {
+      "name": "Pattern Gamma Obelisk Data",
+      "type": "Encoded"
+    },
+    "ancienttechnologicaldata": {
+      "name": "Pattern Epsilon Obelisk Data",
+      "type": "Encoded"
+    },
+    "tg_compositiondata": {
+      "name": "Thargoid Material Composition Data",
+      "type": "Encoded"
+    },
+    "tg_residuedata": {
+      "name": "Thargoid Residue Data",
+      "type": "Encoded"
+    },
+    "tg_structuraldata": {
+      "name": "Thargoid Structural Data",
+      "type": "Encoded"
+    },
+    "unknowncarapace": {
+      "name": "Thargoid Carapace",
+      "type": "Manufactured"
+    },
+    "unknownenergycell": {
+      "name": "Thargoid Energy Cell",
+      "type": "Manufactured"
+    },
+    "unknownorganiccircuitry": {
+      "name": "Thargoid Organic Circuitry",
+      "type": "Manufactured"
+    },
+    "unknowntechnologycomponents": {
+      "name": "Thargoid Technological Components",
+      "type": "Manufactured"
+    },
+    "tg_biomechanicalconduits": {
+      "name": "Bio-Mechanical Conduits",
+      "type": "Manufactured"
+    },
+    "tg_propulsionelement": {
+      "name": "Propulsion Elements",
+      "type": "Manufactured"
+    },
+    "tg_weaponparts": {
+      "name": "Weapon Parts",
+      "type": "Manufactured"
+    },
+    "tg_wreckagecomponents": {
+      "name": "Wreckage Components",
+      "type": "Manufactured"
+    },
+    "tg_shipflightdata": {
+      "name": "Ship Flight Data",
+      "type": "Encoded"
+    },
+    "tg_shipsystemsdata": {
+      "name": "Ship Systems Data",
+      "type": "Encoded"
+    },
+    "guardian_powercell": {
+      "name": "Guardian Power Cell",
+      "type": "Manufactured"
+    },
+    "guardian_powerconduit": {
+      "name": "Guardian Power Conduit",
+      "type": "Manufactured"
+    },
+    "guardian_techcomponent": {
+      "name": "Guardian Technology Component",
+      "type": "Manufactured"
+    },
+    "guardian_sentinel_weaponparts": {
+      "name": "Guardian Sentinel Weapon Parts",
+      "type": "Manufactured"
+    },
+    "guardian_sentinel_wreckagecomponents": {
+      "name": "Guardian Sentinel Wreckage Components",
+      "type": "Manufactured"
+    },
+    "guardian_weaponblueprint": {
+      "name": "Guardian Weapon Blueprint Segment",
+      "type": "Encoded"
+    },
+    "guardian_moduleblueprint": {
+      "name": "Guardian Module Blueprint Segment",
+      "type": "Encoded"
+    },
+    "guardian_vesselblueprint": {
+      "name": "Guardian Vessel Blueprint Segment",
+      "type": "Encoded"
+    },
+    "rhenium": {
+      "name": "Rhenium",
+      "type": "Raw"
+    },
+    "lead": {
+      "name": "Lead",
+      "type": "Raw"
+    },
+    "boron": {
+      "name": "Boron",
+      "type": "Raw"
+    }
+  }
+}

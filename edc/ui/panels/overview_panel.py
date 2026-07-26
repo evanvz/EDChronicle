@@ -329,6 +329,17 @@ class OverviewPanel(QWidget):
 
         layout.addWidget(self.system_card)
 
+        # ── Engineering wishlist alert ─────────────────────────────────────
+        self.engineering_alert = QLabel("")
+        self.engineering_alert.setTextFormat(Qt.TextFormat.RichText)
+        self.engineering_alert.setWordWrap(True)
+        self.engineering_alert.setVisible(False)
+        self.engineering_alert.setStyleSheet(
+            "QLabel { background: #1a2a0d; border: 1px solid #3a5a1e;"
+            "border-radius: 6px; padding: 8px 10px; color: #B8E68C; }"
+        )
+        layout.addWidget(self.engineering_alert)
+
         # ── Conflicts section ─────────────────────────────────────────────
         self.conflict_widget = QWidget()
         self.conflict_widget.setStyleSheet("background: transparent;")
@@ -361,6 +372,20 @@ class OverviewPanel(QWidget):
             "QListWidget::item { border: none; }"
         )
         layout.addWidget(self.factions_list, 1)
+
+    # ── Engineering wishlist alert ─────────────────────────────────────────────
+    def set_engineering_alert(self, materials: list) -> None:
+        """Shows a banner naming wishlist materials farmable in the current system."""
+        names = [m for m in (materials or []) if isinstance(m, str) and m.strip()]
+        if not names:
+            self.engineering_alert.setVisible(False)
+            self.engineering_alert.setText("")
+            return
+        joined = ", ".join(names)
+        self.engineering_alert.setText(
+            f'<b>🔧 Wishlist materials nearby:</b> {joined}'
+        )
+        self.engineering_alert.setVisible(True)
 
     # ── Link handler ──────────────────────────────────────────────────────────
     def _on_overview_action_link(self, link: str):

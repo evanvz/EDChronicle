@@ -1,5 +1,50 @@
 from __future__ import annotations
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+
+# Category name (as used by MaterialCollected/MaterialDiscarded/MaterialTrade)
+# -> (counts dict attr, localised dict attr) on GameState.
+_CATEGORY_ATTRS = {
+    "raw":          ("materials_raw",          "materials_raw_loc"),
+    "manufactured": ("materials_manufactured",  "materials_manufactured_loc"),
+    "encoded":      ("materials_encoded",       "materials_encoded_loc"),
+}
+
+
+def _adjust_material(engine, category: Optional[str], rec: Dict[str, Any], delta: int) -> None:
+    """
+    Apply a +/- delta to a single material's live count, keeping the
+    matching *_loc display-name dict in sync. `category` is "Raw" /
+    "Manufactured" / "Encoded" (case-insensitive) when known (Material-
+    Collected/Discarded/Trade all provide it). When it's None (Engineer-
+    Craft's Ingredients list doesn't tag category), the material is
+    looked up by name across all three categories instead — raw/
+    manufactured/encoded material names never overlap.
+    """
+    nm = rec.get("Name")
+    if not isinstance(nm, str):
+        return
+    key = nm.strip().lower()
+    if not key:
+        return
+    nl = rec.get("Name_Localised")
+    display = nl.strip() if isinstance(nl, str) and nl.strip() else None
+
+    cat_key = category.strip().lower() if isinstance(category, str) else None
+    attrs = [_CATEGORY_ATTRS[cat_key]] if cat_key in _CATEGORY_ATTRS else list(_CATEGORY_ATTRS.values())
+
+    for counts_attr, loc_attr in attrs:
+        counts: Dict[str, int] = getattr(engine.state, counts_attr)
+        if cat_key is None and key not in counts:
+            continue  # searching all categories — only touch the one that already holds this material
+        new_count = counts.get(key, 0) + delta
+        if new_count > 0:
+            counts[key] = new_count
+        else:
+            counts.pop(key, None)
+        if display:
+            getattr(engine.state, loc_attr)[key] = display
+        return
+
 
 def handle(engine, name: str | None, event: Dict[str, Any], msgs: List[str]) -> bool:
     """
@@ -53,6 +98,29 @@ def handle(engine, name: str | None, event: Dict[str, Any], msgs: List[str]) -> 
         inv = event.get("Inventory")
         if isinstance(inv, list):
             engine.state.cargo_inventory = inv
+        return True
+
+    elif name == "MaterialCollected":
+        _adjust_material(engine, event.get("Category"), event, +int(event.get("Count") or 0))
+        return True
+
+    elif name == "MaterialDiscarded":
+        _adjust_material(engine, event.get("Category"), event, -int(event.get("Count") or 0))
+        return True
+
+    elif name == "MaterialTrade":
+        paid = event.get("Paid")
+        received = event.get("Received")
+        if isinstance(paid, dict):
+            _adjust_material(engine, paid.get("Category"), paid, -int(paid.get("Count") or 0))
+        if isinstance(received, dict):
+            _adjust_material(engine, received.get("Category"), received, +int(received.get("Count") or 0))
+        return True
+
+    elif name == "EngineerCraft":
+        for ingredient in (event.get("Ingredients") or []):
+            if isinstance(ingredient, dict):
+                _adjust_material(engine, None, ingredient, -int(ingredient.get("Count") or 0))
         return True
 
     return False

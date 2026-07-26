@@ -142,4 +142,29 @@ class GameState:
     # Session dedupe sets (do not persist initially)
     counted_combat_keys: Set[str] = field(default_factory=set)
     counted_exploration_keys: Set[str] = field(default_factory=set)
+
+    # Fleet Carrier (journal-derived; only present if the commander owns one)
+    carrier_market_id: Optional[int] = None
+    carrier_callsign: Optional[str] = None
+    carrier_name: Optional[str] = None
+    carrier_docking_access: Optional[str] = None       # all/none/friends/squadron/squadronfriends
+    carrier_allow_notorious: Optional[bool] = None
+    carrier_fuel_level: Optional[int] = None           # tritium, tons
+    carrier_jump_range_curr: Optional[float] = None
+    carrier_jump_range_max: Optional[float] = None
+    carrier_pending_decommission: Optional[bool] = None
+    carrier_space_usage: Dict[str, int] = field(default_factory=dict)   # TotalCapacity/Crew/Cargo/CargoSpaceReserved/ShipPacks/ModulePacks/FreeSpace
+    carrier_finance: Dict[str, int] = field(default_factory=dict)       # CarrierBalance/ReserveBalance/AvailableBalance/ReservePercent/TaxRate
+    carrier_current_system: Optional[str] = None       # from CarrierJump
+    carrier_next_jump_system: Optional[str] = None      # from CarrierJumpRequest (cleared on jump/cancel)
+    carrier_next_jump_body: Optional[str] = None
+    carrier_trade_orders: Dict[str, Dict[str, Any]] = field(default_factory=dict)  # commodity(lower) -> order details
+
+    # Mining (session-scoped; resets on app start, like the other session_collected fields)
+    mining_refined_totals: Dict[str, int] = field(default_factory=dict)     # material(lower) -> units refined this session
+    mining_prospected_count: int = 0
+    mining_cracked_count: int = 0
+    mining_last_prospect_materials: List[Dict[str, Any]] = field(default_factory=list)  # [{"Name":..., "Proportion":...}]
+    mining_last_prospect_content: Optional[str] = None       # High/Medium/Low
+    mining_last_motherlode_material: Optional[str] = None
     counted_exobiology_keys: Set[str] = field(default_factory=set)

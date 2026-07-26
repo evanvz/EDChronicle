@@ -138,8 +138,11 @@ class PowerplayFinderPanel(QWidget):
     _HDR_STYLE   = "color:#555555; font-size:10px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
     _LABEL_STYLE = "background:transparent; border:none; color:#c8c8c8;"
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, edsm_powerplay=None, eddn_powerplay=None):
         super().__init__(parent)
+
+        self._edsm_powerplay = edsm_powerplay
+        self._eddn_powerplay = eddn_powerplay
 
         self._power:        str   = ""
         self._system:       str   = ""
@@ -414,10 +417,20 @@ class PowerplayFinderPanel(QWidget):
             self._status_label.setText(f"Error: {error}")
             return
 
-        self._status_label.setText(
+        status_txt = (
             f"Found {len(results)} system{'s' if len(results) != 1 else ''} "
             f"within {self._range_spin.value()} ly."
         )
+        if self._edsm_powerplay is not None:
+            if self._edsm_powerplay.has_data():
+                age = " (today's data)" if not self._edsm_powerplay.is_stale() else " (cache outdated)"
+                status_txt += f"  EDSM cross-check active{age}."
+            else:
+                status_txt += "  EDSM cross-check data not yet downloaded."
+        if self._eddn_powerplay is not None:
+            n = self._eddn_powerplay.system_count()
+            status_txt += f"  EDDN live cross-check active ({n} systems seen this session)." if n else "  EDDN live cross-check active (no sightings yet)."
+        self._status_label.setText(status_txt)
         self._table.setRowCount(len(results))
         for row, sys in enumerate(results):
             name_item  = QTableWidgetItem(sys.name)
@@ -433,8 +446,36 @@ class PowerplayFinderPanel(QWidget):
             if state_color:
                 state_item.setForeground(QColor(state_color))
             state_tip = _STATE_TOOLTIPS.get(state_lower)
-            if state_tip:
-                state_item.setToolTip(state_tip)
+
+            # Cross-check against independent sources, keyed by system id64.
+            # Only compares controlling power (vocab for tier/state differs
+            # between Spansh and these sources, so tier itself isn't compared).
+            cross_notes = []
+            any_disagreement = False
+            for label, source in (("EDSM", self._edsm_powerplay), ("EDDN (live)", self._eddn_powerplay)):
+                if source is None:
+                    continue
+                rec = source.get_controller(sys.id64)
+                if rec:
+                    rec_power = rec.get("power") or ""
+                    rec_state = rec.get("power_state") or ""
+                    rec_date  = rec.get("date") or ""
+                    if rec_power and sys.controlling_power and rec_power.lower() != sys.controlling_power.lower():
+                        any_disagreement = True
+                        cross_notes.append(f"⚠ {label} disagrees: {rec_power} ({rec_state}) as of {rec_date}")
+                    else:
+                        cross_notes.append(f"{label} confirms: {rec_power or '—'} ({rec_state}) as of {rec_date}")
+                elif sys.id64 is not None:
+                    cross_notes.append(f"Not found in {label} data.")
+
+            if any_disagreement:
+                state_item.setText(f"⚠ {state_item.text()}")
+
+            tooltip = state_tip or ""
+            if cross_notes:
+                tooltip += "\n\n" + "\n".join(cross_notes)
+            if tooltip:
+                state_item.setToolTip(tooltip)
 
             # Powers present column
             all_p = sys.all_powers()

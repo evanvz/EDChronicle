@@ -51,6 +51,15 @@ from edc.core.item_catalog import ItemCatalog
 from edc.core.farming_locations import FarmingLocations
 from edc.core.powerplay_activities import PowerPlayActivityTable
 from edc.core.spansh_client import SpanshClient as _SpanshClient
+from edc.core.edsm_powerplay import EdsmPowerPlayCache
+from edc.core.engineering_blueprints import EngineeringBlueprintTable
+from edc.core.engineering_wishlist import EngineeringWishlist
+from edc.ui.panels.engineering_panel import EngineeringPanel
+from edc.audio.handlers.engineering import EngineeringPhrases
+from edc.ui.panels.fleet_carrier_panel import FleetCarrierPanel
+from edc.core.eddn_powerplay import EddnPowerPlayCache
+from edc.core.eddn_listener import EddnPowerPlayWorker
+from edc.ui.panels.mining_panel import MiningPanel
 from edc.ui import formatting as fmt
 from edc.audio.tts_engine import TTSEngine
 from edc.audio.voice_commands import VoiceCommandListener
@@ -83,6 +92,18 @@ class _SpanshEnrichWorker(QObject):
     def run(self):
         bodies, error = _SpanshClient().fetch_system_bodies(self._system_name, self._system_address)
         self.finished.emit(bodies, error, self._system_address)
+
+
+class _EdsmPowerPlayRefreshWorker(QObject):
+    finished = pyqtSignal(bool)
+
+    def __init__(self, cache: EdsmPowerPlayCache):
+        super().__init__()
+        self._cache = cache
+
+    def run(self):
+        ok = self._cache.refresh()
+        self.finished.emit(ok)
 
 
 class MainWindow(QMainWindow):
@@ -244,6 +265,20 @@ class MainWindow(QMainWindow):
         self.external_intel = ExternalIntel(settings_base)
         self.item_catalog = ItemCatalog(settings_base)
         self.farming_locations = FarmingLocations(settings_base)
+        self.edsm_powerplay = EdsmPowerPlayCache(settings_base)
+        self._edsm_powerplay_thread: QThread | None = None
+        self._edsm_powerplay_worker: _EdsmPowerPlayRefreshWorker | None = None
+        self.engineering_blueprints = EngineeringBlueprintTable(settings_base)
+        self.engineering_wishlist_store = EngineeringWishlist(data_dir / "engineering_wishlist.json")
+        self.eddn_powerplay = EddnPowerPlayCache(settings_base)
+        self._eddn_worker: EddnPowerPlayWorker | None = None
+        self._eddn_thread: QThread | None = None
+        self._eddn_save_timer = QTimer(self)
+        self._eddn_save_timer.setInterval(2 * 60 * 1000)  # persist periodically, not on every sighting
+        self._eddn_save_timer.timeout.connect(self.eddn_powerplay.save)
+        self._edsm_powerplay_retry_timer = QTimer(self)
+        self._edsm_powerplay_retry_timer.setInterval(10 * 60 * 1000)  # retry every 10 min until fresh
+        self._edsm_powerplay_retry_timer.timeout.connect(self._maybe_start_edsm_powerplay_refresh)
 
         self.engine = EventEngine(
             self.state,
@@ -399,9 +434,24 @@ class MainWindow(QMainWindow):
         self.sidebar.addItem("Exobiology")
 
         # PowerPlay tab
-        self.powerplay_panel = PowerplayPanel()
+        self.powerplay_panel = PowerplayPanel(edsm_powerplay=self.edsm_powerplay, eddn_powerplay=self.eddn_powerplay)
         self.stack.addWidget(self.powerplay_panel)
         self.sidebar.addItem("PowerPlay")
+
+        # Engineering tab
+        self.engineering_panel = EngineeringPanel(self.engineering_blueprints, self.engineering_wishlist_store)
+        self.stack.addWidget(self.engineering_panel)
+        self.sidebar.addItem("Engineering")
+
+        # Fleet Carrier tab
+        self.fleet_carrier_panel = FleetCarrierPanel()
+        self.stack.addWidget(self.fleet_carrier_panel)
+        self.sidebar.addItem("Fleet Carrier")
+
+        # Mining tab
+        self.mining_panel = MiningPanel()
+        self.stack.addWidget(self.mining_panel)
+        self.sidebar.addItem("Mining")
 
         # Combat tab (stub)
         self.combat_panel = CombatPanel()
@@ -543,6 +593,10 @@ class MainWindow(QMainWindow):
         self.sidebar.currentRowChanged.connect(self.stack.setCurrentIndex)
         self.sidebar.setCurrentRow(0)
         self._refresh_hud()
+        self._maybe_start_edsm_powerplay_refresh()
+        self._start_eddn_listener()
+        if self.edsm_powerplay.is_stale():
+            self._edsm_powerplay_retry_timer.start()
         if auto_start:
             self._auto_start_if_configured()
 
@@ -582,6 +636,88 @@ class MainWindow(QMainWindow):
 
     def load_current_system_data(self):
         self.system_data_loader.load_current_system_data()
+
+    def _start_eddn_listener(self):
+        if self._eddn_thread and self._eddn_thread.isRunning():
+            return
+        self._eddn_worker = EddnPowerPlayWorker()
+        self._eddn_thread = QThread()
+        self._eddn_worker.moveToThread(self._eddn_thread)
+        self._eddn_thread.started.connect(self._eddn_worker.run)
+        self._eddn_worker.system_seen.connect(self._on_eddn_system_seen)
+        self._eddn_thread.start()
+        self._eddn_save_timer.start()
+        log.info("EDDN PowerPlay listener started")
+
+    def _stop_eddn_listener(self):
+        if self._eddn_worker:
+            self._eddn_worker.stop()
+        if self._eddn_thread:
+            self._eddn_thread.quit()
+            self._eddn_thread.wait(2000)
+        self._eddn_worker = None
+        self._eddn_thread = None
+        self._eddn_save_timer.stop()
+        self.eddn_powerplay.save()
+        log.info("EDDN PowerPlay listener stopped")
+
+    def _on_eddn_system_seen(self, id64: int, power: str, power_state: str, timestamp: str):
+        self.eddn_powerplay.ingest(id64, power, power_state, timestamp)
+
+    def _maybe_start_edsm_powerplay_refresh(self):
+        if not self.edsm_powerplay.is_stale():
+            return
+        if self._edsm_powerplay_thread and self._edsm_powerplay_thread.isRunning():
+            return
+
+        log.info("EDSM PowerPlay cache is stale — refreshing in background")
+        self._edsm_powerplay_worker = _EdsmPowerPlayRefreshWorker(self.edsm_powerplay)
+        self._edsm_powerplay_thread = QThread()
+        self._edsm_powerplay_worker.moveToThread(self._edsm_powerplay_thread)
+        self._edsm_powerplay_thread.started.connect(self._edsm_powerplay_worker.run)
+        self._edsm_powerplay_worker.finished.connect(self._on_edsm_powerplay_refreshed)
+        self._edsm_powerplay_worker.finished.connect(self._edsm_powerplay_thread.quit)
+        self._edsm_powerplay_thread.start()
+
+    def _on_edsm_powerplay_refreshed(self, ok: bool):
+        if ok:
+            log.info("EDSM PowerPlay cache refresh complete")
+            self._edsm_powerplay_retry_timer.stop()
+        else:
+            log.warning("EDSM PowerPlay cache refresh failed — will retry later")
+            if not self._edsm_powerplay_retry_timer.isActive():
+                self._edsm_powerplay_retry_timer.start()
+
+    def _maybe_alert_engineering_materials(self):
+        """
+        Once per system entry: if a material still short for the wishlist
+        has a known farming location in the current system, speak a
+        heads-up and show a banner on the Overview tab.
+        """
+        system_name = (getattr(self.state, "system", None) or "").strip()
+        if not system_name:
+            return
+        try:
+            shortfall = self.engineering_panel.missing_materials_for_wishlist()
+        except Exception:
+            return
+        if not shortfall:
+            return
+
+        hits = []
+        for symbol in shortfall:
+            display = self.engineering_blueprints.material_name(symbol)
+            for rec in self.farming_locations.get_for_material(display):
+                if (rec.get("system") or "").strip().lower() == system_name.lower():
+                    hits.append(display)
+                    break
+
+        if not hits:
+            return
+
+        for display in hits[:2]:  # cap announcements — avoid stacking too many at once
+            self.tts.speak(EngineeringPhrases.material_nearby(display), priority=5)
+        self.overview_panel.set_engineering_alert(hits)
 
     def _maybe_start_spansh_enrichment(self):
         system_name    = getattr(self.state, "system",         None) or ""
@@ -736,6 +872,7 @@ class MainWindow(QMainWindow):
         log.info("closeEvent triggered:\n%s", "".join(traceback.format_stack()))
         self.stop_watching()
         self._stop_voice_commands()
+        self._stop_eddn_listener()
         super().closeEvent(event)
 
     def _on_status(self, msg: str):
@@ -781,6 +918,7 @@ class MainWindow(QMainWindow):
                 self._tts_spoken_signal_bodies.clear()
                 self.load_current_system_data()
                 self._maybe_start_spansh_enrichment()
+                self._maybe_alert_engineering_materials()
                 self._refresh_hud()
                 self._refresh_exploration()
 
@@ -2281,6 +2419,9 @@ class MainWindow(QMainWindow):
         self._refresh_intel()
         self._refresh_materials_inventory()
         self._refresh_shiplocker_inventory()
+        self._refresh_engineering()
+        self._refresh_fleet_carrier()
+        self._refresh_mining()
 
     def _animate_overview_update(self, html: str):
         self.overview_panel.animate_overview_update(html)
@@ -2290,6 +2431,15 @@ class MainWindow(QMainWindow):
 
     def _refresh_materials_inventory(self):
         self.materials_panel.refresh(self.state, self.item_catalog)
+
+    def _refresh_engineering(self):
+        self.engineering_panel.refresh(self.state)
+
+    def _refresh_fleet_carrier(self):
+        self.fleet_carrier_panel.refresh(self.state)
+
+    def _refresh_mining(self):
+        self.mining_panel.refresh(self.state)
 
     def _refresh_intel(self):
         self.intel_panel.refresh(self.state, self.farming_locations)
