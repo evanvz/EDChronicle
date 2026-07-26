@@ -176,7 +176,7 @@ class EngineeringPanel(QWidget):
 
     def _missing_count(self, fdname: str, grade: int) -> int:
         """Number of distinct materials where held < required."""
-        reqs = self._blueprints.requirements(fdname, grade)
+        reqs = self._blueprints.cumulative_requirements(fdname, grade)
         return sum(1 for sym, qty in reqs.items() if self._held_count(sym) < qty)
 
     def missing_materials_for_wishlist(self) -> Dict[str, int]:
@@ -186,7 +186,7 @@ class EngineeringPanel(QWidget):
         """
         shortfall: Dict[str, int] = {}
         for entry in self._wishlist:
-            reqs = self._blueprints.requirements(entry["fdname"], entry["grade"])
+            reqs = self._blueprints.cumulative_requirements(entry["fdname"], entry["grade"])
             for sym, qty in reqs.items():
                 need = qty - self._held_count(sym)
                 if need > 0:
@@ -241,7 +241,7 @@ class EngineeringPanel(QWidget):
             self._detail_table.setRowCount(0)
             return
         entry = self._wishlist[row]
-        reqs = self._blueprints.requirements(entry["fdname"], entry["grade"])
+        reqs = self._blueprints.cumulative_requirements(entry["fdname"], entry["grade"])
         rows = sorted(reqs.items(), key=lambda kv: self._blueprints.material_name(kv[0]))
 
         self._detail_table.setRowCount(len(rows))

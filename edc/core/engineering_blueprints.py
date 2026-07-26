@@ -94,13 +94,36 @@ class EngineeringBlueprintTable:
         return self._blueprints.get(fdname)
 
     def requirements(self, fdname: str, grade: int) -> Dict[str, int]:
-        """Returns {material_symbol_lower: qty} for one blueprint grade, or {} if unknown."""
+        """Returns {material_symbol_lower: qty} for one single blueprint grade, or {} if unknown."""
         bp = self.get(fdname)
         if not bp:
             return {}
         grades = bp.get("grades") or {}
         reqs = grades.get(str(grade))
         return dict(reqs) if isinstance(reqs, dict) else {}
+
+    def cumulative_requirements(self, fdname: str, grade: int) -> Dict[str, int]:
+        """
+        Returns {material_symbol_lower: qty} summed across grades 1..grade.
+
+        Reaching a given grade means engineering at every grade below it
+        first (grade 1, then 2, ... up to `grade`), each consuming its own
+        materials — so building at grade 5 needs grades 1+2+3+4+5's
+        materials combined, not just grade 5's.
+        """
+        bp = self.get(fdname)
+        if not bp:
+            return {}
+        grades = bp.get("grades") or {}
+        total: Dict[str, int] = {}
+        for g in range(1, grade + 1):
+            reqs = grades.get(str(g))
+            if not isinstance(reqs, dict):
+                continue
+            for material, qty in reqs.items():
+                if isinstance(qty, int):
+                    total[material] = total.get(material, 0) + qty
+        return total
 
     def max_grade(self, fdname: str) -> int:
         bp = self.get(fdname)
