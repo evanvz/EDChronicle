@@ -81,4 +81,45 @@ CREATE TABLE IF NOT EXISTS spansh_bodies (
     landable        INTEGER,
     PRIMARY KEY (system_address, body_name)
 );
+
+CREATE TABLE IF NOT EXISTS faction_snapshots (
+    system_address    INTEGER NOT NULL,
+    faction_name      TEXT    NOT NULL,
+    snapshot_date     TEXT    NOT NULL,
+    influence         REAL,
+    government        TEXT,
+    allegiance        TEXT,
+    faction_state     TEXT,
+    happiness         TEXT,
+    active_states     TEXT,
+    pending_states    TEXT,
+    recovering_states TEXT,
+    is_controlling    INTEGER DEFAULT 0,
+    PRIMARY KEY (system_address, faction_name, snapshot_date)
+);
+
+CREATE TABLE IF NOT EXISTS system_coords (
+    system_name TEXT PRIMARY KEY,
+    x REAL,
+    y REAL,
+    z REAL,
+    last_seen TEXT
+);
+
+CREATE TABLE IF NOT EXISTS market_prices (
+    market_id      INTEGER NOT NULL,
+    commodity_name TEXT    NOT NULL,
+    station_name   TEXT,
+    station_type   TEXT,
+    system_name    TEXT,
+    sell_price     INTEGER,
+    buy_price      INTEGER,
+    mean_price     INTEGER,
+    demand         INTEGER,
+    demand_bracket INTEGER,
+    stock          INTEGER,
+    stock_bracket  INTEGER,
+    last_updated   TEXT NOT NULL,
+    PRIMARY KEY (market_id, commodity_name)
+);
 """

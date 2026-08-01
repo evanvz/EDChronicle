@@ -21,6 +21,7 @@ log = logging.getLogger(__name__)
 
 _RELAY_URL = "tcp://eddn.edcd.io:9500"
 _JOURNAL_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/journal/"
+_COMMODITY_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/commodity/"
 _RELEVANT_EVENTS = {"FSDJump", "Location", "CarrierJump"}
 _RECV_TIMEOUT_MS = 5000
 _RECONNECT_DELAY_S = 5
@@ -28,6 +29,8 @@ _RECONNECT_DELAY_S = 5
 
 class EddnPowerPlayWorker(QObject):
     system_seen = pyqtSignal(int, str, str, str)  # id64, power, power_state, timestamp
+    system_coords_seen = pyqtSignal(str, float, float, float)  # StarSystem, x, y, z
+    commodity_seen = pyqtSignal(dict)  # raw commodity/3 message body
     finished = pyqtSignal()
 
     def __init__(self):
@@ -68,12 +71,29 @@ class EddnPowerPlayWorker(QObject):
                 continue
 
             schema = data.get("$schemaRef") or ""
+
+            if schema.startswith(_COMMODITY_SCHEMA_PREFIX):
+                msg = data.get("message")
+                if isinstance(msg, dict) and isinstance(msg.get("commodities"), list):
+                    self.commodity_seen.emit(msg)
+                continue
+
             if not schema.startswith(_JOURNAL_SCHEMA_PREFIX):
                 continue
 
             msg = data.get("message")
             if not isinstance(msg, dict) or msg.get("event") not in _RELEVANT_EVENTS:
                 continue
+
+            # Passively harvest system coordinates from whichever journal
+            # messages already carry StarPos — feeds the market feature's
+            # distance filtering without needing a separate lookup API.
+            star_system = msg.get("StarSystem")
+            star_pos = msg.get("StarPos")
+            if (isinstance(star_system, str) and star_system
+                    and isinstance(star_pos, list) and len(star_pos) == 3
+                    and all(isinstance(v, (int, float)) for v in star_pos)):
+                self.system_coords_seen.emit(star_system, float(star_pos[0]), float(star_pos[1]), float(star_pos[2]))
 
             power = msg.get("ControllingPower")
             power_state = msg.get("PowerplayState")

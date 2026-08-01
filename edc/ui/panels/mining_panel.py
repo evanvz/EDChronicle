@@ -45,8 +45,12 @@ class MiningPanel(QWidget):
     """
     Owns all widgets and refresh logic for the Mining tab.
     Receives state via refresh(state). Knows nothing about
-    main_window or repo.
+    main_window or repo — "where to sell" is delegated via
+    sell_search_requested, letting main_window switch tabs and
+    query the Market panel itself.
     """
+
+    sell_search_requested = pyqtSignal(str)  # commodity display name
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -83,6 +87,15 @@ class MiningPanel(QWidget):
         self._last_prospect_label.setStyleSheet("color:#FFB347; background:transparent; border:none;")
         self._last_prospect_label.setVisible(False)
         stats_layout.addWidget(self._last_prospect_label)
+
+        self._sell_hdr = QLabel("Where to sell:")
+        self._sell_hdr.setStyleSheet("color:#555555; font-size:10px; background:transparent; border:none;")
+        self._sell_hdr.setVisible(False)
+        stats_layout.addWidget(self._sell_hdr)
+
+        self._sell_row = QHBoxLayout()
+        self._sell_row.setSpacing(4)
+        stats_layout.addLayout(self._sell_row)
 
         root.addWidget(stats_frame)
 
@@ -196,7 +209,9 @@ class MiningPanel(QWidget):
                 )
                 parts.append(f"Refined — {refined_txt}")
             self._session_label.setText(" | ".join(parts))
+            self._rebuild_sell_buttons(refined)
         else:
+            self._rebuild_sell_buttons({})
             self._session_label.setText("No mining activity yet this session.")
 
         content = getattr(state, "mining_last_prospect_content", None)
@@ -216,6 +231,29 @@ class MiningPanel(QWidget):
             self._last_prospect_label.setVisible(True)
         else:
             self._last_prospect_label.setVisible(False)
+
+    def _rebuild_sell_buttons(self, refined: dict) -> None:
+        while self._sell_row.count():
+            item = self._sell_row.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
+
+        if not refined:
+            self._sell_hdr.setVisible(False)
+            return
+
+        self._sell_hdr.setVisible(True)
+        for name in sorted(refined.keys(), key=lambda n: -refined[n])[:6]:
+            btn = QPushButton(name.title())
+            btn.setStyleSheet(
+                "QPushButton { background:#1a2a1a; color:#6BCB77; border:1px solid #2a5a2a;"
+                " border-radius:3px; padding:2px 8px; font-size:10px; }"
+                "QPushButton:hover { background:#2a3a2a; }"
+            )
+            btn.clicked.connect(lambda checked=False, n=name: self.sell_search_requested.emit(n))
+            self._sell_row.addWidget(btn)
+        self._sell_row.addStretch(1)
 
     # ── Search ────────────────────────────────────────────────────────────
 

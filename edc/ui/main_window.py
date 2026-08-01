@@ -1,5 +1,6 @@
 import logging
 import time
+from datetime import date
 from PyQt6.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -61,7 +62,9 @@ from edc.audio.handlers.engineering import EngineeringPhrases
 from edc.ui.panels.fleet_carrier_panel import FleetCarrierPanel
 from edc.core.eddn_powerplay import EddnPowerPlayCache
 from edc.core.eddn_listener import EddnPowerPlayWorker
+from edc.core.eddn_market import EddnMarketCache
 from edc.ui.panels.mining_panel import MiningPanel
+from edc.ui.panels.market_panel import MarketPanel
 from edc.ui import formatting as fmt
 from edc.audio.tts_engine import TTSEngine
 from edc.audio.voice_commands import VoiceCommandListener
@@ -179,6 +182,23 @@ class MainWindow(QMainWindow):
             )
         except Exception:
             pass
+
+    def _save_faction_snapshots(self):
+        system_address = getattr(self.state, "system_address", None)
+        factions = getattr(self.state, "factions", None) or []
+        if not isinstance(system_address, int) or not factions:
+            return
+
+        controlling = (getattr(self.state, "controlling_faction", None) or "").strip()
+        today = date.today().isoformat()
+        try:
+            for f in factions:
+                if not isinstance(f, dict):
+                    continue
+                is_controlling = bool(controlling) and f.get("Name") == controlling
+                self.repo.save_faction_snapshot(system_address, f, today, is_controlling)
+        except Exception:
+            log.exception("Failed to save faction snapshots")
 
     def _planet_value_class_name(self, planet_class: str) -> str:
         pc = (planet_class or "").strip()
@@ -311,6 +331,11 @@ class MainWindow(QMainWindow):
         self._edsm_powerplay_retry_timer = QTimer(self)
         self._edsm_powerplay_retry_timer.setInterval(10 * 60 * 1000)  # retry every 10 min until fresh
         self._edsm_powerplay_retry_timer.timeout.connect(self._maybe_start_edsm_powerplay_refresh)
+
+        self.eddn_market_cache = EddnMarketCache(self.repo)
+        self._market_flush_timer = QTimer(self)
+        self._market_flush_timer.setInterval(45 * 1000)  # batch-write buffered EDDN market data periodically
+        self._market_flush_timer.timeout.connect(self.eddn_market_cache.flush)
 
         self.engine = EventEngine(
             self.state,
@@ -485,6 +510,13 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.mining_panel)
         self.sidebar.addItem("Mining")
 
+        # Market tab
+        self.market_panel = MarketPanel(self.repo)
+        self.stack.addWidget(self.market_panel)
+        self.sidebar.addItem("Market")
+        self._market_tab_row = self.sidebar.count() - 1
+        self.mining_panel.sell_search_requested.connect(self._on_mining_sell_search_requested)
+
         # Combat tab (stub)
         self.combat_panel = CombatPanel()
         self.stack.addWidget(self.combat_panel)
@@ -610,6 +642,20 @@ class MainWindow(QMainWindow):
         self.eddn_contribute_check.toggled.connect(self._on_eddn_contribute_toggled)
         st.addWidget(self.eddn_contribute_check)
 
+        # --- Market search radius ---
+        market_row = QHBoxLayout()
+        market_label = QLabel("Market search radius:")
+        self.market_radius_spin = QSpinBox()
+        self.market_radius_spin.setRange(10, 5000)
+        self.market_radius_spin.setSingleStep(10)
+        self.market_radius_spin.setSuffix(" ly")
+        self.market_radius_spin.setValue(int(getattr(self.cfg, "market_search_radius_ly", 100) or 100))
+        self.market_radius_spin.valueChanged.connect(self._on_market_radius_changed)
+        market_row.addWidget(market_label)
+        market_row.addWidget(self.market_radius_spin)
+        market_row.addStretch(1)
+        st.addLayout(market_row)
+
         st.addStretch(1)
         self.stack.addWidget(tab_settings)
         self.sidebar.addItem("Settings")
@@ -690,8 +736,11 @@ class MainWindow(QMainWindow):
         self._eddn_worker.moveToThread(self._eddn_thread)
         self._eddn_thread.started.connect(self._eddn_worker.run)
         self._eddn_worker.system_seen.connect(self._on_eddn_system_seen)
+        self._eddn_worker.system_coords_seen.connect(self.eddn_market_cache.on_coords_seen)
+        self._eddn_worker.commodity_seen.connect(self.eddn_market_cache.on_commodity_message)
         self._eddn_thread.start()
         self._eddn_save_timer.start()
+        self._market_flush_timer.start()
         log.info("EDDN PowerPlay listener started")
 
     def _stop_eddn_listener(self):
@@ -704,6 +753,8 @@ class MainWindow(QMainWindow):
         self._eddn_thread = None
         self._eddn_save_timer.stop()
         self.eddn_powerplay.save()
+        self._market_flush_timer.stop()
+        self.eddn_market_cache.flush()
         log.info("EDDN PowerPlay listener stopped")
 
     def _on_eddn_system_seen(self, id64: int, power: str, power_state: str, timestamp: str):
@@ -994,6 +1045,9 @@ class MainWindow(QMainWindow):
         ):
             self._save_session_ledger()
 
+        if name in ("Docked", "FSDJump", "Location"):
+            self._save_faction_snapshots()
+
         if name == "EngineerProgress":
             self.engineer_progress_store.save(self.state.engineer_progress)
 
@@ -1045,8 +1099,9 @@ class MainWindow(QMainWindow):
                     "Scan", "FSSBodySignals"):
             self._refresh_exploration()
 
-        # Refresh intel panel when signal data or DSS scan arrives
-        if name in ("SAASignalsFound", "FSSBodySignals"):
+        # Refresh intel panel when signal data, DSS scan, or a fresh BGS
+        # snapshot (Docked) arrives
+        if name in ("SAASignalsFound", "FSSBodySignals", "Docked"):
             self._refresh_intel()
 
         if self._replaying:
@@ -1505,6 +1560,10 @@ class MainWindow(QMainWindow):
 
     def _on_eddn_contribute_toggled(self, checked: bool):
         self.cfg.eddn_contribute_enabled = bool(checked)
+        self.cfg_store.save(self.cfg)
+
+    def _on_market_radius_changed(self, value: int):
+        self.cfg.market_search_radius_ly = int(value)
         self.cfg_store.save(self.cfg)
 
     def _on_always_on_top_changed(self, checked: bool):
@@ -2528,6 +2587,7 @@ class MainWindow(QMainWindow):
         self._refresh_engineering()
         self._refresh_fleet_carrier()
         self._refresh_mining()
+        self._refresh_market()
 
     def _animate_overview_update(self, html: str):
         self.overview_panel.animate_overview_update(html)
@@ -2547,8 +2607,23 @@ class MainWindow(QMainWindow):
     def _refresh_mining(self):
         self.mining_panel.refresh(self.state)
 
+    def _refresh_market(self):
+        radius = int(getattr(self.cfg, "market_search_radius_ly", 100) or 100)
+        self.market_panel.refresh(self.state, radius)
+
+    def _on_mining_sell_search_requested(self, commodity_name: str):
+        self.sidebar.setCurrentRow(self._market_tab_row)
+        self.market_panel.search_for(commodity_name)
+
     def _refresh_intel(self):
-        self.intel_panel.refresh(self.state, self.farming_locations)
+        system_address = getattr(self.state, "system_address", None)
+        faction_history = []
+        if isinstance(system_address, int):
+            try:
+                faction_history = self.repo.get_faction_history(system_address)
+            except Exception:
+                log.exception("Failed to load faction history")
+        self.intel_panel.refresh(self.state, self.farming_locations, faction_history)
 
     def _refresh_combat(self):
         self.combat_panel.refresh(self.state)

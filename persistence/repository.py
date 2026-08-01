@@ -1,3 +1,5 @@
+import json
+
 from .database import Database
 
 
@@ -263,6 +265,154 @@ class Repository:
                 variant, codex_entry_id, codex_name, base_value,
             ),
         )
+
+    def save_faction_snapshot(
+        self,
+        system_address: int,
+        faction: dict,
+        snapshot_date: str,
+        is_controlling: bool,
+    ):
+        name = faction.get("Name")
+        if not isinstance(name, str) or not name:
+            return
+
+        influence = faction.get("Influence")
+        self.db.execute(
+            """
+            INSERT INTO faction_snapshots (
+                system_address, faction_name, snapshot_date,
+                influence, government, allegiance, faction_state, happiness,
+                active_states, pending_states, recovering_states, is_controlling
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(system_address, faction_name, snapshot_date) DO UPDATE SET
+                influence         = excluded.influence,
+                government        = excluded.government,
+                allegiance        = excluded.allegiance,
+                faction_state     = excluded.faction_state,
+                happiness         = excluded.happiness,
+                active_states     = excluded.active_states,
+                pending_states    = excluded.pending_states,
+                recovering_states = excluded.recovering_states,
+                is_controlling    = excluded.is_controlling
+            """,
+            (
+                system_address,
+                name,
+                snapshot_date,
+                float(influence) if isinstance(influence, (int, float)) else None,
+                faction.get("Government"),
+                faction.get("Allegiance"),
+                faction.get("FactionState"),
+                faction.get("Happiness_Localised") or faction.get("Happiness"),
+                json.dumps(faction.get("ActiveStates")) if faction.get("ActiveStates") else None,
+                json.dumps(faction.get("PendingStates")) if faction.get("PendingStates") else None,
+                json.dumps(faction.get("RecoveringStates")) if faction.get("RecoveringStates") else None,
+                1 if is_controlling else 0,
+            ),
+        )
+
+    def save_system_coords_batch(self, records: list[tuple[str, float, float, float, str]]):
+        """records: [(system_name, x, y, z, last_seen), ...]"""
+        if not records:
+            return
+        cur = self.db.conn.cursor()
+        cur.executemany(
+            """
+            INSERT INTO system_coords (system_name, x, y, z, last_seen)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(system_name) DO UPDATE SET
+                x = excluded.x, y = excluded.y, z = excluded.z, last_seen = excluded.last_seen
+            """,
+            records,
+        )
+        self.db.conn.commit()
+
+    def save_market_snapshot_batch(self, records: list[tuple]):
+        """
+        records: [(market_id, commodity_name, station_name, station_type,
+                    system_name, sell_price, buy_price, mean_price, demand,
+                    demand_bracket, stock, stock_bracket, last_updated), ...]
+        """
+        if not records:
+            return
+        cur = self.db.conn.cursor()
+        cur.executemany(
+            """
+            INSERT INTO market_prices (
+                market_id, commodity_name, station_name, station_type, system_name,
+                sell_price, buy_price, mean_price, demand, demand_bracket,
+                stock, stock_bracket, last_updated
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(market_id, commodity_name) DO UPDATE SET
+                station_name   = excluded.station_name,
+                station_type   = excluded.station_type,
+                system_name    = excluded.system_name,
+                sell_price     = excluded.sell_price,
+                buy_price      = excluded.buy_price,
+                mean_price     = excluded.mean_price,
+                demand         = excluded.demand,
+                demand_bracket = excluded.demand_bracket,
+                stock          = excluded.stock,
+                stock_bracket  = excluded.stock_bracket,
+                last_updated   = excluded.last_updated
+            """,
+            records,
+        )
+        self.db.conn.commit()
+
+    def search_market_prices(
+        self, commodity_name: str, x: float, y: float, z: float, radius_ly: float
+    ) -> list[dict]:
+        """
+        Best sell prices for a commodity, joined against system_coords for
+        distance, filtered to radius_ly, sorted by sell price descending.
+        Distance filtering/sorting happens in Python — dataset is bounded
+        (one row per station/commodity ever reported), no need for a
+        spatial index at this scale.
+        """
+        rows = self.db.conn.execute(
+            """
+            SELECT m.market_id, m.station_name, m.station_type, m.system_name,
+                   m.sell_price, m.demand, m.stock, m.last_updated,
+                   c.x, c.y, c.z
+            FROM market_prices m
+            JOIN system_coords c ON c.system_name = m.system_name
+            WHERE m.commodity_name = ? AND m.sell_price IS NOT NULL
+            """,
+            (commodity_name,),
+        ).fetchall()
+
+        results = []
+        for r in rows:
+            rx, ry, rz = r["x"], r["y"], r["z"]
+            if rx is None or ry is None or rz is None:
+                continue
+            dist = ((rx - x) ** 2 + (ry - y) ** 2 + (rz - z) ** 2) ** 0.5
+            if dist > radius_ly:
+                continue
+            rec = dict(r)
+            rec["distance_ly"] = dist
+            results.append(rec)
+
+        results.sort(key=lambda r: r["sell_price"], reverse=True)
+        return results
+
+    def get_faction_history(self, system_address: int) -> list[dict]:
+        rows = self.db.execute(
+            """
+            SELECT faction_name, snapshot_date, influence, government, allegiance,
+                   faction_state, happiness, active_states, pending_states,
+                   recovering_states, is_controlling
+            FROM faction_snapshots
+            WHERE system_address = ?
+            ORDER BY snapshot_date DESC, faction_name ASC
+            """,
+            (system_address,),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     def get_codex_entries(self, system_address: int):
         return self.db.execute(
