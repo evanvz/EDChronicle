@@ -4,11 +4,11 @@ from __future__ import annotations
 import logging
 from typing import List, Optional
 
-from PyQt6.QtCore import Qt, QObject, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QObject, QThread, QStringListModel, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QLineEdit, QSpinBox, QTableWidget, QTableWidgetItem,
+    QLineEdit, QSpinBox, QCompleter, QTableWidget, QTableWidgetItem,
     QHeaderView, QFrame,
 )
 
@@ -187,6 +187,16 @@ class MiningPanel(QWidget):
         self._material_edit.setPlaceholderText("Material (e.g. Platinum, Painite, Alexandrite, Void Opals...)")
         self._material_edit.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
 
+        self._material_completer = QCompleter([])
+        self._material_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self._material_completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        self._material_completer.popup().setStyleSheet(
+            "QAbstractItemView { background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;"
+            " selection-background-color:#1a3a5a; selection-color:#FFB347; }"
+        )
+        self._material_edit.setCompleter(self._material_completer)
+        self.refresh_commodity_names()
+
         range_label = QLabel("Range:")
         range_label.setStyleSheet(_LABEL_STYLE)
         self._range_spin = QSpinBox()
@@ -253,6 +263,21 @@ class MiningPanel(QWidget):
         root.addWidget(self._table, 1)
 
     # ── Public API ────────────────────────────────────────────────────────
+
+    def refresh_commodity_names(self) -> None:
+        """Same autocomplete source as the Market tab — ring hotspot
+        materials are also ordinary sellable commodities, so no separate
+        data source is needed. See MarketPanel.refresh_commodity_names."""
+        try:
+            names = self._repo.get_all_commodity_display_names()
+        except Exception:
+            log.exception("Failed to load commodity display names")
+            return
+        model = self._material_completer.model()
+        if isinstance(model, QStringListModel):
+            model.setStringList(names)
+        else:
+            self._material_completer.setModel(QStringListModel(names, self._material_completer))
 
     def refresh(self, state, market_radius_ly: int = 100) -> None:
         self._system = (getattr(state, "system", None) or "").strip()

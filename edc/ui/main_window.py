@@ -71,7 +71,7 @@ from edc.core.squadron_scanner import scan_squadron_status
 from edc.core.carrier_scanner import scan_carrier_status
 from edc.ui.panels.squadron_panel import SquadronPanel
 from edc.ui.panels.mining_panel import MiningPanel
-from edc.ui.panels.market_panel import MarketPanel
+from edc.ui.panels.market_panel import MarketPanel, normalize_commodity_name
 from edc.ui.panels.player_faction_panel import PlayerFactionPanel
 from edc.ui import formatting as fmt
 from edc.audio.tts_engine import TTSEngine
@@ -233,6 +233,41 @@ class MainWindow(QMainWindow):
         except Exception:
             log.exception("Failed to save station info")
 
+    def _seed_commodity_names_from_market_json(self):
+        """
+        Market.json persists on disk from whenever the commodity screen was
+        last opened — possibly a previous session, at a station we're no
+        longer docked at. Read it once at startup just to seed the
+        autocomplete name list; deliberately does NOT touch
+        state.current_market_* (that has "currently docked here" meaning
+        elsewhere, e.g. Trade Opportunities, and this data may be stale).
+        """
+        journal_dir = getattr(self.cfg, "journal_dir", None)
+        if not journal_dir:
+            return
+        market_path = Path(journal_dir) / "Market.json"
+        try:
+            if not market_path.exists():
+                return
+            data = json.loads(market_path.read_text(encoding="utf-8", errors="replace"))
+        except Exception:
+            log.exception("Failed to read Market.json for commodity name seeding")
+            return
+        if not isinstance(data, dict):
+            return
+        name_pairs = []
+        for it in (data.get("Items") or []):
+            if not isinstance(it, dict):
+                continue
+            name = it.get("Name_Localised") or it.get("Name") or ""
+            if not name:
+                continue
+            name_pairs.append((normalize_commodity_name(name), name))
+        try:
+            self.repo.save_commodity_names_batch(name_pairs)
+        except Exception:
+            log.exception("Failed to seed commodity display names")
+
     def _load_current_market(self):
         """
         Reads Market.json (written by the game alongside the journal
@@ -258,6 +293,7 @@ class MainWindow(QMainWindow):
         self.state.current_market_system = data.get("StarSystem")
 
         items = []
+        name_pairs = []
         for it in (data.get("Items") or []):
             if not isinstance(it, dict):
                 continue
@@ -272,7 +308,12 @@ class MainWindow(QMainWindow):
                 "demand": it.get("Demand") or 0,
                 "stock": it.get("Stock") or 0,
             })
+            name_pairs.append((normalize_commodity_name(name), name))
         self.state.current_market_items = items
+        try:
+            self.repo.save_commodity_names_batch(name_pairs)
+        except Exception:
+            log.exception("Failed to save commodity display names")
 
     def _load_cargo_inventory(self):
         """
@@ -464,6 +505,8 @@ class MainWindow(QMainWindow):
             self.state.carrier_next_jump_body = carrier_rec.carrier_next_jump_body
             self.state.carrier_trade_orders = carrier_rec.carrier_trade_orders
             self.state.squadron_carrier = carrier_rec.squadron_carrier
+
+        self._seed_commodity_names_from_market_json()
 
         # Load value tables from the canonical app_dir only (no Path.cwd fallbacks).
         self.planet_values = PlanetValueTable.load_from_paths(settings_base / "planet_values.json")
@@ -1236,6 +1279,8 @@ class MainWindow(QMainWindow):
             self._load_current_market()
             radius = int(getattr(self.cfg, "market_search_radius_ly", 100) or 100)
             self.market_panel.refresh_trade_opportunities(self.state, radius)
+            self.market_panel.refresh_commodity_names()
+            self.mining_panel.refresh_commodity_names()
 
         if name == "Undocked":
             # Leaving the station — "what's for sale here" stops being true;

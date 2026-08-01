@@ -88,6 +88,10 @@ class Database:
             )""",
             "ALTER TABLE station_info ADD COLUMN station_services TEXT",
             "ALTER TABLE station_info ADD COLUMN station_faction TEXT",
+            """CREATE TABLE IF NOT EXISTS commodity_names (
+                internal_name TEXT PRIMARY KEY,
+                display_name  TEXT NOT NULL
+            )""",
             """CREATE TABLE IF NOT EXISTS market_prices (
                 market_id      INTEGER NOT NULL,
                 commodity_name TEXT    NOT NULL,

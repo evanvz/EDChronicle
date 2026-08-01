@@ -5,11 +5,11 @@ import logging
 import re
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QObject, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QObject, QThread, QStringListModel, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QLineEdit, QSpinBox, QComboBox, QTableWidget, QTableWidgetItem,
+    QLineEdit, QSpinBox, QComboBox, QCompleter, QTableWidget, QTableWidgetItem,
     QHeaderView, QFrame,
 )
 
@@ -222,6 +222,16 @@ class MarketPanel(QWidget):
         self._commodity_edit.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
         self._commodity_edit.returnPressed.connect(self._start_search)
 
+        self._commodity_completer = QCompleter([])
+        self._commodity_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self._commodity_completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        self._commodity_completer.popup().setStyleSheet(
+            "QAbstractItemView { background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;"
+            " selection-background-color:#1a3a5a; selection-color:#FFB347; }"
+        )
+        self._commodity_edit.setCompleter(self._commodity_completer)
+        self.refresh_commodity_names()
+
         range_label = QLabel("Range:")
         range_label.setStyleSheet(_LABEL_STYLE)
         self._range_spin = QSpinBox()
@@ -334,6 +344,25 @@ class MarketPanel(QWidget):
         root.addWidget(self._table, 1)
 
     # ── Public API ────────────────────────────────────────────────────────
+
+    def refresh_commodity_names(self) -> None:
+        """
+        Repopulates the commodity search box's autocomplete list from
+        commodity_names — built up from the player's own Market.json visits
+        (which has real display names), so suggestions only ever show
+        commodities we can actually resolve back to a display name. Cheap
+        (a few hundred strings at most); safe to call often.
+        """
+        try:
+            names = self._repo.get_all_commodity_display_names()
+        except Exception:
+            log.exception("Failed to load commodity display names")
+            return
+        model = self._commodity_completer.model()
+        if isinstance(model, QStringListModel):
+            model.setStringList(names)
+        else:
+            self._commodity_completer.setModel(QStringListModel(names, self._commodity_completer))
 
     def refresh(self, state, radius_ly: int) -> None:
         """Cheap, safe to call on every general refresh — location/radius only.

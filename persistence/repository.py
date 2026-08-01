@@ -415,6 +415,32 @@ class Repository:
         )
         self.db.conn.commit()
 
+    def save_commodity_names_batch(self, pairs: list[tuple[str, str]]):
+        """
+        pairs: [(internal_name, display_name), ...] — captured from the
+        player's own Market.json (which has both), used to build a proper
+        autocomplete list instead of guessing display names from EDDN's
+        internal-only commodity symbols.
+        """
+        if not pairs:
+            return
+        cur = self.db.conn.cursor()
+        cur.executemany(
+            """
+            INSERT INTO commodity_names (internal_name, display_name)
+            VALUES (?, ?)
+            ON CONFLICT(internal_name) DO UPDATE SET display_name = excluded.display_name
+            """,
+            pairs,
+        )
+        self.db.conn.commit()
+
+    def get_all_commodity_display_names(self) -> list[str]:
+        rows = self.db.conn.execute(
+            "SELECT DISTINCT display_name FROM commodity_names ORDER BY display_name"
+        ).fetchall()
+        return [r["display_name"] for r in rows]
+
     def save_station_info(
         self,
         market_id: int,
