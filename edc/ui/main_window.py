@@ -959,13 +959,28 @@ class MainWindow(QMainWindow):
     def _start_eddn_listener(self):
         if self._eddn_thread and self._eddn_thread.isRunning():
             return
-        self._eddn_worker = EddnPowerPlayWorker()
+
+        # Watch EDDN's network-wide Factions array for the squadron-aligned
+        # faction, if any — lets us build presence data for systems the
+        # player never personally visits (Inara/EDSM do the same thing from
+        # the same feed), fixed at listener-start time since this rarely
+        # changes mid-session.
+        watched_factions = set()
+        try:
+            overview = self.repo.get_player_faction_overview()
+            if overview and overview.get("faction_name"):
+                watched_factions.add(overview["faction_name"])
+        except Exception:
+            log.exception("Failed to load squadron faction name for EDDN watch list")
+
+        self._eddn_worker = EddnPowerPlayWorker(watched_factions=watched_factions)
         self._eddn_thread = QThread()
         self._eddn_worker.moveToThread(self._eddn_thread)
         self._eddn_thread.started.connect(self._eddn_worker.run)
         self._eddn_worker.system_seen.connect(self._on_eddn_system_seen)
         self._eddn_worker.system_coords_seen.connect(self.eddn_market_cache.on_coords_seen)
         self._eddn_worker.commodity_seen.connect(self.eddn_market_cache.on_commodity_message)
+        self._eddn_worker.faction_seen.connect(self._on_eddn_faction_seen)
         self._eddn_thread.start()
         self._eddn_save_timer.start()
         self._market_flush_timer.start()
@@ -987,6 +1002,14 @@ class MainWindow(QMainWindow):
 
     def _on_eddn_system_seen(self, id64: int, power: str, power_state: str, timestamp: str):
         self.eddn_powerplay.ingest(id64, power, power_state, timestamp)
+
+    def _on_eddn_faction_seen(self, system_address: int, system_name: str, faction: dict, is_controlling: bool, timestamp: str):
+        try:
+            snapshot_date = (timestamp or "")[:10] or date.today().isoformat()
+            self.repo.save_system_name_if_missing(system_address, system_name)
+            self.repo.save_faction_snapshot(system_address, faction, snapshot_date, is_controlling)
+        except Exception:
+            log.exception("Failed to save EDDN-sourced faction snapshot")
 
     def _maybe_start_edsm_powerplay_refresh(self):
         if not self.edsm_powerplay.is_stale():

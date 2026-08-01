@@ -268,6 +268,24 @@ class Repository:
             ),
         )
 
+    def save_system_name_if_missing(self, system_address: int, system_name: str):
+        """
+        Ensures a systems row (and its system_name) exists for a system the
+        player has never personally visited — e.g. one only known from an
+        EDDN faction sighting — without touching visit_count/first_visit/
+        last_visit/body_count on an existing row (those have real meaning
+        for systems the player actually jumped into; ON CONFLICT DO NOTHING
+        leaves them alone).
+        """
+        self.db.execute(
+            """
+            INSERT INTO systems (system_address, system_name, body_count, fss_complete, first_visit, last_visit, visit_count)
+            VALUES (?, ?, NULL, 0, NULL, NULL, 0)
+            ON CONFLICT(system_address) DO NOTHING
+            """,
+            (system_address, system_name),
+        )
+
     def save_faction_snapshot(
         self,
         system_address: int,

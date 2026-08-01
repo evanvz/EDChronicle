@@ -28,14 +28,27 @@ _RECONNECT_DELAY_S = 5
 
 
 class EddnPowerPlayWorker(QObject):
-    system_seen = pyqtSignal(int, str, str, str)  # id64, power, power_state, timestamp
+    # id64 (SystemAddress) is a 64-bit value — pyqtSignal(int, ...) silently
+    # truncates to 32 bits (confirmed: PyQt maps "int" to C++ int), corrupting
+    # any SystemAddress above ~2.1 billion. Declared as "object" instead to
+    # pass the Python int through unmodified.
+    system_seen = pyqtSignal(object, str, str, str)  # id64, power, power_state, timestamp
     system_coords_seen = pyqtSignal(str, float, float, float)  # StarSystem, x, y, z
     commodity_seen = pyqtSignal(dict)  # raw commodity/3 message body
+    # id64, StarSystem, faction record (dict), is_controlling, timestamp — only
+    # emitted for factions in watched_factions, so this stays rare rather than
+    # firing on every journal/1 message network-wide.
+    faction_seen = pyqtSignal(object, str, dict, bool, str)
     finished = pyqtSignal()
 
-    def __init__(self):
+    def __init__(self, watched_factions=None):
         super().__init__()
         self._stop = False
+        # Fixed at construction (squadron-aligned faction rarely changes) —
+        # a set of faction names to watch for in EDDN's Factions array, so
+        # we can build presence data for systems the player never personally
+        # visits, the same way Inara/EDSM's own BGS tools do.
+        self._watched_factions = set(watched_factions or ())
 
     def stop(self):
         self._stop = True
@@ -107,3 +120,37 @@ class EddnPowerPlayWorker(QObject):
 
             timestamp = msg.get("timestamp") or ""
             self.system_seen.emit(id64, power, power_state, timestamp)
+
+            if self._watched_factions:
+                self._maybe_emit_faction_seen(msg, timestamp)
+
+    def _maybe_emit_faction_seen(self, msg: dict, timestamp: str) -> None:
+        factions = msg.get("Factions")
+        system_address = msg.get("SystemAddress")
+        star_system = msg.get("StarSystem")
+        if not (isinstance(factions, list) and isinstance(system_address, int)
+                and system_address > 0 and isinstance(star_system, str) and star_system):
+            return
+
+        target = None
+        best_name = None
+        best_influence = -1.0
+        for f in factions:
+            if not isinstance(f, dict):
+                continue
+            name = f.get("Name")
+            influence = f.get("Influence")
+            if isinstance(influence, (int, float)) and influence > best_influence:
+                best_influence = influence
+                best_name = name
+            if name in self._watched_factions:
+                target = f
+
+        if target is None:
+            return
+
+        # EDDN's schema doesn't include SystemFaction (that field is
+        # journal-only) — highest Influence among all factions in this same
+        # message is used as an is_controlling heuristic instead.
+        is_controlling = bool(best_name and target.get("Name") == best_name)
+        self.faction_seen.emit(system_address, star_system, dict(target), is_controlling, timestamp)
