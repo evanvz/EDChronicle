@@ -68,6 +68,7 @@ from edc.core.station_pads import extract_station_info
 from edc.core.bounty_scanner import scan_active_bounties
 from edc.core.notoriety_scanner import scan_latest_notoriety
 from edc.core.squadron_scanner import scan_squadron_status
+from edc.core.carrier_scanner import scan_carrier_status
 from edc.ui.panels.squadron_panel import SquadronPanel
 from edc.ui.panels.mining_panel import MiningPanel
 from edc.ui.panels.market_panel import MarketPanel
@@ -435,6 +436,34 @@ class MainWindow(QMainWindow):
             self.state.squadron_trophies = int(squadron_rec.get("trophies", 0) or 0)
             self.state.squadron_status = squadron_rec.get("status")
             self.state.squadron_status_timestamp = squadron_rec.get("status_timestamp")
+
+        # Same reasoning again: a carrier's last CarrierStats/CarrierJump may
+        # have happened in an earlier session, outside the live bootstrap's
+        # tail-replay window.
+        try:
+            carrier_rec = scan_carrier_status(Path(self.cfg.journal_dir)) \
+                if getattr(self.cfg, "journal_dir", None) else None
+        except Exception:
+            log.exception("Failed to scan journal history for carrier status")
+            carrier_rec = None
+        if carrier_rec:
+            self.state.carrier_owned_market_id = carrier_rec.carrier_owned_market_id
+            self.state.carrier_market_id = carrier_rec.carrier_market_id
+            self.state.carrier_callsign = carrier_rec.carrier_callsign
+            self.state.carrier_name = carrier_rec.carrier_name
+            self.state.carrier_docking_access = carrier_rec.carrier_docking_access
+            self.state.carrier_allow_notorious = carrier_rec.carrier_allow_notorious
+            self.state.carrier_fuel_level = carrier_rec.carrier_fuel_level
+            self.state.carrier_jump_range_curr = carrier_rec.carrier_jump_range_curr
+            self.state.carrier_jump_range_max = carrier_rec.carrier_jump_range_max
+            self.state.carrier_pending_decommission = carrier_rec.carrier_pending_decommission
+            self.state.carrier_space_usage = carrier_rec.carrier_space_usage
+            self.state.carrier_finance = carrier_rec.carrier_finance
+            self.state.carrier_current_system = carrier_rec.carrier_current_system
+            self.state.carrier_next_jump_system = carrier_rec.carrier_next_jump_system
+            self.state.carrier_next_jump_body = carrier_rec.carrier_next_jump_body
+            self.state.carrier_trade_orders = carrier_rec.carrier_trade_orders
+            self.state.squadron_carrier = carrier_rec.squadron_carrier
 
         # Load value tables from the canonical app_dir only (no Path.cwd fallbacks).
         self.planet_values = PlanetValueTable.load_from_paths(settings_base / "planet_values.json")
