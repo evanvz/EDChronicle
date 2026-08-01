@@ -64,7 +64,7 @@ class CombatPanel(QWidget):
         # be paid off, only decays with active play) ───────────────────────
         self.notoriety_card = QFrame()
         self.notoriety_card.setStyleSheet(
-            "QFrame { background: #0d1520; border: 1px solid #1e2a3a;"
+            "QFrame { background: #201a0d; border: 1px solid #4a3a1e;"
             "border-radius: 5px; }"
         )
         notoriety_l = QVBoxLayout(self.notoriety_card)
@@ -73,7 +73,7 @@ class CombatPanel(QWidget):
 
         notoriety_hdr = QLabel("NOTORIETY")
         notoriety_hdr.setStyleSheet(
-            "color: #555555; font-size: 10px; font-weight: bold; "
+            "color: #d0a060; font-size: 10px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         notoriety_l.addWidget(notoriety_hdr)
