@@ -105,6 +105,13 @@ class EdsmPowerPlayCache:
         Returns True on success (cache updated and persisted to disk).
         """
         try:
+            # This dump is publicly published by EDSM specifically for
+            # third-party tools to reuse (no login, no API key involved —
+            # our EDSM API key elsewhere is only for uploading journal data,
+            # unrelated to this). It's just sitting behind Cloudflare's
+            # generic bot-challenge, which plain `requests` can't clear, so
+            # `cloudscraper` (browser TLS/JS-challenge emulation) is used to
+            # reach data EDSM already intends for tools like this to fetch.
             scraper = cloudscraper.create_scraper()
             resp = scraper.get(_DUMP_URL, timeout=_TIMEOUT)
             resp.raise_for_status()
