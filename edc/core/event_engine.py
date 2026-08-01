@@ -738,6 +738,12 @@ class EventEngine:
                 except Exception:
                     pass
 
+        elif name == "Statistics":
+            crime = event.get("Crime")
+            if isinstance(crime, dict) and isinstance(crime.get("Notoriety"), int):
+                self.state.notoriety = crime["Notoriety"]
+                self.state.notoriety_timestamp = event.get("timestamp")
+
         elif name == "PayBounties":
             try:
                 active = dict(getattr(self.state, "active_bounties", None) or {})

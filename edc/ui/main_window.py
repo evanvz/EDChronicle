@@ -66,6 +66,7 @@ from edc.core.eddn_listener import EddnPowerPlayWorker
 from edc.core.eddn_market import EddnMarketCache
 from edc.core.station_pads import extract_station_info
 from edc.core.bounty_scanner import scan_active_bounties
+from edc.core.notoriety_scanner import scan_latest_notoriety
 from edc.ui.panels.mining_panel import MiningPanel
 from edc.ui.panels.market_panel import MarketPanel
 from edc.ui.panels.player_faction_panel import PlayerFactionPanel
@@ -405,6 +406,19 @@ class MainWindow(QMainWindow):
         except Exception:
             log.exception("Failed to scan journal history for active bounties")
             self.state.active_bounties = {}
+
+        # Same reasoning as active_bounties: the live bootstrap only re-reads
+        # the tail of the current journal, which can miss the Statistics
+        # event that carries Notoriety if it fell outside that window.
+        try:
+            notoriety_rec = scan_latest_notoriety(Path(self.cfg.journal_dir)) \
+                if getattr(self.cfg, "journal_dir", None) else None
+        except Exception:
+            log.exception("Failed to scan journal history for notoriety")
+            notoriety_rec = None
+        if notoriety_rec:
+            self.state.notoriety = notoriety_rec.get("notoriety")
+            self.state.notoriety_timestamp = notoriety_rec.get("timestamp")
 
         # Load value tables from the canonical app_dir only (no Path.cwd fallbacks).
         self.planet_values = PlanetValueTable.load_from_paths(settings_base / "planet_values.json")

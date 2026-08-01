@@ -476,6 +476,7 @@ class Repository:
         rows = self.db.conn.execute(
             """
             SELECT si.market_id, si.station_name, si.system_name, si.station_faction,
+                   si.station_type, si.pads_small, si.pads_medium, si.pads_large,
                    si.last_visited, c.x, c.y, c.z
             FROM station_info si
             JOIN system_coords c ON c.system_name = si.system_name
@@ -500,6 +501,9 @@ class Repository:
         if best is None:
             return None
         best["distance_ly"] = best_dist
+        best["pad_size"] = effective_pad_size(
+            best["station_type"], best.get("pads_small"), best.get("pads_medium"), best.get("pads_large")
+        )
         return best
 
     def search_market_prices(

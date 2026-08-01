@@ -105,6 +105,12 @@ class GameState:
     # currently-bounty-issuing faction — see main_window._refresh_bounty_status.
     closest_interstellar_factors: Optional[Dict[str, Any]] = None
 
+    # Notoriety (from the "Statistics" event's Crime.Notoriety) — distinct
+    # from bounties: decays 1 point per 2 hours of active in-game time, not
+    # clearable by paying. notoriety_timestamp is when this reading was taken.
+    notoriety: Optional[int] = None
+    notoriety_timestamp: Optional[str] = None
+
     # Misc targeting/combat helpers (safe defaults)
     last_target_ship: Optional[str] = None
     last_target_pilot: Optional[str] = None

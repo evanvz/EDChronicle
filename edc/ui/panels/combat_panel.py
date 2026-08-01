@@ -60,6 +60,33 @@ class CombatPanel(QWidget):
         content_l.setAlignment(Qt.AlignmentFlag.AlignTop)
         scroll.setWidget(content)
 
+        # ── Notoriety card (always visible — distinct from bounties, can't
+        # be paid off, only decays with active play) ───────────────────────
+        self.notoriety_card = QFrame()
+        self.notoriety_card.setStyleSheet(
+            "QFrame { background: #0d1520; border: 1px solid #1e2a3a;"
+            "border-radius: 5px; }"
+        )
+        notoriety_l = QVBoxLayout(self.notoriety_card)
+        notoriety_l.setContentsMargins(8, 6, 8, 6)
+        notoriety_l.setSpacing(4)
+
+        notoriety_hdr = QLabel("NOTORIETY")
+        notoriety_hdr.setStyleSheet(
+            "color: #555555; font-size: 10px; font-weight: bold; "
+            "letter-spacing: 1px; background: transparent; border: none;"
+        )
+        notoriety_l.addWidget(notoriety_hdr)
+
+        self.notoriety_summary = QLabel("")
+        self.notoriety_summary.setWordWrap(True)
+        self.notoriety_summary.setStyleSheet(
+            "color: #cccccc; font-size: 12px; background: transparent; border: none;"
+        )
+        notoriety_l.addWidget(self.notoriety_summary)
+
+        content_l.addWidget(self.notoriety_card)
+
         # ── Bounty clearance card (hidden unless a bounty is active) ──────
         self.bounty_card = QFrame()
         self.bounty_card.setStyleSheet(
@@ -166,6 +193,11 @@ class CombatPanel(QWidget):
         content_l.addWidget(card)
 
     def refresh(self, state):
+        try:
+            self._refresh_notoriety_card(state)
+        except Exception:
+            log.exception("CombatPanel._refresh_notoriety_card failed")
+
         try:
             self._refresh_bounty_card(state)
         except Exception:
@@ -276,6 +308,25 @@ class CombatPanel(QWidget):
         except Exception:
             log.exception("CombatPanel.refresh failed")
 
+    def _refresh_notoriety_card(self, state):
+        notoriety = getattr(state, "notoriety", None)
+        ts = getattr(state, "notoriety_timestamp", None) or "unknown"
+
+        if notoriety is None:
+            self.notoriety_summary.setText("No reading yet — open the in-game Statistics panel once to record it.")
+            return
+
+        if notoriety <= 0:
+            self.notoriety_summary.setText(f"Clean (as of {ts}).")
+            return
+
+        min_hours = notoriety * 2
+        self.notoriety_summary.setText(
+            f"Level {notoriety} (as of {ts}). Decays 1 point per 2 hours of active "
+            f"in-game time (paused at the main menu) — at least {min_hours}h of "
+            f"continuous play from that reading to fully clear. Can't be paid off."
+        )
+
     def _refresh_bounty_card(self, state):
         active = getattr(state, "active_bounties", None) or {}
         if not active:
@@ -297,9 +348,11 @@ class CombatPanel(QWidget):
         dist = station.get("distance_ly")
         dist_txt = f"{dist:.1f} ly" if isinstance(dist, (int, float)) else "? ly"
         last_visited = station.get("last_visited") or "unknown date"
+        pad_size = station.get("pad_size") or "?"
+        pad_txt = f"{pad_size} pad" if pad_size != "?" else "pad size unknown"
         self.bounty_station.setText(
             f"Closest known: {station.get('station_name') or '?'} "
-            f"({station.get('system_name') or '?'}), {dist_txt} — "
+            f"({station.get('system_name') or '?'}), {dist_txt}, {pad_txt} — "
             f"controlled by {station.get('station_faction') or 'unknown faction'}. "
             f"Confirmed as of {last_visited} — Interstellar Factors availability "
             f"shifts with system security/BGS, so verify on arrival."
