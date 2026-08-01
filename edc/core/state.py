@@ -111,6 +111,15 @@ class GameState:
     notoriety: Optional[int] = None
     notoriety_timestamp: Optional[str] = None
 
+    # Squadron (journal-exposed data only: name/rank/membership transitions —
+    # no member roster, chat, or wing-mission data is available from the game).
+    squadron_name: Optional[str] = None
+    squadron_rank: Optional[int] = None
+    squadron_rank_history: List[Dict[str, Any]] = field(default_factory=list)
+    squadron_trophies: int = 0
+    squadron_status: Optional[str] = None            # last membership transition event name
+    squadron_status_timestamp: Optional[str] = None
+
     # Misc targeting/combat helpers (safe defaults)
     last_target_ship: Optional[str] = None
     last_target_pilot: Optional[str] = None
@@ -181,6 +190,10 @@ class GameState:
     carrier_next_jump_system: Optional[str] = None      # from CarrierJumpRequest (cleared on jump/cancel)
     carrier_next_jump_body: Optional[str] = None
     carrier_trade_orders: Dict[str, Dict[str, Any]] = field(default_factory=dict)  # commodity(lower) -> order details
+    # Confirmed-owned carrier's market/carrier ID — squadron members can now
+    # see CarrierStats for their SQUADRON's shared carrier too (CarrierType:
+    # "SquadronCarrier"), which must not be displayed as the player's own.
+    carrier_owned_market_id: Optional[int] = None
 
     # Mining (session-scoped; resets on app start, like the other session_collected fields)
     mining_refined_totals: Dict[str, int] = field(default_factory=dict)     # material(lower) -> units refined this session

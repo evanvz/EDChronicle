@@ -6,6 +6,21 @@ from typing import Any, Dict, List
 # CarrierDecommission/CancelDecommission/CrewServices/ShipPack/ModulePack/
 # DockingPermission/NameChanged are not tracked (out of scope for a status
 # overview panel).
+#
+# Squadron members can now see CarrierStats for their SQUADRON's shared
+# carrier too (CarrierType:"SquadronCarrier" — confirmed empirically, not
+# documented in the older manual), which must not be mistaken for the
+# player's own carrier. carrier_owned_market_id is the gate: once we've
+# confirmed a specific carrier ID is genuinely the player's own (via
+# CarrierBuy, or a non-squadron CarrierStats), every other carrier event
+# is only applied if its ID matches.
+
+
+def _owned_id_matches(engine, event_carrier_id) -> bool:
+    owned = engine.state.carrier_owned_market_id
+    if owned is None:
+        return True  # not yet confirmed either way — accept, as before
+    return event_carrier_id == owned
 
 
 def handle(engine, name: str | None, event: Dict[str, Any], msgs: List[str]) -> bool:
@@ -16,7 +31,10 @@ def handle(engine, name: str | None, event: Dict[str, Any], msgs: List[str]) -> 
 
     if name == "CarrierJump":
         # Fired when the player is docked at their carrier as it jumps.
-        engine.state.carrier_market_id = event.get("MarketID") or engine.state.carrier_market_id
+        market_id = event.get("MarketID")
+        if not _owned_id_matches(engine, market_id):
+            return True
+        engine.state.carrier_market_id = market_id or engine.state.carrier_market_id
         system = event.get("StarSystem")
         if isinstance(system, str) and system:
             engine.state.carrier_current_system = system
@@ -25,6 +43,7 @@ def handle(engine, name: str | None, event: Dict[str, Any], msgs: List[str]) -> 
         return True
 
     elif name == "CarrierBuy":
+        engine.state.carrier_owned_market_id = event.get("CarrierID")
         engine.state.carrier_market_id = event.get("CarrierID")
         engine.state.carrier_callsign = event.get("Callsign") or engine.state.carrier_callsign
         location = event.get("Location")
@@ -34,6 +53,9 @@ def handle(engine, name: str | None, event: Dict[str, Any], msgs: List[str]) -> 
         return True
 
     elif name == "CarrierStats":
+        if event.get("CarrierType") == "SquadronCarrier":
+            return True
+        engine.state.carrier_owned_market_id = event.get("CarrierID") or engine.state.carrier_owned_market_id
         engine.state.carrier_market_id = event.get("CarrierID") or engine.state.carrier_market_id
         engine.state.carrier_callsign = event.get("Callsign") or engine.state.carrier_callsign
         engine.state.carrier_name = event.get("Name") or engine.state.carrier_name
@@ -57,7 +79,10 @@ def handle(engine, name: str | None, event: Dict[str, Any], msgs: List[str]) -> 
         return True
 
     elif name == "CarrierJumpRequest":
-        engine.state.carrier_market_id = event.get("CarrierID") or engine.state.carrier_market_id
+        carrier_id = event.get("CarrierID")
+        if not _owned_id_matches(engine, carrier_id):
+            return True
+        engine.state.carrier_market_id = carrier_id or engine.state.carrier_market_id
         system = event.get("SystemName")
         engine.state.carrier_next_jump_system = system if isinstance(system, str) and system else None
         body = event.get("Body")

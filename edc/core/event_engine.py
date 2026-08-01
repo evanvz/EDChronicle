@@ -7,6 +7,7 @@ from .planet_values import PlanetValueTable
 from .exo_values import ExoValueTable
 from .external_intel import ExternalIntel
 from edc.engine.handlers import exploration, exobio, inventory, powerplay, misc, fleet_carrier, mining, engineers
+from edc.core.squadron_events import SQUADRON_EVENT_NAMES, apply_squadron_event
 
 log = logging.getLogger("edc.event_engine")
 
@@ -737,6 +738,23 @@ class EventEngine:
                         self.state.combat_contacts = contacts
                 except Exception:
                     pass
+
+        elif name in SQUADRON_EVENT_NAMES:
+            current = {
+                "name": self.state.squadron_name,
+                "rank": self.state.squadron_rank,
+                "rank_history": list(self.state.squadron_rank_history or []),
+                "trophies": self.state.squadron_trophies,
+                "status": self.state.squadron_status,
+                "status_timestamp": self.state.squadron_status_timestamp,
+            }
+            apply_squadron_event(current, event)
+            self.state.squadron_name = current["name"]
+            self.state.squadron_rank = current["rank"]
+            self.state.squadron_rank_history = current["rank_history"]
+            self.state.squadron_trophies = current["trophies"]
+            self.state.squadron_status = current["status"]
+            self.state.squadron_status_timestamp = current["status_timestamp"]
 
         elif name == "Statistics":
             crime = event.get("Crime")

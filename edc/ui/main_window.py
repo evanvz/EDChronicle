@@ -67,6 +67,8 @@ from edc.core.eddn_market import EddnMarketCache
 from edc.core.station_pads import extract_station_info
 from edc.core.bounty_scanner import scan_active_bounties
 from edc.core.notoriety_scanner import scan_latest_notoriety
+from edc.core.squadron_scanner import scan_squadron_status
+from edc.ui.panels.squadron_panel import SquadronPanel
 from edc.ui.panels.mining_panel import MiningPanel
 from edc.ui.panels.market_panel import MarketPanel
 from edc.ui.panels.player_faction_panel import PlayerFactionPanel
@@ -420,6 +422,20 @@ class MainWindow(QMainWindow):
             self.state.notoriety = notoriety_rec.get("notoriety")
             self.state.notoriety_timestamp = notoriety_rec.get("timestamp")
 
+        try:
+            squadron_rec = scan_squadron_status(Path(self.cfg.journal_dir)) \
+                if getattr(self.cfg, "journal_dir", None) else None
+        except Exception:
+            log.exception("Failed to scan journal history for squadron status")
+            squadron_rec = None
+        if squadron_rec:
+            self.state.squadron_name = squadron_rec.get("name")
+            self.state.squadron_rank = squadron_rec.get("rank")
+            self.state.squadron_rank_history = squadron_rec.get("rank_history") or []
+            self.state.squadron_trophies = int(squadron_rec.get("trophies", 0) or 0)
+            self.state.squadron_status = squadron_rec.get("status")
+            self.state.squadron_status_timestamp = squadron_rec.get("status_timestamp")
+
         # Load value tables from the canonical app_dir only (no Path.cwd fallbacks).
         self.planet_values = PlanetValueTable.load_from_paths(settings_base / "planet_values.json")
         self.exo_values = ExoValueTable.load_from_paths(settings_base / "exo_values.json")
@@ -643,6 +659,11 @@ class MainWindow(QMainWindow):
         self.player_faction_panel = PlayerFactionPanel(self.repo)
         self.stack.addWidget(self.player_faction_panel)
         self.sidebar.addItem("Player Faction")
+
+        # Squadron tab
+        self.squadron_panel = SquadronPanel(self.repo)
+        self.stack.addWidget(self.squadron_panel)
+        self.sidebar.addItem("Squadron")
 
         # Combat tab (stub)
         self.combat_panel = CombatPanel()
@@ -2742,6 +2763,7 @@ class MainWindow(QMainWindow):
         self._refresh_powerplay()
         self._refresh_bounty_status()
         self._refresh_combat()
+        self._refresh_squadron()
         self._refresh_intel()
         self._refresh_materials_inventory()
         self._refresh_shiplocker_inventory()
@@ -2793,6 +2815,9 @@ class MainWindow(QMainWindow):
 
     def _refresh_combat(self):
         self.combat_panel.refresh(self.state)
+
+    def _refresh_squadron(self):
+        self.squadron_panel.refresh(self.state)
 
     def _refresh_bounty_status(self):
         """
