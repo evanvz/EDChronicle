@@ -52,6 +52,7 @@ from edc.core.farming_locations import FarmingLocations
 from edc.core.powerplay_activities import PowerPlayActivityTable
 from edc.core.spansh_client import SpanshClient as _SpanshClient
 from edc.core.edsm_powerplay import EdsmPowerPlayCache
+from edc.core.eddn_publisher import EddnPublisher
 from edc.core.engineering_blueprints import EngineeringBlueprintTable
 from edc.core.engineering_wishlist import EngineeringWishlist
 from edc.ui.panels.engineering_panel import EngineeringPanel
@@ -272,6 +273,9 @@ class MainWindow(QMainWindow):
         self.edsm_powerplay = EdsmPowerPlayCache(settings_base)
         self._edsm_powerplay_thread: QThread | None = None
         self._edsm_powerplay_worker: _EdsmPowerPlayRefreshWorker | None = None
+
+        self.eddn_publisher = EddnPublisher()
+        self.eddn_publisher.start()
         self.engineering_blueprints = EngineeringBlueprintTable(settings_base)
         self.engineering_wishlist_store = EngineeringWishlist(data_dir / "engineering_wishlist.json")
         self.eddn_powerplay = EddnPowerPlayCache(settings_base)
@@ -568,6 +572,19 @@ class MainWindow(QMainWindow):
         self.always_on_top_check.setChecked(bool(getattr(self.cfg, "always_on_top", False)))
         self.always_on_top_check.toggled.connect(self._on_always_on_top_changed)
         st.addWidget(self.always_on_top_check)
+
+        # --- EDDN contribution ---
+        self.eddn_contribute_check = QCheckBox("Contribute data to EDDN (helps Spansh, EDSM, Inara, etc. stay accurate)")
+        self.eddn_contribute_check.setToolTip(
+            "Sends a subset of your journal events (jumps, docking, scans, "
+            "surface signal scans, carrier jumps, codex entries) to the "
+            "public Elite Dangerous Data Network. No personal data beyond "
+            "your commander name is included — EDDN obfuscates that before "
+            "distributing it further. Off by default."
+        )
+        self.eddn_contribute_check.setChecked(bool(getattr(self.cfg, "eddn_contribute_enabled", False)))
+        self.eddn_contribute_check.toggled.connect(self._on_eddn_contribute_toggled)
+        st.addWidget(self.eddn_contribute_check)
 
         st.addStretch(1)
         self.stack.addWidget(tab_settings)
@@ -899,8 +916,13 @@ class MainWindow(QMainWindow):
         self._append(f"[EVENT] {name}")
 
         old_system_address = getattr(self.state, "system_address", None)
+        self.eddn_publisher.observe(evt)
         state, msgs = self.engine.process(evt)
         self.state = state
+
+        if getattr(self.cfg, "eddn_contribute_enabled", False):
+            star_pos = (self.state.system_x, self.state.system_y, self.state.system_z)
+            self.eddn_publisher.maybe_publish(evt, self.state.system, star_pos, self.state.system_address)
 
         if name in (
             "Bounty",
@@ -1407,6 +1429,10 @@ class MainWindow(QMainWindow):
             self.voice_combo.addItem(vname)
         self.voice_combo.setCurrentIndex(int(getattr(self.cfg, "tts_voice_index", 0)))
         self.voice_combo.blockSignals(False)
+
+    def _on_eddn_contribute_toggled(self, checked: bool):
+        self.cfg.eddn_contribute_enabled = bool(checked)
+        self.cfg_store.save(self.cfg)
 
     def _on_always_on_top_changed(self, checked: bool):
         self.cfg.always_on_top = bool(checked)

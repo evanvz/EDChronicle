@@ -1,0 +1,233 @@
+"""EDDN publisher — contributes journal/1-schema events back to the shared
+Elite Dangerous Data Network, the same feed Spansh/EDSM/Inara consume from.
+
+Opt-in only (AppConfig.eddn_contribute_enabled). The actual HTTP POST runs
+on a background worker thread via a queue, so journal-event processing on
+the UI thread is never blocked by network I/O.
+
+Schema reference: https://github.com/EDCD/EDDN/blob/live/schemas/journal-v1.0.json
+Only 7 event types are accepted under this schema: Docked, FSDJump, Scan,
+Location, SAASignalsFound, CarrierJump, CodexEntry. Everything else is
+silently skipped (not an error — most journal events simply aren't part
+of this schema).
+"""
+from __future__ import annotations
+
+import copy
+import logging
+import queue
+import threading
+from typing import Any, Dict, Optional, Sequence
+
+import requests
+
+log = logging.getLogger(__name__)
+
+_GATEWAY_URL = "https://eddn.edcd.io:4430/upload/"
+_SCHEMA_REF = "https://eddn.edcd.io/schemas/journal/1"
+
+_ALLOWED_EVENTS = {"Docked", "FSDJump", "Scan", "Location", "SAASignalsFound", "CarrierJump", "CodexEntry"}
+
+_TOP_LEVEL_DISALLOWED = {
+    "ActiveFine", "CockpitBreach", "BoostUsed", "FuelLevel", "FuelUsed",
+    "JumpDist", "Latitude", "Longitude", "Wanted", "IsNewEntry",
+    "NewTraitsDiscovered", "Traits", "VoucherAmount",
+}
+_FACTION_DISALLOWED = {"HappiestSystem", "HomeSystem", "MyReputation", "SquadronFaction"}
+
+_SOFTWARE_NAME = "EDChronicle"
+_SOFTWARE_VERSION = "1.0.0"
+
+_RETRY_DELAY_SECONDS = 60
+_QUEUE_MAX = 200
+_POST_TIMEOUT = 15
+
+
+def _strip_localised(obj: Any) -> Any:
+    """Recursively drop any dict key ending in '_Localised' — required by EDDN."""
+    if isinstance(obj, dict):
+        return {
+            k: _strip_localised(v)
+            for k, v in obj.items()
+            if not (isinstance(k, str) and k.endswith("_Localised"))
+        }
+    if isinstance(obj, list):
+        return [_strip_localised(v) for v in obj]
+    return obj
+
+
+def build_message(
+    event: Dict[str, Any],
+    star_system: str,
+    star_pos: Optional[Sequence[float]],
+    system_address: Optional[int],
+) -> Optional[Dict[str, Any]]:
+    """
+    Returns a journal/1-schema-compliant message body, or None if this
+    event isn't covered by the schema or lacks enough context to complete
+    the required StarSystem/StarPos/SystemAddress fields.
+    """
+    name = event.get("event")
+    if name not in _ALLOWED_EVENTS:
+        return None
+
+    msg = _strip_localised(copy.deepcopy(event))
+
+    for key in _TOP_LEVEL_DISALLOWED:
+        msg.pop(key, None)
+
+    factions = msg.get("Factions")
+    if isinstance(factions, list):
+        for f in factions:
+            if isinstance(f, dict):
+                for key in _FACTION_DISALLOWED:
+                    f.pop(key, None)
+
+    if not msg.get("StarSystem"):
+        if not star_system:
+            return None
+        msg["StarSystem"] = star_system
+
+    if not msg.get("StarPos"):
+        if not (isinstance(star_pos, (list, tuple)) and len(star_pos) == 3):
+            return None
+        msg["StarPos"] = list(star_pos)
+
+    if not isinstance(msg.get("SystemAddress"), int):
+        if not isinstance(system_address, int):
+            return None
+        msg["SystemAddress"] = system_address
+
+    return msg
+
+
+class EddnPublisher:
+    """
+    Call observe() on every raw journal event unconditionally (cheap —
+    just tracks session header fields). Call maybe_publish() only when
+    the user has EDDN contribution enabled.
+    """
+
+    def __init__(self):
+        self._commander: str = ""
+        self._horizons: bool = True
+        self._odyssey: bool = True
+        self._gameversion: str = ""
+        self._gamebuild: str = ""
+        self._is_beta: bool = False
+
+        self._queue: "queue.Queue[Dict[str, Any]]" = queue.Queue(maxsize=_QUEUE_MAX)
+        self._thread: Optional[threading.Thread] = None
+        self._stop = threading.Event()
+
+    def start(self) -> None:
+        if self._thread and self._thread.is_alive():
+            return
+        self._stop.clear()
+        self._thread = threading.Thread(target=self._worker_loop, name="EddnPublisher", daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+
+    def observe(self, event: Dict[str, Any]) -> None:
+        """Keep session header fields current — call for every raw journal event."""
+        name = event.get("event")
+        if not isinstance(name, str):
+            return
+
+        if name.lower() == "fileheader":
+            gv = event.get("gameversion")
+            gb = event.get("build")
+            od = event.get("odyssey")
+            if gv:
+                self._gameversion = gv
+                self._is_beta = "beta" in gv.lower()
+            if gb:
+                self._gamebuild = gb
+            if isinstance(od, bool):
+                self._odyssey = od
+            return
+
+        if name == "Commander":
+            cmdr = event.get("Name")
+            if cmdr:
+                self._commander = cmdr
+            return
+
+        if name == "LoadGame":
+            cmdr = event.get("Commander")
+            if cmdr:
+                self._commander = cmdr
+            h = event.get("Horizons")
+            o = event.get("Odyssey")
+            gv = event.get("gameversion")
+            gb = event.get("build")
+            if isinstance(h, bool):
+                self._horizons = h
+            if isinstance(o, bool):
+                self._odyssey = o
+            if gv:
+                self._gameversion = gv
+                self._is_beta = "beta" in gv.lower()
+            if gb:
+                self._gamebuild = gb
+
+    def maybe_publish(
+        self,
+        event: Dict[str, Any],
+        star_system: str,
+        star_pos: Optional[Sequence[float]],
+        system_address: Optional[int],
+    ) -> None:
+        if self._is_beta:
+            return
+        if not self._commander:
+            return
+
+        msg = build_message(event, star_system, star_pos, system_address)
+        if msg is None:
+            return
+
+        payload = {
+            "$schemaRef": _SCHEMA_REF,
+            "header": {
+                "uploaderID": self._commander,
+                "softwareName": _SOFTWARE_NAME,
+                "softwareVersion": _SOFTWARE_VERSION,
+                "gameversion": self._gameversion,
+                "gamebuild": self._gamebuild,
+            },
+            "message": msg,
+        }
+        try:
+            self._queue.put_nowait(payload)
+        except queue.Full:
+            log.warning("EDDN publish queue full — dropping message")
+
+    def _worker_loop(self) -> None:
+        while not self._stop.is_set():
+            try:
+                payload = self._queue.get(timeout=0.5)
+            except queue.Empty:
+                continue
+            self._send_with_retry(payload)
+
+    def _send_with_retry(self, payload: Dict[str, Any]) -> None:
+        try:
+            resp = requests.post(_GATEWAY_URL, json=payload, timeout=_POST_TIMEOUT)
+            if resp.status_code == 200:
+                return
+            log.warning("EDDN gateway rejected message (status %s): %s", resp.status_code, resp.text[:300])
+        except requests.RequestException as exc:
+            log.warning("EDDN publish failed: %s", exc)
+
+        # Per EDDN dev docs: wait >= 60s before retrying a failed message,
+        # and don't block other queued messages meanwhile.
+        threading.Timer(_RETRY_DELAY_SECONDS, self._requeue, args=(payload,)).start()
+
+    def _requeue(self, payload: Dict[str, Any]) -> None:
+        try:
+            self._queue.put_nowait(payload)
+        except queue.Full:
+            log.warning("EDDN publish queue full on retry — dropping message")

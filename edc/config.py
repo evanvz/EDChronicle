@@ -42,6 +42,7 @@ class AppConfig:
     comms_rate: int = 210
     voice_commands_enabled: bool = False
     always_on_top: bool = False
+    eddn_contribute_enabled: bool = False
 
     def __post_init__(self):
         if self.tts_events is None:
@@ -175,6 +176,7 @@ class ConfigStore:
                 comms_rate=int(data.get("comms_rate", 210) or 210),
                 voice_commands_enabled=bool(data.get("voice_commands_enabled", False)),
                 always_on_top=bool(data.get("always_on_top", False)),
+                eddn_contribute_enabled=bool(data.get("eddn_contribute_enabled", False)),
             )
             if isinstance(data.get("tts_events"), dict):
                 cfg.tts_events.update(data["tts_events"])
@@ -205,6 +207,7 @@ class ConfigStore:
                         "comms_rate": int(getattr(cfg, "comms_rate", 210) or 210),
                         "voice_commands_enabled": bool(getattr(cfg, "voice_commands_enabled", False)),
                         "always_on_top": bool(getattr(cfg, "always_on_top", False)),
+                        "eddn_contribute_enabled": bool(getattr(cfg, "eddn_contribute_enabled", False)),
                     },
                     indent=2,
                 ),
