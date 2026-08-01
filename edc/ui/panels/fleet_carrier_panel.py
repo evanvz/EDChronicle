@@ -19,6 +19,12 @@ class FleetCarrierPanel(QWidget):
     _HDR_STYLE = "color:#555555; font-size:10px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
     _LABEL_STYLE = "background:transparent; border:none; color:#c8c8c8;"
 
+    # Squadron carrier gets its own accent (purple — matches the "PP Enemy"/
+    # not-exclusively-yours tone already used on the Combat tab) so it reads
+    # as clearly distinct from your own carrier's card at a glance.
+    _SQUAD_CARD_STYLE = "QFrame { background:#1a0d1f; border:1px solid #4a1e5a; border-radius:5px; }"
+    _SQUAD_HDR_STYLE = "color:#b380d9; font-size:10px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
+
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -92,13 +98,13 @@ class FleetCarrierPanel(QWidget):
 
         # ── Squadron carrier card (separate from your own) ─────────────────
         squad_frame = QFrame()
-        squad_frame.setStyleSheet(self._CARD_STYLE)
+        squad_frame.setStyleSheet(self._SQUAD_CARD_STYLE)
         squad_layout = QVBoxLayout(squad_frame)
         squad_layout.setContentsMargins(8, 6, 8, 8)
         squad_layout.setSpacing(4)
 
         squad_hdr = QLabel("SQUADRON CARRIER")
-        squad_hdr.setStyleSheet(self._HDR_STYLE)
+        squad_hdr.setStyleSheet(self._SQUAD_HDR_STYLE)
         squad_layout.addWidget(squad_hdr)
 
         self._squad_name_label = QLabel("No squadron carrier data recorded yet.")
