@@ -563,6 +563,56 @@ class Repository:
         results.sort(key=lambda r: (not r["pad_known"], -r["sell_price"]))
         return results
 
+    def search_market_buy_prices(
+        self, commodity_name: str, x: float, y: float, z: float, radius_ly: float,
+        exclude_market_id: Optional[int] = None,
+    ) -> list[dict]:
+        """
+        Cheapest buy prices for a commodity — the mirror of
+        search_market_prices, sorted ascending instead of descending, and
+        requiring stock > 0 since a listed buy_price with nothing in stock
+        isn't actually purchasable.
+        """
+        rows = self.db.conn.execute(
+            """
+            SELECT m.market_id, m.station_name, m.station_type, m.system_name,
+                   m.buy_price, m.stock, m.last_updated,
+                   c.x, c.y, c.z,
+                   si.pads_small, si.pads_medium, si.pads_large
+            FROM market_prices m
+            JOIN system_coords c ON c.system_name = m.system_name
+            LEFT JOIN station_info si ON si.market_id = m.market_id
+            WHERE m.commodity_name = ? AND m.buy_price IS NOT NULL AND m.buy_price > 0
+                  AND m.stock IS NOT NULL AND m.stock > 0
+            """,
+            (commodity_name,),
+        ).fetchall()
+
+        results = []
+        for r in rows:
+            if exclude_market_id is not None and r["market_id"] == exclude_market_id:
+                continue
+            rx, ry, rz = r["x"], r["y"], r["z"]
+            if rx is None or ry is None or rz is None:
+                continue
+            dist = ((rx - x) ** 2 + (ry - y) ** 2 + (rz - z) ** 2) ** 0.5
+            if dist > radius_ly:
+                continue
+            rec = dict(r)
+            rec["distance_ly"] = dist
+
+            pad = effective_pad_size(
+                rec["station_type"], rec.get("pads_small"), rec.get("pads_medium"), rec.get("pads_large")
+            )
+            rec["pad_known"] = pad != "?"
+            rec["pad_size"] = pad
+
+            results.append(rec)
+
+        # Known pad size first, then cheapest price within each tier.
+        results.sort(key=lambda r: (not r["pad_known"], r["buy_price"]))
+        return results
+
     def get_faction_history(self, system_address: int) -> list[dict]:
         rows = self.db.execute(
             """

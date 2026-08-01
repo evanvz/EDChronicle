@@ -9,7 +9,7 @@ from PyQt6.QtCore import Qt, QObject, QThread, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QLineEdit, QSpinBox, QTableWidget, QTableWidgetItem,
+    QLineEdit, QSpinBox, QComboBox, QTableWidget, QTableWidgetItem,
     QHeaderView, QFrame,
 )
 
@@ -190,13 +190,29 @@ class MarketPanel(QWidget):
         search_layout.setContentsMargins(8, 6, 8, 8)
         search_layout.setSpacing(6)
 
-        hdr = QLabel("MARKET — BEST SELL PRICE SEARCH")
-        hdr.setStyleSheet(_HDR_STYLE)
-        search_layout.addWidget(hdr)
+        self._search_hdr = QLabel("MARKET — BEST SELL PRICE SEARCH")
+        self._search_hdr.setStyleSheet(_HDR_STYLE)
+        search_layout.addWidget(self._search_hdr)
 
         self._location_label = QLabel("Location: —")
         self._location_label.setStyleSheet(_LABEL_STYLE)
         search_layout.addWidget(self._location_label)
+
+        mode_row = QHBoxLayout()
+        mode_row.setSpacing(8)
+        mode_label = QLabel("I want to:")
+        mode_label.setStyleSheet(_LABEL_STYLE + " font-weight:bold;")
+        self._mode_combo = QComboBox()
+        self._mode_combo.addItem("SELL — find the best price to sell a commodity", "sell")
+        self._mode_combo.addItem("BUY — find the cheapest place to buy a commodity", "buy")
+        self._mode_combo.setStyleSheet(
+            "QComboBox { background:#0a1520; color:#FFB347; border:1px solid #FFB347;"
+            " border-radius:3px; padding:3px 8px; font-weight:bold; }"
+        )
+        self._mode_combo.currentIndexChanged.connect(self._on_mode_changed)
+        mode_row.addWidget(mode_label)
+        mode_row.addWidget(self._mode_combo, 1)
+        search_layout.addLayout(mode_row)
 
         row = QHBoxLayout()
         row.setSpacing(8)
@@ -479,6 +495,21 @@ class MarketPanel(QWidget):
 
     # ── Search ────────────────────────────────────────────────────────────
 
+    def _on_mode_changed(self):
+        if self._mode() == "buy":
+            self._search_hdr.setText("MARKET — CHEAPEST BUY PRICE SEARCH")
+            self._table.setHorizontalHeaderLabels(
+                ["Station", "Pad", "System", "Buy Price", "Dist (ly)", "Stock", "Updated"]
+            )
+        else:
+            self._search_hdr.setText("MARKET — BEST SELL PRICE SEARCH")
+            self._table.setHorizontalHeaderLabels(
+                ["Station", "Pad", "System", "Sell Price", "Dist (ly)", "Demand", "Updated"]
+            )
+
+    def _mode(self) -> str:
+        return self._mode_combo.currentData() or "sell"
+
     def _start_search(self):
         raw = self._commodity_edit.text().strip()
         if not raw:
@@ -490,33 +521,41 @@ class MarketPanel(QWidget):
 
         commodity = normalize_commodity_name(raw)
         radius = self._range_spin.value()
+        buy_mode = self._mode() == "buy"
 
         try:
-            results = self._repo.search_market_prices(
-                commodity, self._ref_x, self._ref_y, self._ref_z, float(radius)
-            )
+            if buy_mode:
+                results = self._repo.search_market_buy_prices(
+                    commodity, self._ref_x, self._ref_y, self._ref_z, float(radius)
+                )
+            else:
+                results = self._repo.search_market_prices(
+                    commodity, self._ref_x, self._ref_y, self._ref_z, float(radius)
+                )
         except Exception:
             log.exception("Market price search failed")
             self._status_label.setText("Search failed — see log.")
             return
 
+        verb = "buying" if buy_mode else "selling"
         self._status_label.setText(
             f"Found {len(results)} station{'s' if len(results) != 1 else ''} "
-            f"selling {raw} within {radius} ly."
+            f"{verb} {raw} within {radius} ly."
         )
         self._table.setRowCount(len(results))
         for row, r in enumerate(results):
             station_item = QTableWidgetItem(r.get("station_name") or "—")
             pad_item = QTableWidgetItem(r.get("pad_size") or pad_size_hint(r.get("station_type")))
             system_item = QTableWidgetItem(r.get("system_name") or "—")
-            price_item = QTableWidgetItem(f"{r.get('sell_price', 0):,}")
+            price = r.get("buy_price") if buy_mode else r.get("sell_price")
+            price_item = QTableWidgetItem(f"{price or 0:,}")
             dist_item = QTableWidgetItem(f"{r.get('distance_ly', 0.0):.1f}")
-            demand_item = QTableWidgetItem(str(r.get("demand") or 0))
+            count_item = QTableWidgetItem(str(r.get("stock") if buy_mode else r.get("demand") or 0))
             updated_item = QTableWidgetItem(str(r.get("last_updated") or "—"))
             if pad_item.text() == "?":
                 pad_item.setForeground(QColor("#888888"))
                 pad_item.setToolTip("Landing pad size unknown for this station type")
-            for it in (pad_item, price_item, dist_item, demand_item):
+            for it in (pad_item, price_item, dist_item, count_item):
                 it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
             self._table.setItem(row, 0, station_item)
@@ -524,5 +563,5 @@ class MarketPanel(QWidget):
             self._table.setItem(row, 2, system_item)
             self._table.setItem(row, 3, price_item)
             self._table.setItem(row, 4, dist_item)
-            self._table.setItem(row, 5, demand_item)
+            self._table.setItem(row, 5, count_item)
             self._table.setItem(row, 6, updated_item)
