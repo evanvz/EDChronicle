@@ -2,7 +2,7 @@
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/bobrogers_solo)
 
-EDChronicle is a Python desktop companion app for Elite Dangerous built for the solo player, with a focus on Exploration, Exobiology, Combat, and PowerPlay. It monitors live journal entries and imports historical journals into a local SQLite database. Body enrichment data is optionally fetched from [Spansh](https://spansh.co.uk) when local journal data is insufficient.
+EDChronicle is a Python desktop companion app for Elite Dangerous built for the solo player, with a focus on Exploration, Exobiology, Combat, PowerPlay, Mining, Engineering, and Fleet Carriers. It monitors live journal entries and imports historical journals into a local SQLite database. Body enrichment data is optionally fetched from [Spansh](https://spansh.co.uk) when local journal data is insufficient, and PowerPlay system control is cross-checked against [EDSM](https://www.edsm.net) and a live [EDDN](https://github.com/EDCD/EDDN) feed. EDChronicle can also optionally contribute journal data back to EDDN, the same shared network Spansh, EDSM, and Inara all draw from.
 
 ## Inspiration
 
@@ -33,20 +33,48 @@ Inspired by [EDCoPilot](https://www.razzafrag.com/) by CMDR RazzaFrag.
 ### PowerPlay
 - Live system type detection on every jump: reinforcement, undermining, or acquisition
 - Displays controlling power, PP state, reinforcement score, and undermining score
-- PowerPlay Finder tab — searches Spansh for nearby systems by mission type (reinforcement, undermining, acquisition) with distance and value filters
+- PowerPlay Target Finder tab — searches Spansh for nearby systems by mission type (reinforcement, undermining, acquisition) with distance and facility filters
+- Target Finder results are cross-checked against two independent sources: a daily-refreshed EDSM PowerPlay dump and a live EDDN PowerPlay feed — agreement is confirmed, disagreement is flagged, so stale or wrong Spansh data doesn't send you to the wrong system
 - Activity guide per system type driven by a local `powerplay_activities.json` config
 - TTS megaship merit alert when a megaship is detected in a reinforcement or acquisition system
+
+### Mining
+- Live session stats: asteroids prospected, cores cracked, tons refined per material
+- Ring/hotspot finder — searches Spansh for systems with rings containing a specific mineable material, sorted by distance from your current location
+
+### Materials & Engineering
+- Live material inventory (Raw/Manufactured/Encoded) tracked incrementally as you collect, discard, trade, or consume materials — no need to relog for counts to update
+- Engineering Blueprint Wishlist tab — pick a blueprint and target grade, and EDChronicle sums material requirements cumulatively across every grade from 1 up to the target (reaching grade 5 means engineering through grades 1-4 first, each with its own material cost)
+- Shows exactly which materials you're short, and how many
+- Lists every known engineer who offers the selected blueprint/grade, sorted by distance from your current location, with your real unlock rank compared against what that specific grade requires
+- Optional voice + Overview panel alert when you're near a farming location for a material on your wishlist
+
+### Fleet Carrier
+- Tracks carrier stats, cargo, and jump status from journal events
+
+### Voice commands
+- Say a trigger phrase to fire in-game ship actions (power distribution, cargo scoop, landing gear, etc.) via keybind dispatch — reads your actual bound keys from the game's `.binds` file
+- Offline speech recognition via Vosk, with confirmation TTS feedback per command
 
 ### Voice / TTS alerts
 - Text-to-speech announcements via Edge TTS (Microsoft neural voices)
 - Priority queue — combat alerts interrupt lower-priority exploration cues
 - Per-event TTS toggle in Settings (each event type can be enabled/disabled independently)
 - NPC and system text comms read aloud via a dedicated comms audio channel
-- Voice command recognition via Vosk (offline, no cloud dependency)
 - Announcement examples: FSD jump, arrival, system PP type, first discovery, first mapping, first footfall, SAA complete, FSS complete, bio/geo/Guardian/Thargoid signals, exobiology scan progress, combat under attack
 
 ### Overview panel
 - Single-screen HUD showing current system, body count, PP state, active signals, unresolved bodies, and recommended actions
+
+## Data sources & ecosystem contribution
+
+EDChronicle draws on the same community data network the rest of the Elite Dangerous tooling ecosystem uses:
+
+- **[Spansh](https://spansh.co.uk)** — body enrichment, PowerPlay system search, ring/hotspot mining search
+- **[EDSM](https://www.edsm.net)** — daily PowerPlay dump, used as an independent cross-check against Spansh
+- **[EDDN](https://github.com/EDCD/EDDN)** — live subscription for real-time PowerPlay cross-checking, the same feed Spansh and EDSM themselves are built from
+
+EDChronicle can also **optionally** contribute back: with "Contribute data to EDDN" enabled in Settings (off by default), a subset of your journal events (jumps, docking, scans, surface signal scans, carrier jumps, codex entries) is published to EDDN in its standard schema, benefiting every tool that consumes it — the same mechanism EDMarketConnector uses. No personal data beyond your commander name is included, and EDDN obfuscates that before distributing it further.
 
 ## Screenshots
 
@@ -60,7 +88,7 @@ Inspired by [EDCoPilot](https://www.razzafrag.com/) by CMDR RazzaFrag.
 
 ## Current architecture at a glance
 
-The application has three main runtime paths:
+The application has four main runtime paths:
 
 ### 1. Live runtime path
 
@@ -100,10 +128,21 @@ Flow:
 3. Physical stats (gravity, radius, temperature, pressure, atmosphere, etc.) are saved to `spansh_bodies` for all bodies — including already-scanned ones — so they can backfill NULL fields in older records
 4. `edc/ui/system_data_loader.py` merges Spansh stats into existing body recs for any fields that are still NULL after journal loading
 
+### 4. EDDN cross-check & publish path
+
+Cross-checks PowerPlay data and, if enabled, contributes journal events back to the network.
+
+Flow:
+
+1. `edc/core/eddn_listener.py` subscribes to EDDN's live ZeroMQ relay in the background and feeds PowerPlay sightings into `edc/core/eddn_powerplay.py`
+2. `edc/core/edsm_powerplay.py` refreshes a daily-cached EDSM PowerPlay dump on startup (via `cloudscraper`, since the public dump sits behind a generic Cloudflare bot challenge)
+3. `edc/ui/panels/powerplay_finder_panel.py` cross-checks each Spansh search result's controlling power against both sources and flags disagreement
+4. On every raw journal event, `MainWindow` calls `edc/core/eddn_publisher.py::observe()` to track session header fields (commander, game version, Horizons/Odyssey flags); if "Contribute data to EDDN" is enabled in Settings, `maybe_publish()` builds a schema-compliant `journal/1` message and queues it for background delivery to the EDDN gateway
+
 ## Current top-level module ownership
 
 ### `edc/core`
-Core runtime: state management, live watchers, journal importer, Spansh client, PowerPlay activity table.
+Core runtime: state management, live watchers, journal importer, Spansh/EDSM/EDDN clients, PowerPlay activity table, engineering data.
 
 Notable files:
 - `event_engine.py`
@@ -112,8 +151,14 @@ Notable files:
 - `status_watcher.py`
 - `state.py`
 - `spansh_client.py`
+- `edsm_powerplay.py` — daily-cached EDSM PowerPlay dump cross-check
+- `eddn_listener.py` / `eddn_powerplay.py` — live EDDN PowerPlay subscription
+- `eddn_publisher.py` — opt-in journal/1 schema publishing back to EDDN
 - `powerplay_activities.py`
 - `item_catalog.py`
+- `engineering_blueprints.py` — blueprint material costs + which engineer(s) offer each grade
+- `engineering_wishlist.py` — persisted blueprint/grade build targets
+- `engineer_progress_store.py` — persisted per-engineer unlock rank/status
 
 ### `edc/engine/handlers`
 Feature-specific event handling logic (state mutations driven by journal events).
@@ -121,8 +166,11 @@ Feature-specific event handling logic (state mutations driven by journal events)
 Notable files:
 - `exploration.py`
 - `exobio.py`
-- `inventory.py`
+- `inventory.py` — includes live material inventory deltas (collect/discard/trade/craft)
 - `powerplay.py`
+- `mining.py`
+- `fleet_carrier.py`
+- `engineers.py` — `EngineerProgress` unlock tracking
 
 ### `edc/audio`
 TTS engine, audio playback, voice command recognition, and per-feature phrase banks.
@@ -136,6 +184,7 @@ Notable files:
 - `handlers/powerplay.py` — PowerPlay TTS phrase pools
 - `handlers/combat.py` — combat TTS phrase pools
 - `handlers/exobiology.py` — exobiology TTS phrase pools
+- `handlers/engineering.py` — wishlist material-nearby alert phrase pool
 
 ### `edc/ui`
 Main window, splash screen, system data loader, formatting helpers, and settings dialog.
@@ -158,6 +207,9 @@ Notable files:
 - `combat_panel.py`
 - `powerplay_panel.py`
 - `powerplay_finder_panel.py`
+- `mining_panel.py`
+- `engineering_panel.py`
+- `fleet_carrier_panel.py`
 
 ### `persistence`
 SQLite schema, connection layer, repository/data access layer, and schema version migrations.
@@ -186,6 +238,18 @@ Notable files:
 ### Schema migrations
 
 `database.py::run_migrations()` runs on every startup and applies any pending `ALTER TABLE` statements safely (wrapped in try/except so already-existing columns are silently skipped). A `schema_version` table tracks which version the DB is on. Version upgrades can trigger one-time actions such as clearing `processed_journals` to force a full journal re-import when new columns need backfilling.
+
+### Local JSON stores (outside SQLite)
+
+Some newer features persist to plain JSON under `settings/` or `data/` rather than the SQLite database:
+
+| File | Contents |
+|------|----------|
+| `settings/engineering_blueprints.json` | Blueprint material costs per grade + which engineer(s) offer each (reference data, not user-specific) |
+| `data/engineering_wishlist.json` | User-selected blueprint/grade build targets |
+| `data/engineer_progress.json` | Per-engineer unlock rank/status, seeded at startup and updated on `EngineerProgress` events |
+| `settings/edsm_powerplay_cache.json` | Daily-refreshed EDSM PowerPlay dump cross-check cache |
+| `settings/eddn_powerplay_cache.json` | Live EDDN PowerPlay sightings collected this session |
 
 ## Development tooling
 
