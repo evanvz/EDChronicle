@@ -55,6 +55,7 @@ class AppConfig:
                 "ScanOrganic": True,
                 "SellOrganicData": True,
                 "SAASignalsFound": True,
+                "USSDrop": True,
                 "FSSBodySignals": True,
                 "SAAScanComplete": False,
                 "Disembark": True,

@@ -127,6 +127,12 @@ class ExplorationPhrases:
         "Megaship in range. PowerPlay merits available.",
     ]
 
+    NHSS_DETECTED = [
+        "Non-human signal source detected. Threat level {threat}.",
+        "Non-human signal source on sensors. Threat level {threat}.",
+        "Caution. Non-human signal source. Threat level {threat}.",
+    ]
+
     MEGASHIP_PP_UNDERMINING = [
         "Megaship detected. Scan for undermining merits.",
         "Megaship on sensors. Undermining merits available.",
@@ -254,6 +260,10 @@ class ExplorationPhrases:
         if activity == "acquisition":
             return pick(ExplorationPhrases.MEGASHIP_PP_ACQUISITION)
         return pick(ExplorationPhrases.MEGASHIP_PP_MERITS)
+
+    @staticmethod
+    def nhss_detected(threat: int) -> str:
+        return pick(ExplorationPhrases.NHSS_DETECTED, threat=threat)
 
     @staticmethod
     def codex_entry(name: str) -> str:

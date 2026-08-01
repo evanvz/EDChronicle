@@ -77,6 +77,8 @@ class EventEngine:
                 return "NavBeacon"
             if isinstance(is_station, bool) and is_station:
                 return "Station"
+            if uss_type == "$USS_Type_NonHuman;":
+                return "NHSS"
             if isinstance(uss_type, str) and uss_type.strip():
                 return "USS"
             s = signal_name if isinstance(signal_name, str) else ""
@@ -891,14 +893,15 @@ class EventEngine:
             # Discovered via FSS zoom; includes USS/Stations/Phenomena etc.
             sig_name = event.get("SignalName_Localised") or event.get("SignalName") or ""
             sig_type = event.get("SignalType") or event.get("SignalType_Localised") or ""
-            uss = event.get("USSType_Localised") or event.get("USSType") or ""
+            uss_raw = event.get("USSType") or ""
+            uss = event.get("USSType_Localised") or uss_raw or ""
             threat = event.get("ThreatLevel")
             is_station = event.get("IsStation")
             time_rem = event.get("TimeRemaining")
             ts = event.get("timestamp") or ""
 
             key = f"{sig_name}|{sig_type}|{uss}|{threat}|{is_station}"
-            category = self._classify_system_signal(sig_name, uss, is_station, sig_type)
+            category = self._classify_system_signal(sig_name, uss_raw, is_station, sig_type)
 
             entry = {
                 "Key": key,

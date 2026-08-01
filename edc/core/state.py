@@ -5,6 +5,7 @@ from typing import Optional, List, Dict, Any, Set
 class GameState:
     commander: Optional[str] = None
     ship: Optional[str] = None
+    odyssey: bool = True
     ship_id: Optional[int] = None
     credits: Optional[int] = None
     system: Optional[str] = None

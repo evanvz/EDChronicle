@@ -53,6 +53,7 @@ from edc.core.powerplay_activities import PowerPlayActivityTable
 from edc.core.spansh_client import SpanshClient as _SpanshClient
 from edc.core.edsm_powerplay import EdsmPowerPlayCache
 from edc.core.eddn_publisher import EddnPublisher
+from edc.core.canonn_client import CanonnClient, SystemPoi
 from edc.core.engineering_blueprints import EngineeringBlueprintTable
 from edc.core.engineering_wishlist import EngineeringWishlist
 from edc.ui.panels.engineering_panel import EngineeringPanel
@@ -106,6 +107,23 @@ class _EdsmPowerPlayRefreshWorker(QObject):
     def run(self):
         ok = self._cache.refresh()
         self.finished.emit(ok)
+
+
+class _CanonnRefreshWorker(QObject):
+    finished = pyqtSignal(object, str, object, str)  # poi, poi_error, challenge, challenge_error
+
+    def __init__(self, client: CanonnClient, system: str, odyssey: bool, cmdr: str, x: float, y: float, z: float):
+        super().__init__()
+        self._client = client
+        self._system = system
+        self._odyssey = odyssey
+        self._cmdr = cmdr
+        self._x, self._y, self._z = x, y, z
+
+    def run(self):
+        poi, poi_error = self._client.get_system_poi(self._system, self._odyssey, self._cmdr)
+        challenge, challenge_error = self._client.get_nearest_challenge(self._cmdr, self._x, self._y, self._z)
+        self.finished.emit(poi, poi_error, challenge, challenge_error)
 
 
 class MainWindow(QMainWindow):
@@ -276,6 +294,12 @@ class MainWindow(QMainWindow):
 
         self.eddn_publisher = EddnPublisher()
         self.eddn_publisher.start()
+
+        self.canonn_client = CanonnClient()
+        self._canonn_poi: SystemPoi | None = None
+        self._canonn_challenge: dict | None = None
+        self._canonn_thread: QThread | None = None
+        self._canonn_worker: _CanonnRefreshWorker | None = None
         self.engineering_blueprints = EngineeringBlueprintTable(settings_base)
         self.engineering_wishlist_store = EngineeringWishlist(data_dir / "engineering_wishlist.json")
         self.eddn_powerplay = EddnPowerPlayCache(settings_base)
@@ -740,6 +764,41 @@ class MainWindow(QMainWindow):
             self.tts.speak(EngineeringPhrases.material_nearby(display), priority=5)
         self.overview_panel.set_engineering_alert(hits)
 
+    def _maybe_start_canonn_refresh(self):
+        system_name = getattr(self.state, "system", None) or ""
+        if not system_name:
+            return
+        if self._canonn_thread and self._canonn_thread.isRunning():
+            return
+
+        cmdr = getattr(self.state, "commander", None) or ""
+        odyssey = bool(getattr(self.state, "odyssey", True))
+        x = float(getattr(self.state, "system_x", 0.0) or 0.0)
+        y = float(getattr(self.state, "system_y", 0.0) or 0.0)
+        z = float(getattr(self.state, "system_z", 0.0) or 0.0)
+
+        self._canonn_worker = _CanonnRefreshWorker(self.canonn_client, system_name, odyssey, cmdr, x, y, z)
+        self._canonn_thread = QThread()
+        self._canonn_worker.moveToThread(self._canonn_thread)
+        self._canonn_thread.started.connect(self._canonn_worker.run)
+        self._canonn_worker.finished.connect(self._on_canonn_refreshed)
+        self._canonn_worker.finished.connect(self._canonn_thread.quit)
+        self._canonn_thread.start()
+
+    def _on_canonn_refreshed(self, poi, poi_error: str, challenge: dict, challenge_error: str):
+        if poi_error:
+            log.warning("Canonn POI fetch failed: %s", poi_error)
+        else:
+            self._canonn_poi = poi
+        if challenge_error:
+            log.warning("Canonn nearest-challenge fetch failed: %s", challenge_error)
+        else:
+            self._canonn_challenge = challenge
+        try:
+            self.overview_panel.set_canonn_intel(self._canonn_poi, self._canonn_challenge)
+        except Exception:
+            log.exception("Failed to update Canonn intel card")
+
     def _maybe_start_spansh_enrichment(self):
         system_name    = getattr(self.state, "system",         None) or ""
         system_address = getattr(self.state, "system_address", None)
@@ -947,6 +1006,7 @@ class MainWindow(QMainWindow):
                 self._tts_spoken_signal_bodies.clear()
                 self.load_current_system_data()
                 self._maybe_start_spansh_enrichment()
+                self._maybe_start_canonn_refresh()
                 self._maybe_alert_engineering_materials()
                 self._refresh_hud()
                 self._refresh_exploration()
@@ -1212,6 +1272,12 @@ class MainWindow(QMainWindow):
                 return ""
 
             if event_type == "FSSSignalDiscovered":
+                uss_type = evt.get("USSType") or ""
+                if uss_type == "$USS_Type_NonHuman;":
+                    threat = evt.get("ThreatLevel")
+                    if isinstance(threat, int):
+                        return ExplorationPhrases.nhss_detected(threat)
+
                 sig_type = (evt.get("SignalType") or "").strip().lower()
                 if sig_type == "megaship":
                     pledged = (getattr(state, "pp_power", None) or "").strip()
@@ -1224,6 +1290,13 @@ class MainWindow(QMainWindow):
                         # Acquisition: no controlling power, but PP-active
                         if not ctrl and pp_state_val:
                             return ExplorationPhrases.megaship_pp_merits("acquisition")
+                return ""
+
+            if event_type == "USSDrop":
+                if evt.get("USSType") == "$USS_Type_NonHuman;":
+                    threat = evt.get("USSThreat")
+                    if isinstance(threat, int):
+                        return ExplorationPhrases.nhss_detected(threat)
                 return ""
 
             if event_type == "SAAScanComplete":

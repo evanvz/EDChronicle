@@ -340,6 +340,17 @@ class OverviewPanel(QWidget):
         )
         layout.addWidget(self.engineering_alert)
 
+        # ── Canonn community intel (POI / codex) ────────────────────────────
+        self.canonn_intel = QLabel("")
+        self.canonn_intel.setTextFormat(Qt.TextFormat.RichText)
+        self.canonn_intel.setWordWrap(True)
+        self.canonn_intel.setVisible(False)
+        self.canonn_intel.setStyleSheet(
+            "QLabel { background: #0d1a2a; border: 1px solid #1e3a5a;"
+            "border-radius: 6px; padding: 8px 10px; color: #9fc6e8; }"
+        )
+        layout.addWidget(self.canonn_intel)
+
         # ── Conflicts section ─────────────────────────────────────────────
         self.conflict_widget = QWidget()
         self.conflict_widget.setStyleSheet("background: transparent;")
@@ -386,6 +397,58 @@ class OverviewPanel(QWidget):
             f'<b>🔧 Wishlist materials nearby:</b> {joined}'
         )
         self.engineering_alert.setVisible(True)
+
+    # ── Canonn community intel ───────────────────────────────────────────────
+    def set_canonn_intel(self, poi, challenge: dict | None) -> None:
+        """
+        poi: edc.core.canonn_client.SystemPoi | None — unclaimed codex entries
+        for the current system, community-sourced via Canonn.
+        challenge: nearest unclaimed codex challenge galaxy-wide, from Canonn.
+        """
+        lines = []
+
+        if challenge and challenge.get("system") and challenge.get("english_name"):
+            dist = challenge.get("distance")
+            try:
+                dist_txt = f"{float(dist):.1f} ly"
+            except (TypeError, ValueError):
+                dist_txt = ""
+            lines.append(
+                f'<b>Nearest unclaimed codex:</b> {challenge["english_name"]} '
+                f'in {challenge["system"]}' + (f' ({dist_txt})' if dist_txt else '')
+            )
+
+        if poi is not None:
+            unclaimed = poi.unclaimed_codex()
+            if unclaimed:
+                # Same name/category can repeat once per body (e.g. a geological
+                # feature type present on several bodies) — dedupe and count
+                # rather than showing the identical label over and over.
+                counts: dict = {}
+                for c in unclaimed:
+                    key = (c.name, c.category)
+                    counts[key] = counts.get(key, 0) + 1
+                grouped = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)
+
+                shown = grouped[:6]
+                parts = []
+                for (name, category), count in shown:
+                    label = f"{name} ({category})" if category else name
+                    if count > 1:
+                        label += f" x{count}"
+                    parts.append(label)
+                names = ", ".join(parts)
+                if len(grouped) > len(shown):
+                    names += f" +{len(grouped) - len(shown)} more types"
+                lines.append(f'<b>Unclaimed codex here:</b> {names}')
+
+        if not lines:
+            self.canonn_intel.setVisible(False)
+            self.canonn_intel.setText("")
+            return
+
+        self.canonn_intel.setText("🔭 " + "<br>".join(lines))
+        self.canonn_intel.setVisible(True)
 
     # ── Link handler ──────────────────────────────────────────────────────────
     def _on_overview_action_link(self, link: str):

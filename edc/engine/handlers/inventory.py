@@ -65,6 +65,9 @@ def handle(engine, name: str | None, event: Dict[str, Any], msgs: List[str]) -> 
         sid = event.get("ShipID")
         if isinstance(sid, int):
             engine.state.ship_id = sid
+        ody = event.get("Odyssey")
+        if isinstance(ody, bool):
+            engine.state.odyssey = ody
         return True
 
     elif name == "Materials":
