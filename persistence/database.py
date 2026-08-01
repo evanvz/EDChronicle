@@ -86,6 +86,8 @@ class Database:
                 pads_large    INTEGER,
                 last_visited  TEXT
             )""",
+            "ALTER TABLE station_info ADD COLUMN station_services TEXT",
+            "ALTER TABLE station_info ADD COLUMN station_faction TEXT",
             """CREATE TABLE IF NOT EXISTS market_prices (
                 market_id      INTEGER NOT NULL,
                 commodity_name TEXT    NOT NULL,
@@ -113,7 +115,7 @@ class Database:
         self._apply_version_migrations()
 
     # Bump this constant whenever a migration requires journals to be re-imported.
-    _REQUIRED_SCHEMA_VERSION = 3
+    _REQUIRED_SCHEMA_VERSION = 4
 
     def _apply_version_migrations(self):
         self.conn.execute(
@@ -127,6 +129,7 @@ class Database:
         if current < self._REQUIRED_SCHEMA_VERSION:
             # v2: body physical-stat columns were added.
             # v3: station_info (landing pad ground truth from Docked events) was added.
+            # v4: station_info.station_services/station_faction (Interstellar Factors detection) was added.
             # Re-import all journals to backfill.
             self.conn.execute("DELETE FROM processed_journals")
             if current == 0:

@@ -65,12 +65,21 @@ def effective_pad_size(
     return pad_size_hint(station_type)
 
 
+def has_interstellar_factors(station_services: Any) -> bool:
+    """StationServices (array of strings) includes "Facilitator" for
+    stations offering Interstellar Factors (bounty/fine clearance)."""
+    if not isinstance(station_services, list):
+        return False
+    return any(isinstance(s, str) and s.strip().lower() == "facilitator" for s in station_services)
+
+
 def extract_station_info(event: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
-    Pulls MarketID/StationName/StarSystem/StationType/LandingPads out of a
-    raw "Docked" journal event. Returns None if it lacks a usable MarketID.
-    Shared by the live event path and the historical journal importer so
-    both populate the same station_info table the same way.
+    Pulls MarketID/StationName/StarSystem/StationType/LandingPads/
+    StationServices/StationFaction out of a raw "Docked" journal event.
+    Returns None if it lacks a usable MarketID. Shared by the live event
+    path and the historical journal importer so both populate the same
+    station_info table the same way.
     """
     market_id = event.get("MarketID")
     if not isinstance(market_id, int):
@@ -83,6 +92,12 @@ def extract_station_info(event: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         pads_medium = pads.get("Medium")
         pads_large = pads.get("Large")
 
+    station_faction = event.get("StationFaction")
+    faction_name = station_faction.get("Name") if isinstance(station_faction, dict) else None
+
+    services = event.get("StationServices")
+    services = services if isinstance(services, list) else None
+
     return {
         "market_id": market_id,
         "station_name": event.get("StationName"),
@@ -91,5 +106,7 @@ def extract_station_info(event: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         "pads_small": pads_small if isinstance(pads_small, int) else None,
         "pads_medium": pads_medium if isinstance(pads_medium, int) else None,
         "pads_large": pads_large if isinstance(pads_large, int) else None,
+        "station_faction": faction_name,
+        "station_services": services,
         "timestamp": event.get("timestamp"),
     }

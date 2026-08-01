@@ -60,6 +60,40 @@ class CombatPanel(QWidget):
         content_l.setAlignment(Qt.AlignmentFlag.AlignTop)
         scroll.setWidget(content)
 
+        # ── Bounty clearance card (hidden unless a bounty is active) ──────
+        self.bounty_card = QFrame()
+        self.bounty_card.setStyleSheet(
+            "QFrame { background: #200d0d; border: 1px solid #4a1e1e;"
+            "border-radius: 5px; }"
+        )
+        bounty_l = QVBoxLayout(self.bounty_card)
+        bounty_l.setContentsMargins(8, 6, 8, 6)
+        bounty_l.setSpacing(4)
+
+        bounty_hdr = QLabel("BOUNTY CLEARANCE")
+        bounty_hdr.setStyleSheet(
+            "color: #d06060; font-size: 10px; font-weight: bold; "
+            "letter-spacing: 1px; background: transparent; border: none;"
+        )
+        bounty_l.addWidget(bounty_hdr)
+
+        self.bounty_summary = QLabel("")
+        self.bounty_summary.setWordWrap(True)
+        self.bounty_summary.setStyleSheet(
+            "color: #ffcccc; font-size: 12px; background: transparent; border: none;"
+        )
+        bounty_l.addWidget(self.bounty_summary)
+
+        self.bounty_station = QLabel("")
+        self.bounty_station.setWordWrap(True)
+        self.bounty_station.setStyleSheet(
+            "color: #cccccc; font-size: 11px; background: transparent; border: none;"
+        )
+        bounty_l.addWidget(self.bounty_station)
+
+        content_l.addWidget(self.bounty_card)
+        self.bounty_card.setVisible(False)
+
         # ── Combat contacts card ──────────────────────────────────────────
         card = QFrame()
         card.setStyleSheet(
@@ -132,6 +166,11 @@ class CombatPanel(QWidget):
         content_l.addWidget(card)
 
     def refresh(self, state):
+        try:
+            self._refresh_bounty_card(state)
+        except Exception:
+            log.exception("CombatPanel._refresh_bounty_card failed")
+
         try:
             contacts = getattr(state, "combat_contacts", None) or {}
             cur_key  = getattr(state, "combat_current_key", "") or ""
@@ -236,3 +275,32 @@ class CombatPanel(QWidget):
 
         except Exception:
             log.exception("CombatPanel.refresh failed")
+
+    def _refresh_bounty_card(self, state):
+        active = getattr(state, "active_bounties", None) or {}
+        if not active:
+            self.bounty_card.setVisible(False)
+            return
+
+        self.bounty_card.setVisible(True)
+        parts = [f"{faction}: {amount:,} Cr" for faction, amount in active.items()]
+        self.bounty_summary.setText("Outstanding: " + "  |  ".join(parts))
+
+        station = getattr(state, "closest_interstellar_factors", None)
+        if not isinstance(station, dict):
+            self.bounty_station.setText(
+                "No confirmed Interstellar Factors station known yet — "
+                "dock somewhere offering it to record it."
+            )
+            return
+
+        dist = station.get("distance_ly")
+        dist_txt = f"{dist:.1f} ly" if isinstance(dist, (int, float)) else "? ly"
+        last_visited = station.get("last_visited") or "unknown date"
+        self.bounty_station.setText(
+            f"Closest known: {station.get('station_name') or '?'} "
+            f"({station.get('system_name') or '?'}), {dist_txt} — "
+            f"controlled by {station.get('station_faction') or 'unknown faction'}. "
+            f"Confirmed as of {last_visited} — Interstellar Factors availability "
+            f"shifts with system security/BGS, so verify on arrival."
+        )

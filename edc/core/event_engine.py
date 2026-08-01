@@ -707,6 +707,16 @@ class EventEngine:
                 pass
 
         elif name == "CommitCrime":
+            bounty = event.get("Bounty")
+            faction = event.get("Faction")
+            if isinstance(bounty, int) and isinstance(faction, str) and faction:
+                try:
+                    active = dict(getattr(self.state, "active_bounties", None) or {})
+                    active[faction] = active.get(faction, 0) + bounty
+                    self.state.active_bounties = active
+                except Exception:
+                    pass
+
             if event.get("CrimeType") == "murder":
                 ts = event.get("timestamp") or ""
                 cur_key = (getattr(self.state, "combat_current_key", "") or
@@ -727,6 +737,18 @@ class EventEngine:
                         self.state.combat_contacts = contacts
                 except Exception:
                     pass
+
+        elif name == "PayBounties":
+            try:
+                active = dict(getattr(self.state, "active_bounties", None) or {})
+                faction = event.get("Faction")
+                if isinstance(faction, str) and faction:
+                    active.pop(faction, None)
+                else:
+                    active.clear()
+                self.state.active_bounties = active
+            except Exception:
+                pass
 
         elif name == "RedeemVoucher":
             if event.get("Type") == "bounty":

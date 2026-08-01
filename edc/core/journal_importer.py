@@ -608,6 +608,8 @@ class JournalImporter:
             pads_medium=info["pads_medium"],
             pads_large=info["pads_large"],
             last_visited=info["timestamp"],
+            station_services=info["station_services"],
+            station_faction=info["station_faction"],
         )
 
     def _handle_scan_organic(self, event: dict[str, Any]) -> None:

@@ -425,27 +425,82 @@ class Repository:
         pads_medium: Optional[int],
         pads_large: Optional[int],
         last_visited: Optional[str],
+        station_services: Optional[list] = None,
+        station_faction: Optional[str] = None,
     ):
         """Ground truth from our own Docked events — ON CONFLICT keeps the latest visit's data."""
         self.db.execute(
             """
             INSERT INTO station_info (
                 market_id, station_name, system_name, station_type,
-                pads_small, pads_medium, pads_large, last_visited
+                pads_small, pads_medium, pads_large, last_visited,
+                station_services, station_faction
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(market_id) DO UPDATE SET
-                station_name = excluded.station_name,
-                system_name  = excluded.system_name,
-                station_type = excluded.station_type,
-                pads_small   = excluded.pads_small,
-                pads_medium  = excluded.pads_medium,
-                pads_large   = excluded.pads_large,
-                last_visited = excluded.last_visited
+                station_name     = excluded.station_name,
+                system_name      = excluded.system_name,
+                station_type     = excluded.station_type,
+                pads_small       = excluded.pads_small,
+                pads_medium      = excluded.pads_medium,
+                pads_large       = excluded.pads_large,
+                last_visited     = excluded.last_visited,
+                station_services = excluded.station_services,
+                station_faction  = excluded.station_faction
             """,
             (market_id, station_name, system_name, station_type,
-             pads_small, pads_medium, pads_large, last_visited),
+             pads_small, pads_medium, pads_large, last_visited,
+             json.dumps(station_services) if station_services else None,
+             station_faction),
         )
+
+    def find_closest_interstellar_factors(
+        self, x: float, y: float, z: float, exclude_factions: Optional[list[str]] = None,
+    ) -> Optional[dict]:
+        """
+        Closest known station (from our own past Docked visits) confirmed to
+        offer Interstellar Factors ("Facilitator" in StationServices), whose
+        controlling faction is not one of exclude_factions — a bounty can't
+        be cleared at a station owned by the faction that issued it.
+        Distance computed in Python against system_coords, same pattern as
+        search_market_prices — dataset is bounded to stations we've visited.
+
+        Interstellar Factors presence is BGS-driven (only spawns in Low
+        Security/Anarchy stations, and disappears if the system's security
+        or controlling faction changes), so this is only as fresh as our
+        last recorded visit — last_visited is returned so the caller can
+        surface that caveat rather than presenting it as guaranteed-current.
+        """
+        excluded = {f.strip().lower() for f in (exclude_factions or []) if f}
+
+        rows = self.db.conn.execute(
+            """
+            SELECT si.market_id, si.station_name, si.system_name, si.station_faction,
+                   si.last_visited, c.x, c.y, c.z
+            FROM station_info si
+            JOIN system_coords c ON c.system_name = si.system_name
+            WHERE si.station_services LIKE '%Facilitator%'
+            """
+        ).fetchall()
+
+        best = None
+        best_dist = None
+        for r in rows:
+            faction = (r["station_faction"] or "").strip().lower()
+            if faction and faction in excluded:
+                continue
+            rx, ry, rz = r["x"], r["y"], r["z"]
+            if rx is None or ry is None or rz is None:
+                continue
+            dist = ((rx - x) ** 2 + (ry - y) ** 2 + (rz - z) ** 2) ** 0.5
+            if best_dist is None or dist < best_dist:
+                best_dist = dist
+                best = dict(r)
+
+        if best is None:
+            return None
+        best["distance_ly"] = best_dist
+        return best
 
     def search_market_prices(
         self, commodity_name: str, x: float, y: float, z: float, radius_ly: float,

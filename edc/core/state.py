@@ -96,6 +96,15 @@ class GameState:
     session_bounties: int = 0
     session_kills: int = 0
 
+    # Bounties incurred BY the player (CommitCrime), per issuing faction —
+    # distinct from Notoriety, which can't be cleared this way. Persists
+    # across restarts (loaded/saved via SessionLedger) since a real bounty
+    # doesn't go away just because the app restarted.
+    active_bounties: Dict[str, int] = field(default_factory=dict)
+    # Closest known station offering Interstellar Factors, not owned by any
+    # currently-bounty-issuing faction — see main_window._refresh_bounty_status.
+    closest_interstellar_factors: Optional[Dict[str, Any]] = None
+
     # Misc targeting/combat helpers (safe defaults)
     last_target_ship: Optional[str] = None
     last_target_pilot: Optional[str] = None

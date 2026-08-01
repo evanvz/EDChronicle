@@ -65,6 +65,7 @@ from edc.core.eddn_powerplay import EddnPowerPlayCache
 from edc.core.eddn_listener import EddnPowerPlayWorker
 from edc.core.eddn_market import EddnMarketCache
 from edc.core.station_pads import extract_station_info
+from edc.core.bounty_scanner import scan_active_bounties
 from edc.ui.panels.mining_panel import MiningPanel
 from edc.ui.panels.market_panel import MarketPanel
 from edc.ui.panels.player_faction_panel import PlayerFactionPanel
@@ -222,6 +223,8 @@ class MainWindow(QMainWindow):
                 pads_medium=info["pads_medium"],
                 pads_large=info["pads_large"],
                 last_visited=info["timestamp"],
+                station_services=info["station_services"],
+                station_faction=info["station_faction"],
             )
         except Exception:
             log.exception("Failed to save station info")
@@ -390,6 +393,18 @@ class MainWindow(QMainWindow):
         self.state.combat_unsold_total = int(ledger.get("combat_unsold_total", 0) or 0)
         self.state.exploration_unsold_total_est = int(ledger.get("exploration_unsold_total_est", 0) or 0)
         self.state.exobiology_unsold_total_est = int(ledger.get("exobiology_unsold_total_est", 0) or 0)
+
+        # Active bounties must survive across app restarts and journal-file
+        # boundaries (a real in-game bounty doesn't clear just because the
+        # app restarted) — reconstructed by scanning full journal history
+        # rather than persisted ledger state, which only tracks live changes
+        # seen while the app happened to be running.
+        try:
+            self.state.active_bounties = scan_active_bounties(Path(self.cfg.journal_dir)) \
+                if getattr(self.cfg, "journal_dir", None) else {}
+        except Exception:
+            log.exception("Failed to scan journal history for active bounties")
+            self.state.active_bounties = {}
 
         # Load value tables from the canonical app_dir only (no Path.cwd fallbacks).
         self.planet_values = PlanetValueTable.load_from_paths(settings_base / "planet_values.json")
@@ -2711,6 +2726,7 @@ class MainWindow(QMainWindow):
         self._refresh_exploration()
         self._refresh_exobiology()
         self._refresh_powerplay()
+        self._refresh_bounty_status()
         self._refresh_combat()
         self._refresh_intel()
         self._refresh_materials_inventory()
@@ -2763,6 +2779,27 @@ class MainWindow(QMainWindow):
 
     def _refresh_combat(self):
         self.combat_panel.refresh(self.state)
+
+    def _refresh_bounty_status(self):
+        """
+        If a bounty is currently outstanding (CommitCrime with no matching
+        PayBounties yet), find the closest station we've personally
+        confirmed offers Interstellar Factors, excluding any station owned
+        by an issuing faction — that station can't clear the bounty.
+        """
+        active = getattr(self.state, "active_bounties", None) or {}
+        if not active:
+            self.state.closest_interstellar_factors = None
+            return
+        x, y, z = self.state.system_x, self.state.system_y, self.state.system_z
+        if not all(isinstance(v, (int, float)) for v in (x, y, z)):
+            return
+        try:
+            self.state.closest_interstellar_factors = self.repo.find_closest_interstellar_factors(
+                x, y, z, exclude_factions=list(active.keys())
+            )
+        except Exception:
+            log.exception("Failed to find closest Interstellar Factors station")
 
     def _refresh_powerplay(self):
         self.powerplay_panel.refresh(self.state, self.pp_activities)
