@@ -95,6 +95,8 @@ CREATE TABLE IF NOT EXISTS faction_snapshots (
     pending_states    TEXT,
     recovering_states TEXT,
     is_controlling    INTEGER DEFAULT 0,
+    my_reputation       REAL,
+    is_squadron_faction INTEGER DEFAULT 0,
     PRIMARY KEY (system_address, faction_name, snapshot_date)
 );
 

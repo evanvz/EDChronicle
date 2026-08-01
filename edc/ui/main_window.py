@@ -65,6 +65,7 @@ from edc.core.eddn_listener import EddnPowerPlayWorker
 from edc.core.eddn_market import EddnMarketCache
 from edc.ui.panels.mining_panel import MiningPanel
 from edc.ui.panels.market_panel import MarketPanel
+from edc.ui.panels.player_faction_panel import PlayerFactionPanel
 from edc.ui import formatting as fmt
 from edc.audio.tts_engine import TTSEngine
 from edc.audio.voice_commands import VoiceCommandListener
@@ -516,6 +517,11 @@ class MainWindow(QMainWindow):
         self.sidebar.addItem("Market")
         self._market_tab_row = self.sidebar.count() - 1
         self.mining_panel.sell_search_requested.connect(self._on_mining_sell_search_requested)
+
+        # Player Faction tab
+        self.player_faction_panel = PlayerFactionPanel(self.repo)
+        self.stack.addWidget(self.player_faction_panel)
+        self.sidebar.addItem("Player Faction")
 
         # Combat tab (stub)
         self.combat_panel = CombatPanel()
@@ -2588,6 +2594,7 @@ class MainWindow(QMainWindow):
         self._refresh_fleet_carrier()
         self._refresh_mining()
         self._refresh_market()
+        self._refresh_player_faction()
 
     def _animate_overview_update(self, html: str):
         self.overview_panel.animate_overview_update(html)
@@ -2610,6 +2617,9 @@ class MainWindow(QMainWindow):
     def _refresh_market(self):
         radius = int(getattr(self.cfg, "market_search_radius_ly", 100) or 100)
         self.market_panel.refresh(self.state, radius)
+
+    def _refresh_player_faction(self):
+        self.player_faction_panel.refresh()
 
     def _on_mining_sell_search_requested(self, commodity_name: str):
         self.sidebar.setCurrentRow(self._market_tab_row)

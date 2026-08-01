@@ -329,6 +329,17 @@ class OverviewPanel(QWidget):
 
         layout.addWidget(self.system_card)
 
+        # ── Squadron faction badge ──────────────────────────────────────────
+        self.squadron_faction_badge = QLabel("")
+        self.squadron_faction_badge.setTextFormat(Qt.TextFormat.RichText)
+        self.squadron_faction_badge.setWordWrap(True)
+        self.squadron_faction_badge.setVisible(False)
+        self.squadron_faction_badge.setStyleSheet(
+            "QLabel { background: #1a1400; border: 1px solid #4a3a00;"
+            "border-radius: 6px; padding: 6px 10px; color: #FFD93D; }"
+        )
+        layout.addWidget(self.squadron_faction_badge)
+
         # ── Engineering wishlist alert ─────────────────────────────────────
         self.engineering_alert = QLabel("")
         self.engineering_alert.setTextFormat(Qt.TextFormat.RichText)
@@ -519,10 +530,34 @@ class OverviewPanel(QWidget):
             self.lbl_meta_right.setText("")
             self.conflict_widget.setVisible(False)
             self.factions_list.clear()
+            self.squadron_faction_badge.setVisible(False)
             return
         self._refresh_system_card(state)
         self._refresh_conflicts(state)
         self._refresh_factions(state)
+        self._refresh_squadron_faction_badge(state)
+
+    def _refresh_squadron_faction_badge(self, state):
+        squadron_faction = None
+        for f in (getattr(state, "factions", None) or []):
+            if isinstance(f, dict) and f.get("SquadronFaction") is True:
+                squadron_faction = f
+                break
+
+        if not squadron_faction:
+            self.squadron_faction_badge.setVisible(False)
+            return
+
+        name = self._esc(squadron_faction.get("Name") or "")
+        controlling = (getattr(state, "controlling_faction", None) or "") == squadron_faction.get("Name")
+        infl = squadron_faction.get("Influence")
+        infl_txt = f"{float(infl) * 100:.1f}%" if isinstance(infl, (int, float)) else "?"
+
+        status = "controls this system" if controlling else "present, not controlling"
+        self.squadron_faction_badge.setText(
+            f"🎖 <b>{name}</b> (your squadron faction) {status} — influence {infl_txt}"
+        )
+        self.squadron_faction_badge.setVisible(True)
 
     # ── System card ───────────────────────────────────────────────────────────
     def _refresh_system_card(self, state):

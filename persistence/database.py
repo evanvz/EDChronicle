@@ -73,6 +73,8 @@ class Database:
                 z REAL,
                 last_seen TEXT
             )""",
+            "ALTER TABLE faction_snapshots ADD COLUMN my_reputation REAL",
+            "ALTER TABLE faction_snapshots ADD COLUMN is_squadron_faction INTEGER DEFAULT 0",
             """CREATE TABLE IF NOT EXISTS market_prices (
                 market_id      INTEGER NOT NULL,
                 commodity_name TEXT    NOT NULL,

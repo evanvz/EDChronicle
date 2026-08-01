@@ -1,4 +1,5 @@
 import json
+from typing import Optional
 
 from .database import Database
 
@@ -278,24 +279,29 @@ class Repository:
             return
 
         influence = faction.get("Influence")
+        my_reputation = faction.get("MyReputation")
+        is_squadron_faction = faction.get("SquadronFaction") is True
         self.db.execute(
             """
             INSERT INTO faction_snapshots (
                 system_address, faction_name, snapshot_date,
                 influence, government, allegiance, faction_state, happiness,
-                active_states, pending_states, recovering_states, is_controlling
+                active_states, pending_states, recovering_states, is_controlling,
+                my_reputation, is_squadron_faction
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(system_address, faction_name, snapshot_date) DO UPDATE SET
-                influence         = excluded.influence,
-                government        = excluded.government,
-                allegiance        = excluded.allegiance,
-                faction_state     = excluded.faction_state,
-                happiness         = excluded.happiness,
-                active_states     = excluded.active_states,
-                pending_states    = excluded.pending_states,
-                recovering_states = excluded.recovering_states,
-                is_controlling    = excluded.is_controlling
+                influence           = excluded.influence,
+                government          = excluded.government,
+                allegiance          = excluded.allegiance,
+                faction_state       = excluded.faction_state,
+                happiness           = excluded.happiness,
+                active_states       = excluded.active_states,
+                pending_states      = excluded.pending_states,
+                recovering_states   = excluded.recovering_states,
+                is_controlling      = excluded.is_controlling,
+                my_reputation       = excluded.my_reputation,
+                is_squadron_faction = excluded.is_squadron_faction
             """,
             (
                 system_address,
@@ -310,8 +316,53 @@ class Repository:
                 json.dumps(faction.get("PendingStates")) if faction.get("PendingStates") else None,
                 json.dumps(faction.get("RecoveringStates")) if faction.get("RecoveringStates") else None,
                 1 if is_controlling else 0,
+                float(my_reputation) if isinstance(my_reputation, (int, float)) else None,
+                1 if is_squadron_faction else 0,
             ),
         )
+
+    def get_player_faction_overview(self) -> Optional[dict]:
+        """
+        Detects the player's squadron-aligned minor faction (if any, from
+        SquadronFaction:true in the journal) and returns its most recent
+        recorded status in every system it's ever been seen in — not just
+        the current system. Returns None if no squadron faction has ever
+        been recorded.
+        """
+        row = self.db.conn.execute(
+            """
+            SELECT faction_name FROM faction_snapshots
+            WHERE is_squadron_faction = 1
+            ORDER BY snapshot_date DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        if not row:
+            return None
+        faction_name = row["faction_name"]
+
+        systems = self.db.conn.execute(
+            """
+            SELECT fs.system_address, s.system_name, fs.influence, fs.faction_state,
+                   fs.active_states, fs.pending_states, fs.recovering_states,
+                   fs.is_controlling, fs.my_reputation, fs.snapshot_date
+            FROM faction_snapshots fs
+            LEFT JOIN systems s ON s.system_address = fs.system_address
+            WHERE fs.faction_name = ?
+              AND fs.snapshot_date = (
+                  SELECT MAX(snapshot_date) FROM faction_snapshots fs2
+                  WHERE fs2.system_address = fs.system_address
+                    AND fs2.faction_name = fs.faction_name
+              )
+            ORDER BY fs.is_controlling DESC, fs.influence DESC
+            """,
+            (faction_name,),
+        ).fetchall()
+
+        return {
+            "faction_name": faction_name,
+            "systems": [dict(r) for r in systems],
+        }
 
     def save_system_coords_batch(self, records: list[tuple[str, float, float, float, str]]):
         """records: [(system_name, x, y, z, last_seen), ...]"""
