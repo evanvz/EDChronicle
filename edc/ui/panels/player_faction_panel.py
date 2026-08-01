@@ -119,9 +119,9 @@ class PlayerFactionPanel(QWidget):
         root.addWidget(frame)
 
         self._table = QTableWidget()
-        self._table.setColumnCount(6)
+        self._table.setColumnCount(7)
         self._table.setHorizontalHeaderLabels(
-            ["System", "Influence", "Controlling", "State", "Reputation", "Action"]
+            ["System", "Influence", "Controlling", "Active", "Pending", "Reputation", "Action"]
         )
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -141,7 +141,8 @@ class PlayerFactionPanel(QWidget):
         h.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
-        h.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
+        h.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(6, QHeaderView.ResizeMode.Stretch)
         root.addWidget(self._table, 1)
 
         # ── Active missions for this faction (what to complete) ───────────
@@ -208,7 +209,14 @@ class PlayerFactionPanel(QWidget):
             infl = s.get("influence")
             infl_item = QTableWidgetItem(f"{float(infl) * 100:.1f}%" if isinstance(infl, (int, float)) else "?")
             ctrl_item = QTableWidgetItem("★ Yes" if s.get("is_controlling") else "No")
-            state_item = QTableWidgetItem(s.get("faction_state") or "—")
+
+            active_names = [s.get("faction_state")] if s.get("faction_state") and s.get("faction_state") != "None" else []
+            active_names += [st for st in _parse_states(s.get("active_states")) if st not in active_names]
+            active_item = QTableWidgetItem(", ".join(active_names) if active_names else "—")
+
+            pending_names = _parse_states(s.get("pending_states"))
+            pending_item = QTableWidgetItem(", ".join(pending_names) if pending_names else "—")
+
             rep = s.get("my_reputation")
             rep_item = QTableWidgetItem(f"{float(rep):.1f}" if isinstance(rep, (int, float)) else "—")
 
@@ -216,17 +224,20 @@ class PlayerFactionPanel(QWidget):
             action_item = QTableWidgetItem(action_text)
             action_item.setForeground(QColor(color))
 
-            for it in (infl_item, ctrl_item, state_item, rep_item):
+            for it in (infl_item, ctrl_item, active_item, pending_item, rep_item):
                 it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             if s.get("is_controlling"):
                 ctrl_item.setForeground(QColor("#6BCB77"))
+            if pending_names:
+                pending_item.setForeground(QColor("#FFD93D"))
 
             self._table.setItem(row, 0, name_item)
             self._table.setItem(row, 1, infl_item)
             self._table.setItem(row, 2, ctrl_item)
-            self._table.setItem(row, 3, state_item)
-            self._table.setItem(row, 4, rep_item)
-            self._table.setItem(row, 5, action_item)
+            self._table.setItem(row, 3, active_item)
+            self._table.setItem(row, 4, pending_item)
+            self._table.setItem(row, 5, rep_item)
+            self._table.setItem(row, 6, action_item)
 
         self._refresh_active_missions(overview["faction_name"], state)
 
