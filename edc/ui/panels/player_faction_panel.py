@@ -144,7 +144,41 @@ class PlayerFactionPanel(QWidget):
         h.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
         root.addWidget(self._table, 1)
 
-    def refresh(self) -> None:
+        # ── Active missions for this faction (what to complete) ───────────
+        missions_hdr = QLabel("ACTIVE MISSIONS — HELP THIS FACTION")
+        missions_hdr.setStyleSheet(_HDR_STYLE)
+        root.addWidget(missions_hdr)
+
+        self._missions_status_label = QLabel("")
+        self._missions_status_label.setWordWrap(True)
+        self._missions_status_label.setStyleSheet("background:transparent; border:none; color:#888888; font-size:10px;")
+        root.addWidget(self._missions_status_label)
+
+        self._missions_table = QTableWidget()
+        self._missions_table.setColumnCount(4)
+        self._missions_table.setHorizontalHeaderLabels(
+            ["Mission", "Influence", "Destination", "Expiry"]
+        )
+        self._missions_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._missions_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._missions_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self._missions_table.verticalHeader().setVisible(False)
+        self._missions_table.setAlternatingRowColors(True)
+        self._missions_table.setStyleSheet(
+            "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
+            " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
+            "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
+            " padding:3px; font-size:10px; font-weight:bold; letter-spacing:1px; }"
+            "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
+        )
+        mh = self._missions_table.horizontalHeader()
+        mh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        mh.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        mh.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        mh.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        root.addWidget(self._missions_table, 1)
+
+    def refresh(self, state=None) -> None:
         try:
             overview = self._repo.get_player_faction_overview()
         except Exception:
@@ -157,6 +191,8 @@ class PlayerFactionPanel(QWidget):
                 "this tab activates automatically once your squadron adopts one."
             )
             self._table.setRowCount(0)
+            self._missions_status_label.setText("")
+            self._missions_table.setRowCount(0)
             return
 
         systems = overview.get("systems") or []
@@ -191,3 +227,37 @@ class PlayerFactionPanel(QWidget):
             self._table.setItem(row, 3, state_item)
             self._table.setItem(row, 4, rep_item)
             self._table.setItem(row, 5, action_item)
+
+        self._refresh_active_missions(overview["faction_name"], state)
+
+    def _refresh_active_missions(self, faction_name: str, state) -> None:
+        active_missions = getattr(state, "active_missions", None) or {} if state else {}
+        relevant = [m for m in active_missions.values() if m.get("faction") == faction_name]
+
+        if not relevant:
+            self._missions_status_label.setText(
+                f"No active missions currently helping {faction_name} — "
+                "accept some at a station it controls."
+            )
+            self._missions_table.setRowCount(0)
+            return
+
+        self._missions_status_label.setText(
+            f"{len(relevant)} active mission{'s' if len(relevant) != 1 else ''} helping {faction_name}."
+        )
+        self._missions_table.setRowCount(len(relevant))
+        for row, m in enumerate(relevant):
+            name_item = QTableWidgetItem(m.get("localised_name") or m.get("name") or "—")
+            infl_item = QTableWidgetItem(m.get("influence") or "—")
+            dest = m.get("destination_system") or "—"
+            if m.get("destination_station"):
+                dest = f"{dest} ({m['destination_station']})"
+            dest_item = QTableWidgetItem(dest)
+            expiry_item = QTableWidgetItem(m.get("expiry") or "—")
+            infl_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            expiry_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            self._missions_table.setItem(row, 0, name_item)
+            self._missions_table.setItem(row, 1, infl_item)
+            self._missions_table.setItem(row, 2, dest_item)
+            self._missions_table.setItem(row, 3, expiry_item)

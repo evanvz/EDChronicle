@@ -69,6 +69,7 @@ from edc.core.bounty_scanner import scan_active_bounties
 from edc.core.notoriety_scanner import scan_latest_notoriety
 from edc.core.squadron_scanner import scan_squadron_status
 from edc.core.carrier_scanner import scan_carrier_status
+from edc.core.mission_scanner import scan_active_missions
 from edc.ui.panels.squadron_panel import SquadronPanel
 from edc.ui.panels.mining_panel import MiningPanel
 from edc.ui.panels.market_panel import MarketPanel, normalize_commodity_name
@@ -505,6 +506,13 @@ class MainWindow(QMainWindow):
             self.state.carrier_next_jump_body = carrier_rec.carrier_next_jump_body
             self.state.carrier_trade_orders = carrier_rec.carrier_trade_orders
             self.state.squadron_carrier = carrier_rec.squadron_carrier
+
+        try:
+            self.state.active_missions = scan_active_missions(Path(self.cfg.journal_dir)) \
+                if getattr(self.cfg, "journal_dir", None) else {}
+        except Exception:
+            log.exception("Failed to scan journal history for active missions")
+            self.state.active_missions = {}
 
         self._seed_commodity_names_from_market_json()
 
@@ -2871,7 +2879,7 @@ class MainWindow(QMainWindow):
         self.market_panel.refresh(self.state, radius)
 
     def _refresh_player_faction(self):
-        self.player_faction_panel.refresh()
+        self.player_faction_panel.refresh(self.state)
 
     def _on_mining_sell_search_requested(self, commodity_name: str):
         self.sidebar.setCurrentRow(self._market_tab_row)

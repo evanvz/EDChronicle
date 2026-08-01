@@ -8,6 +8,7 @@ from .exo_values import ExoValueTable
 from .external_intel import ExternalIntel
 from edc.engine.handlers import exploration, exobio, inventory, powerplay, misc, fleet_carrier, mining, engineers
 from edc.core.squadron_events import SQUADRON_EVENT_NAMES, apply_squadron_event
+from edc.core.mission_events import MISSION_EVENT_NAMES, apply_mission_event
 
 log = logging.getLogger("edc.event_engine")
 
@@ -755,6 +756,9 @@ class EventEngine:
             self.state.squadron_trophies = current["trophies"]
             self.state.squadron_status = current["status"]
             self.state.squadron_status_timestamp = current["status_timestamp"]
+
+        elif name in MISSION_EVENT_NAMES:
+            apply_mission_event(self.state.active_missions, event)
 
         elif name == "Statistics":
             crime = event.get("Crime")

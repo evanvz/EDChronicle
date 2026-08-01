@@ -14,6 +14,7 @@ from PyQt6.QtCore import Qt
 
 from edc.ui import formatting as fmt
 from edc.ui.panels.powerplay_finder_panel import PowerplayFinderPanel
+from edc.ui.panels.player_faction_panel import derive_bgs_action
 
 log = logging.getLogger(__name__)
 
@@ -127,6 +128,34 @@ class PowerplayPanel(QWidget):
         act_frame_l.addWidget(self.pp_actions)
 
         layout.addWidget(act_frame)
+
+        # ── Local faction BGS card ─────────────────────────────────────────
+        # A system's Power control is ultimately backed by its local minor
+        # faction's BGS standing — losing that faction's war/election here
+        # can threaten Power control even if PP-specific metrics look fine.
+        bgs_frame = QFrame()
+        bgs_frame.setStyleSheet(
+            "QFrame { background: #0d1a2a; border: 1px solid #1e3a5a;"
+            "border-radius: 5px; }"
+        )
+        bgs_frame_l = QVBoxLayout(bgs_frame)
+        bgs_frame_l.setContentsMargins(8, 6, 8, 6)
+        bgs_frame_l.setSpacing(4)
+
+        bgs_hdr = QLabel("LOCAL FACTION BGS")
+        bgs_hdr.setStyleSheet(
+            "color: #555555; font-size: 10px; font-weight: bold; "
+            "letter-spacing: 1px; background: transparent; border: none;"
+        )
+        bgs_frame_l.addWidget(bgs_hdr)
+
+        self.bgs_summary = QLabel("")
+        self.bgs_summary.setWordWrap(True)
+        self.bgs_summary.setTextFormat(Qt.TextFormat.RichText)
+        self.bgs_summary.setStyleSheet("background: transparent; border: none;")
+        bgs_frame_l.addWidget(self.bgs_summary)
+
+        layout.addWidget(bgs_frame)
 
         # ── Conflict progress card ────────────────────────────────────────
         prog_frame = QFrame()
@@ -459,6 +488,35 @@ class PowerplayPanel(QWidget):
                             )
 
         self.pp_actions.setText("<br>".join(html_parts))
+
+        # Local faction BGS
+        try:
+            controlling_faction_name = getattr(state, "controlling_faction", None)
+            factions = getattr(state, "factions", None) or []
+            faction_rec = next(
+                (f for f in factions if isinstance(f, dict) and f.get("Name") == controlling_faction_name),
+                None,
+            )
+            if not faction_rec:
+                self.bgs_summary.setText(
+                    "No local faction data yet — jump into a system to see its BGS standing."
+                )
+            else:
+                sys_rec = {
+                    "active_states": faction_rec.get("ActiveStates") or [],
+                    "pending_states": faction_rec.get("PendingStates") or [],
+                    "recovering_states": faction_rec.get("RecoveringStates") or [],
+                    "faction_state": faction_rec.get("FactionState"),
+                    "is_controlling": True,
+                }
+                bgs_action, bgs_color = derive_bgs_action(sys_rec)
+                self.bgs_summary.setText(
+                    f"<b>{controlling_faction_name}</b> (controlling)<br>"
+                    f'<span style="color:{bgs_color};">{bgs_action}</span>'
+                )
+        except Exception:
+            log.exception("Failed to derive local faction BGS status")
+            self.bgs_summary.setText("")
 
         # Conflict progress table
         has_conflict = isinstance(prog, dict) and any(

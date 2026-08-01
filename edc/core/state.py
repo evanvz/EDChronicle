@@ -205,6 +205,10 @@ class GameState:
     # reliably attributed between a personal and squadron carrier.
     squadron_carrier: Optional[Dict[str, Any]] = None
 
+    # Currently-active (accepted, not yet completed/failed/abandoned)
+    # missions, keyed by MissionID — see edc.core.mission_events.
+    active_missions: Dict[int, Dict[str, Any]] = field(default_factory=dict)
+
     # Mining (session-scoped; resets on app start, like the other session_collected fields)
     mining_refined_totals: Dict[str, int] = field(default_factory=dict)     # material(lower) -> units refined this session
     mining_prospected_count: int = 0
