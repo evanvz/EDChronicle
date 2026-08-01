@@ -319,6 +319,6 @@ This project is built and maintained by a solo developer in personal time. If yo
 
 MIT License — free to use, modify and distribute, provided the original copyright notice and author credit are retained in all copies or substantial portions of the software.
 
-Copyright © 2026 Evan van Zyl (bobrogers_solo)
+Copyright © 2026 CMDR B0B R0GERS
 
 See [LICENSE](../LICENSE) for the full license text.
