@@ -4,6 +4,7 @@ from pathlib import Path
 
 class Database:
     def __init__(self, db_path: Path):
+        self.db_path = db_path
         self.conn = sqlite3.connect(db_path)
         self.conn.row_factory = sqlite3.Row
 
@@ -75,6 +76,16 @@ class Database:
             )""",
             "ALTER TABLE faction_snapshots ADD COLUMN my_reputation REAL",
             "ALTER TABLE faction_snapshots ADD COLUMN is_squadron_faction INTEGER DEFAULT 0",
+            """CREATE TABLE IF NOT EXISTS station_info (
+                market_id     INTEGER PRIMARY KEY,
+                station_name  TEXT,
+                system_name   TEXT,
+                station_type  TEXT,
+                pads_small    INTEGER,
+                pads_medium   INTEGER,
+                pads_large    INTEGER,
+                last_visited  TEXT
+            )""",
             """CREATE TABLE IF NOT EXISTS market_prices (
                 market_id      INTEGER NOT NULL,
                 commodity_name TEXT    NOT NULL,
@@ -102,7 +113,7 @@ class Database:
         self._apply_version_migrations()
 
     # Bump this constant whenever a migration requires journals to be re-imported.
-    _REQUIRED_SCHEMA_VERSION = 2
+    _REQUIRED_SCHEMA_VERSION = 3
 
     def _apply_version_migrations(self):
         self.conn.execute(
@@ -114,7 +125,9 @@ class Database:
         current = row[0] if row else 0
 
         if current < self._REQUIRED_SCHEMA_VERSION:
-            # Body physical-stat columns were added — re-import all journals to populate them.
+            # v2: body physical-stat columns were added.
+            # v3: station_info (landing pad ground truth from Docked events) was added.
+            # Re-import all journals to backfill.
             self.conn.execute("DELETE FROM processed_journals")
             if current == 0:
                 self.conn.execute(

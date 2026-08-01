@@ -108,6 +108,17 @@ CREATE TABLE IF NOT EXISTS system_coords (
     last_seen TEXT
 );
 
+CREATE TABLE IF NOT EXISTS station_info (
+    market_id     INTEGER PRIMARY KEY,
+    station_name  TEXT,
+    system_name   TEXT,
+    station_type  TEXT,
+    pads_small    INTEGER,
+    pads_medium   INTEGER,
+    pads_large    INTEGER,
+    last_visited  TEXT
+);
+
 CREATE TABLE IF NOT EXISTS market_prices (
     market_id      INTEGER NOT NULL,
     commodity_name TEXT    NOT NULL,

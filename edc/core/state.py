@@ -103,6 +103,12 @@ class GameState:
     # Cargo snapshot (safe defaults)
     cargo_inventory: List[Dict[str, Any]] = field(default_factory=list)
 
+    # Current station's commodity market (Market.json, read on the "Market" event)
+    current_market_id: Optional[int] = None
+    current_market_station: Optional[str] = None
+    current_market_system: Optional[str] = None
+    current_market_items: List[Dict[str, Any]] = field(default_factory=list)
+
     # Visited systems tracking (safe defaults)
     visited_systems: Set[str] = field(default_factory=set)
     

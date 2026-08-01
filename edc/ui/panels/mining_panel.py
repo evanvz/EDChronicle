@@ -5,6 +5,7 @@ import logging
 from typing import List, Optional
 
 from PyQt6.QtCore import Qt, QObject, QThread, pyqtSignal
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QSpinBox, QTableWidget, QTableWidgetItem,
@@ -12,6 +13,8 @@ from PyQt6.QtWidgets import (
 )
 
 from edc.core.spansh_client import SpanshClient, MiningRingResult
+from edc.core.station_pads import pad_size_hint
+from edc.ui.panels.market_panel import normalize_commodity_name
 
 log = logging.getLogger(__name__)
 
@@ -52,13 +55,17 @@ class MiningPanel(QWidget):
 
     sell_search_requested = pyqtSignal(str)  # commodity display name
 
-    def __init__(self, parent=None):
+    def __init__(self, repo, parent=None):
         super().__init__(parent)
 
+        self._repo = repo
         self._system: str = ""
         self._ref_x: float = 0.0
         self._ref_y: float = 0.0
         self._ref_z: float = 0.0
+        self._cargo_inventory: list = []
+        self._current_market_id: Optional[int] = None
+        self._market_radius_ly: int = 100
         self._thread: Optional[QThread] = None
         self._worker: Optional[_RingSearchWorker] = None
 
@@ -98,6 +105,65 @@ class MiningPanel(QWidget):
         stats_layout.addLayout(self._sell_row)
 
         root.addWidget(stats_frame)
+
+        # ── Sell cargo — market search ──────────────────────────────────
+        cargo_frame = QFrame()
+        cargo_frame.setStyleSheet(_CARD_STYLE)
+        cargo_layout = QVBoxLayout(cargo_frame)
+        cargo_layout.setContentsMargins(8, 6, 8, 8)
+        cargo_layout.setSpacing(6)
+
+        cargo_hdr_row = QHBoxLayout()
+        cargo_hdr = QLabel("SELL CARGO — MARKET SEARCH")
+        cargo_hdr.setStyleSheet(_HDR_STYLE)
+        cargo_hdr_row.addWidget(cargo_hdr)
+        cargo_hdr_row.addStretch(1)
+        self._cargo_search_btn = QPushButton("Search Markets for Cargo")
+        self._cargo_search_btn.setStyleSheet(
+            "QPushButton { background:#1a3a5a; color:#FFB347; border:1px solid #2a5a8a;"
+            " border-radius:3px; padding:3px 12px; font-weight:bold; }"
+            "QPushButton:hover { background:#2a5a8a; }"
+            "QPushButton:disabled { background:#111; color:#555; border-color:#333; }"
+        )
+        self._cargo_search_btn.clicked.connect(self._search_cargo_markets)
+        cargo_hdr_row.addWidget(self._cargo_search_btn)
+        cargo_layout.addLayout(cargo_hdr_row)
+
+        self._cargo_status_label = QLabel("Mine something, then search for where to sell your whole hold.")
+        self._cargo_status_label.setWordWrap(True)
+        self._cargo_status_label.setStyleSheet("color:#888888; font-size:10px; background:transparent;")
+        cargo_layout.addWidget(self._cargo_status_label)
+
+        self._cargo_market_table = QTableWidget()
+        self._cargo_market_table.setColumnCount(6)
+        self._cargo_market_table.setHorizontalHeaderLabels(
+            ["Commodity", "Qty", "Station", "System", "Pad", "Sell Price"]
+        )
+        self._cargo_market_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._cargo_market_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._cargo_market_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self._cargo_market_table.verticalHeader().setVisible(False)
+        self._cargo_market_table.verticalHeader().setDefaultSectionSize(18)
+        self._cargo_market_table.setAlternatingRowColors(True)
+        self._cargo_market_table.setStyleSheet(
+            "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
+            " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; font-size:10px; }"
+            "QTableWidget::item { padding:1px 4px; }"
+            "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
+            " padding:2px; font-size:10px; font-weight:bold; letter-spacing:1px; }"
+            "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
+        )
+        cmh = self._cargo_market_table.horizontalHeader()
+        cmh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        cmh.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        cmh.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        cmh.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        cmh.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        cmh.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+        self._cargo_market_table.setMaximumHeight(180)
+        cargo_layout.addWidget(self._cargo_market_table)
+
+        root.addWidget(cargo_frame)
 
         # ── Ring finder card ──────────────────────────────────────────────
         finder_frame = QFrame()
@@ -188,13 +254,18 @@ class MiningPanel(QWidget):
 
     # ── Public API ────────────────────────────────────────────────────────
 
-    def refresh(self, state) -> None:
+    def refresh(self, state, market_radius_ly: int = 100) -> None:
         self._system = (getattr(state, "system", None) or "").strip()
         self._ref_x = float(getattr(state, "system_x", 0.0) or 0.0)
         self._ref_y = float(getattr(state, "system_y", 0.0) or 0.0)
         self._ref_z = float(getattr(state, "system_z", 0.0) or 0.0)
         self._location_label.setText(f"Location: {self._system or '—'}")
         self._search_btn.setEnabled(bool(self._system))
+
+        self._cargo_inventory = getattr(state, "cargo_inventory", None) or []
+        self._current_market_id = getattr(state, "current_market_id", None)
+        self._market_radius_ly = int(market_radius_ly or 100)
+        self._cargo_search_btn.setEnabled(bool(self._system) and bool(self._cargo_inventory))
 
         refined = getattr(state, "mining_refined_totals", {}) or {}
         prospected = getattr(state, "mining_prospected_count", 0)
@@ -254,6 +325,78 @@ class MiningPanel(QWidget):
             btn.clicked.connect(lambda checked=False, n=name: self.sell_search_requested.emit(n))
             self._sell_row.addWidget(btn)
         self._sell_row.addStretch(1)
+
+    def _search_cargo_markets(self):
+        if not self._system:
+            self._cargo_status_label.setText("No system location data yet — jump to a system first.")
+            return
+        if not self._cargo_inventory:
+            self._cargo_status_label.setText("Cargo hold is empty — nothing to search for.")
+            self._cargo_market_table.setRowCount(0)
+            return
+
+        # Sum quantity per distinct commodity — the same item can appear as
+        # multiple entries (e.g. a regular stack plus a mission-tagged stack).
+        qty_by_commodity: dict = {}
+        display_by_commodity: dict = {}
+        for c in self._cargo_inventory:
+            if not isinstance(c, dict):
+                continue
+            raw_name = c.get("Name") or ""
+            key = normalize_commodity_name(raw_name)
+            if not key:
+                continue
+            qty_by_commodity[key] = qty_by_commodity.get(key, 0) + int(c.get("Count") or 0)
+            display_by_commodity.setdefault(key, c.get("Name_Localised") or raw_name.title())
+
+        rows = []
+        for key, qty in qty_by_commodity.items():
+            try:
+                results = self._repo.search_market_prices(
+                    key, self._ref_x, self._ref_y, self._ref_z, float(self._market_radius_ly),
+                    exclude_market_id=self._current_market_id,
+                )
+            except Exception:
+                log.exception("Cargo market search failed for %s", key)
+                continue
+            for r in results[:3]:
+                rows.append((display_by_commodity[key], qty, r))
+
+        if not rows:
+            self._cargo_status_label.setText(
+                "No known market data for anything in your cargo within "
+                f"{self._market_radius_ly} ly yet."
+            )
+            self._cargo_market_table.setRowCount(0)
+            return
+
+        self._cargo_status_label.setText(
+            f"{len(qty_by_commodity)} commodit{'y' if len(qty_by_commodity) == 1 else 'ies'} "
+            f"in cargo — showing up to 3 destinations each, within {self._market_radius_ly} ly."
+        )
+
+        # Grouped by commodity (insertion order already groups them, since
+        # we appended per-key in a batch above).
+        self._cargo_market_table.setRowCount(len(rows))
+        for row, (name, qty, r) in enumerate(rows):
+            name_item = QTableWidgetItem(name)
+            qty_item = QTableWidgetItem(str(qty))
+            station_item = QTableWidgetItem(r.get("station_name") or "—")
+            system_item = QTableWidgetItem(r.get("system_name") or "—")
+            pad_item = QTableWidgetItem(r.get("pad_size") or pad_size_hint(r.get("station_type")))
+            price_item = QTableWidgetItem(f"{r.get('sell_price', 0):,}")
+            if pad_item.text() == "?":
+                pad_item.setForeground(QColor("#888888"))
+                pad_item.setToolTip("Landing pad size unknown for this station type")
+            for it in (qty_item, pad_item, price_item):
+                it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            self._cargo_market_table.setItem(row, 0, name_item)
+            self._cargo_market_table.setItem(row, 1, qty_item)
+            self._cargo_market_table.setItem(row, 2, station_item)
+            self._cargo_market_table.setItem(row, 3, system_item)
+            self._cargo_market_table.setItem(row, 4, pad_item)
+            self._cargo_market_table.setItem(row, 5, price_item)
 
     # ── Search ────────────────────────────────────────────────────────────
 

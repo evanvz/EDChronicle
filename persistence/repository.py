@@ -2,6 +2,7 @@ import json
 from typing import Optional
 
 from .database import Database
+from edc.core.station_pads import effective_pad_size
 
 
 class Repository:
@@ -414,23 +415,63 @@ class Repository:
         )
         self.db.conn.commit()
 
+    def save_station_info(
+        self,
+        market_id: int,
+        station_name: Optional[str],
+        system_name: Optional[str],
+        station_type: Optional[str],
+        pads_small: Optional[int],
+        pads_medium: Optional[int],
+        pads_large: Optional[int],
+        last_visited: Optional[str],
+    ):
+        """Ground truth from our own Docked events — ON CONFLICT keeps the latest visit's data."""
+        self.db.execute(
+            """
+            INSERT INTO station_info (
+                market_id, station_name, system_name, station_type,
+                pads_small, pads_medium, pads_large, last_visited
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(market_id) DO UPDATE SET
+                station_name = excluded.station_name,
+                system_name  = excluded.system_name,
+                station_type = excluded.station_type,
+                pads_small   = excluded.pads_small,
+                pads_medium  = excluded.pads_medium,
+                pads_large   = excluded.pads_large,
+                last_visited = excluded.last_visited
+            """,
+            (market_id, station_name, system_name, station_type,
+             pads_small, pads_medium, pads_large, last_visited),
+        )
+
     def search_market_prices(
-        self, commodity_name: str, x: float, y: float, z: float, radius_ly: float
+        self, commodity_name: str, x: float, y: float, z: float, radius_ly: float,
+        exclude_market_id: Optional[int] = None,
     ) -> list[dict]:
         """
         Best sell prices for a commodity, joined against system_coords for
-        distance, filtered to radius_ly, sorted by sell price descending.
+        distance and station_info for a confirmed landing pad size (from our
+        own past visits, if any). Filtered to radius_ly. Sorted with known
+        pad size preferred over unknown, and best price within each tier —
+        never silently recommends a destination we can't confirm you can
+        physically dock at when a known-pad alternative exists.
         Distance filtering/sorting happens in Python — dataset is bounded
         (one row per station/commodity ever reported), no need for a
-        spatial index at this scale.
+        spatial index at this scale. exclude_market_id skips a specific
+        station (e.g. the one you're currently docked at).
         """
         rows = self.db.conn.execute(
             """
             SELECT m.market_id, m.station_name, m.station_type, m.system_name,
                    m.sell_price, m.demand, m.stock, m.last_updated,
-                   c.x, c.y, c.z
+                   c.x, c.y, c.z,
+                   si.pads_small, si.pads_medium, si.pads_large
             FROM market_prices m
             JOIN system_coords c ON c.system_name = m.system_name
+            LEFT JOIN station_info si ON si.market_id = m.market_id
             WHERE m.commodity_name = ? AND m.sell_price IS NOT NULL
             """,
             (commodity_name,),
@@ -438,6 +479,8 @@ class Repository:
 
         results = []
         for r in rows:
+            if exclude_market_id is not None and r["market_id"] == exclude_market_id:
+                continue
             rx, ry, rz = r["x"], r["y"], r["z"]
             if rx is None or ry is None or rz is None:
                 continue
@@ -446,9 +489,19 @@ class Repository:
                 continue
             rec = dict(r)
             rec["distance_ly"] = dist
+
+            # Ground truth from our own visits (if any) beats the EDDN-
+            # reported stationType; both beat "?".
+            pad = effective_pad_size(
+                rec["station_type"], rec.get("pads_small"), rec.get("pads_medium"), rec.get("pads_large")
+            )
+            rec["pad_known"] = pad != "?"
+            rec["pad_size"] = pad
+
             results.append(rec)
 
-        results.sort(key=lambda r: r["sell_price"], reverse=True)
+        # Known pad size first, then best price within each tier.
+        results.sort(key=lambda r: (not r["pad_known"], -r["sell_price"]))
         return results
 
     def get_faction_history(self, system_address: int) -> list[dict]:

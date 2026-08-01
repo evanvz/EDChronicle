@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any
 import logging
 
+from edc.core.station_pads import extract_station_info
+
 log = logging.getLogger(__name__)
 
 
@@ -175,6 +177,8 @@ class JournalImporter:
             self._handle_scan_organic(event)
         elif name == "Disembark":
             self._handle_disembark(event)
+        elif name == "Docked":
+            self._handle_docked(event)
 
     def _upsert_visit(
         self,
@@ -583,6 +587,27 @@ class JournalImporter:
             body_name=body_name,
             first_footfall=first_footfall,
             has_footfall=1,
+        )
+
+    def _handle_docked(self, event: dict[str, Any]) -> None:
+        """
+        Backfills landing pad ground truth from every station ever docked
+        at across all historical journals — not just ones visited going
+        forward. Shares extract_station_info with the live path so both
+        populate station_info identically.
+        """
+        info = extract_station_info(event)
+        if not info:
+            return
+        self.repo.save_station_info(
+            market_id=info["market_id"],
+            station_name=info["station_name"],
+            system_name=info["system_name"],
+            station_type=info["station_type"],
+            pads_small=info["pads_small"],
+            pads_medium=info["pads_medium"],
+            pads_large=info["pads_large"],
+            last_visited=info["timestamp"],
         )
 
     def _handle_scan_organic(self, event: dict[str, Any]) -> None:

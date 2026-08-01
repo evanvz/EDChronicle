@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 from datetime import date
@@ -63,6 +64,7 @@ from edc.ui.panels.fleet_carrier_panel import FleetCarrierPanel
 from edc.core.eddn_powerplay import EddnPowerPlayCache
 from edc.core.eddn_listener import EddnPowerPlayWorker
 from edc.core.eddn_market import EddnMarketCache
+from edc.core.station_pads import extract_station_info
 from edc.ui.panels.mining_panel import MiningPanel
 from edc.ui.panels.market_panel import MarketPanel
 from edc.ui.panels.player_faction_panel import PlayerFactionPanel
@@ -200,6 +202,96 @@ class MainWindow(QMainWindow):
                 self.repo.save_faction_snapshot(system_address, f, today, is_controlling)
         except Exception:
             log.exception("Failed to save faction snapshots")
+
+    def _save_station_info(self, evt: dict):
+        """
+        Ground-truth landing pad data from our own Docked event — the most
+        reliable source, better than EDDN's stationType heuristic. Fires
+        for every station we personally dock at, not just ones we trade at.
+        """
+        info = extract_station_info(evt)
+        if not info:
+            return
+        try:
+            self.repo.save_station_info(
+                market_id=info["market_id"],
+                station_name=info["station_name"],
+                system_name=info["system_name"],
+                station_type=info["station_type"],
+                pads_small=info["pads_small"],
+                pads_medium=info["pads_medium"],
+                pads_large=info["pads_large"],
+                last_visited=info["timestamp"],
+            )
+        except Exception:
+            log.exception("Failed to save station info")
+
+    def _load_current_market(self):
+        """
+        Reads Market.json (written by the game alongside the journal
+        whenever the commodity screen is opened) into state.current_market_*.
+        """
+        journal_dir = getattr(self.cfg, "journal_dir", None)
+        if not journal_dir:
+            return
+        market_path = Path(journal_dir) / "Market.json"
+        try:
+            if not market_path.exists():
+                return
+            data = json.loads(market_path.read_text(encoding="utf-8", errors="replace"))
+        except Exception:
+            log.exception("Failed to read Market.json")
+            return
+
+        if not isinstance(data, dict):
+            return
+
+        self.state.current_market_id = data.get("MarketID")
+        self.state.current_market_station = data.get("StationName")
+        self.state.current_market_system = data.get("StarSystem")
+
+        items = []
+        for it in (data.get("Items") or []):
+            if not isinstance(it, dict):
+                continue
+            name = it.get("Name_Localised") or it.get("Name") or ""
+            if not name:
+                continue
+            items.append({
+                "name": name,
+                "category": it.get("Category_Localised") or it.get("Category") or "",
+                "buy_price": it.get("BuyPrice") or 0,
+                "sell_price": it.get("SellPrice") or 0,
+                "demand": it.get("Demand") or 0,
+                "stock": it.get("Stock") or 0,
+            })
+        self.state.current_market_items = items
+
+    def _load_cargo_inventory(self):
+        """
+        Reads Cargo.json — per the journal manual, only the FIRST "Cargo"
+        event in a session carries the Inventory array inline; every
+        subsequent one is just a bare notification that the file changed,
+        so this must be re-read from disk every time to stay current.
+        """
+        journal_dir = getattr(self.cfg, "journal_dir", None)
+        if not journal_dir:
+            return
+        cargo_path = Path(journal_dir) / "Cargo.json"
+        try:
+            if not cargo_path.exists():
+                return
+            data = json.loads(cargo_path.read_text(encoding="utf-8", errors="replace"))
+        except Exception:
+            log.exception("Failed to read Cargo.json")
+            return
+
+        if not isinstance(data, dict):
+            return
+
+        inv = data.get("Inventory")
+        if isinstance(inv, list):
+            self.state.cargo_inventory = inv
 
     def _planet_value_class_name(self, planet_class: str) -> str:
         pc = (planet_class or "").strip()
@@ -507,7 +599,7 @@ class MainWindow(QMainWindow):
         self.sidebar.addItem("Fleet Carrier")
 
         # Mining tab
-        self.mining_panel = MiningPanel()
+        self.mining_panel = MiningPanel(self.repo)
         self.stack.addWidget(self.mining_panel)
         self.sidebar.addItem("Mining")
 
@@ -1036,7 +1128,11 @@ class MainWindow(QMainWindow):
         state, msgs = self.engine.process(evt)
         self.state = state
 
-        if getattr(self.cfg, "eddn_contribute_enabled", False):
+        # Bootstrap replay re-reads the tail of the current journal on every
+        # app restart to catch up on anything missed — publishing those
+        # events again would just be duplicate traffic for data EDDN
+        # already received the first time they happened.
+        if getattr(self.cfg, "eddn_contribute_enabled", False) and not self._replaying:
             star_pos = (self.state.system_x, self.state.system_y, self.state.system_z)
             self.eddn_publisher.maybe_publish(evt, self.state.system, star_pos, self.state.system_address)
 
@@ -1053,6 +1149,35 @@ class MainWindow(QMainWindow):
 
         if name in ("Docked", "FSDJump", "Location"):
             self._save_faction_snapshots()
+
+        if name == "Docked":
+            self._save_station_info(evt)
+
+        if name == "Market":
+            self._load_current_market()
+            radius = int(getattr(self.cfg, "market_search_radius_ly", 100) or 100)
+            self.market_panel.refresh_trade_opportunities(self.state, radius)
+
+        if name == "Undocked":
+            # Leaving the station — "what's for sale here" stops being true;
+            # the market_panel keeps a separate, longer-lived memory of
+            # where to sell anything already in cargo. Must call
+            # refresh_trade_opportunities() specifically — refresh() is the
+            # cheap path and deliberately doesn't touch that table.
+            self.state.current_market_id = None
+            self.state.current_market_station = None
+            self.state.current_market_system = None
+            self.state.current_market_items = []
+            radius = int(getattr(self.cfg, "market_search_radius_ly", 100) or 100)
+            self.market_panel.refresh_trade_opportunities(self.state, radius)
+
+        if name == "Cargo":
+            # Only the FIRST "Cargo" event in a session carries the
+            # Inventory array inline — every subsequent one is just a bare
+            # notification that Cargo.json changed (confirmed in the
+            # journal manual), so the file itself must be re-read each time.
+            self._load_cargo_inventory()
+            self._refresh_market()
 
         if name == "EngineerProgress":
             self.engineer_progress_store.save(self.state.engineer_progress)
@@ -2612,7 +2737,8 @@ class MainWindow(QMainWindow):
         self.fleet_carrier_panel.refresh(self.state)
 
     def _refresh_mining(self):
-        self.mining_panel.refresh(self.state)
+        radius = int(getattr(self.cfg, "market_search_radius_ly", 100) or 100)
+        self.mining_panel.refresh(self.state, radius)
 
     def _refresh_market(self):
         radius = int(getattr(self.cfg, "market_search_radius_ly", 100) or 100)
