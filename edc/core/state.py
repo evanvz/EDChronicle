@@ -195,6 +195,16 @@ class GameState:
     # "SquadronCarrier"), which must not be displayed as the player's own.
     carrier_owned_market_id: Optional[int] = None
 
+    # Squadron's shared carrier (CarrierType:"SquadronCarrier"), tracked
+    # separately from the player's own so the two are never conflated.
+    # Keys: market_id, name, callsign, current_system, fuel_level,
+    # jump_range_curr, jump_range_max, docking_access, allow_notorious,
+    # pending_decommission, space_usage, finance, next_jump_system,
+    # next_jump_body, last_updated. Trade orders aren't split out here —
+    # CarrierTradeOrder events carry no CarrierID, so they can't be
+    # reliably attributed between a personal and squadron carrier.
+    squadron_carrier: Optional[Dict[str, Any]] = None
+
     # Mining (session-scoped; resets on app start, like the other session_collected fields)
     mining_refined_totals: Dict[str, int] = field(default_factory=dict)     # material(lower) -> units refined this session
     mining_prospected_count: int = 0

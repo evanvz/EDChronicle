@@ -90,6 +90,52 @@ class FleetCarrierPanel(QWidget):
 
         root.addWidget(fin_frame)
 
+        # ── Squadron carrier card (separate from your own) ─────────────────
+        squad_frame = QFrame()
+        squad_frame.setStyleSheet(self._CARD_STYLE)
+        squad_layout = QVBoxLayout(squad_frame)
+        squad_layout.setContentsMargins(8, 6, 8, 8)
+        squad_layout.setSpacing(4)
+
+        squad_hdr = QLabel("SQUADRON CARRIER")
+        squad_hdr.setStyleSheet(self._HDR_STYLE)
+        squad_layout.addWidget(squad_hdr)
+
+        self._squad_name_label = QLabel("No squadron carrier data recorded yet.")
+        self._squad_name_label.setWordWrap(True)
+        self._squad_name_label.setStyleSheet(self._LABEL_STYLE + " font-weight:bold; font-size:13px;")
+        squad_layout.addWidget(self._squad_name_label)
+
+        squad_row1 = QHBoxLayout()
+        self._squad_location_label = QLabel("Location: —")
+        self._squad_location_label.setStyleSheet(self._LABEL_STYLE)
+        self._squad_fuel_label = QLabel("Fuel: —")
+        self._squad_fuel_label.setStyleSheet(self._LABEL_STYLE)
+        self._squad_docking_label = QLabel("Docking: —")
+        self._squad_docking_label.setStyleSheet(self._LABEL_STYLE)
+        squad_row1.addWidget(self._squad_location_label)
+        squad_row1.addWidget(self._squad_fuel_label)
+        squad_row1.addWidget(self._squad_docking_label)
+        squad_row1.addStretch()
+        squad_layout.addLayout(squad_row1)
+
+        squad_row2 = QHBoxLayout()
+        self._squad_jump_range_label = QLabel("Jump range: —")
+        self._squad_jump_range_label.setStyleSheet(self._LABEL_STYLE)
+        self._squad_space_label = QLabel("Free space: —")
+        self._squad_space_label.setStyleSheet(self._LABEL_STYLE)
+        squad_row2.addWidget(self._squad_jump_range_label)
+        squad_row2.addWidget(self._squad_space_label)
+        squad_row2.addStretch()
+        squad_layout.addLayout(squad_row2)
+
+        self._squad_finance_label = QLabel("—")
+        self._squad_finance_label.setWordWrap(True)
+        self._squad_finance_label.setStyleSheet(self._LABEL_STYLE)
+        squad_layout.addWidget(self._squad_finance_label)
+
+        root.addWidget(squad_frame)
+
         # ── Trade orders table ────────────────────────────────────────────
         orders_hdr = QLabel("TRADE ORDERS")
         orders_hdr.setStyleSheet(self._HDR_STYLE)
@@ -116,6 +162,8 @@ class FleetCarrierPanel(QWidget):
         root.addWidget(self._orders_table, 1)
 
     def refresh(self, state) -> None:
+        self._refresh_squadron_carrier(state)
+
         callsign = getattr(state, "carrier_callsign", None)
         if not callsign:
             self._name_label.setText("No fleet carrier detected.")
@@ -192,3 +240,58 @@ class FleetCarrierPanel(QWidget):
             self._orders_table.setItem(r, 1, buy_item)
             self._orders_table.setItem(r, 2, sell_item)
             self._orders_table.setItem(r, 3, price_item)
+
+    def _refresh_squadron_carrier(self, state) -> None:
+        sc = getattr(state, "squadron_carrier", None)
+        if not isinstance(sc, dict) or not sc.get("callsign"):
+            self._squad_name_label.setText("No squadron carrier data recorded yet.")
+            self._squad_location_label.setText("Location: —")
+            self._squad_fuel_label.setText("Fuel: —")
+            self._squad_docking_label.setText("Docking: —")
+            self._squad_jump_range_label.setText("Jump range: —")
+            self._squad_space_label.setText("Free space: —")
+            self._squad_finance_label.setText("—")
+            return
+
+        name = sc.get("name") or ""
+        callsign = sc["callsign"]
+        self._squad_name_label.setText(f"{name} ({callsign})" if name else callsign)
+
+        location = sc.get("current_system") or "—"
+        self._squad_location_label.setText(f"Location: {location}")
+
+        fuel = sc.get("fuel_level")
+        self._squad_fuel_label.setText(f"Fuel: {fuel} t" if isinstance(fuel, int) else "Fuel: —")
+
+        docking = sc.get("docking_access") or "—"
+        self._squad_docking_label.setText(f"Docking: {docking.title() if isinstance(docking, str) else docking}")
+
+        curr = sc.get("jump_range_curr")
+        maxr = sc.get("jump_range_max")
+        if isinstance(curr, float) and isinstance(maxr, float):
+            self._squad_jump_range_label.setText(f"Jump range: {curr:.1f} / {maxr:.1f} ly")
+        else:
+            self._squad_jump_range_label.setText("Jump range: —")
+
+        space = sc.get("space_usage") or {}
+        free = space.get("FreeSpace")
+        total = space.get("TotalCapacity")
+        if isinstance(free, int) and isinstance(total, int):
+            self._squad_space_label.setText(f"Free space: {free:,} / {total:,} t")
+        else:
+            self._squad_space_label.setText("Free space: —")
+
+        finance = sc.get("finance") or {}
+        if finance:
+            parts = []
+            if isinstance(finance.get("CarrierBalance"), int):
+                parts.append(f"Balance: {finance['CarrierBalance']:,} cr")
+            if isinstance(finance.get("ReserveBalance"), int):
+                parts.append(f"Reserve: {finance['ReserveBalance']:,} cr")
+            if isinstance(finance.get("AvailableBalance"), int):
+                parts.append(f"Available: {finance['AvailableBalance']:,} cr")
+            if isinstance(finance.get("TaxRate"), int):
+                parts.append(f"Tax rate: {finance['TaxRate']}%")
+            self._squad_finance_label.setText(" | ".join(parts) if parts else "—")
+        else:
+            self._squad_finance_label.setText("—")

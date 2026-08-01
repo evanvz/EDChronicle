@@ -32,6 +32,16 @@ def handle(engine, name: str | None, event: Dict[str, Any], msgs: List[str]) -> 
     if name == "CarrierJump":
         # Fired when the player is docked at their carrier as it jumps.
         market_id = event.get("MarketID")
+        squadron_carrier = engine.state.squadron_carrier
+        if squadron_carrier and market_id == squadron_carrier.get("market_id"):
+            sc = dict(squadron_carrier)
+            system = event.get("StarSystem")
+            if isinstance(system, str) and system:
+                sc["current_system"] = system
+            sc["next_jump_system"] = None
+            sc["next_jump_body"] = None
+            engine.state.squadron_carrier = sc
+            return True
         if not _owned_id_matches(engine, market_id):
             return True
         engine.state.carrier_market_id = market_id or engine.state.carrier_market_id
@@ -54,6 +64,27 @@ def handle(engine, name: str | None, event: Dict[str, Any], msgs: List[str]) -> 
 
     elif name == "CarrierStats":
         if event.get("CarrierType") == "SquadronCarrier":
+            sc = dict(engine.state.squadron_carrier or {})
+            sc["market_id"] = event.get("CarrierID") or sc.get("market_id")
+            sc["callsign"] = event.get("Callsign") or sc.get("callsign")
+            sc["name"] = event.get("Name") or sc.get("name")
+            sc["docking_access"] = event.get("DockingAccess")
+            allow_notorious = event.get("AllowNotorious")
+            sc["allow_notorious"] = allow_notorious if isinstance(allow_notorious, bool) else sc.get("allow_notorious")
+            fuel = event.get("FuelLevel")
+            sc["fuel_level"] = fuel if isinstance(fuel, int) else sc.get("fuel_level")
+            rng_curr = event.get("JumpRangeCurr")
+            rng_max = event.get("JumpRangeMax")
+            sc["jump_range_curr"] = float(rng_curr) if isinstance(rng_curr, (int, float)) else sc.get("jump_range_curr")
+            sc["jump_range_max"] = float(rng_max) if isinstance(rng_max, (int, float)) else sc.get("jump_range_max")
+            pending = event.get("PendingDecommission")
+            sc["pending_decommission"] = pending if isinstance(pending, bool) else sc.get("pending_decommission")
+            space = event.get("SpaceUsage")
+            sc["space_usage"] = dict(space) if isinstance(space, dict) else sc.get("space_usage", {})
+            finance = event.get("Finance")
+            sc["finance"] = dict(finance) if isinstance(finance, dict) else sc.get("finance", {})
+            sc["last_updated"] = event.get("timestamp")
+            engine.state.squadron_carrier = sc
             return True
         engine.state.carrier_owned_market_id = event.get("CarrierID") or engine.state.carrier_owned_market_id
         engine.state.carrier_market_id = event.get("CarrierID") or engine.state.carrier_market_id
@@ -80,6 +111,15 @@ def handle(engine, name: str | None, event: Dict[str, Any], msgs: List[str]) -> 
 
     elif name == "CarrierJumpRequest":
         carrier_id = event.get("CarrierID")
+        squadron_carrier = engine.state.squadron_carrier
+        if squadron_carrier and carrier_id == squadron_carrier.get("market_id"):
+            sc = dict(squadron_carrier)
+            system = event.get("SystemName")
+            sc["next_jump_system"] = system if isinstance(system, str) and system else None
+            body = event.get("Body")
+            sc["next_jump_body"] = body if isinstance(body, str) and body else None
+            engine.state.squadron_carrier = sc
+            return True
         if not _owned_id_matches(engine, carrier_id):
             return True
         engine.state.carrier_market_id = carrier_id or engine.state.carrier_market_id
