@@ -126,6 +126,12 @@ CREATE TABLE IF NOT EXISTS commodity_names (
     display_name  TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS dismissed_faction_systems (
+    faction_name   TEXT NOT NULL,
+    system_address INTEGER NOT NULL,
+    PRIMARY KEY (faction_name, system_address)
+);
+
 CREATE TABLE IF NOT EXISTS market_prices (
     market_id      INTEGER NOT NULL,
     commodity_name TEXT    NOT NULL,

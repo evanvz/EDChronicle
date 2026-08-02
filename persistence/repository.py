@@ -373,6 +373,10 @@ class Repository:
                   WHERE fs2.system_address = fs.system_address
                     AND fs2.faction_name = fs.faction_name
               )
+              AND NOT EXISTS (
+                  SELECT 1 FROM dismissed_faction_systems d
+                  WHERE d.faction_name = fs.faction_name AND d.system_address = fs.system_address
+              )
             ORDER BY fs.is_controlling DESC, fs.influence DESC
             """,
             (faction_name,),
@@ -382,6 +386,33 @@ class Repository:
             "faction_name": faction_name,
             "systems": [dict(r) for r in systems],
         }
+
+    def dismiss_faction_system(self, faction_name: str, system_address: int):
+        """
+        Hides a system from get_player_faction_overview() without deleting
+        its faction_snapshots history — for when the squadron loses presence
+        there ("kicked out") and it shouldn't keep showing in the current
+        list. Sticky/permanent until manually undone — new snapshots for
+        the same system don't automatically clear it, since EDDN sightings
+        can lag real-world presence changes.
+        """
+        self.db.execute(
+            """
+            INSERT INTO dismissed_faction_systems (faction_name, system_address)
+            VALUES (?, ?)
+            ON CONFLICT(faction_name, system_address) DO NOTHING
+            """,
+            (faction_name, system_address),
+        )
+
+    def undismiss_faction_system(self, faction_name: str, system_address: int):
+        """Reverses dismiss_faction_system — used when the same system is
+        deliberately re-added (manually, or a fresh EDDN sighting), which
+        should override an earlier "kicked out" dismissal."""
+        self.db.execute(
+            "DELETE FROM dismissed_faction_systems WHERE faction_name = ? AND system_address = ?",
+            (faction_name, system_address),
+        )
 
     def save_system_coords_batch(self, records: list[tuple[str, float, float, float, str]]):
         """records: [(system_name, x, y, z, last_seen), ...]"""
