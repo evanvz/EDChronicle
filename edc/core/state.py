@@ -55,6 +55,12 @@ class GameState:
     thargoid_signals: Dict[str, int] = field(default_factory=dict)
     other_signals: Dict[str, int] = field(default_factory=dict)
     saa_signals: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
+    # RingName -> {system_address, parent_body, ring_class, distance_ls,
+    # scanned, hotspots: [{name, count}]}. Populated from Scan events' Rings
+    # array (planets and stars both — stars carry no PlanetClass so this is
+    # tracked separately from the bodies dict) and marked scanned/populated
+    # with material types once SAASignalsFound is reported for that ring.
+    rings: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     non_body_count: Optional[int] = None                               # FSSDiscoveryScan.NonBodyCount
     fss_complete: bool = False
     route_target_system: Optional[str] = None

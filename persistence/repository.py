@@ -387,6 +387,129 @@ class Repository:
             "systems": [dict(r) for r in systems],
         }
 
+    def get_player_faction_system_status(self, faction_name: str, system_address: int) -> Optional[dict]:
+        """
+        Same shape as one entry of get_player_faction_overview()'s "systems"
+        list, but scoped to a single system — used when arriving in-game so
+        only that one row needs checking/updating, not the whole ~hundreds
+        of tracked systems.
+        """
+        row = self.db.conn.execute(
+            """
+            SELECT fs.system_address, s.system_name, fs.influence, fs.faction_state,
+                   fs.active_states, fs.pending_states, fs.recovering_states,
+                   fs.is_controlling, fs.my_reputation, fs.snapshot_date
+            FROM faction_snapshots fs
+            LEFT JOIN systems s ON s.system_address = fs.system_address
+            WHERE fs.faction_name = ? AND fs.system_address = ?
+              AND fs.snapshot_date = (
+                  SELECT MAX(snapshot_date) FROM faction_snapshots fs2
+                  WHERE fs2.system_address = fs.system_address
+                    AND fs2.faction_name = fs.faction_name
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM dismissed_faction_systems d
+                  WHERE d.faction_name = fs.faction_name AND d.system_address = fs.system_address
+              )
+            """,
+            (faction_name, system_address),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def save_ring(
+        self,
+        system_address: int,
+        ring_name: str,
+        parent_body: Optional[str],
+        ring_class: Optional[str],
+        distance_ls: Optional[float],
+        scanned: bool,
+        hotspots: Optional[list],
+    ) -> None:
+        """
+        Upserts one ring's known state. scanned only ever moves False->True
+        (MAX), and hotspots/ring_class/distance_ls only overwrite the stored
+        value when the new data actually has something — so a later Scan
+        event (which knows distance but not hotspots) can't clobber hotspot
+        data an earlier SAASignalsFound already recorded, or vice versa.
+        """
+        hotspots_json = json.dumps(hotspots) if hotspots else None
+        self.db.execute(
+            """
+            INSERT INTO rings (
+                system_address, ring_name, parent_body, ring_class,
+                distance_ls, scanned, hotspots
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(system_address, ring_name) DO UPDATE SET
+                parent_body = COALESCE(excluded.parent_body, rings.parent_body),
+                ring_class  = COALESCE(NULLIF(excluded.ring_class, ''), rings.ring_class),
+                distance_ls = COALESCE(excluded.distance_ls, rings.distance_ls),
+                scanned     = MAX(rings.scanned, excluded.scanned),
+                hotspots    = COALESCE(excluded.hotspots, rings.hotspots)
+            """,
+            (
+                system_address, ring_name, parent_body, ring_class,
+                distance_ls, int(bool(scanned)), hotspots_json,
+            ),
+        )
+
+    def get_rings_for_system(self, system_address: int) -> list[dict]:
+        rows = self.db.conn.execute(
+            """
+            SELECT ring_name, parent_body, ring_class, distance_ls, scanned, hotspots
+            FROM rings WHERE system_address = ?
+            """,
+            (system_address,),
+        ).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            try:
+                d["hotspots"] = json.loads(d["hotspots"]) if d.get("hotspots") else []
+            except (TypeError, ValueError):
+                d["hotspots"] = []
+            d["scanned"] = bool(d["scanned"])
+            out.append(d)
+        return out
+
+    def get_known_system_names(self, faction_name: str) -> set[str]:
+        """
+        Lowercased system names we already have faction_snapshots data for,
+        for this faction — regardless of dismissed status (a dismissed
+        system is still "known"; skipping it on a bulk re-import leaves it
+        dismissed rather than silently reviving it). Used to skip redundant
+        EDSM re-lookups on a repeat CSV import.
+        """
+        rows = self.db.conn.execute(
+            """
+            SELECT DISTINCT s.system_name
+            FROM faction_snapshots fs
+            JOIN systems s ON s.system_address = fs.system_address
+            WHERE fs.faction_name = ? AND s.system_name IS NOT NULL
+            """,
+            (faction_name,),
+        ).fetchall()
+        return {r["system_name"].strip().lower() for r in rows if r["system_name"]}
+
+    def get_stale_faction_systems(self, faction_name: str, current_names: set[str]) -> list[dict]:
+        """
+        Currently-visible systems (see get_player_faction_overview — already
+        excludes dismissed ones) for faction_name whose name isn't in
+        current_names (case-insensitive) — i.e. systems we're tracking that
+        a fresh "complete" export no longer lists, suggesting the faction
+        may have lost presence there. Advisory only — caller decides
+        whether to dismiss them, this doesn't touch the database.
+        """
+        lowered = {n.strip().lower() for n in current_names if n}
+        overview = self.get_player_faction_overview()
+        if not overview or overview["faction_name"] != faction_name:
+            return []
+        return [
+            s for s in overview["systems"]
+            if (s.get("system_name") or "").strip().lower() not in lowered
+        ]
+
     def dismiss_faction_system(self, faction_name: str, system_address: int):
         """
         Hides a system from get_player_faction_overview() without deleting

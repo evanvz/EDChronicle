@@ -16,7 +16,7 @@ per-message synchronous writes would be a real bottleneck.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Dict, Tuple
 
 log = logging.getLogger(__name__)
@@ -28,6 +28,10 @@ class EddnMarketCache:
         self._repo = repo
         self._coord_buffer: Dict[str, Tuple[str, float, float, float, str]] = {}
         self._market_buffer: Dict[Tuple[int, str], tuple] = {}
+        # (system_name, faction dict, is_controlling, timestamp) keyed by
+        # system_address — deduped so re-sightings of the same system
+        # between flushes only cost one write, not one per sighting.
+        self._faction_buffer: Dict[int, Tuple[str, Dict[str, Any], bool, str]] = {}
 
     def on_coords_seen(self, system_name: str, x: float, y: float, z: float) -> None:
         if not system_name:
@@ -60,9 +64,14 @@ class EddnMarketCache:
                 timestamp,
             )
 
-    def buffered_counts(self) -> Tuple[int, int]:
-        """Returns (coord_count, market_row_count) currently buffered — for status/logging."""
-        return len(self._coord_buffer), len(self._market_buffer)
+    def on_faction_seen(self, system_address: int, system_name: str, faction: Dict[str, Any], is_controlling: bool, timestamp: str) -> None:
+        if not (isinstance(system_address, int) and system_name):
+            return
+        self._faction_buffer[system_address] = (system_name, faction, is_controlling, timestamp)
+
+    def buffered_counts(self) -> Tuple[int, int, int]:
+        """Returns (coord_count, market_row_count, faction_count) currently buffered — for status/logging."""
+        return len(self._coord_buffer), len(self._market_buffer), len(self._faction_buffer)
 
     def flush(self) -> None:
         if self._coord_buffer:
@@ -78,3 +87,13 @@ class EddnMarketCache:
             except Exception:
                 log.exception("Failed to flush market_prices batch")
             self._market_buffer.clear()
+
+        if self._faction_buffer:
+            for system_address, (system_name, faction, is_controlling, timestamp) in self._faction_buffer.items():
+                try:
+                    self._repo.save_system_name_if_missing(system_address, system_name)
+                    snapshot_date = (timestamp or "")[:10] or date.today().isoformat()
+                    self._repo.save_faction_snapshot(system_address, faction, snapshot_date, is_controlling)
+                except Exception:
+                    log.exception("Failed to flush faction sighting for system_address=%s", system_address)
+            self._faction_buffer.clear()

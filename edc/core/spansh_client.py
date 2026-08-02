@@ -374,3 +374,47 @@ class SpanshClient:
 
         out.sort(key=lambda r: r.distance)
         return out, ""
+
+    def fetch_system_rings(self, system_address: int) -> Tuple[List[dict], str]:
+        """
+        Every ring in this system that Spansh knows about, with whatever
+        community-reported hotspot signals it has (empty list if none — a
+        genuine "nobody has DSS'd this and had it reach Spansh via EDDN" gap,
+        distinct from this commander simply not having scanned it personally).
+
+        Each entry: {"ring_name", "parent_body", "ring_type", "signals": [{"name","count"}, ...]}.
+        Returns (rings, error). error is "" on success.
+        """
+        body = {
+            "filters": {"system_id64": {"value": system_address, "comparison": "="}},
+            "size":    500,
+            "page":    0,
+        }
+        try:
+            resp = requests.post(_BODIES_SEARCH_URL, json=body, timeout=_BODIES_TIMEOUT)
+            resp.raise_for_status()
+            data = resp.json()
+        except requests.RequestException as exc:
+            log.error("Spansh ring fetch failed: %s", exc)
+            return [], str(exc)
+        except ValueError:
+            return [], "Invalid response from Spansh"
+
+        out: List[dict] = []
+        for rec in (data.get("results") or []):
+            if not isinstance(rec, dict):
+                continue
+            for ring in (rec.get("rings") or []):
+                if not isinstance(ring, dict):
+                    continue
+                signals = []
+                for sig in (ring.get("signals") or []):
+                    if isinstance(sig, dict) and sig.get("name"):
+                        signals.append({"name": str(sig.get("name")), "count": int(sig.get("count") or 0)})
+                out.append({
+                    "ring_name":   str(ring.get("name") or ""),
+                    "parent_body": str(rec.get("name") or ""),
+                    "ring_type":   str(ring.get("type") or ""),
+                    "signals":     signals,
+                })
+        return out, ""

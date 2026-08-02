@@ -114,6 +114,30 @@ class ExplorationPanel(QWidget):
         sig_l.addWidget(self.system_signals_box)
         self._content_layout.addWidget(sig_frame)
 
+        # ── Rings box (which bodies have rings, scan status, hotspots) ─────
+        rings_frame = QFrame()
+        rings_frame.setStyleSheet(
+            "QFrame { background: #0d1a2a; border: 1px solid #1e3a5a;"
+            "border-radius: 5px; }"
+        )
+        rings_l = QVBoxLayout(rings_frame)
+        rings_l.setContentsMargins(8, 6, 8, 6)
+        rings_l.setSpacing(2)
+        rings_hdr = QLabel("RINGS IN THIS SYSTEM")
+        rings_hdr.setStyleSheet(
+            "color: #555555; font-size: 10px; font-weight: bold; "
+            "letter-spacing: 1px; background: transparent; border: none;"
+        )
+        self.rings_box = QLabel("")
+        self.rings_box.setWordWrap(True)
+        self.rings_box.setTextFormat(Qt.TextFormat.RichText)
+        self.rings_box.setStyleSheet("background: transparent; border: none;")
+        rings_l.addWidget(rings_hdr)
+        rings_l.addWidget(self.rings_box)
+        self._rings_frame = rings_frame
+        self._rings_frame.setVisible(False)
+        self._content_layout.addWidget(rings_frame)
+
         # ── Bodies section label ──────────────────────────────────────────
         self._bodies_label = QLabel("SCANNED BODIES")
         self._bodies_label.setStyleSheet(
@@ -175,7 +199,7 @@ class ExplorationPanel(QWidget):
         )
 
     # ── Main refresh ──────────────────────────────────────────────────────────
-    def refresh(self, state, cfg, planet_values):
+    def refresh(self, state, cfg, planet_values, spansh_rings=None):
         try:
             min_100k = int(getattr(cfg, "min_planet_value_100k", 5) or 5)
         except Exception:
@@ -186,8 +210,89 @@ class ExplorationPanel(QWidget):
         self.min_value_changed.emit(f"{min_100k / 10:.1f}M")
 
         self._refresh_signals(state)
+        self._refresh_rings(state, spansh_rings)
         self._refresh_bodies(state, min_value, planet_values)
         self._refresh_materials(state)
+
+    # ── Rings box ─────────────────────────────────────────────────────────────
+    def _refresh_rings(self, state, spansh_rings=None):
+        system_address = getattr(state, "system_address", None)
+        all_rings = getattr(state, "rings", None) or {}
+
+        # Personal/persisted data (this commander's own scans) is the base —
+        # merge in Spansh's community data on top: rings Spansh knows about
+        # that we've never even scanned ourselves get added (so a ring known
+        # only from other commanders' uploads still shows up), and rings we
+        # haven't personally scanned get the community's hotspot data
+        # attached for reference.
+        merged: dict = {}
+        for name, rec in all_rings.items():
+            if isinstance(rec, dict) and rec.get("system_address") == system_address:
+                merged[name] = dict(rec)
+
+        for r in (spansh_rings or []):
+            if not isinstance(r, dict) or not r.get("ring_name"):
+                continue
+            name = r["ring_name"]
+            if name not in merged:
+                merged[name] = {
+                    "parent_body": r.get("parent_body"),
+                    "ring_class": "",
+                    "distance_ls": None,
+                    "scanned": False,
+                    "hotspots": [],
+                }
+            merged[name]["community_signals"] = r.get("signals") or []
+
+        if not merged:
+            self._rings_frame.setVisible(False)
+            return
+
+        rings = list(merged.items())
+
+        def _dist(item):
+            d = item[1].get("distance_ls")
+            return d if isinstance(d, (int, float)) else float("inf")
+
+        rings.sort(key=_dist)
+
+        closest_unscanned = next((name for name, rec in rings if not rec.get("scanned")), None)
+
+        lines = []
+        for name, rec in rings:
+            dist = rec.get("distance_ls")
+            dist_txt = f"{dist:,.0f} ls" if isinstance(dist, (int, float)) else "? ls"
+            ring_class = self._norm_token(rec.get("ring_class") or "")
+
+            if rec.get("scanned"):
+                hotspots = rec.get("hotspots") or []
+                if hotspots:
+                    hs_txt = ", ".join(f"{h.get('name')} x{h.get('count')}" for h in hotspots)
+                    status = f'<span style="color:#6BCB77;">✅ {self._esc(hs_txt)}</span>'
+                else:
+                    status = '<span style="color:#888888;">✅ Scanned — no hotspots</span>'
+            else:
+                marker = " 👉 CLOSEST UNSCANNED" if name == closest_unscanned else ""
+                community = rec.get("community_signals") or []
+                if community:
+                    cs_txt = ", ".join(f"{h.get('name')} x{h.get('count')}" for h in community)
+                    status = (
+                        f'<span style="color:#4D96FF;">🌐 Community: {self._esc(cs_txt)} '
+                        f'(not scanned by you){marker}</span>'
+                    )
+                else:
+                    color = "#FFD93D" if name == closest_unscanned else "#888888"
+                    status = (
+                        f'<span style="color:{color};">❗ Missing everywhere — '
+                        f'DSS it to be first to report{marker}</span>'
+                    )
+
+            lines.append(
+                f'💍 {self._esc(name)} ({self._esc(ring_class)}) — {dist_txt} — {status}'
+            )
+
+        self.rings_box.setText("<br>".join(lines))
+        self._rings_frame.setVisible(True)
 
     # ── Signals box ───────────────────────────────────────────────────────────
     def _refresh_signals(self, state):

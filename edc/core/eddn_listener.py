@@ -26,6 +26,28 @@ _RELEVANT_EVENTS = {"FSDJump", "Location", "CarrierJump"}
 _RECV_TIMEOUT_MS = 5000
 _RECONNECT_DELAY_S = 5
 
+# EDDN is public/unmoderated at the transport level — zlib.decompress() has
+# no built-in size cap, so a corrupted or oversized message could decompress
+# to something huge ("zip bomb" pattern) and stall/crash the listener on a
+# pathologically large json.loads() call. Real EDDN messages are KBs; 10MB
+# is generous headroom while still rejecting anything that isn't legitimate.
+_MAX_DECOMPRESSED_BYTES = 10 * 1024 * 1024
+
+
+def _safe_decompress(raw: bytes) -> bytes | None:
+    """Returns the decompressed bytes, or None if decompression failed or
+    would exceed _MAX_DECOMPRESSED_BYTES (in which case the message is
+    discarded rather than risking an unbounded-size json.loads() call)."""
+    try:
+        decompressor = zlib.decompressobj()
+        out = decompressor.decompress(raw, _MAX_DECOMPRESSED_BYTES)
+        if decompressor.unconsumed_tail:
+            log.warning("Discarding oversized EDDN message (exceeded %d bytes decompressed)", _MAX_DECOMPRESSED_BYTES)
+            return None
+        return out
+    except Exception:
+        return None
+
 
 class EddnPowerPlayWorker(QObject):
     # id64 (SystemAddress) is a 64-bit value — pyqtSignal(int, ...) silently
@@ -78,8 +100,11 @@ class EddnPowerPlayWorker(QObject):
                 raw = sub.recv()
             except zmq.error.Again:
                 continue  # recv timeout — just gives us a chance to check self._stop
+            decompressed = _safe_decompress(raw)
+            if decompressed is None:
+                continue
             try:
-                data = json.loads(zlib.decompress(raw))
+                data = json.loads(decompressed)
             except Exception:
                 continue
 

@@ -8,6 +8,7 @@ from typing import Any
 import logging
 
 from edc.core.station_pads import extract_station_info
+from edc.core.ring_signals import RING_NAME_RE, parent_body_from_ring_name, parse_ring_hotspots
 
 log = logging.getLogger(__name__)
 
@@ -344,6 +345,21 @@ class JournalImporter:
         if isinstance(body_id, int):
             self.body_id_to_name[body_id] = body_name
 
+        if event.get("event") == "SAASignalsFound" and RING_NAME_RE.match(body_name):
+            # Confirmed via live journal data: SAASignalsFound for a ring can
+            # arrive before that ring's own Scan event — save_ring() upserts
+            # either order correctly.
+            self.repo.save_ring(
+                system_address=system_address,
+                ring_name=body_name,
+                parent_body=parent_body_from_ring_name(body_name),
+                ring_class=None,
+                distance_ls=None,
+                scanned=True,
+                hotspots=parse_ring_hotspots(event.get("Signals")),
+            )
+            return  # not a planetary body — skip the bio/geo/human bucket parsing below
+
         if event.get("event") == "SAASignalsFound":
             genuses = event.get("Genuses")
             if isinstance(genuses, list):
@@ -410,6 +426,21 @@ class JournalImporter:
         body_name = _norm_text(event.get("BodyName"))
         if not body_name:
             return
+
+        if RING_NAME_RE.match(body_name):
+            distance_ls = event.get("DistanceFromArrivalLS")
+            if not isinstance(distance_ls, (int, float)):
+                distance_ls = None
+            self.repo.save_ring(
+                system_address=system_address,
+                ring_name=body_name,
+                parent_body=parent_body_from_ring_name(body_name),
+                ring_class=None,
+                distance_ls=distance_ls,
+                scanned=False,
+                hotspots=None,
+            )
+            return  # rings have no PlanetClass — not a planetary body record
 
         planet_class = event.get("PlanetClass") or ""
         if not isinstance(planet_class, str) or not planet_class:

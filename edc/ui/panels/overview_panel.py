@@ -357,8 +357,8 @@ class OverviewPanel(QWidget):
         self.canonn_intel.setWordWrap(True)
         self.canonn_intel.setVisible(False)
         self.canonn_intel.setStyleSheet(
-            "QLabel { background: #0d1a2a; border: 1px solid #1e3a5a;"
-            "border-radius: 6px; padding: 8px 10px; color: #9fc6e8; }"
+            "QLabel { background: #0d2a2a; border: 1px solid #1e5a5a;"
+            "border-radius: 6px; padding: 8px 10px; color: #6be6d9; }"
         )
         layout.addWidget(self.canonn_intel)
 

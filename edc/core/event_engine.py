@@ -9,6 +9,7 @@ from .external_intel import ExternalIntel
 from edc.engine.handlers import exploration, exobio, inventory, powerplay, misc, fleet_carrier, mining, engineers
 from edc.core.squadron_events import SQUADRON_EVENT_NAMES, apply_squadron_event
 from edc.core.mission_events import MISSION_EVENT_NAMES, apply_mission_event
+from edc.core.ring_signals import RING_NAME_RE as _RING_NAME_RE, parse_ring_hotspots
 
 log = logging.getLogger("edc.event_engine")
 
@@ -792,6 +793,43 @@ class EventEngine:
         elif name == "Scan":
             body = self._norm_text(event.get("BodyName"))
             if body:
+                # Rings can belong to stars as well as planets, so this must
+                # run before the planet_class early-return below (stars have
+                # no PlanetClass and would otherwise never reach this code).
+                distance_ls = event.get("DistanceFromArrivalLS")
+
+                ring_match = _RING_NAME_RE.match(body)
+                if ring_match:
+                    # The ring's own Scan event (AutoScan/Detailed) — always
+                    # present, unlike the parent's Rings array.
+                    rec = self.state.rings.get(body, {})
+                    rec.setdefault("scanned", False)
+                    rec.setdefault("hotspots", [])
+                    rec.setdefault("ring_class", "")
+                    rec.update({
+                        "system_address": self.state.system_address,
+                        "parent_body": ring_match.group(1),
+                        "distance_ls": distance_ls,
+                    })
+                    self.state.rings[body] = rec
+
+                for ring in (event.get("Rings") or []):
+                    if not isinstance(ring, dict):
+                        continue
+                    ring_name = self._norm_text(ring.get("Name"))
+                    if not ring_name:
+                        continue
+                    rec = self.state.rings.get(ring_name, {})
+                    rec.setdefault("scanned", False)
+                    rec.setdefault("hotspots", [])
+                    rec.update({
+                        "system_address": self.state.system_address,
+                        "parent_body": body,
+                        "ring_class": ring.get("RingClass") or rec.get("ring_class") or "",
+                        "distance_ls": rec.get("distance_ls", distance_ls),
+                    })
+                    self.state.rings[ring_name] = rec
+
                 planet_class = event.get("PlanetClass") or ""
                 if not planet_class:
                     return self.state, msgs
@@ -1204,6 +1242,20 @@ class EventEngine:
             body = self._norm_text(event.get("BodyName"))
             if not body:
                 return self.state, msgs
+
+            ring_match = _RING_NAME_RE.match(body)
+            if ring_match:
+                # Confirmed via live journal data: SAASignalsFound for a ring
+                # can arrive BEFORE that ring's own Scan event — so the rec
+                # must be created here if missing, not just looked up.
+                rec = self.state.rings.get(body, {})
+                rec.setdefault("system_address", self.state.system_address)
+                rec.setdefault("parent_body", ring_match.group(1))
+                rec.setdefault("ring_class", "")
+                rec.setdefault("distance_ls", None)
+                rec["scanned"] = True
+                rec["hotspots"] = parse_ring_hotspots(event.get("Signals"))
+                self.state.rings[body] = rec
 
             body_id = event.get("BodyID")
             if isinstance(body_id, int):

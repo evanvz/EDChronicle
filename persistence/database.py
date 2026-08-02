@@ -5,8 +5,19 @@ from pathlib import Path
 class Database:
     def __init__(self, db_path: Path):
         self.db_path = db_path
-        self.conn = sqlite3.connect(db_path)
+        # timeout=30: how long a connection waits for a lock before raising
+        # "database is locked", instead of sqlite3's 5s default — matters
+        # now that background workers (CSV import, market search) open
+        # their own connection to this same file while the main/UI thread
+        # is also reading/writing live. WAL journal mode is the real fix
+        # (readers don't block on a writer at all, and vice versa in the
+        # common case) — the busy_timeout is just a safety net for the
+        # writer-vs-writer case WAL doesn't eliminate.
+        self.conn = sqlite3.connect(db_path, timeout=30)
         self.conn.row_factory = sqlite3.Row
+        if str(db_path) != ":memory:":
+            self.conn.execute("PRAGMA journal_mode=WAL")
+            self.conn.execute("PRAGMA busy_timeout=30000")
 
     def execute(self, sql: str, params: tuple = ()):
         cur = self.conn.cursor()
@@ -113,6 +124,16 @@ class Database:
                 last_updated   TEXT NOT NULL,
                 PRIMARY KEY (market_id, commodity_name)
             )""",
+            """CREATE TABLE IF NOT EXISTS rings (
+                system_address INTEGER NOT NULL,
+                ring_name      TEXT    NOT NULL,
+                parent_body    TEXT,
+                ring_class     TEXT,
+                distance_ls    REAL,
+                scanned        INTEGER DEFAULT 0,
+                hotspots       TEXT,
+                PRIMARY KEY (system_address, ring_name)
+            )""",
         ]
         for sql in migrations:
             try:
@@ -124,7 +145,7 @@ class Database:
         self._apply_version_migrations()
 
     # Bump this constant whenever a migration requires journals to be re-imported.
-    _REQUIRED_SCHEMA_VERSION = 4
+    _REQUIRED_SCHEMA_VERSION = 5
 
     def _apply_version_migrations(self):
         self.conn.execute(
@@ -139,6 +160,7 @@ class Database:
             # v2: body physical-stat columns were added.
             # v3: station_info (landing pad ground truth from Docked events) was added.
             # v4: station_info.station_services/station_faction (Interstellar Factors detection) was added.
+            # v5: rings table (hotspot scan history) was added.
             # Re-import all journals to backfill.
             self.conn.execute("DELETE FROM processed_journals")
             if current == 0:

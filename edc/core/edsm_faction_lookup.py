@@ -14,6 +14,7 @@ caching to disk.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import cloudscraper
@@ -22,6 +23,13 @@ log = logging.getLogger(__name__)
 
 _FACTIONS_URL = "https://www.edsm.net/api-system-v1/factions"
 _TIMEOUT = 20
+
+# Confirmed via live testing (a 743-system bulk import): EDSM's Cloudflare
+# challenge blocks roughly 60% of requests seemingly at random — not a
+# sustained "you've been cut off" wall, since successes and failures were
+# interleaved from the very first request rather than clustered. A retry
+# with backoff recovers a meaningful share of these on the same call.
+_RETRY_DELAYS_S = (1.0, 3.0, 6.0)
 
 # Second element of the return tuple when the first is None — lets the UI
 # distinguish "genuinely not in EDSM's database" from "the request itself
@@ -34,6 +42,8 @@ ERROR_NOT_FOUND = "not_found"
 def fetch_system_factions(system_name: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """
     Synchronous — call from a worker thread only, never the UI thread.
+    Retries on a blocked/failed request (not on a genuine "not found") with
+    increasing backoff before giving up.
 
     Returns ({"system_address": int, "system_name": str, "factions": [...]}, None)
     on success, or (None, ERROR_BLOCKED | ERROR_NOT_FOUND) on failure.
@@ -42,6 +52,16 @@ def fetch_system_factions(system_name: str) -> Tuple[Optional[Dict[str, Any]], O
     PendingStates/...) plus an "is_controlling" bool, so it can be passed
     straight into Repository.save_faction_snapshot.
     """
+    attempt = 0
+    while True:
+        result, error = _fetch_once(system_name)
+        if result is not None or error != ERROR_BLOCKED or attempt >= len(_RETRY_DELAYS_S):
+            return result, error
+        time.sleep(_RETRY_DELAYS_S[attempt])
+        attempt += 1
+
+
+def _fetch_once(system_name: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     try:
         scraper = cloudscraper.create_scraper()
         resp = scraper.get(

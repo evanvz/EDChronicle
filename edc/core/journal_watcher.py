@@ -13,6 +13,14 @@ class JournalWatcher(QObject):
     status = pyqtSignal(str)             # emits human status messages
     error = pyqtSignal(str)              # emits readable error message
 
+    # Re-scanning the whole journal directory (glob + sort) on every idle
+    # poll — up to 5x/second — becomes real, continuous overhead once a
+    # commander has accumulated hundreds of old journal files, competing
+    # for CPU/disk right when other things (game login, EDDN, TTS) are also
+    # busy. A newer file only needs to be detected within a couple seconds
+    # of appearing, not instantly, so the scan itself is rate-limited.
+    _DIR_SCAN_INTERVAL_S = 2.0
+
     def __init__(self, journal_dir: Path):
         super().__init__()
         self.journal_dir = journal_dir
@@ -20,6 +28,7 @@ class JournalWatcher(QObject):
         self._current_file: Optional[Path] = None
         self._fp = None
         self._no_journal_notice = False
+        self._last_dir_scan_at: float = 0.0
 
     def stop(self) -> None:
         self._running = False
@@ -33,17 +42,20 @@ class JournalWatcher(QObject):
 
         while self._running:
             try:
-                latest = self._find_latest_journal(self.journal_dir)
-                if latest is None:
-                    if not self._no_journal_notice:
-                        self.status.emit("No Journal*.log found yet...")
-                        self._no_journal_notice = True
-                    time.sleep(1.0)
-                    continue
-                self._no_journal_notice = False
+                now = time.monotonic()
+                if self._current_file is None or (now - self._last_dir_scan_at) >= self._DIR_SCAN_INTERVAL_S:
+                    self._last_dir_scan_at = now
+                    latest = self._find_latest_journal(self.journal_dir)
+                    if latest is None:
+                        if not self._no_journal_notice:
+                            self.status.emit("No Journal*.log found yet...")
+                            self._no_journal_notice = True
+                        time.sleep(1.0)
+                        continue
+                    self._no_journal_notice = False
 
-                if self._current_file != latest:
-                    self._switch_to(latest)
+                    if self._current_file != latest:
+                        self._switch_to(latest)
 
                 line = self._fp.readline() if self._fp else ""
                 if not line:

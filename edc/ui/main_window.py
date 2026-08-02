@@ -109,6 +109,18 @@ class _SpanshEnrichWorker(QObject):
         self.finished.emit(bodies, error, self._system_address)
 
 
+class _SpanshRingWorker(QObject):
+    finished = pyqtSignal(list, str, object)  # rings, error, system_address
+
+    def __init__(self, system_address: int):
+        super().__init__()
+        self._system_address = system_address
+
+    def run(self):
+        rings, error = _SpanshClient().fetch_system_rings(self._system_address)
+        self.finished.emit(rings, error, self._system_address)
+
+
 class _EdsmPowerPlayRefreshWorker(QObject):
     finished = pyqtSignal(bool)
 
@@ -150,6 +162,16 @@ class MainWindow(QMainWindow):
 
     def load_last_system_data(self):
         self.system_data_loader.load_last_system_data()
+        # This pre-populates state.system_address from the DB before journal
+        # replay catches up — which then defeats the "system changed" guard
+        # on the Location/FSDJump handler below for the first bootstrap-
+        # replayed event (same system, so "unchanged"). Confirmed via live
+        # logging: personal/community ring data never loaded on startup
+        # without this — so it must also run unconditionally here.
+        system_address = getattr(self.state, "system_address", None)
+        if isinstance(system_address, int):
+            self._load_persisted_rings(system_address)
+            self._maybe_start_ring_hotspot_check()
 
     def _save_exobiology_to_db(self):
         try:
@@ -208,6 +230,51 @@ class MainWindow(QMainWindow):
                 self.repo.save_faction_snapshot(system_address, f, today, is_controlling)
         except Exception:
             log.exception("Failed to save faction snapshots")
+
+    def _save_ring_data(self):
+        system_address = getattr(self.state, "system_address", None)
+        rings = getattr(self.state, "rings", None) or {}
+        if not isinstance(system_address, int) or not rings:
+            return
+        try:
+            for ring_name, rec in rings.items():
+                if not isinstance(rec, dict) or rec.get("system_address") != system_address:
+                    continue
+                self.repo.save_ring(
+                    system_address=system_address,
+                    ring_name=ring_name,
+                    parent_body=rec.get("parent_body"),
+                    ring_class=rec.get("ring_class") or "",
+                    distance_ls=rec.get("distance_ls"),
+                    scanned=bool(rec.get("scanned")),
+                    hotspots=rec.get("hotspots") or None,
+                )
+        except Exception:
+            log.exception("Failed to save ring data")
+
+    def _load_persisted_rings(self, system_address: int) -> None:
+        """
+        Backfills state.rings from previously-persisted scan data on arrival
+        — so a ring scanned in an earlier session shows up immediately, not
+        only after re-scanning it this session. Never overwrites a ring
+        already known in-memory (e.g. from a bootstrap tail-replay of this
+        same journal file moments earlier).
+        """
+        try:
+            for rec in self.repo.get_rings_for_system(system_address):
+                ring_name = rec.get("ring_name")
+                if not ring_name or ring_name in self.state.rings:
+                    continue
+                self.state.rings[ring_name] = {
+                    "system_address": system_address,
+                    "parent_body": rec.get("parent_body"),
+                    "ring_class": rec.get("ring_class") or "",
+                    "distance_ls": rec.get("distance_ls"),
+                    "scanned": bool(rec.get("scanned")),
+                    "hotspots": rec.get("hotspots") or [],
+                }
+        except Exception:
+            log.exception("Failed to load persisted ring data for system_address=%s", system_address)
 
     def _save_station_info(self, evt: dict):
         """
@@ -538,6 +605,7 @@ class MainWindow(QMainWindow):
         self._canonn_challenge: dict | None = None
         self._canonn_thread: QThread | None = None
         self._canonn_worker: _CanonnRefreshWorker | None = None
+        self._spansh_rings_by_system: Dict[int, List[dict]] = {}
         self.engineering_blueprints = EngineeringBlueprintTable(settings_base)
         self.engineering_wishlist_store = EngineeringWishlist(data_dir / "engineering_wishlist.json")
         self.eddn_powerplay = EddnPowerPlayCache(settings_base)
@@ -554,6 +622,15 @@ class MainWindow(QMainWindow):
         self._market_flush_timer = QTimer(self)
         self._market_flush_timer.setInterval(45 * 1000)  # batch-write buffered EDDN market data periodically
         self._market_flush_timer.timeout.connect(self.eddn_market_cache.flush)
+
+        self._player_faction_refresh_timer = QTimer(self)
+        # BGS ticks server-side once a day — this only needs to be frequent
+        # enough to eventually surface EDDN-sourced changes to systems the
+        # player hasn't personally visited, not "live". Arriving in a
+        # tracked system triggers an immediate refresh separately.
+        self._player_faction_refresh_timer.setInterval(20 * 60 * 1000)
+        self._player_faction_refresh_timer.timeout.connect(self._refresh_player_faction)
+        self._player_faction_refresh_timer.start()
 
         self.engine = EventEngine(
             self.state,
@@ -934,6 +1011,8 @@ class MainWindow(QMainWindow):
         self._replaying: bool = False  # True during journal bootstrap; suppresses all TTS
         self._enrich_thread: QThread | None = None
         self._enrich_worker: _SpanshEnrichWorker | None = None
+        self._ring_gap_thread: QThread | None = None
+        self._ring_gap_worker: _SpanshRingWorker | None = None
 
         # Voice command listener — only started if enabled in settings
         self._voice_cmd_models_dir = app_dir / "models"
@@ -980,7 +1059,7 @@ class MainWindow(QMainWindow):
         self._eddn_worker.system_seen.connect(self._on_eddn_system_seen)
         self._eddn_worker.system_coords_seen.connect(self.eddn_market_cache.on_coords_seen)
         self._eddn_worker.commodity_seen.connect(self.eddn_market_cache.on_commodity_message)
-        self._eddn_worker.faction_seen.connect(self._on_eddn_faction_seen)
+        self._eddn_worker.faction_seen.connect(self.eddn_market_cache.on_faction_seen)
         self._eddn_thread.start()
         self._eddn_save_timer.start()
         self._market_flush_timer.start()
@@ -1002,14 +1081,6 @@ class MainWindow(QMainWindow):
 
     def _on_eddn_system_seen(self, id64: int, power: str, power_state: str, timestamp: str):
         self.eddn_powerplay.ingest(id64, power, power_state, timestamp)
-
-    def _on_eddn_faction_seen(self, system_address: int, system_name: str, faction: dict, is_controlling: bool, timestamp: str):
-        try:
-            snapshot_date = (timestamp or "")[:10] or date.today().isoformat()
-            self.repo.save_system_name_if_missing(system_address, system_name)
-            self.repo.save_faction_snapshot(system_address, faction, snapshot_date, is_controlling)
-        except Exception:
-            log.exception("Failed to save EDDN-sourced faction snapshot")
 
     def _maybe_start_edsm_powerplay_refresh(self):
         if not self.edsm_powerplay.is_stale():
@@ -1159,6 +1230,32 @@ class MainWindow(QMainWindow):
             saved += 1
         log.info("Spansh enrichment saved %d/%d bodies for address %d", saved, len(bodies), system_address)
         self.system_data_loader.load_current_system_data()
+
+    def _maybe_start_ring_hotspot_check(self):
+        system_address = getattr(self.state, "system_address", None)
+        if not isinstance(system_address, int):
+            return
+        if system_address in self._spansh_rings_by_system:
+            return  # already checked this system this session
+        if self._ring_gap_thread and self._ring_gap_thread.isRunning():
+            return
+
+        self._ring_gap_worker = _SpanshRingWorker(system_address)
+        self._ring_gap_thread = QThread()
+        self._ring_gap_worker.moveToThread(self._ring_gap_thread)
+        self._ring_gap_thread.started.connect(self._ring_gap_worker.run)
+        self._ring_gap_worker.finished.connect(self._on_ring_hotspot_gap_result)
+        self._ring_gap_worker.finished.connect(self._ring_gap_thread.quit)
+        self._ring_gap_thread.start()
+
+    def _on_ring_hotspot_gap_result(self, rings: list, error: str, system_address: int):
+        if error:
+            log.warning("Spansh ring check failed: %s", error)
+            return
+        self._spansh_rings_by_system[system_address] = rings
+        if getattr(self.state, "system_address", None) == system_address:
+            self._refresh_hud()
+            self._refresh_exploration()
 
     def _auto_start_if_configured(self):
         """
@@ -1345,11 +1442,19 @@ class MainWindow(QMainWindow):
                 self._tts_spoken_ships.clear()
                 self._tts_spoken_signal_bodies.clear()
                 self.load_current_system_data()
+                self._load_persisted_rings(incoming_system_address)
                 self._maybe_start_spansh_enrichment()
                 self._maybe_start_canonn_refresh()
+                self._maybe_start_ring_hotspot_check()
                 self._maybe_alert_engineering_materials()
                 self._refresh_hud()
                 self._refresh_exploration()
+                # BGS state changes on a daily server tick, not per-event —
+                # arriving in a system is the moment the game hands us
+                # fresh, authoritative faction data for it. Only that one
+                # row needs checking, not a full rebuild of every tracked
+                # system (that's left to the coarse timer / tab-visibility).
+                self.player_faction_panel.refresh_single_system(incoming_system_address)
 
         if name == "StartJump" and evt.get("JumpType") == "Hyperspace":
             self._clear_all_panels()
@@ -1384,6 +1489,9 @@ class MainWindow(QMainWindow):
         if name in ("FSSSignalDiscovered", "FSSDiscoveryScan", "SAASignalsFound",
                     "Scan", "FSSBodySignals"):
             self._refresh_exploration()
+
+        if name in ("Scan", "SAASignalsFound"):
+            self._save_ring_data()
 
         # Refresh intel panel when signal data, DSS scan, or a fresh BGS
         # snapshot (Docked) arrives
@@ -2604,6 +2712,9 @@ class MainWindow(QMainWindow):
         if action_state["exploration"]:
             lines.append(action_state["exploration"])
 
+        if action_state["rings"]:
+            lines.append(action_state["rings"])
+
 
         # Exobiology: split "bio signals exist" vs "we have real exobio targets/values"
         # Bio signals from FSS may not include genus until DSS/mapping events arrive.
@@ -2876,7 +2987,6 @@ class MainWindow(QMainWindow):
         self._refresh_fleet_carrier()
         self._refresh_mining()
         self._refresh_market()
-        self._refresh_player_faction()
 
     def _animate_overview_update(self, html: str):
         self.overview_panel.animate_overview_update(html)
@@ -2962,8 +3072,11 @@ class MainWindow(QMainWindow):
         dlg.exec()
 
     def _refresh_exploration(self):
+        spansh_rings = self._spansh_rings_by_system.get(
+            getattr(self.state, "system_address", None)
+        ) or []
         self.exploration_panel.refresh(
-            self.state, self.cfg, self.planet_values
+            self.state, self.cfg, self.planet_values, spansh_rings=spansh_rings
         )
 
     def _refresh_materials_shortlist(self):
@@ -3042,6 +3155,7 @@ class MainWindow(QMainWindow):
         out = {
             "exploration": None,
             "exobiology": [],
+            "rings": None,
         }
 
         try:
@@ -3095,6 +3209,29 @@ class MainWindow(QMainWindow):
         if bio_need_dss > 0:
             out["exobiology"].append(
                 f"🔬 Action: {bio_need_dss} bodies have exobiological signals — DSS/map to reveal genus"
+            )
+
+        # Rings with no hotspot data anywhere — checked against Spansh
+        # (community/EDDN) once per system via _maybe_start_ring_hotspot_check(),
+        # but Spansh's snapshot goes stale the moment you personally DSS a
+        # ring yourself: EDDN->Spansh ingestion lags (observed: even minutes
+        # after a real scan, Spansh still showed it as ungathered), so a
+        # ring this commander has already scanned this session must also be
+        # excluded here even if Spansh hasn't caught up yet.
+        system_address = getattr(self.state, "system_address", None)
+        spansh_rings = self._spansh_rings_by_system.get(system_address) or []
+        personally_scanned = {
+            name for name, rec in (self.state.rings or {}).items()
+            if isinstance(rec, dict) and rec.get("system_address") == system_address and rec.get("scanned")
+        }
+        ring_gaps = [
+            r for r in spansh_rings
+            if not r.get("signals") and r.get("ring_name") not in personally_scanned
+        ]
+        if ring_gaps:
+            out["rings"] = (
+                f"💍 Action: {len(ring_gaps)} ring{'s' if len(ring_gaps) != 1 else ''} here "
+                f"missing hotspot data anywhere (Spansh/EDDN) — DSS it to be first to report"
             )
 
         dss_hv = 0

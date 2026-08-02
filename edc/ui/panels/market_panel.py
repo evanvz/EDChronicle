@@ -8,6 +8,7 @@ from typing import Optional
 from PyQt6.QtCore import Qt, QObject, QThread, QStringListModel, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
+    QApplication,
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QSpinBox, QComboBox, QCompleter, QTableWidget, QTableWidgetItem,
     QHeaderView, QFrame,
@@ -341,9 +342,21 @@ class MarketPanel(QWidget):
         h.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
+        self._table.setToolTip("Click a Station or System cell to copy its name to the clipboard.")
+        self._table.cellClicked.connect(self._on_results_cell_clicked)
         root.addWidget(self._table, 1)
 
     # ── Public API ────────────────────────────────────────────────────────
+
+    def _on_results_cell_clicked(self, row: int, column: int) -> None:
+        if column not in (0, 2):  # Station, System
+            return
+        item = self._table.item(row, column)
+        if item is None or not item.text():
+            return
+        QApplication.clipboard().setText(item.text())
+        label = "Station" if column == 0 else "System"
+        self._status_label.setText(f"Copied {label.lower()} name: {item.text()}")
 
     def refresh_commodity_names(self) -> None:
         """
