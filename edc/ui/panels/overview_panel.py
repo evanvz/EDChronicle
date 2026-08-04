@@ -241,6 +241,7 @@ class OverviewPanel(QWidget):
     """
 
     navigate_to = pyqtSignal(int)
+    destination_dismissed = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -329,6 +330,19 @@ class OverviewPanel(QWidget):
 
         layout.addWidget(self.system_card)
 
+        # ── Pinned Market destination (persists until Docked there) ────────
+        self.pinned_destination_badge = QLabel("")
+        self.pinned_destination_badge.setTextFormat(Qt.TextFormat.RichText)
+        self.pinned_destination_badge.setWordWrap(True)
+        self.pinned_destination_badge.setVisible(False)
+        self.pinned_destination_badge.setStyleSheet(
+            "QLabel { background: #0d1a0d; border: 1px solid #1e3a1e;"
+            "border-radius: 6px; padding: 6px 10px; color: #6BCB77; }"
+        )
+        self.pinned_destination_badge.setOpenExternalLinks(False)
+        self.pinned_destination_badge.linkActivated.connect(lambda _href: self.destination_dismissed.emit())
+        layout.addWidget(self.pinned_destination_badge)
+
         # ── Squadron faction badge ──────────────────────────────────────────
         self.squadron_faction_badge = QLabel("")
         self.squadron_faction_badge.setTextFormat(Qt.TextFormat.RichText)
@@ -394,6 +408,29 @@ class OverviewPanel(QWidget):
             "QListWidget::item { border: none; }"
         )
         layout.addWidget(self.factions_list, 1)
+
+    # ── Pinned Market destination ────────────────────────────────────────────
+    def set_pinned_destination(self, pin: dict | None) -> None:
+        """
+        pin: {"system_name", "station_name", "commodity", "mode"} from the
+        Market tab's destination_selected signal, or None to clear. Stays
+        visible across tab switches and app restarts (persisted separately
+        by MarketDestinationStore) until Docked at that exact station, or
+        until the "Mark Reached" link is clicked (emits destination_dismissed).
+        """
+        if not pin or not pin.get("station_name") or not pin.get("system_name"):
+            self.pinned_destination_badge.setVisible(False)
+            self.pinned_destination_badge.setText("")
+            return
+        verb = "Buy at" if pin.get("mode") == "buy" else "Sell at"
+        commodity = pin.get("commodity") or ""
+        commodity_txt = f" {self._esc(commodity)}" if commodity else ""
+        self.pinned_destination_badge.setText(
+            f'<b>🎯 {verb}{commodity_txt}:</b> {self._esc(pin["station_name"])} '
+            f'({self._esc(pin["system_name"])})'
+            f'&nbsp;&nbsp;<a href="dismiss" style="color:#E6E6E6;">[✓ Mark Reached]</a>'
+        )
+        self.pinned_destination_badge.setVisible(True)
 
     # ── Engineering wishlist alert ─────────────────────────────────────────────
     def set_engineering_alert(self, materials: list) -> None:

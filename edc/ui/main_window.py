@@ -58,6 +58,7 @@ from edc.core.eddn_publisher import EddnPublisher
 from edc.core.canonn_client import CanonnClient, SystemPoi
 from edc.core.engineering_blueprints import EngineeringBlueprintTable
 from edc.core.engineering_wishlist import EngineeringWishlist
+from edc.core.market_destination import MarketDestinationStore
 from edc.ui.panels.engineering_panel import EngineeringPanel
 from edc.audio.handlers.engineering import EngineeringPhrases
 from edc.ui.panels.fleet_carrier_panel import FleetCarrierPanel
@@ -300,6 +301,46 @@ class MainWindow(QMainWindow):
             )
         except Exception:
             log.exception("Failed to save station info")
+
+    def _on_market_destination_selected(self, system_name: str, station_name: str, commodity: str, mode: str):
+        """
+        Market tab — clicking a Station/System cell in the results table
+        pins that destination (persisted to disk so a crash/restart shows
+        it again) until Docked at that exact station clears it.
+        """
+        self._pinned_destination = {
+            "system_name": system_name,
+            "station_name": station_name,
+            "commodity": commodity,
+            "mode": mode,
+        }
+        self.market_destination_store.save(system_name, station_name, commodity, mode)
+        self._refresh_pinned_destination_display()
+
+    def _maybe_clear_pinned_destination(self, docked_station_name):
+        if not self._pinned_destination or not isinstance(docked_station_name, str):
+            return
+        if docked_station_name.strip().lower() != self._pinned_destination["station_name"].strip().lower():
+            return
+        self._pinned_destination = None
+        self.market_destination_store.clear()
+        self._refresh_pinned_destination_display()
+
+    def _on_pinned_destination_dismissed(self):
+        # "Mark Reached" link on the Overview banner — manual clear for
+        # when Docked-matching won't fire (changed plans, docked elsewhere,
+        # or just want to reset it without actually flying there).
+        if not self._pinned_destination:
+            return
+        self._pinned_destination = None
+        self.market_destination_store.clear()
+        self._refresh_pinned_destination_display()
+
+    def _refresh_pinned_destination_display(self):
+        try:
+            self.overview_panel.set_pinned_destination(self._pinned_destination)
+        except Exception:
+            log.exception("Failed to update pinned destination display")
 
     def _seed_commodity_names_from_market_json(self):
         """
@@ -608,6 +649,8 @@ class MainWindow(QMainWindow):
         self._spansh_rings_by_system: Dict[int, List[dict]] = {}
         self.engineering_blueprints = EngineeringBlueprintTable(settings_base)
         self.engineering_wishlist_store = EngineeringWishlist(data_dir / "engineering_wishlist.json")
+        self.market_destination_store = MarketDestinationStore(data_dir / "market_destination.json")
+        self._pinned_destination: dict | None = self.market_destination_store.load()
         self.eddn_powerplay = EddnPowerPlayCache(settings_base)
         self._eddn_worker: EddnPowerPlayWorker | None = None
         self._eddn_thread: QThread | None = None
@@ -765,6 +808,8 @@ class MainWindow(QMainWindow):
         # Overview tab (System Card)
         self.overview_panel = OverviewPanel()
         self.overview_panel.navigate_to.connect(self.sidebar.setCurrentRow)
+        self.overview_panel.set_pinned_destination(self._pinned_destination)
+        self.overview_panel.destination_dismissed.connect(self._on_pinned_destination_dismissed)
 
         # Exploration tab
         self.exploration_panel = ExplorationPanel()
@@ -794,6 +839,7 @@ class MainWindow(QMainWindow):
         # Market tab
         self.market_panel = MarketPanel(self.repo)
         self.mining_panel.sell_search_requested.connect(self._on_mining_sell_search_requested)
+        self.market_panel.destination_selected.connect(self._on_market_destination_selected)
 
         # Player Faction tab
         self.player_faction_panel = PlayerFactionPanel(self.repo)
@@ -1404,6 +1450,7 @@ class MainWindow(QMainWindow):
 
         if name == "Docked":
             self._save_station_info(evt)
+            self._maybe_clear_pinned_destination(evt.get("StationName"))
 
         if name == "Market":
             self._load_current_market()
@@ -1891,16 +1938,22 @@ class MainWindow(QMainWindow):
     # pinned first, then Combat, Engineering, Exobiology, Exploration,
     # Fleet Carrier, Intel, Market, Materials, Mining, Odyssey, Player
     # Faction, PowerPlay, Squadron, Voice Cmds, then Settings/Log pinned
-    # last). These two entries were already stale before the reorder
-    # (Combat/Intel pointed at the wrong rows) — fixed here rather than
-    # carried forward.
+    # last). Voice Cmds/Settings/Log deliberately have no voice trigger.
     _TAB_INDEX: dict = {
-        "Overview":    0,
-        "Exploration": 4,
-        "Exobiology":  3,
-        "PowerPlay":   12,
-        "Combat":      1,
-        "Intel":       6,
+        "Overview":       0,
+        "Combat":         1,
+        "Engineering":    2,
+        "Exobiology":     3,
+        "Exploration":    4,
+        "Fleet Carrier":  5,
+        "Intel":          6,
+        "Market":         7,
+        "Materials":      8,
+        "Mining":         9,
+        "Odyssey":        10,
+        "Player Faction": 11,
+        "PowerPlay":      12,
+        "Squadron":       13,
     }
 
     def _start_voice_commands(self):
@@ -1991,7 +2044,7 @@ class MainWindow(QMainWindow):
     def _on_feedback_volume_test(self):
         """Voice Cmds panel Test button — play the cue tone at the currently
         configured feedback volume."""
-        self._play_beep(880, 140)
+        self._play_radio_click()
 
     def _feedback_volume(self) -> float:
         """Voice-command feedback volume from the Voice Cmds panel slider —
@@ -2009,29 +2062,66 @@ class MainWindow(QMainWindow):
             return 0.0
         return self._feedback_volume() / main_vol
 
-    def _play_beep(self, freq: int, duration_ms: int):
-        """Play a soft sine tone through the normal audio output at the
-        Voice Cmds feedback volume. winsound.Beep is deliberately not used —
-        it's a raw system square wave that ignores all volume control and is
-        painfully loud through headphones."""
+    def _play_radio_click(self, end: bool = False):
+        """Play a PTT-style radio click as the voice-command cue tone.
+        Replaces a pure sine-tone beep that read as sharp/piercing through
+        headphones even with a fade envelope — winsound.Beep was avoided
+        for the same reason (raw square wave, ignores volume control) but
+        the tone itself was still the problem.
+
+        Not the shared NPC-comms click (edc/audio/_comms_edge_proc.py):
+        that one is deliberately mid-band-only (600-2400Hz) and held to 70%
+        headroom so it doesn't compete with the TTS line that follows it
+        there — both of those made it read as thin/papery as a standalone
+        cue with nothing else playing. This version widens the band down
+        into the low-mids and layers in a short decaying low-frequency
+        "thump" for actual body, at full configured volume.
+
+        end=True uses a close-click (with a brief static tail) for
+        "didn't understand"/"can't do that" cues; end=False (open click,
+        just a punch) for "trigger heard, listening now"."""
         def _worker():
             try:
                 import numpy as np
                 import miniaudio
                 import threading as _threading
+                from scipy.signal import butter, sosfilt
                 from edc.audio.audio_devices import resolve_playback_device_id
 
                 sr  = 22050
-                n   = int(sr * duration_ms / 1000)
                 vol = self._feedback_volume()
-                t    = np.arange(n) / sr
-                wave = np.sin(2 * np.pi * freq * t)
-                # Short fade in/out to avoid clicks
-                fade = max(1, int(sr * 0.005))
-                env  = np.ones(n)
-                env[:fade]  = np.linspace(0.0, 1.0, fade)
-                env[-fade:] = np.linspace(1.0, 0.0, fade)
-                pcm = (np.clip(wave * env * vol, -1.0, 1.0) * 32767).astype(np.int16).tobytes()
+
+                n = int(sr * 0.045)
+                t = np.linspace(0, 1, n, endpoint=False)
+                env = np.exp(-t * 70.0) * (1.0 - np.exp(-t * 700.0))
+                click = np.random.normal(0, 1.0, n).astype("float32") * env.astype("float32")
+                sos = butter(4, [150, 3000], btype="band", fs=sr, output="sos")
+                click = sosfilt(sos, click).astype("float32")
+
+                # Low-frequency punch layered under the click's front edge —
+                # this is what was missing: the band-passed noise alone has
+                # snap but no weight.
+                punch_n = int(sr * 0.025)
+                pt = np.arange(punch_n) / sr
+                punch_env = np.exp(-pt * 140.0)
+                punch = (np.sin(2 * np.pi * 110.0 * pt) * punch_env).astype("float32")
+                click[:punch_n] += punch * 0.9
+
+                click = np.tanh(click * 4.0).astype("float32")
+                peak = float(np.max(np.abs(click)))
+                if peak > 0:
+                    click = click / peak * float(vol)
+
+                if end:
+                    n_tail = int(sr * 0.08)
+                    t_tail = np.linspace(0, 1, n_tail, endpoint=False)
+                    tail_env = np.exp(-t_tail * 6.0)
+                    tail = np.random.normal(0, 1.0, n_tail).astype("float32") * tail_env.astype("float32")
+                    sos2 = butter(3, [300, 3000], btype="band", fs=sr, output="sos")
+                    tail = sosfilt(sos2, tail).astype("float32") * float(vol) * 0.28
+                    click = np.concatenate([click, tail])
+
+                pcm = (np.clip(click, -1.0, 1.0) * 32767).astype(np.int16).tobytes()
 
                 done = _threading.Event()
 
@@ -2060,11 +2150,11 @@ class MainWindow(QMainWindow):
                 next(gen)
                 device.start(gen)
                 try:
-                    done.wait(timeout=duration_ms / 1000 + 0.5)
+                    done.wait(timeout=len(click) / sr + 0.5)
                 finally:
                     device.stop()
             except Exception:
-                pass
+                log.exception("_play_radio_click failed")
 
         import threading
         threading.Thread(target=_worker, daemon=True).start()
@@ -2094,12 +2184,13 @@ class MainWindow(QMainWindow):
 
     def _on_voice_trigger_heard(self):
         """Trigger word heard — 'now listening for the command' cue."""
-        self._play_beep(880, 140)
+        self._play_radio_click()
 
     def _on_voice_unrecognised(self):
-        """Trigger word was heard but the phrase matched nothing — low tone so
-        the user knows to just retry instead of wondering if the system hung."""
-        self._play_beep(320, 200)
+        """Trigger word was heard but the phrase matched nothing — closing
+        click (with static tail) so the user knows to just retry instead of
+        wondering if the system hung."""
+        self._play_radio_click(end=True)
 
     def _on_voice_command(self, tab_name: str):
         idx = self._TAB_INDEX.get(tab_name)
@@ -2115,7 +2206,7 @@ class MainWindow(QMainWindow):
             # the game isn't foreground would type into our own UI (arrow keys
             # move the sidebar = "menu changed by itself") or another app.
             log.info("Ship command '%s' skipped — Elite Dangerous is not the focused window", phrase)
-            self._play_beep(320, 200)
+            self._play_radio_click(end=True)
             return
         cmds = self.voice_commands_panel.active_commands()
         for cmd in cmds:

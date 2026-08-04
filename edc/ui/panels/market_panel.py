@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import datetime, timezone
 from typing import Optional
 
 from PyQt6.QtCore import Qt, QObject, QThread, QStringListModel, pyqtSignal
@@ -30,6 +31,45 @@ def normalize_commodity_name(name: str) -> str:
     to whatever the user types so free-text search matches stored data.
     """
     return re.sub(r"[^a-z0-9]", "", (name or "").lower())
+
+
+def _format_relative_time(iso_str: str) -> tuple[str, float]:
+    """Returns (display text, age in seconds) for an EDDN commodity
+    message's ISO-8601 timestamp — "Updated" showing a raw timestamp
+    string wasn't useful at a glance; age in seconds doubles as the sort
+    key so the column sorts by actual recency, not alphabetically."""
+    if not iso_str:
+        return "—", float("inf")
+    try:
+        ts = iso_str.strip()
+        if ts.endswith("Z"):
+            ts = ts[:-1] + "+00:00"
+        dt = datetime.fromisoformat(ts)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        age = max(0.0, (datetime.now(timezone.utc) - dt).total_seconds())
+        if age < 3600:
+            mins = int(age // 60)
+            return (f"{mins}m ago" if mins > 0 else "just now"), age
+        if age < 86400:
+            return f"{int(age // 3600)}h ago", age
+        return f"{int(age // 86400)}d ago", age
+    except (ValueError, TypeError):
+        return iso_str, float("inf")
+
+
+class _NumericTableWidgetItem(QTableWidgetItem):
+    """Sorts by an actual numeric value instead of the displayed string
+    (plain QTableWidgetItem sorting would put "1,200" before "300")."""
+
+    def __init__(self, text: str, sort_value: float):
+        super().__init__(text)
+        self._sort_value = sort_value
+
+    def __lt__(self, other):
+        if isinstance(other, _NumericTableWidgetItem):
+            return self._sort_value < other._sort_value
+        return super().__lt__(other)
 
 
 def _compute_trade_opportunities(repo, items, market_id, ref_x, ref_y, ref_z, radius_ly):
@@ -126,6 +166,12 @@ class MarketPanel(QWidget):
     on a background thread (see refresh_trade_opportunities) rather than
     blocking the UI.
     """
+
+    # system_name, station_name, commodity, mode ("buy"/"sell") — emitted
+    # when the user clicks a result row's Station/System cell, so the
+    # destination can be pinned/persisted and shown elsewhere (Overview)
+    # until they actually reach it.
+    destination_selected = pyqtSignal(str, str, str, str)
 
     def __init__(self, repo, parent=None):
         super().__init__(parent)
@@ -358,6 +404,15 @@ class MarketPanel(QWidget):
         label = "Station" if column == 0 else "System"
         self._status_label.setText(f"Copied {label.lower()} name: {item.text()}")
 
+        station_item = self._table.item(row, 0)
+        system_item  = self._table.item(row, 2)
+        station_name = station_item.text() if station_item else ""
+        system_name  = system_item.text() if system_item else ""
+        if station_name and system_name:
+            self.destination_selected.emit(
+                system_name, station_name, self._commodity_edit.text().strip(), self._mode()
+            )
+
     def refresh_commodity_names(self) -> None:
         """
         Repopulates the commodity search box's autocomplete list from
@@ -584,20 +639,25 @@ class MarketPanel(QWidget):
             f"Found {len(results)} station{'s' if len(results) != 1 else ''} "
             f"{verb} {raw} within {radius} ly."
         )
+        self._table.setSortingEnabled(False)
         self._table.setRowCount(len(results))
         for row, r in enumerate(results):
             station_item = QTableWidgetItem(r.get("station_name") or "—")
             pad_item = QTableWidgetItem(r.get("pad_size") or pad_size_hint(r.get("station_type")))
             system_item = QTableWidgetItem(r.get("system_name") or "—")
             price = r.get("buy_price") if buy_mode else r.get("sell_price")
-            price_item = QTableWidgetItem(f"{price or 0:,}")
-            dist_item = QTableWidgetItem(f"{r.get('distance_ly', 0.0):.1f}")
-            count_item = QTableWidgetItem(str(r.get("stock") if buy_mode else r.get("demand") or 0))
-            updated_item = QTableWidgetItem(str(r.get("last_updated") or "—"))
+            price_value = float(price or 0)
+            price_item = _NumericTableWidgetItem(f"{price or 0:,}", price_value)
+            dist_value = float(r.get("distance_ly", 0.0) or 0.0)
+            dist_item = _NumericTableWidgetItem(f"{dist_value:.1f}", dist_value)
+            count_value = float((r.get("stock") if buy_mode else r.get("demand")) or 0)
+            count_item = _NumericTableWidgetItem(str(int(count_value)), count_value)
+            updated_text, updated_age = _format_relative_time(r.get("last_updated") or "")
+            updated_item = _NumericTableWidgetItem(updated_text, updated_age)
             if pad_item.text() == "?":
                 pad_item.setForeground(QColor("#888888"))
                 pad_item.setToolTip("Landing pad size unknown for this station type")
-            for it in (pad_item, price_item, dist_item, count_item):
+            for it in (pad_item, price_item, dist_item, count_item, updated_item):
                 it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
             self._table.setItem(row, 0, station_item)
@@ -607,3 +667,4 @@ class MarketPanel(QWidget):
             self._table.setItem(row, 4, dist_item)
             self._table.setItem(row, 5, count_item)
             self._table.setItem(row, 6, updated_item)
+        self._table.setSortingEnabled(True)
