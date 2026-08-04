@@ -765,8 +765,6 @@ class MainWindow(QMainWindow):
         # Overview tab (System Card)
         self.overview_panel = OverviewPanel()
         self.overview_panel.navigate_to.connect(self.sidebar.setCurrentRow)
-        self.stack.addWidget(self.overview_panel)
-        self.sidebar.addItem("Overview")
 
         # Exploration tab
         self.exploration_panel = ExplorationPanel()
@@ -774,79 +772,50 @@ class MainWindow(QMainWindow):
             self._on_exploration_min_value_changed
         )
         self.exploration_panel.body_clicked.connect(self._open_planet_detail)
-        self.stack.addWidget(self.exploration_panel)
-        self.sidebar.addItem("Exploration")
 
         # Exobiology tab
         self.exobiology_panel = ExobiologyPanel()
         self.exobiology_panel.exo_min_value_changed.connect(
             self._on_exo_min_value_changed
         )
-        self.stack.addWidget(self.exobiology_panel)
-        self.sidebar.addItem("Exobiology")
 
         # PowerPlay tab
         self.powerplay_panel = PowerplayPanel(edsm_powerplay=self.edsm_powerplay, eddn_powerplay=self.eddn_powerplay)
-        self.stack.addWidget(self.powerplay_panel)
-        self.sidebar.addItem("PowerPlay")
 
         # Engineering tab
         self.engineering_panel = EngineeringPanel(self.engineering_blueprints, self.engineering_wishlist_store)
-        self.stack.addWidget(self.engineering_panel)
-        self.sidebar.addItem("Engineering")
 
         # Fleet Carrier tab
         self.fleet_carrier_panel = FleetCarrierPanel()
-        self.stack.addWidget(self.fleet_carrier_panel)
-        self.sidebar.addItem("Fleet Carrier")
 
         # Mining tab
         self.mining_panel = MiningPanel(self.repo)
-        self.stack.addWidget(self.mining_panel)
-        self.sidebar.addItem("Mining")
 
         # Market tab
         self.market_panel = MarketPanel(self.repo)
-        self.stack.addWidget(self.market_panel)
-        self.sidebar.addItem("Market")
-        self._market_tab_row = self.sidebar.count() - 1
         self.mining_panel.sell_search_requested.connect(self._on_mining_sell_search_requested)
 
         # Player Faction tab
         self.player_faction_panel = PlayerFactionPanel(self.repo)
-        self.stack.addWidget(self.player_faction_panel)
-        self.sidebar.addItem("Player Faction")
 
         # Squadron tab
         self.squadron_panel = SquadronPanel(self.repo)
-        self.stack.addWidget(self.squadron_panel)
-        self.sidebar.addItem("Squadron")
 
         # Combat tab (stub)
         self.combat_panel = CombatPanel()
-        self.stack.addWidget(self.combat_panel)
-        self.sidebar.addItem("Combat")
 
         # Intel tab (external / advisory)
         self.intel_panel = IntelPanel()
-        self.stack.addWidget(self.intel_panel)
-        self.sidebar.addItem("Intel")
 
         self.shiplocker_panel = ShiplockerPanel()
-        self.stack.addWidget(self.shiplocker_panel)
-        self.sidebar.addItem("Odyssey")
-        
+
         self.materials_panel = MaterialsPanel()
-        self.stack.addWidget(self.materials_panel)
-        self.sidebar.addItem("Materials")
 
         # Voice Commands tab
         _vc_config_path = app_dir / "settings" / "voice_commands.json"
         self.voice_commands_panel = VoiceCommandsPanel(_vc_config_path, app_dir / "models")
         self.voice_commands_panel.commands_changed.connect(self._on_voice_commands_config_changed)
         self.voice_commands_panel.feedback_test_requested.connect(self._on_feedback_volume_test)
-        self.stack.addWidget(self.voice_commands_panel)
-        self.sidebar.addItem("Voice Cmds")
 
         # Settings tab
         tab_settings = QWidget()
@@ -962,14 +931,46 @@ class MainWindow(QMainWindow):
         st.addLayout(market_row)
 
         st.addStretch(1)
-        self.stack.addWidget(tab_settings)
-        self.sidebar.addItem("Settings")
 
         # Log tab
         tab_log = QWidget()
         lg = QVBoxLayout(tab_log)
         lg.addWidget(QLabel("Log"))
         lg.addWidget(self.log_box)
+
+        # ── Sidebar/stack registration — alphabetical by tab name, with
+        # Overview pinned first (the home tab) and Settings/Log (utility
+        # tabs, not content) pinned at the end, regardless of sort order.
+        # Panels above are constructed in a dependency-safe order (e.g.
+        # Mining before Market, since Market wires into Mining's
+        # sell_search_requested signal) that's independent of this display
+        # order.
+        for widget, name in [
+            (self.overview_panel,        "Overview"),
+            (self.combat_panel,          "Combat"),
+            (self.engineering_panel,     "Engineering"),
+            (self.exobiology_panel,      "Exobiology"),
+            (self.exploration_panel,     "Exploration"),
+            (self.fleet_carrier_panel,   "Fleet Carrier"),
+            (self.intel_panel,           "Intel"),
+            (self.market_panel,          "Market"),
+            (self.materials_panel,       "Materials"),
+            (self.mining_panel,          "Mining"),
+            (self.shiplocker_panel,      "Odyssey"),
+            (self.player_faction_panel,  "Player Faction"),
+            (self.powerplay_panel,       "PowerPlay"),
+            (self.squadron_panel,        "Squadron"),
+            (self.voice_commands_panel,  "Voice Cmds"),
+        ]:
+            self.stack.addWidget(widget)
+            self.sidebar.addItem(name)
+            if name == "Market":
+                self._market_tab_row = self.sidebar.count() - 1
+            elif name == "Overview":
+                self._overview_tab_row = self.sidebar.count() - 1
+
+        self.stack.addWidget(tab_settings)
+        self.sidebar.addItem("Settings")
         self.stack.addWidget(tab_log)
         self.sidebar.addItem("Log")
 
@@ -985,9 +986,10 @@ class MainWindow(QMainWindow):
         self._hud_refresh_timer.setSingleShot(True)
         self._hud_refresh_timer.timeout.connect(self._do_hud_refresh)
 
-        # Sidebar navigation
+        # Sidebar navigation — Overview is the intended home tab regardless
+        # of its alphabetical position in the list.
         self.sidebar.currentRowChanged.connect(self.stack.setCurrentIndex)
-        self.sidebar.setCurrentRow(0)
+        self.sidebar.setCurrentRow(self._overview_tab_row)
         self._refresh_hud()
         self._maybe_start_edsm_powerplay_refresh()
         self._start_eddn_listener()
@@ -1885,13 +1887,20 @@ class MainWindow(QMainWindow):
             pass
         return ""
 
+    # Kept in sync with the sidebar order set up in __init__ (Overview
+    # pinned first, then Combat, Engineering, Exobiology, Exploration,
+    # Fleet Carrier, Intel, Market, Materials, Mining, Odyssey, Player
+    # Faction, PowerPlay, Squadron, Voice Cmds, then Settings/Log pinned
+    # last). These two entries were already stale before the reorder
+    # (Combat/Intel pointed at the wrong rows) — fixed here rather than
+    # carried forward.
     _TAB_INDEX: dict = {
         "Overview":    0,
-        "Exploration": 1,
-        "Exobiology":  2,
-        "PowerPlay":   3,
-        "Combat":      4,
-        "Intel":       5,
+        "Exploration": 4,
+        "Exobiology":  3,
+        "PowerPlay":   12,
+        "Combat":      1,
+        "Intel":       6,
     }
 
     def _start_voice_commands(self):
