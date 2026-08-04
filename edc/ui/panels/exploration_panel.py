@@ -91,14 +91,14 @@ class ExplorationPanel(QWidget):
         sig_hdr_row = QHBoxLayout()
         sig_hdr_lbl = QLabel("SYSTEM SIGNALS (FSS)")
         sig_hdr_lbl.setStyleSheet(
-            "color: #555555; font-size: 10px; font-weight: bold; "
+            "color: #555555; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         self._sig_toggle_btn = QPushButton("Show detail ▼")
         self._sig_toggle_btn.setStyleSheet(
             "QPushButton { background: transparent; border: none; "
-            "color: #4D96FF; font-size: 10px; padding: 0px; }"
-            "QPushButton:hover { color: #7EC8FF; }"
+            "color: #FFB347; font-size:12px; padding: 0px; }"
+            "QPushButton:hover { color: #FF8C00; }"
         )
         self._sig_toggle_btn.setVisible(False)
         self._sig_toggle_btn.clicked.connect(self._toggle_signals)
@@ -125,7 +125,7 @@ class ExplorationPanel(QWidget):
         rings_l.setSpacing(2)
         rings_hdr = QLabel("RINGS IN THIS SYSTEM")
         rings_hdr.setStyleSheet(
-            "color: #555555; font-size: 10px; font-weight: bold; "
+            "color: #555555; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         self.rings_box = QLabel("")
@@ -141,7 +141,7 @@ class ExplorationPanel(QWidget):
         # ── Bodies section label ──────────────────────────────────────────
         self._bodies_label = QLabel("SCANNED BODIES")
         self._bodies_label.setStyleSheet(
-            "color: #555555; font-size: 10px; font-weight: bold;"
+            "color: #555555; font-size:12px; font-weight: bold;"
             "letter-spacing: 1px; padding: 4px 0px 2px 2px;"
         )
         self._content_layout.addWidget(self._bodies_label)
@@ -165,7 +165,7 @@ class ExplorationPanel(QWidget):
         mat_l.setSpacing(2)
         mat_hdr = QLabel("MATERIALS SHORTLIST (landable + Geo signals)")
         mat_hdr.setStyleSheet(
-            "color: #555555; font-size: 10px; font-weight: bold; "
+            "color: #555555; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         self.materials_box = QLabel("")
@@ -194,7 +194,7 @@ class ExplorationPanel(QWidget):
         fw = "font-weight:700;" if bold else ""
         return (
             f'<span style="background:{bg};color:{fg};{fw}'
-            f'font-size:10px;padding:1px 5px;border-radius:3px;">'
+            f'font-size:12px;padding:1px 5px;border-radius:3px;">'
             f'{self._esc(text)}</span>'
         )
 
@@ -362,12 +362,12 @@ class ExplorationPanel(QWidget):
             if not cats[cat]:
                 continue
             cat_suffix = (
-                f' <span style="color:#444444;font-size:9px;">'
+                f' <span style="color:#444444;font-size:11px;">'
                 f'— scan skimmers first, attack only if Wanted</span>'
                 if cat == "Wreckage" else ""
             )
             html.append(
-                f'<br><span style="color:#555555;font-size:10px;">'
+                f'<br><span style="color:#555555;font-size:12px;">'
                 f'{cat.upper()}</span>{cat_suffix}'
             )
             shown_in_cat = 0
@@ -561,7 +561,7 @@ class ExplorationPanel(QWidget):
         if pc_disp:
             pc_lbl = QLabel(f"- {esc(pc_disp)}")
             pc_lbl.setStyleSheet(
-                "color: #888888; font-size: 10px; background: transparent; border: none;"
+                "color: #888888; font-size:12px; background: transparent; border: none;"
             )
             hdr_row.addWidget(pc_lbl)
 
@@ -605,56 +605,56 @@ class ExplorationPanel(QWidget):
 
         if dist_txt:
             info_html.append(
-                f'<span style="color:#555555;font-size:10px;">DISTANCE</span>'
-                f'&nbsp;<span style="color:#CCCCCC;font-size:11px;">{esc(dist_txt)}</span>'
+                f'<span style="color:#555555;font-size:12px;">DISTANCE</span>'
+                f'&nbsp;<span style="color:#CCCCCC;font-size:12px;">{esc(dist_txt)}</span>'
             )
         if est_txt:
             val_color = "#FFB347" if isinstance(est, int) and est >= min_value else "#AAAAAA"
             info_html.append(
-                f'<span style="color:#555555;font-size:10px;">EST. VALUE</span>'
-                f'&nbsp;<span style="color:{val_color};font-size:11px;font-weight:700;">'
+                f'<span style="color:#555555;font-size:12px;">EST. VALUE</span>'
+                f'&nbsp;<span style="color:{val_color};font-size:12px;font-weight:700;">'
                 f'{esc(est_txt)}</span>'
             )
         if isinstance(bio, int) and bio > 0:
             info_html.append(
-                f'<span style="color:#555555;font-size:10px;">BIO</span>'
-                f'&nbsp;<span style="color:#6BCB77;font-size:11px;font-weight:700;">'
+                f'<span style="color:#555555;font-size:12px;">BIO</span>'
+                f'&nbsp;<span style="color:#6BCB77;font-size:12px;font-weight:700;">'
                 f'{bio}</span>'
             )
         if isinstance(geo, int) and geo > 0:
             info_html.append(
-                f'<span style="color:#555555;font-size:10px;">GEO</span>'
-                f'&nbsp;<span style="color:#FFB347;font-size:11px;font-weight:700;">'
+                f'<span style="color:#555555;font-size:12px;">GEO</span>'
+                f'&nbsp;<span style="color:#FFB347;font-size:12px;font-weight:700;">'
                 f'{geo}</span>'
             )
         if isinstance(human, int) and human > 0:
             info_html.append(
-                f'<span style="color:#555555;font-size:10px;">HUMAN</span>'
-                f'&nbsp;<span style="color:#4D96FF;font-size:11px;font-weight:700;">'
+                f'<span style="color:#555555;font-size:12px;">HUMAN</span>'
+                f'&nbsp;<span style="color:#4D96FF;font-size:12px;font-weight:700;">'
                 f'{human}</span>'
             )
         if isinstance(guardian, int) and guardian > 0:
             info_html.append(
-                f'<span style="color:#555555;font-size:10px;">GUARDIAN</span>'
-                f'&nbsp;<span style="color:#C77DFF;font-size:11px;font-weight:700;">'
+                f'<span style="color:#555555;font-size:12px;">GUARDIAN</span>'
+                f'&nbsp;<span style="color:#C77DFF;font-size:12px;font-weight:700;">'
                 f'{guardian}</span>'
             )
         if isinstance(thargoid, int) and thargoid > 0:
             info_html.append(
-                f'<span style="color:#555555;font-size:10px;">THARGOID</span>'
-                f'&nbsp;<span style="color:#FF6B6B;font-size:11px;font-weight:700;">'
+                f'<span style="color:#555555;font-size:12px;">THARGOID</span>'
+                f'&nbsp;<span style="color:#FF6B6B;font-size:12px;font-weight:700;">'
                 f'{thargoid}</span>'
             )
         if isinstance(other_sig, int) and other_sig > 0:
             info_html.append(
-                f'<span style="color:#555555;font-size:10px;">OTHER</span>'
-                f'&nbsp;<span style="color:#AAAAAA;font-size:11px;font-weight:700;">'
+                f'<span style="color:#555555;font-size:12px;">OTHER</span>'
+                f'&nbsp;<span style="color:#AAAAAA;font-size:12px;font-weight:700;">'
                 f'{other_sig}</span>'
             )
         if volcanism and "no volcanism" not in volcanism.lower():
             info_html.append(
-                f'<span style="color:#555555;font-size:10px;">VOLCANISM</span>'
-                f'&nbsp;<span style="color:#FF8888;font-size:10px;">'
+                f'<span style="color:#555555;font-size:12px;">VOLCANISM</span>'
+                f'&nbsp;<span style="color:#FF8888;font-size:12px;">'
                 f'{esc(volcanism.strip())}</span>'
             )
 

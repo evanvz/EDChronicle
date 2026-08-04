@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
 log = logging.getLogger(__name__)
 
 _CARD_STYLE = "QFrame { background:#0d1a2a; border:1px solid #1e3a5a; border-radius:5px; }"
-_HDR_STYLE = "color:#555555; font-size:10px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
+_HDR_STYLE = "color:#555555; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
 
 
 class SquadronPanel(QWidget):
@@ -81,7 +81,7 @@ class SquadronPanel(QWidget):
             "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
             " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
             "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
-            " padding:3px; font-size:10px; font-weight:bold; letter-spacing:1px; }"
+            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
         )
         h = self._history_table.horizontalHeader()
         h.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)

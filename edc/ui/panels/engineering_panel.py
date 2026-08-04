@@ -32,7 +32,7 @@ class EngineeringPanel(QWidget):
     """
 
     _CARD_STYLE = "QFrame { background:#0d1a2a; border:1px solid #1e3a5a; border-radius:5px; }"
-    _HDR_STYLE = "color:#555555; font-size:10px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
+    _HDR_STYLE = "color:#555555; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
     _LABEL_STYLE = "background:transparent; border:none; color:#c8c8c8;"
 
     def __init__(self, blueprint_table: EngineeringBlueprintTable, wishlist_store: EngineeringWishlist, parent=None):
@@ -121,7 +121,7 @@ class EngineeringPanel(QWidget):
             "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
             " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
             "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
-            " padding:3px; font-size:10px; font-weight:bold; letter-spacing:1px; }"
+            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
             "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
         )
         h = self._wl_table.horizontalHeader()
@@ -147,7 +147,7 @@ class EngineeringPanel(QWidget):
             "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
             " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
             "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
-            " padding:3px; font-size:10px; font-weight:bold; letter-spacing:1px; }"
+            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
         )
         dh = self._detail_table.horizontalHeader()
         dh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
@@ -172,7 +172,7 @@ class EngineeringPanel(QWidget):
             "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
             " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
             "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
-            " padding:3px; font-size:10px; font-weight:bold; letter-spacing:1px; }"
+            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
         )
         eh = self._engineer_table.horizontalHeader()
         eh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
@@ -186,7 +186,7 @@ class EngineeringPanel(QWidget):
             "and not 100% complete — an empty list means unknown, not unavailable."
         )
         self._engineer_note.setWordWrap(True)
-        self._engineer_note.setStyleSheet("color:#555555; font-size:9px; background:transparent; border:none;")
+        self._engineer_note.setStyleSheet("color:#555555; font-size:11px; background:transparent; border:none;")
         root.addWidget(self._engineer_note)
 
     # ── Helpers ──────────────────────────────────────────────────────────

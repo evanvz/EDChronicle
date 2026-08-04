@@ -73,7 +73,7 @@ class CombatPanel(QWidget):
 
         notoriety_hdr = QLabel("NOTORIETY")
         notoriety_hdr.setStyleSheet(
-            "color: #d0a060; font-size: 10px; font-weight: bold; "
+            "color: #d0a060; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         notoriety_l.addWidget(notoriety_hdr)
@@ -90,7 +90,7 @@ class CombatPanel(QWidget):
         # ── Bounty clearance card (hidden unless a bounty is active) ──────
         self.bounty_card = QFrame()
         self.bounty_card.setStyleSheet(
-            "QFrame { background: #200d0d; border: 1px solid #4a1e1e;"
+            "QFrame { background: #2a0a0a; border: 1px solid #4a1e1e;"
             "border-radius: 5px; }"
         )
         bounty_l = QVBoxLayout(self.bounty_card)
@@ -99,7 +99,7 @@ class CombatPanel(QWidget):
 
         bounty_hdr = QLabel("BOUNTY CLEARANCE")
         bounty_hdr.setStyleSheet(
-            "color: #d06060; font-size: 10px; font-weight: bold; "
+            "color: #d06060; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         bounty_l.addWidget(bounty_hdr)
@@ -114,7 +114,7 @@ class CombatPanel(QWidget):
         self.bounty_station = QLabel("")
         self.bounty_station.setWordWrap(True)
         self.bounty_station.setStyleSheet(
-            "color: #cccccc; font-size: 11px; background: transparent; border: none;"
+            "color: #cccccc; font-size:12px; background: transparent; border: none;"
         )
         bounty_l.addWidget(self.bounty_station)
 
@@ -124,7 +124,7 @@ class CombatPanel(QWidget):
         # ── Combat contacts card ──────────────────────────────────────────
         card = QFrame()
         card.setStyleSheet(
-            "QFrame { background: #0d1520; border: 1px solid #1e2a3a;"
+            "QFrame { background: #0d1a2a; border: 1px solid #1e3a5a;"
             "border-radius: 5px; }"
         )
         card_l = QVBoxLayout(card)
@@ -133,7 +133,7 @@ class CombatPanel(QWidget):
 
         card_hdr = QLabel("COMBAT CONTACTS")
         card_hdr.setStyleSheet(
-            "color: #555555; font-size: 10px; font-weight: bold; "
+            "color: #555555; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         card_l.addWidget(card_hdr)
@@ -148,7 +148,7 @@ class CombatPanel(QWidget):
         )
         legend.setTextFormat(Qt.TextFormat.RichText)
         legend.setStyleSheet(
-            "font-size: 10px; color: #888888; "
+            "font-size:12px; color: #888888; "
             "background: transparent; border: none;"
         )
         card_l.addWidget(legend)
@@ -174,7 +174,7 @@ class CombatPanel(QWidget):
         self.combat_table.setStyleSheet(
             "QTableWidget { background: transparent; border: none; }"
             "QHeaderView::section { background: #1a2a3a; color: #888888; "
-            "font-size: 10px; font-weight: bold; letter-spacing: 1px; "
+            "font-size:12px; font-weight: bold; letter-spacing: 1px; "
             "border: none; padding: 4px; }"
         )
 

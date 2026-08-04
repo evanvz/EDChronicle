@@ -374,7 +374,7 @@ class OverviewPanel(QWidget):
         # ── Section label ─────────────────────────────────────────────────
         fac_label = QLabel("SYSTEM MINOR FACTIONS")
         fac_label.setStyleSheet(
-            "color: #667788; font-size: 10px; font-weight: bold;"
+            "color: #667788; font-size:12px; font-weight: bold;"
             "letter-spacing: 1px; padding: 4px 0px 2px 2px;"
         )
         layout.addWidget(fac_label)
@@ -517,8 +517,8 @@ class OverviewPanel(QWidget):
     def _meta_row(self, label, value, label_color="#555555", value_color="#CCCCCC"):
         esc = self._esc
         return (
-            f'<span style="color:{label_color};font-size:10px;">{esc(label)}</span>'
-            f'&nbsp;<span style="color:{value_color};font-size:11px;">{esc(value)}</span><br>'
+            f'<span style="color:{label_color};font-size:12px;">{esc(label)}</span>'
+            f'&nbsp;<span style="color:{value_color};font-size:12px;">{esc(value)}</span><br>'
         )
 
     # ── Main refresh ──────────────────────────────────────────────────────────
@@ -563,16 +563,18 @@ class OverviewPanel(QWidget):
     def _refresh_system_card(self, state):
         esc = self._esc
 
-        # System name
+        # System name — the single most prominent piece of info on the
+        # primary tab; uses the app's own brand accent (Elite Dangerous's
+        # HUD orange, already used for sidebar selection) rather than blue.
         self.lbl_system.setText(
-            f'<span style="font-size:16px;font-weight:700;color:#4D96FF;">'
+            f'<span style="font-size:16px;font-weight:700;color:#FF8C00;">'
             f'🌟 {esc(state.system)}</span>'
         )
 
         # Controlling faction
         if state.controlling_faction:
             self.lbl_controlling.setText(
-                f'<span style="color:#888888;font-size:10px;">CONTROLLING FACTION</span>'
+                f'<span style="color:#888888;font-size:12px;">CONTROLLING FACTION</span>'
                 f'&nbsp;<span style="color:#FFB347;font-weight:700;font-size:12px;">'
                 f'{esc(state.controlling_faction)}</span>'
             )
@@ -665,7 +667,7 @@ class OverviewPanel(QWidget):
         # Section header
         hdr = QLabel("CONFLICTS")
         hdr.setStyleSheet(
-            "color: #667788; font-size: 10px; font-weight: bold;"
+            "color: #667788; font-size:12px; font-weight: bold;"
             "letter-spacing: 1px; padding: 4px 0px 2px 2px;"
         )
         self.conflict_layout.addWidget(hdr)
@@ -719,9 +721,9 @@ class OverviewPanel(QWidget):
             # Header row — type + status
             top_row = QHBoxLayout()
             type_lbl = QLabel(
-                f'<span style="color:{hdr_color};font-weight:700;font-size:11px;">'
+                f'<span style="color:{hdr_color};font-weight:700;font-size:12px;">'
                 f'⚔ {label}</span>'
-                f'&nbsp;<span style="color:#888888;font-size:10px;">({status_txt})</span>'
+                f'&nbsp;<span style="color:#999999;font-size:12px;">({status_txt})</span>'
             )
             type_lbl.setTextFormat(Qt.TextFormat.RichText)
             top_row.addWidget(type_lbl)
@@ -735,7 +737,7 @@ class OverviewPanel(QWidget):
             f1_lbl = QLabel(
                 f'<span style="color:{hdr_color};font-weight:700;">'
                 f'{self._esc(f1_name)}</span>'
-                + (f'<br><span style="color:#888888;font-size:10px;">'
+                + (f'<br><span style="color:#E6E6E6;font-size:12px;">'
                    f'Asset: {self._esc(f1_stake)}</span>' if f1_stake else "")
             )
             f1_lbl.setTextFormat(Qt.TextFormat.RichText)
@@ -751,7 +753,7 @@ class OverviewPanel(QWidget):
             f2_lbl = QLabel(
                 f'<span style="color:{hdr_color};font-weight:700;">'
                 f'{self._esc(f2_name)}</span>'
-                + (f'<br><span style="color:#888888;font-size:10px;">'
+                + (f'<br><span style="color:#E6E6E6;font-size:12px;">'
                    f'Asset: {self._esc(f2_stake)}</span>' if f2_stake else "")
             )
             f2_lbl.setTextFormat(Qt.TextFormat.RichText)
@@ -768,7 +770,7 @@ class OverviewPanel(QWidget):
             else:
                 hint = "Fight in CZs · Hand in bonds at faction station"
             tip_lbl = QLabel(
-                f'<span style="color:#666666;font-size:9px;">→ {self._esc(hint)}</span>'
+                f'<span style="color:#999999;font-size:11px;">→ {self._esc(hint)}</span>'
             )
             tip_lbl.setTextFormat(Qt.TextFormat.RichText)
             card_l.addWidget(tip_lbl)

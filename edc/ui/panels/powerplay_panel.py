@@ -83,7 +83,7 @@ class PowerplayPanel(QWidget):
 
         pp_hdr = QLabel("POWERPLAY STATUS")
         pp_hdr.setStyleSheet(
-            "color: #555555; font-size: 10px; font-weight: bold; "
+            "color: #555555; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         pp_frame_l.addWidget(pp_hdr)
@@ -115,7 +115,7 @@ class PowerplayPanel(QWidget):
 
         act_hdr = QLabel("RECOMMENDED ACTIONS")
         act_hdr.setStyleSheet(
-            "color: #555555; font-size: 10px; font-weight: bold; "
+            "color: #555555; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         act_frame_l.addWidget(act_hdr)
@@ -144,7 +144,7 @@ class PowerplayPanel(QWidget):
 
         bgs_hdr = QLabel("LOCAL FACTION BGS")
         bgs_hdr.setStyleSheet(
-            "color: #555555; font-size: 10px; font-weight: bold; "
+            "color: #555555; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         bgs_frame_l.addWidget(bgs_hdr)
@@ -169,7 +169,7 @@ class PowerplayPanel(QWidget):
 
         self.pp_progress_label = QLabel("CONFLICT PROGRESS")
         self.pp_progress_label.setStyleSheet(
-            "color: #555555; font-size: 10px; font-weight: bold; "
+            "color: #555555; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         prog_frame_l.addWidget(self.pp_progress_label)
@@ -301,16 +301,16 @@ class PowerplayPanel(QWidget):
             ' style="background-color:#1a0808; padding:10px 12px;">'
             f'<div style="color:#FF4444;font-size:26px;font-weight:700;'
             f'line-height:1.1;">{undermine_txt}</div>'
-            f'<div style="color:#FF4444;font-size:10px;font-weight:700;'
+            f'<div style="color:#FF4444;font-size:12px;font-weight:700;'
             f'letter-spacing:1px;margin-top:2px;">UNDERMINING</div>'
-            + (f'<div style="margin-top:6px;font-size:11px;line-height:1.5;">'
+            + (f'<div style="margin-top:6px;font-size:12px;line-height:1.5;">'
                f'{powers_html}</div>' if powers_html else '')
             + '</td>'
 
             # ── Center: Power state ────────────────────────────────────
             '<td width="34%" valign="top" align="center"'
             ' style="background-color:#080f18; padding:10px 12px;">'
-            '<div style="color:#444444;font-size:10px;font-weight:700;'
+            '<div style="color:#555555;font-size:12px;font-weight:700;'
             'letter-spacing:1px;">POWERPLAY</div>'
             f'<div style="color:{ctrl_color};font-size:12px;font-weight:700;'
             f'margin-top:4px;">{ctrl_txt} (Controlling)</div>'
@@ -321,13 +321,17 @@ class PowerplayPanel(QWidget):
             '</td>'
 
             # ── Right: Reinforcement ───────────────────────────────────
+            # Mirrors Undermining's #1a0808 with the red/blue channels
+            # swapped (#08081a) — same darkness/weight as the red block, so
+            # the two sides read as a matched pair instead of one being a
+            # subtle tint and the other a noticeably brighter box.
             '<td width="33%" valign="top" align="right"'
-            ' style="background-color:#08101a; padding:10px 12px;">'
+            ' style="background-color:#08081a; padding:10px 12px;">'
             f'<div style="color:#4D96FF;font-size:26px;font-weight:700;'
             f'line-height:1.1;">{reinforce_txt}</div>'
-            f'<div style="color:#4D96FF;font-size:10px;font-weight:700;'
+            f'<div style="color:#4D96FF;font-size:12px;font-weight:700;'
             f'letter-spacing:1px;margin-top:2px;">REINFORCEMENT</div>'
-            f'<div style="color:#88aacc;font-size:11px;margin-top:6px;">'
+            f'<div style="color:#88aacc;font-size:12px;margin-top:6px;">'
             f'{ctrl_txt}</div>'
             '</td>'
 
@@ -444,12 +448,12 @@ class PowerplayPanel(QWidget):
                 )
                 if is_defensive:
                     html_parts.append(
-                        '<span style="color:#FFB347;font-size:10px;">'
+                        '<span style="color:#FFB347;font-size:12px;">'
                         '&#9888; Defensive system: your personal merits are reduced by 35% here. '
                         'Control Points are unaffected.</span>'
                     )
                 html_parts.append(
-                    '<span style="color:#666666;font-size:10px;">'
+                    '<span style="color:#666666;font-size:12px;">'
                     "Contribute to your Power's Control Score by completing the "
                     'following activities in this system:</span>'
                 )
@@ -463,7 +467,7 @@ class PowerplayPanel(QWidget):
                         color = ethos_colors.get(a.ethos, "#FFB347")
                         html_parts.append(
                             f'<span style="color:#FFB347;">&#9656;&nbsp;{a.action}'
-                            f'&nbsp;<span style="color:{color};font-size:10px;">'
+                            f'&nbsp;<span style="color:{color};font-size:12px;">'
                             f'(Ethos Bonus)</span></span>'
                         )
 
@@ -483,7 +487,7 @@ class PowerplayPanel(QWidget):
                         for act in actions:
                             html_parts.append(
                                 f'<span style="color:#E6E6E6;">&#9656;&nbsp;{act}'
-                                f'&nbsp;<span style="color:{color};font-size:10px;">'
+                                f'&nbsp;<span style="color:{color};font-size:12px;">'
                                 f'[{ethos}]</span></span>'
                             )
 

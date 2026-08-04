@@ -19,7 +19,7 @@ from edc.core.station_pads import pad_size_hint
 log = logging.getLogger(__name__)
 
 _CARD_STYLE = "QFrame { background:#0d1a2a; border:1px solid #1e3a5a; border-radius:5px; }"
-_HDR_STYLE = "color:#555555; font-size:10px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
+_HDR_STYLE = "color:#555555; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
 _LABEL_STYLE = "background:transparent; border:none; color:#c8c8c8;"
 
 
@@ -167,10 +167,10 @@ class MarketPanel(QWidget):
         self._cargo_table.setAlternatingRowColors(True)
         self._cargo_table.setStyleSheet(
             "QTableWidget { background:#0d1a0d; alternate-background-color:#0f1f0f;"
-            " color:#c8c8c8; gridline-color:#1e3a1e; border:1px solid #2a5a2a; font-size:10px; }"
+            " color:#c8c8c8; gridline-color:#1e3a1e; border:1px solid #2a5a2a; font-size:12px; }"
             "QTableWidget::item { padding:1px 4px; }"
             "QHeaderView::section { background:#0d1a0d; color:#6BCB77; border:none;"
-            " padding:2px; font-size:10px; font-weight:bold; letter-spacing:1px; }"
+            " padding:2px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
             "QTableWidget::item:selected { background:#1a3a1a; color:#FFB347; }"
         )
         ch = self._cargo_table.horizontalHeader()
@@ -263,7 +263,7 @@ class MarketPanel(QWidget):
             "check \"Updated\" before flying somewhere."
         )
         note.setWordWrap(True)
-        note.setStyleSheet("color:#555555; font-size:9px; background:transparent; border:none;")
+        note.setStyleSheet("color:#555555; font-size:11px; background:transparent; border:none;")
         search_layout.addWidget(note)
 
         root.addWidget(search_frame)
@@ -275,7 +275,7 @@ class MarketPanel(QWidget):
         root.addWidget(self._trade_hdr)
 
         self._trade_status_label = QLabel("")
-        self._trade_status_label.setStyleSheet("color:#888888; font-size:10px; background:transparent;")
+        self._trade_status_label.setStyleSheet("color:#888888; font-size:12px; background:transparent;")
         self._trade_status_label.setVisible(False)
         root.addWidget(self._trade_status_label)
 
@@ -292,10 +292,10 @@ class MarketPanel(QWidget):
         self._trade_table.setAlternatingRowColors(True)
         self._trade_table.setStyleSheet(
             "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
-            " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; font-size:10px; }"
+            " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; font-size:12px; }"
             "QTableWidget::item { padding:1px 4px; }"
             "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
-            " padding:2px; font-size:10px; font-weight:bold; letter-spacing:1px; }"
+            " padding:2px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
             "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
         )
         th = self._trade_table.horizontalHeader()
@@ -312,7 +312,7 @@ class MarketPanel(QWidget):
 
         # ── Status + results ────────────────────────────────────────────
         self._status_label = QLabel("Enter a commodity and press Search.")
-        self._status_label.setStyleSheet("color:#888888; font-size:10px; background:transparent;")
+        self._status_label.setStyleSheet("color:#888888; font-size:12px; background:transparent;")
         root.addWidget(self._status_label)
 
         self._table = QTableWidget()
@@ -328,10 +328,10 @@ class MarketPanel(QWidget):
         self._table.setAlternatingRowColors(True)
         self._table.setStyleSheet(
             "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
-            " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; font-size:10px; }"
+            " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; font-size:12px; }"
             "QTableWidget::item { padding:1px 4px; }"
             "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
-            " padding:2px; font-size:10px; font-weight:bold; letter-spacing:1px; }"
+            " padding:2px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
             "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
         )
         h = self._table.horizontalHeader()

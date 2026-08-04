@@ -16,14 +16,14 @@ class FleetCarrierPanel(QWidget):
     """
 
     _CARD_STYLE = "QFrame { background:#0d1a2a; border:1px solid #1e3a5a; border-radius:5px; }"
-    _HDR_STYLE = "color:#555555; font-size:10px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
+    _HDR_STYLE = "color:#555555; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
     _LABEL_STYLE = "background:transparent; border:none; color:#c8c8c8;"
 
     # Squadron carrier gets its own accent (purple — matches the "PP Enemy"/
     # not-exclusively-yours tone already used on the Combat tab) so it reads
     # as clearly distinct from your own carrier's card at a glance.
     _SQUAD_CARD_STYLE = "QFrame { background:#1a0d1f; border:1px solid #4a1e5a; border-radius:5px; }"
-    _SQUAD_HDR_STYLE = "color:#b380d9; font-size:10px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
+    _SQUAD_HDR_STYLE = "color:#b380d9; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -158,7 +158,7 @@ class FleetCarrierPanel(QWidget):
             "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
             " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
             "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
-            " padding:3px; font-size:10px; font-weight:bold; letter-spacing:1px; }"
+            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
         )
         h = self._orders_table.horizontalHeader()
         h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)

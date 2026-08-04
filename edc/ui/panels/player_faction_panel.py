@@ -27,7 +27,7 @@ from edc.core.inara_faction_csv import parse_inara_faction_csv
 log = logging.getLogger(__name__)
 
 _CARD_STYLE = "QFrame { background:#0d1a2a; border:1px solid #1e3a5a; border-radius:5px; }"
-_HDR_STYLE = "color:#555555; font-size:10px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
+_HDR_STYLE = "color:#555555; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
 
 
 class _NumericTableWidgetItem(QTableWidgetItem):
@@ -252,7 +252,7 @@ class PlayerFactionPanel(QWidget):
         )
         csv_note.setWordWrap(True)
         csv_note.setStyleSheet(
-            "color:#FFD93D; font-size:11px; font-weight:bold; background:transparent; border:none;"
+            "color:#FFD93D; font-size:12px; font-weight:bold; background:transparent; border:none;"
         )
         root.addWidget(csv_note)
 
@@ -290,7 +290,7 @@ class PlayerFactionPanel(QWidget):
 
         self._cancel_import_btn = QPushButton("Cancel")
         self._cancel_import_btn.setStyleSheet(
-            "QPushButton { background:#2a0d0d; color:#d06060; border:1px solid #4a1e1e;"
+            "QPushButton { background:#2a0a0a; color:#d06060; border:1px solid #4a1e1e;"
             " border-radius:3px; padding:3px 12px; font-weight:bold; }"
             "QPushButton:hover { background:#4a1e1e; }"
         )
@@ -339,7 +339,7 @@ class PlayerFactionPanel(QWidget):
 
         self._add_system_status = QLabel("")
         self._add_system_status.setWordWrap(True)
-        self._add_system_status.setStyleSheet("background:transparent; border:none; color:#888888; font-size:10px;")
+        self._add_system_status.setStyleSheet("background:transparent; border:none; color:#888888; font-size:12px;")
         root.addWidget(self._add_system_status)
 
         # ── Stale-system review (shown after a completed CSV import) ──────
@@ -353,18 +353,18 @@ class PlayerFactionPanel(QWidget):
 
         stale_hdr = QLabel("NOT IN LATEST IMPORT — MAY NO LONGER BE PRESENT")
         stale_hdr.setStyleSheet(
-            "color:#d0a060; font-size:10px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
+            "color:#d0a060; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
         )
         stale_l.addWidget(stale_hdr)
 
         self._stale_list_label = QLabel("")
         self._stale_list_label.setWordWrap(True)
-        self._stale_list_label.setStyleSheet("background:transparent; border:none; color:#c8c8c8; font-size:11px;")
+        self._stale_list_label.setStyleSheet("background:transparent; border:none; color:#c8c8c8; font-size:12px;")
         stale_l.addWidget(self._stale_list_label)
 
         self._dismiss_stale_btn = QPushButton("Dismiss All Listed")
         self._dismiss_stale_btn.setStyleSheet(
-            "QPushButton { background:#2a0d0d; color:#d06060; border:1px solid #4a1e1e;"
+            "QPushButton { background:#2a0a0a; color:#d06060; border:1px solid #4a1e1e;"
             " border-radius:3px; padding:3px 12px; font-weight:bold; }"
             "QPushButton:hover { background:#4a1e1e; }"
         )
@@ -389,7 +389,7 @@ class PlayerFactionPanel(QWidget):
             "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
             " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
             "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
-            " padding:3px; font-size:10px; font-weight:bold; letter-spacing:1px; }"
+            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
             "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
         )
         h = self._table.horizontalHeader()
@@ -426,7 +426,7 @@ class PlayerFactionPanel(QWidget):
 
         self._missions_status_label = QLabel("")
         self._missions_status_label.setWordWrap(True)
-        self._missions_status_label.setStyleSheet("background:transparent; border:none; color:#888888; font-size:10px;")
+        self._missions_status_label.setStyleSheet("background:transparent; border:none; color:#888888; font-size:12px;")
         root.addWidget(self._missions_status_label)
 
         self._missions_table = QTableWidget()
@@ -443,7 +443,7 @@ class PlayerFactionPanel(QWidget):
             "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
             " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
             "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
-            " padding:3px; font-size:10px; font-weight:bold; letter-spacing:1px; }"
+            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
             "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
         )
         mh = self._missions_table.horizontalHeader()

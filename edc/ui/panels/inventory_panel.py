@@ -40,7 +40,7 @@ class ShiplockerPanel(QWidget):
 
         hdr = QLabel("ODYSSEY — SHIP LOCKER")
         hdr.setStyleSheet(
-            "color: #555555; font-size: 10px; font-weight: bold;"
+            "color: #555555; font-size:12px; font-weight: bold;"
             "letter-spacing: 1px; padding: 4px 0px 2px 2px;"
             "background: transparent; border: none;"
         )
@@ -53,7 +53,7 @@ class ShiplockerPanel(QWidget):
         self.ody_summary = QLabel("")
         self.ody_summary.setWordWrap(True)
         self.ody_summary.setStyleSheet(
-            "color: #666666; font-size: 10px; padding: 2px 0px;"
+            "color: #666666; font-size:12px; padding: 2px 0px;"
             "background: transparent; border: none;"
         )
 
@@ -191,7 +191,7 @@ class MaterialsPanel(QWidget):
 
         hdr = QLabel("MATERIALS — COMMANDER INVENTORY")
         hdr.setStyleSheet(
-            "color: #555555; font-size: 10px; font-weight: bold;"
+            "color: #555555; font-size:12px; font-weight: bold;"
             "letter-spacing: 1px; padding: 4px 0px 2px 2px;"
             "background: transparent; border: none;"
         )
@@ -210,7 +210,7 @@ class MaterialsPanel(QWidget):
         self.inv_summary = QLabel("")
         self.inv_summary.setWordWrap(True)
         self.inv_summary.setStyleSheet(
-            "color: #666666; font-size: 10px; padding: 2px 0px;"
+            "color: #666666; font-size:12px; padding: 2px 0px;"
             "background: transparent; border: none;"
         )
 
@@ -244,9 +244,9 @@ class MaterialsPanel(QWidget):
         self.inv_table.setMinimumHeight(120)
 
         lbl_cat = QLabel("Category:")
-        lbl_cat.setStyleSheet("color: #888888; font-size: 11px; background: transparent; border: none;")
+        lbl_cat.setStyleSheet("color: #888888; font-size:12px; background: transparent; border: none;")
         lbl_flt = QLabel("Filter:")
-        lbl_flt.setStyleSheet("color: #888888; font-size: 11px; background: transparent; border: none;")
+        lbl_flt.setStyleSheet("color: #888888; font-size:12px; background: transparent; border: none;")
 
         row_filter = QHBoxLayout()
         row_filter.addWidget(lbl_cat)

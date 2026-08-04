@@ -19,7 +19,7 @@ from edc.ui.panels.market_panel import normalize_commodity_name
 log = logging.getLogger(__name__)
 
 _CARD_STYLE = "QFrame { background:#0d1a2a; border:1px solid #1e3a5a; border-radius:5px; }"
-_HDR_STYLE = "color:#555555; font-size:10px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
+_HDR_STYLE = "color:#555555; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
 _LABEL_STYLE = "background:transparent; border:none; color:#c8c8c8;"
 
 
@@ -96,7 +96,7 @@ class MiningPanel(QWidget):
         stats_layout.addWidget(self._last_prospect_label)
 
         self._sell_hdr = QLabel("Where to sell:")
-        self._sell_hdr.setStyleSheet("color:#555555; font-size:10px; background:transparent; border:none;")
+        self._sell_hdr.setStyleSheet("color:#555555; font-size:12px; background:transparent; border:none;")
         self._sell_hdr.setVisible(False)
         stats_layout.addWidget(self._sell_hdr)
 
@@ -131,7 +131,7 @@ class MiningPanel(QWidget):
 
         self._cargo_status_label = QLabel("Mine something, then search for where to sell your whole hold.")
         self._cargo_status_label.setWordWrap(True)
-        self._cargo_status_label.setStyleSheet("color:#888888; font-size:10px; background:transparent;")
+        self._cargo_status_label.setStyleSheet("color:#888888; font-size:12px; background:transparent;")
         cargo_layout.addWidget(self._cargo_status_label)
 
         self._cargo_market_table = QTableWidget()
@@ -147,10 +147,10 @@ class MiningPanel(QWidget):
         self._cargo_market_table.setAlternatingRowColors(True)
         self._cargo_market_table.setStyleSheet(
             "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
-            " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; font-size:10px; }"
+            " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; font-size:12px; }"
             "QTableWidget::item { padding:1px 4px; }"
             "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
-            " padding:2px; font-size:10px; font-weight:bold; letter-spacing:1px; }"
+            " padding:2px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
             "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
         )
         cmh = self._cargo_market_table.horizontalHeader()
@@ -226,14 +226,14 @@ class MiningPanel(QWidget):
             "match — very rare materials near the edge of a large range may not surface."
         )
         note.setWordWrap(True)
-        note.setStyleSheet("color:#555555; font-size:9px; background:transparent; border:none;")
+        note.setStyleSheet("color:#555555; font-size:11px; background:transparent; border:none;")
         finder_layout.addWidget(note)
 
         root.addWidget(finder_frame)
 
         # ── Status + results ──────────────────────────────────────────────
         self._status_label = QLabel("Enter a material and press Search.")
-        self._status_label.setStyleSheet("color:#888888; font-size:10px; background:transparent;")
+        self._status_label.setStyleSheet("color:#888888; font-size:12px; background:transparent;")
         root.addWidget(self._status_label)
 
         self._table = QTableWidget()
@@ -250,7 +250,7 @@ class MiningPanel(QWidget):
             "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
             " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
             "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
-            " padding:3px; font-size:10px; font-weight:bold; letter-spacing:1px; }"
+            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
             "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
         )
         h = self._table.horizontalHeader()
@@ -344,7 +344,7 @@ class MiningPanel(QWidget):
             btn = QPushButton(name.title())
             btn.setStyleSheet(
                 "QPushButton { background:#1a2a1a; color:#6BCB77; border:1px solid #2a5a2a;"
-                " border-radius:3px; padding:2px 8px; font-size:10px; }"
+                " border-radius:3px; padding:2px 8px; font-size:12px; }"
                 "QPushButton:hover { background:#2a3a2a; }"
             )
             btn.clicked.connect(lambda checked=False, n=name: self.sell_search_requested.emit(n))

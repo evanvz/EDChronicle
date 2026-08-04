@@ -75,7 +75,7 @@ class _AddEditDialog(QDialog):
         layout.addWidget(self._phrase_edit)
 
         self._vocab_warning = QLabel("")
-        self._vocab_warning.setStyleSheet("color: #FF6B6B; font-size: 11px;")
+        self._vocab_warning.setStyleSheet("color: #FF6B6B; font-size:12px;")
         self._vocab_warning.setWordWrap(True)
         layout.addWidget(self._vocab_warning)
 
@@ -100,7 +100,7 @@ class _AddEditDialog(QDialog):
         layout.addWidget(self._action_list)
 
         self._status_label = QLabel("")
-        self._status_label.setStyleSheet("font-size: 11px;")
+        self._status_label.setStyleSheet("font-size:12px;")
         layout.addWidget(self._status_label)
 
         layout.addWidget(QLabel("Repeat (for pip commands — tap N times):"))
@@ -191,7 +191,7 @@ class _AddEditDialog(QDialog):
         ab = self._bindings.get(self._selected_action or "")
         if not ab:
             self._status_label.setText("⚠ Select an action from the list above")
-            self._status_label.setStyleSheet("color: #888888; font-size: 11px;")
+            self._status_label.setStyleSheet("color: #888888; font-size:12px;")
             return
         resolved = ab.resolve(self._input_pref)
         if resolved:
@@ -204,13 +204,13 @@ class _AddEditDialog(QDialog):
                     f"⚠ Gamepad-only ({key_str}) — may not respond if you use Steam Input "
                     "or another controller layer. Add a keyboard bind in ED for reliability."
                 )
-                self._status_label.setStyleSheet("color: #FFD700; font-size: 11px;")
+                self._status_label.setStyleSheet("color: #FFD700; font-size:12px;")
             else:
                 self._status_label.setText(f"✓ Ready — {src}: {key_str}")
-                self._status_label.setStyleSheet("color: #6BCB77; font-size: 11px;")
+                self._status_label.setStyleSheet("color: #6BCB77; font-size:12px;")
         else:
             self._status_label.setText("⚠ No binding found — add one in ED Controls")
-            self._status_label.setStyleSheet("color: #FF8C00; font-size: 11px;")
+            self._status_label.setStyleSheet("color: #FF8C00; font-size:12px;")
 
     def result_data(self) -> dict:
         return {
@@ -284,7 +284,7 @@ class VoiceCommandsPanel(QWidget):
         mic_layout.addStretch()
         root.addLayout(mic_layout)
         self._mic_warning = QLabel("")
-        self._mic_warning.setStyleSheet("color: #FF8C00; font-size: 11px;")
+        self._mic_warning.setStyleSheet("color: #FF8C00; font-size:12px;")
         root.addWidget(self._mic_warning)
 
         # ── Audio output selection ──────────────────────────────────────────

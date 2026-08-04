@@ -25,7 +25,7 @@ def _divider():
 def _section_header(text):
     lbl = QLabel(text)
     lbl.setStyleSheet(
-        "color: #555555; font-size: 10px; font-weight: bold; "
+        "color: #555555; font-size:12px; font-weight: bold; "
         "letter-spacing: 1px; background: transparent; border: none;"
     )
     return lbl
@@ -33,13 +33,13 @@ def _section_header(text):
 
 def _stat_label(text):
     lbl = QLabel(text)
-    lbl.setStyleSheet("color: #555555; font-size: 10px; background: transparent; border: none;")
+    lbl.setStyleSheet("color: #555555; font-size:12px; background: transparent; border: none;")
     return lbl
 
 
 def _stat_value(text):
     lbl = QLabel(text)
-    lbl.setStyleSheet("color: #CCCCCC; font-size: 11px; background: transparent; border: none;")
+    lbl.setStyleSheet("color: #CCCCCC; font-size:12px; background: transparent; border: none;")
     lbl.setWordWrap(True)
     return lbl
 
@@ -47,7 +47,7 @@ def _stat_value(text):
 def _badge(text, bg, fg, bold=False):
     weight = "font-weight:700;" if bold else ""
     return (
-        f'<span style="background:{bg};color:{fg};font-size:10px;{weight}'
+        f'<span style="background:{bg};color:{fg};font-size:12px;{weight}'
         f'padding:1px 6px;border-radius:3px;">{_esc(text)}</span>'
     )
 
@@ -95,7 +95,7 @@ class PlanetDetailDialog(QDialog):
         pc = str(rec.get("PlanetClass") or "")
         if pc:
             pc_lbl = QLabel(
-                f'<span style="color:#888888;font-size:11px;">— {_esc(pc)}</span>'
+                f'<span style="color:#888888;font-size:12px;">— {_esc(pc)}</span>'
             )
             pc_lbl.setTextFormat(Qt.TextFormat.RichText)
             pc_lbl.setStyleSheet("background: transparent; border: none;")
@@ -230,8 +230,8 @@ class PlanetDetailDialog(QDialog):
         atmo_comp_str = _fmt_atmo_composition(rec.get("AtmosphereComposition") or [])
         if atmo_comp_str:
             ac_lbl = QLabel(
-                f'<span style="color:#555555;font-size:10px;">ATMOSPHERE COMPOSITION&nbsp;&nbsp;</span>'
-                f'<span style="color:#AAAAAA;font-size:10px;">{_esc(atmo_comp_str)}</span>'
+                f'<span style="color:#555555;font-size:12px;">ATMOSPHERE COMPOSITION&nbsp;&nbsp;</span>'
+                f'<span style="color:#AAAAAA;font-size:12px;">{_esc(atmo_comp_str)}</span>'
             )
             ac_lbl.setTextFormat(Qt.TextFormat.RichText)
             ac_lbl.setWordWrap(True)
@@ -256,7 +256,7 @@ class PlanetDetailDialog(QDialog):
                 bg = "#2a2200" if is_rare else "#1a1a1a"
                 display = name.title()
                 mat_parts.append(
-                    f'<span style="background:{bg};color:{colour};font-size:10px;'
+                    f'<span style="background:{bg};color:{colour};font-size:12px;'
                     f'padding:1px 6px;border-radius:3px;">'
                     f'{_esc(display)}: {pct_f:.1f}%</span>'
                 )
@@ -285,7 +285,7 @@ class PlanetDetailDialog(QDialog):
                 genus_inline = ""
                 if isinstance(genuses, list) and genuses:
                     genus_inline = (
-                        f' <span style="color:#4a7a50;font-size:10px;">'
+                        f' <span style="color:#4a7a50;font-size:12px;">'
                         f'({_esc(", ".join(genuses))})</span>'
                     )
                 sig_parts.append(
@@ -309,7 +309,7 @@ class PlanetDetailDialog(QDialog):
                 human_detail = ""
                 if human_named:
                     human_detail = (
-                        f'<br><span style="color:#3a6a99;font-size:10px;">'
+                        f'<br><span style="color:#3a6a99;font-size:12px;">'
                         f'&nbsp;&nbsp;{_esc(", ".join(human_named[:10]))}</span>'
                     )
                 sig_parts.append(
@@ -318,7 +318,7 @@ class PlanetDetailDialog(QDialog):
             if other_sig:
                 sig_parts.append(
                     f'<span style="color:#888888;">◈ Other: {other_sig}</span>'
-                    f' <span style="color:#555555;font-size:10px;">'
+                    f' <span style="color:#555555;font-size:12px;">'
                     f'(crash sites / guarded installations)</span>'
                 )
 
@@ -330,8 +330,8 @@ class PlanetDetailDialog(QDialog):
 
             if other_sig:
                 tip_lbl = QLabel(
-                    f'<span style="color:#FFD93D;font-size:10px;font-weight:700;">⚠ Crash Site Advisory</span><br>'
-                    f'<span style="color:#888888;font-size:10px;">'
+                    f'<span style="color:#FFD93D;font-size:12px;font-weight:700;">⚠ Crash Site Advisory</span><br>'
+                    f'<span style="color:#888888;font-size:12px;">'
                     f'Scan skimmers before engaging — attack only if Wanted to avoid faction rep loss.<br>'
                     f'Cargo canisters (rebel transmissions, technical components) may be scoopable and sold on the black market.'
                     f'</span>'
@@ -339,7 +339,7 @@ class PlanetDetailDialog(QDialog):
                 tip_lbl.setTextFormat(Qt.TextFormat.RichText)
                 tip_lbl.setWordWrap(True)
                 tip_lbl.setStyleSheet(
-                    "background: #1a1500; border: 1px solid #3a3000; "
+                    "background: #1a1400; border: 1px solid #3a2e00; "
                     "border-radius: 4px; padding: 5px 8px;"
                 )
                 layout.addWidget(tip_lbl)
@@ -356,7 +356,7 @@ class PlanetDetailDialog(QDialog):
 
         if est_i > 0:
             val_lbl = QLabel(
-                f'<span style="color:#555555;font-size:10px;">ESTIMATED VALUE&nbsp;&nbsp;</span>'
+                f'<span style="color:#555555;font-size:12px;">ESTIMATED VALUE&nbsp;&nbsp;</span>'
                 f'<span style="color:#FFD93D;font-size:12px;font-weight:700;">'
                 f'{est_i:,} Cr</span>'
             )
@@ -389,7 +389,7 @@ class PlanetDetailDialog(QDialog):
         close_btn.setFixedWidth(80)
         close_btn.setStyleSheet(
             "QPushButton { background: #0d1015; color: #CCCCCC; border: 1px solid #4D96FF; "
-            "border-radius: 4px; padding: 4px 12px; font-size: 11px; }"
+            "border-radius: 4px; padding: 4px 12px; font-size:12px; }"
             "QPushButton:hover { background: #1a2a3a; }"
         )
         close_btn.clicked.connect(self.accept)

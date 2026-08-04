@@ -66,7 +66,7 @@ class IntelPanel(QWidget):
         poi_l.setSpacing(4)
         poi_hdr = QLabel("EXTERNAL POINTS OF INTEREST")
         poi_hdr.setStyleSheet(
-            "color: #555555; font-size: 10px; font-weight: bold; "
+            "color: #555555; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         poi_l.addWidget(poi_hdr)
@@ -89,7 +89,7 @@ class IntelPanel(QWidget):
         farm_l.setSpacing(4)
         farm_hdr = QLabel("FARMING LOCATIONS — THIS SYSTEM")
         farm_hdr.setStyleSheet(
-            "color: #555555; font-size: 10px; font-weight: bold; "
+            "color: #555555; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         farm_l.addWidget(farm_hdr)
@@ -112,7 +112,7 @@ class IntelPanel(QWidget):
         body_farm_l.setSpacing(4)
         body_farm_hdr = QLabel("SURFACE SCAN — FARMING MATCHES")
         body_farm_hdr.setStyleSheet(
-            "color: #555555; font-size: 10px; font-weight: bold; "
+            "color: #555555; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         body_farm_l.addWidget(body_farm_hdr)
@@ -135,7 +135,7 @@ class IntelPanel(QWidget):
         guide_l.setSpacing(4)
         guide_hdr = QLabel("FARMING GUIDE — ALL CATEGORIES")
         guide_hdr.setStyleSheet(
-            "color: #555555; font-size: 10px; font-weight: bold; "
+            "color: #555555; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         guide_l.addWidget(guide_hdr)
@@ -158,7 +158,7 @@ class IntelPanel(QWidget):
         bgs_l.setSpacing(4)
         bgs_hdr = QLabel("BGS HISTORY — THIS SYSTEM")
         bgs_hdr.setStyleSheet(
-            "color: #555555; font-size: 10px; font-weight: bold; "
+            "color: #555555; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         bgs_l.addWidget(bgs_hdr)
@@ -204,7 +204,7 @@ class IntelPanel(QWidget):
         fg, bg = self._domain_color(domain)
         dom_badge = (
             f'<span style="background:{bg};color:{fg};'
-            f'font-size:10px;font-weight:700;padding:1px 5px;'
+            f'font-size:12px;font-weight:700;padding:1px 5px;'
             f'border-radius:3px;">{self._esc(domain.upper())}</span>'
         ) if domain else ""
 
@@ -213,7 +213,7 @@ class IntelPanel(QWidget):
                 '<div style="margin-bottom:8px;padding:4px 8px;'
                 'background:#1a2a00;border-left:3px solid #6BCB77;'
                 'border-radius:4px;">'
-                '<span style="color:#6BCB77;font-size:10px;'
+                '<span style="color:#6BCB77;font-size:12px;'
                 'font-weight:700;">✓ AVAILABLE NOW &nbsp;</span>'
             )
         else:
@@ -227,22 +227,22 @@ class IntelPanel(QWidget):
             )
         if system:
             line += (
-                f' <span style="color:#4D96FF;font-size:10px;">'
+                f' <span style="color:#4D96FF;font-size:12px;">'
                 f'— {self._esc(system)}</span>'
             )
         if body:
             line += (
-                f' <span style="color:#888888;font-size:10px;">'
+                f' <span style="color:#888888;font-size:12px;">'
                 f'/ {self._esc(body)}</span>'
             )
         if method:
             line += (
-                f'<br><span style="color:#6BCB77;font-size:10px;">'
+                f'<br><span style="color:#6BCB77;font-size:12px;">'
                 f'&nbsp;&nbsp;⚙ {self._esc(method)}</span>'
             )
         if note:
             line += (
-                f'<br><span style="color:#FFD93D;font-size:10px;">'
+                f'<br><span style="color:#FFD93D;font-size:12px;">'
                 f'&nbsp;&nbsp;📌 {self._esc(note)}</span>'
             )
         if mats:
@@ -251,14 +251,14 @@ class IntelPanel(QWidget):
             else:
                 mat_txt = str(mats)
             line += (
-                f'<br><span style="color:#FFD93D;font-size:10px;">'
+                f'<br><span style="color:#FFD93D;font-size:12px;">'
                 f'&nbsp;&nbsp;Mats: {self._esc(mat_txt)}</span>'
             )
         # Sites array — multiple system/body locations
         sites = loc.get("sites") or []
         if isinstance(sites, list) and sites:
             line += (
-                '<br><span style="color:#555555;font-size:10px;">'
+                '<br><span style="color:#555555;font-size:12px;">'
                 '&nbsp;&nbsp;Sites:</span>'
             )
             for site in sites[:8]:
@@ -282,18 +282,18 @@ class IntelPanel(QWidget):
                     )
                 if s_coords:
                     site_line += (
-                        f' <span style="color:#555555;font-size:10px;">'
+                        f' <span style="color:#555555;font-size:12px;">'
                         f'({self._esc(s_coords)})</span>'
                     )
                 if isinstance(s_mats, list) and s_mats:
                     mat_str = ", ".join(str(m) for m in s_mats[:4])
                     site_line += (
-                        f' <span style="color:#FFD93D;font-size:10px;">'
+                        f' <span style="color:#FFD93D;font-size:12px;">'
                         f'— {self._esc(mat_str)}</span>'
                     )
                 if site_line:
                     line += (
-                        f'<br><span style="font-size:10px;">'
+                        f'<br><span style="font-size:12px;">'
                         f'&nbsp;&nbsp;&nbsp;&nbsp;• {site_line}</span>'
                     )
 
@@ -397,22 +397,22 @@ class IntelPanel(QWidget):
             infl_txt = f"{float(infl) * 100:.1f}%" if isinstance(infl, (int, float)) else "?"
             fstate = self._esc(rec.get("faction_state") or "")
             ctrl_badge = (
-                ' <span style="color:#6BCB77;font-size:10px;">★ controlling</span>'
+                ' <span style="color:#6BCB77;font-size:12px;">★ controlling</span>'
                 if rec.get("is_controlling") else ""
             )
             history_html.append(
                 f'<div style="margin-bottom:4px;">'
-                f'<span style="color:#888888;font-size:10px;">{fdate}</span> '
+                f'<span style="color:#888888;font-size:12px;">{fdate}</span> '
                 f'<span style="color:#CCCCCC;font-weight:700;">{fname}</span> '
                 f'<span style="color:#FFB347;">{infl_txt}</span>'
-                + (f' <span style="color:#4D96FF;font-size:10px;">[{fstate}]</span>' if fstate else "")
+                + (f' <span style="color:#4D96FF;font-size:12px;">[{fstate}]</span>' if fstate else "")
                 + ctrl_badge
                 + '</div>'
             )
 
         self.bgs_display.setText(
             "".join(history_html) if history_html else
-            '<span style="color:#444444;font-size:11px;">'
+            '<span style="color:#444444;font-size:12px;">'
             'No BGS history recorded for this system yet — '
             'history accumulates one snapshot per faction per day as you visit.'
             '</span>'
@@ -433,7 +433,7 @@ class IntelPanel(QWidget):
 
             cat_badge = (
                 f'<span style="background:#1a2a3a;color:#4D96FF;'
-                f'font-size:10px;font-weight:700;padding:1px 5px;'
+                f'font-size:12px;font-weight:700;padding:1px 5px;'
                 f'border-radius:3px;">{self._esc(cat)}</span>'
             )
             line = f'<div style="margin-bottom:6px;">{cat_badge} '
@@ -446,12 +446,12 @@ class IntelPanel(QWidget):
                 line += f' <span style="color:#888888;">— {self._esc(body)}</span>'
             if note:
                 line += (
-                    f'<br><span style="color:#FFD93D;font-size:10px;">'
+                    f'<br><span style="color:#FFD93D;font-size:12px;">'
                     f'&nbsp;&nbsp;📌 {self._esc(note)}</span>'
                 )
             if source:
                 line += (
-                    f'<br><span style="color:#555555;font-size:10px;">'
+                    f'<br><span style="color:#555555;font-size:12px;">'
                     f'&nbsp;&nbsp;src: {self._esc(source)}</span>'
                 )
             line += '</div>'
@@ -459,7 +459,7 @@ class IntelPanel(QWidget):
 
         self.poi_display.setText(
             "".join(poi_html) if poi_html else
-            '<span style="color:#444444;font-size:11px;">'
+            '<span style="color:#444444;font-size:12px;">'
             'No external POIs for this system.<br>'
             'Add POIs to <code>settings/external_pois.json</code> '
             'to see them here.</span>'
@@ -490,7 +490,7 @@ class IntelPanel(QWidget):
 
         self.farming_display.setText(
             "".join(farm_html) if farm_html else
-            '<span style="color:#444444;font-size:11px;">'
+            '<span style="color:#444444;font-size:12px;">'
             'No specific farming locations for this system.<br>'
             'Browse the full guide below.</span>'
         )
@@ -543,7 +543,7 @@ class IntelPanel(QWidget):
                         f'<div style="margin-bottom:8px;padding:4px 8px;'
                         f'background:#0a1a1a;border-left:3px solid {border};'
                         f'border-radius:4px;">'
-                        f'<span style="color:{border};font-size:10px;font-weight:700;">'
+                        f'<span style="color:{border};font-size:12px;font-weight:700;">'
                         f'{self._esc(body_name)}</span>'
                     )
 
@@ -552,14 +552,14 @@ class IntelPanel(QWidget):
                         # Thargoid guide has no fixed systems — can't distinguish known vs new
                         # so just surface the guide entries as reference
                         body_farm_html.append(
-                            f'<br><span style="color:#FF6B6B;font-size:10px;">'
+                            f'<br><span style="color:#FF6B6B;font-size:12px;">'
                             f'&nbsp;&nbsp;☣ {t_sig} thargoid signal(s)'
                             f'</span>'
                         )
                         for fm in thargoid_entries[:3]:
                             name = str(fm.get("name") or "")
                             body_farm_html.append(
-                                f'<br><span style="color:{fg_t};font-size:10px;">'
+                                f'<br><span style="color:{fg_t};font-size:12px;">'
                                 f'&nbsp;&nbsp;⛏ {self._esc(name)}</span>'
                             )
 
@@ -568,29 +568,29 @@ class IntelPanel(QWidget):
                         # Guardian guide has specific known systems — flag if this is a new one
                         if known_guardian_systems and current_sys_lower not in known_guardian_systems:
                             body_farm_html.append(
-                                f'<br><span style="color:#FF8888;font-weight:700;font-size:10px;">'
+                                f'<br><span style="color:#FF8888;font-weight:700;font-size:12px;">'
                                 f'&nbsp;&nbsp;🔺 {g_sig} guardian signal(s) — POTENTIALLY UNDISCOVERED SITE'
                                 f'</span>'
-                                f'<br><span style="color:#888888;font-size:10px;">'
+                                f'<br><span style="color:#888888;font-size:12px;">'
                                 f'&nbsp;&nbsp;Not in farming guide — consider logging and reporting'
                                 f'</span>'
                             )
                         else:
                             body_farm_html.append(
-                                f'<br><span style="color:#FF8888;font-size:10px;">'
+                                f'<br><span style="color:#FF8888;font-size:12px;">'
                                 f'&nbsp;&nbsp;🔺 {g_sig} guardian signal(s)'
                                 f'</span>'
                             )
                         for fm in guardian_entries[:3]:
                             name = str(fm.get("name") or "")
                             body_farm_html.append(
-                                f'<br><span style="color:{fg_g};font-size:10px;">'
+                                f'<br><span style="color:{fg_g};font-size:12px;">'
                                 f'&nbsp;&nbsp;⛏ {self._esc(name)}</span>'
                             )
 
                     if h_sig > 0:
                         body_farm_html.append(
-                            f'<br><span style="color:#FFD93D;font-size:10px;">'
+                            f'<br><span style="color:#FFD93D;font-size:12px;">'
                             f'&nbsp;&nbsp;⚠ {h_sig} human signal(s) — possible installation or crash site'
                             f'</span>'
                         )
@@ -598,7 +598,7 @@ class IntelPanel(QWidget):
                             name = str(fm.get("name") or "")
                             fg, _ = self._domain_color("odyssey_onfoot")
                             body_farm_html.append(
-                                f'<br><span style="color:{fg};font-size:10px;">'
+                                f'<br><span style="color:{fg};font-size:12px;">'
                                 f'&nbsp;&nbsp;⛏ {self._esc(name)}</span>'
                             )
 
@@ -607,7 +607,7 @@ class IntelPanel(QWidget):
                         name = str(fm.get("name") or "")
                         fg, _ = self._domain_color(domain)
                         body_farm_html.append(
-                            f'<br><span style="color:{fg};font-size:10px;">'
+                            f'<br><span style="color:{fg};font-size:12px;">'
                             f'&nbsp;&nbsp;⛏ {self._esc(name)}</span>'
                         )
                         mat_names_lower = [n.lower() for n in mat_names]
@@ -622,7 +622,7 @@ class IntelPanel(QWidget):
                                         matched.append(sm)
                         if matched:
                             body_farm_html.append(
-                                f'<span style="color:#888888;font-size:10px;">'
+                                f'<span style="color:#888888;font-size:12px;">'
                                 f' ({self._esc(", ".join(matched[:3]))})'
                                 f'</span>'
                             )
@@ -633,7 +633,7 @@ class IntelPanel(QWidget):
 
         self.body_farm_display.setText(
             "".join(body_farm_html) if body_farm_html else
-            '<span style="color:#444444;font-size:11px;">'
+            '<span style="color:#444444;font-size:12px;">'
             'No surface scan farming matches yet.<br>'
             'Perform a DSS scan to cross-reference body materials.</span>'
         )
@@ -677,9 +677,9 @@ class IntelPanel(QWidget):
                     guide_html.append(
                         f'<div style="margin-top:8px;margin-bottom:4px;">'
                         f'<span style="color:{fg};font-weight:700;'
-                        f'font-size:11px;letter-spacing:1px;">'
+                        f'font-size:12px;letter-spacing:1px;">'
                         f'{self._esc(label)}</span>'
-                        f'<span style="color:#555555;font-size:10px;">'
+                        f'<span style="color:#555555;font-size:12px;">'
                         f' ({len(entries)} entries)</span>'
                         f'</div>'
                     )
@@ -696,7 +696,7 @@ class IntelPanel(QWidget):
 
         self.guide_display.setText(
             "".join(guide_html) if guide_html else
-            '<span style="color:#444444;font-size:11px;">'
+            '<span style="color:#444444;font-size:12px;">'
             'No farming guide loaded.<br>'
             'Check <code>settings/elite_farming_locations.json</code>.'
             '</span>'

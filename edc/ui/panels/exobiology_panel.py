@@ -75,7 +75,7 @@ class ExobiologyPanel(QWidget):
 
         exo_hdr = QLabel("BIOLOGICAL CONTACTS")
         exo_hdr.setStyleSheet(
-            "color: #555555; font-size: 10px; font-weight: bold; "
+            "color: #555555; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         exo_frame_l.addWidget(exo_hdr)
