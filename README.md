@@ -118,13 +118,13 @@ EDChronicle can also **optionally** contribute back: with "Contribute data to ED
 
 ## Screenshots
 
-![Overview HUD](screenshots/OverView%20Hud.png)
-![Exploration](screenshots/Exploration.png)
-![Planets](screenshots/Planets.png)
-![Exobiology](screenshots/Exobiology.png)
-![Combat](screenshots/Combat.png)
-![PowerPlay](screenshots/PowerPlay.png)
-![Settings](screenshots/Settings.png)
+![Overview HUD](docs/screenshots/OverView%20Hud.png)
+![Exploration](docs/screenshots/Exploration.png)
+![Planets](docs/screenshots/Planets.png)
+![Exobiology](docs/screenshots/Exobiology.png)
+![Combat](docs/screenshots/Combat.png)
+![PowerPlay](docs/screenshots/PowerPlay.png)
+![Settings](docs/screenshots/Settings.png)
 
 ## Current architecture at a glance
 
@@ -408,4 +408,4 @@ MIT License — free to use, modify and distribute, provided the original copyri
 
 Copyright © 2026 CMDR B0B R0GERS
 
-See [LICENSE](../LICENSE) for the full license text.
+See [LICENSE](LICENSE) for the full license text.
