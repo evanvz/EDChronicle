@@ -456,6 +456,16 @@ class TTSEngine:
             except queue.Empty:
                 break
 
+    def drain_comms(self):
+        """Drain all queued comms-channel phrases without interrupting current speech.
+        Mirrors drain() but for _comms_queue — system-wide NPC chatter that hasn't
+        started playing yet, e.g. still queued when the player jumps out."""
+        while True:
+            try:
+                self._comms_queue.get_nowait()
+            except queue.Empty:
+                break
+
     def clear(self):
         """Drain all queued phrases and interrupt current speech — hard context wipe."""
         self.drain()
@@ -466,6 +476,15 @@ class TTSEngine:
         """Interrupt comms channel only — leaves main alert channel untouched."""
         if self._comms_worker:
             self._comms_worker.interrupt()
+
+    def stop_comms(self):
+        """Drain queued comms phrases AND interrupt whatever's currently
+        playing — used when the player leaves the system those messages
+        belonged to (StartJump), since a system-wide NPC broadcast from the
+        system you're departing has no business continuing mid-jump. The
+        main Commander Assist channel is deliberately untouched here."""
+        self.drain_comms()
+        self.interrupt_comms()
 
     def speak(self, text: str, priority: int = 5, volume_scale: float = 1.0):
         """Queue a phrase. Lower priority number = spoken sooner.

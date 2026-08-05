@@ -27,6 +27,10 @@ class GameState:
     system_controlling_power: Optional[str] = None
     system_powerplay_state: Optional[str] = None
     system_powers: List[str] = field(default_factory=list)
+    # None until the first Loadout event this session — deliberately not
+    # assumed False by default, since "unknown" and "confirmed unarmed" are
+    # different things for the enemy-alert caveat that reads this.
+    ship_has_weapons: Optional[bool] = None
     system_powerplay_conflict_progress: Dict[str, float] = field(default_factory=dict)
     system_conflicts: List[dict] = field(default_factory=list)
     system_powerplay_control_progress: Optional[float] = None

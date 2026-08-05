@@ -12,6 +12,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 
+from edc.core.bgs_conflicts import find_squadron_war_enemy
+
 log = logging.getLogger(__name__)
 
 
@@ -141,10 +143,12 @@ class CombatPanel(QWidget):
         # Legend
         legend = QLabel(
             '<span style="color:#B4640A;">■</span> Current &nbsp;'
+            '<span style="color:#D42A00;">■</span> Hostile (confirmed safe target) &nbsp;'
             '<span style="color:#640078;">■</span> PP Enemy &nbsp;'
             '<span style="color:#C8A000;">■</span> High Bounty &nbsp;'
             '<span style="color:#503200;">■</span> Wanted &nbsp;'
-            '<span style="color:#5A1E1E;">■</span> Destroyed'
+            '<span style="color:#5A1E1E;">■</span> Destroyed &nbsp;'
+            '<span style="color:#5A2A2A;">■</span> At war (info only, not confirmed)'
         )
         legend.setTextFormat(Qt.TextFormat.RichText)
         legend.setStyleSheet(
@@ -207,6 +211,9 @@ class CombatPanel(QWidget):
             contacts = getattr(state, "combat_contacts", None) or {}
             cur_key  = getattr(state, "combat_current_key", "") or ""
             pledged  = (getattr(state, "pp_power", None) or "").strip().lower()
+            war_enemy_faction = find_squadron_war_enemy(
+                getattr(state, "factions", None), getattr(state, "system_conflicts", None)
+            )
 
             rows = []
             for k, rec in contacts.items():
@@ -243,12 +250,27 @@ class CombatPanel(QWidget):
                 else:
                     last_seen = str(ts) if ts else ""
 
+                is_hostile = bool(rec.get("Hostile"))
                 is_enemy = bool(
                     pledged
                     and power.strip().lower()
                     and power.strip().lower() != pledged
                 )
-                enemy_txt = "⚔ ENEMY" if is_enemy else ""
+                # Informational only — a faction being at war with your
+                # squadron faction doesn't make an arbitrary Clean NPC from
+                # that faction a legal kill; only LegalStatus "Hostile"
+                # (confirmed via Conflict Zone engagement) actually is.
+                bgs_war_faction_match = bool(
+                    war_enemy_faction and faction and faction == war_enemy_faction
+                )
+                if is_hostile:
+                    enemy_txt = "⚔ HOSTILE"
+                elif is_enemy:
+                    enemy_txt = "⚔ PP ENEMY"
+                elif bgs_war_faction_match:
+                    enemy_txt = "⚠ at war (info)"
+                else:
+                    enemy_txt = ""
 
                 is_high_bounty = bool(
                     wanted_f
@@ -278,6 +300,9 @@ class CombatPanel(QWidget):
                 elif is_current:
                     bg = QColor(180, 100, 0)
                     fg = QColor(255, 255, 255)
+                elif is_hostile:
+                    bg = QColor(212, 42, 0)
+                    fg = QColor(255, 255, 255)
                 elif is_enemy:
                     bg = QColor(100, 0, 120)
                     fg = QColor(255, 200, 255)
@@ -287,6 +312,9 @@ class CombatPanel(QWidget):
                 elif wanted_f:
                     bg = QColor(80, 50, 0)
                     fg = QColor(255, 220, 150)
+                elif bgs_war_faction_match:
+                    bg = QColor(70, 30, 30)
+                    fg = QColor(220, 180, 180)
                 else:
                     bg = None
                     fg = None

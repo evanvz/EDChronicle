@@ -9,6 +9,8 @@ from .external_intel import ExternalIntel
 from edc.engine.handlers import exploration, exobio, inventory, powerplay, misc, fleet_carrier, mining, engineers
 from edc.core.squadron_events import SQUADRON_EVENT_NAMES, apply_squadron_event
 from edc.core.mission_events import MISSION_EVENT_NAMES, apply_mission_event
+from edc.core.bgs_conflicts import find_squadron_war_enemy
+from edc.core.ship_loadout import has_any_weapon
 from edc.core.ring_signals import RING_NAME_RE as _RING_NAME_RE, parse_ring_hotspots
 
 log = logging.getLogger("edc.event_engine")
@@ -483,7 +485,17 @@ class EventEngine:
             if not isinstance(target_power, str):
                 target_power = ""
             legal = event.get("LegalStatus") or ""
-            is_wanted = bool(isinstance(legal, str) and legal.strip().lower() == "wanted")
+            legal_lower = legal.strip().lower() if isinstance(legal, str) else ""
+            is_wanted = bool(legal_lower == "wanted")
+            # "Hostile" is a distinct LegalStatus from "Wanted": confirmed via
+            # Elite Dangerous's own Crime & Punishment rules, a Hostile ship
+            # is already trying to kill you and there's no bounty/notoriety
+            # consequence to killing it back — true regardless of whether
+            # that's PowerPlay combat or a BGS Conflict Zone. This is the
+            # authoritative "safe to engage" signal, not faction membership
+            # alone (a ship merely belonging to a faction at war elsewhere in
+            # the BGS isn't fair game outside an actual Conflict Zone).
+            is_hostile = bool(legal_lower == "hostile")
             bounty = event.get("Bounty")
 
             rank_val = event.get("PilotRank")
@@ -524,6 +536,7 @@ class EventEngine:
                     "Faction": faction,
                     "Power": target_power,
                     "Wanted": bool(is_wanted),
+                    "Hostile": bool(is_hostile),
                     "Bounty": bounty if isinstance(bounty, int) else None,
                     "LastSeen": ts,
                 }
@@ -531,26 +544,48 @@ class EventEngine:
             except Exception:
                 pass
 
-            # PP enemy ship scan alert (only after scan completes; only if pledged)
-            pledged = getattr(self.state, "pp_power", None)
-            if not pledged:
-                return self.state, msgs
+            # BGS war context: does this ship's faction oppose our squadron-
+            # aligned faction in an active War/CivilWar right here? This is
+            # informational context only — a ship merely belonging to that
+            # faction isn't a sanctioned kill unless it's also Hostile (i.e.
+            # actually engaged in a Conflict Zone); shooting a random Clean
+            # NPC from that faction outside a CZ just earns a bounty.
+            war_enemy_faction = find_squadron_war_enemy(
+                self.state.factions, self.state.system_conflicts
+            )
+            bgs_war_faction_match = bool(faction and war_enemy_faction and faction == war_enemy_faction)
 
-            # Context: "my PP space" == system controlled by my pledged power
+            pledged = getattr(self.state, "pp_power", None)
+
+            # "My PP space" == systems where my power actually has a stake:
+            # controls it, is one of the active contesting/undermining
+            # powers there (system_powers), or the system's PP state is
+            # Contested — not just systems it already controls outright.
             ctrl = getattr(self.state, "system_controlling_power", None)
-            in_my_pp_space = bool(isinstance(ctrl, str) and ctrl == pledged)
+            pp_state = str(getattr(self.state, "system_powerplay_state", "") or "").strip().lower()
+            system_powers = getattr(self.state, "system_powers", None) or []
+            in_my_pp_space = bool(pledged and (
+                (isinstance(ctrl, str) and ctrl == pledged)
+                or pledged in system_powers
+                or pp_state == "contested"
+            ))
 
             bounty_ok = bool(isinstance(bounty, int) and bounty >= 500_000)
 
             rank_ok = bool(rank_name.lower() in {"dangerous", "deadly", "elite"})
             bounty_target = bool(is_wanted and bounty_ok and rank_ok)
 
-            pp_enemy = bool(target_power and target_power != pledged)
+            pp_enemy = bool(pledged and target_power and target_power != pledged)
 
             # Rules:
-            # 1) In my PP space: alert PP enemies even if Clean/no bounty.
-            # 2) Anywhere: alert only very high-value bounty targets.
-            if in_my_pp_space:
+            # 1) Hostile is authoritative and unconditional — the game has
+            #    already determined this ship is fair game, anywhere.
+            # 2) In my PP space: also alert PP enemies even if Clean/no
+            #    bounty (Power Bounty applies there, not a criminal one).
+            # 3) Anywhere: also alert very high-value bounty targets.
+            if is_hostile:
+                pass
+            elif in_my_pp_space:
                 if not (pp_enemy or bounty_target):
                     return self.state, msgs
             else:
@@ -560,8 +595,15 @@ class EventEngine:
             who_bits = [x for x in [pilot, ship, faction] if isinstance(x, str) and x.strip()]
             who = " — ".join(who_bits) if who_bits else "Unknown target"
 
+            if is_hostile:
+                label = "Hostile contact"
+            elif pp_enemy:
+                label = "PP enemy"
+            else:
+                label = "High bounty"
+
             parts = []
-            parts.append(f"⚔️ {'PP enemy' if pp_enemy else 'High bounty'} scan: {who}")
+            parts.append(f"⚔️ {label} scan: {who}")
             if rank_name:
                 parts.append(f"Rank: {rank_name}")
             if target_power:
@@ -570,6 +612,10 @@ class EventEngine:
                 parts.append("Wanted")
             if isinstance(bounty, int) and bounty > 0:
                 parts.append(f"Bounty: {bounty:,} cr")
+            if bgs_war_faction_match:
+                parts.append(f"At war with your squadron faction ({faction})")
+            if self.state.ship_has_weapons is False:
+                parts.append("⚠️ You have no weapons fitted — do not engage")
 
             alert = " | ".join(parts)
 
@@ -587,6 +633,13 @@ class EventEngine:
                 self.state.pp_enemy_alerts = [alert]
                 self.state.combat_last_alerted_key = key
                 msgs.append(alert)
+
+        elif name == "Loadout":
+            # Fires on ship swap, docking, and any module change — always
+            # reflects the ship you're currently flying. Used to caveat
+            # enemy-contact alerts with "you have no weapons fitted" when
+            # relevant (e.g. flying an unarmed hauler/explorer).
+            self.state.ship_has_weapons = has_any_weapon(event.get("Modules"))
 
         elif name == "Powerplay":
             self.state.pp_power = event.get("Power")
