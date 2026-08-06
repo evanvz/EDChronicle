@@ -35,6 +35,7 @@ Inspired by [EDCoPilot](https://www.razzafrag.com/) by CMDR RazzaFrag.
 - Warns when your current ship (from live `Loadout` tracking) has no weapons fitted at all, regardless of the target
 - Notoriety tracking with decay info, separate from active bounties
 - Interstellar Factors bounty clearance: tracks outstanding `CommitCrime` bounties per issuing faction and finds the closest station you've personally confirmed offers Interstellar Factors (excluding stations owned by the issuing faction, which can't clear it)
+- Massacre mission stacking: active kill-count missions grouped by target faction and system, showing kills credited so far and stack size — one kill correctly credits every stacked mission simultaneously, matching real game behavior, and flags a mission as ready to turn in once its count is met
 
 ### PowerPlay
 - Live system type detection on every jump: reinforcement, undermining, or acquisition
@@ -50,9 +51,13 @@ Inspired by [EDCoPilot](https://www.razzafrag.com/) by CMDR RazzaFrag.
 - Network-wide presence tracking via a live EDDN subscription, matching your squadron's faction by name across all commanders' traffic — surfaces far more systems than personal visits alone would
 - Bulk import from an Inara faction-presence CSV export, resolved live via EDSM per system, with retry-on-block (EDSM sits behind Cloudflare) and skip-already-known-systems on re-import
 - Manual add/remove for systems EDSM doesn't independently confirm, and stale-system reconciliation after a CSV re-import (systems no longer in the latest export are flagged for review, not silently dropped)
+- Dashboard of bucket tiles (War, Election, Expansion Pending, Retreat Risk, Conflict Risk, Stale Data, No Data, No Action, etc.) — a system can land in several buckets at once (e.g. War *and* Stale Data). Clicking a tile opens a separate, movable, non-modal window listing just that bucket's systems, with search, sort, distance-from-current-system, and click-to-copy — it stays open and stays live-updated as you jump around, independent of which tab is active
+- Autocomplete search across every tracked system from the main tab, independent of any bucket
+- Expansion/retreat/conflict-risk forecasting from historical influence trends (`faction_snapshots`), using real Frontier BGS thresholds (expansion ≥75% influence, retreat below 2.5% with a grace window, conflict when two factions converge within a few points, both above a 7% floor) — not guessed heuristics
+- Daily full EDSM refresh across every tracked system (capturing rival factions too, not just yours) — skips any system already refreshed within the last 24 hours, and the automatic (not manual) trigger stands down during Frontier's weekly server maintenance window
 - Per-system recommended BGS action (e.g. "War active — combat kills help win it", "Expansion pending — keep up trade/missions/bounties") with War/Civil War/Election rows highlighted
 - Active-mission tracking: which of your currently accepted missions help the squadron-aligned faction
-- Sortable systems table (influence, reputation, active/pending states)
+- BGS activity attribution: bounty redemptions and trade transactions are credited to your squadron-aligned faction's running session total, but only when done at a station it actually controls — mirrors the real crediting rule, not just "anything I did nearby"
 
 ### Squadron
 - Squadron name, rank, rank history, and trophies from journal-exposed squadron events (the game does not expose a member roster, chat, or wing-mission data to third-party tools)
@@ -61,6 +66,7 @@ Inspired by [EDCoPilot](https://www.razzafrag.com/) by CMDR RazzaFrag.
 ### Market / Trading
 - Manual search: best price to sell, or cheapest place to buy, a given commodity within a configurable radius — backed by a galaxy-wide EDDN commodity feed, not just your own visits
 - Sortable results (price, distance, demand/stock — numeric, not alphabetical) with "Updated" shown as relative time ("3h ago") instead of a raw timestamp
+- Minimum landing pad size filter (Any / Medium+ / Large only) alongside the existing range filter — stations with unconfirmed pad size are kept visible rather than hidden, since we can't rule them out
 - Click a result to copy the station/system name, or pin it as your active destination — shown as a persistent banner on the Overview tab (surviving a crash/restart) until you dock there or dismiss it manually
 - Automatic Trade Opportunities: cross-references your current market's buy prices against known sell prices elsewhere within range
 - "In Cargo — Sell At" tracking that persists across jumps and undocking
@@ -68,7 +74,7 @@ Inspired by [EDCoPilot](https://www.razzafrag.com/) by CMDR RazzaFrag.
 ### Mining
 - Live session stats: asteroids prospected, cores cracked, tons refined per material
 - Ring/hotspot finder — searches Spansh for systems with rings containing a specific mineable material, sorted by distance from your current location
-- "Where to sell" cross-references refined cargo against known market prices within range
+- "Where to sell" cross-references refined cargo against known market prices within range, sharing the Market tab's price/distance/pad-size filtering
 
 ### Materials & Engineering
 - Live material inventory (Raw/Manufactured/Encoded) tracked incrementally as you collect, discard, trade, or consume materials — no need to relog for counts to update
@@ -102,6 +108,8 @@ Inspired by [EDCoPilot](https://www.razzafrag.com/) by CMDR RazzaFrag.
 ### Overview panel
 - Single-screen HUD showing current system, body count, PP state, active signals, unresolved bodies, and recommended actions
 - Persistent banners for: active Market destination, squadron faction presence, engineering wishlist materials nearby, and Canonn Codex intel
+- CMDR rank badge — Combat/Trade/Explore/CQC/Soldier/Exobiologist/Empire/Federation rank names (not raw numbers) and progress-to-next-rank, backfilled at startup from full journal history since Rank/Progress only fire once at login
+- Session trade profit badge — computed from the game's own per-sale cost basis, so it nets out correctly even for cargo that was never bought (mined, looted, mission reward)
 - A live Shutdown journal event (game closed) starts a delayed app auto-close with a spoken goodbye, skipped during startup catch-up and cancelled if the game restarts quickly
 
 ## Data sources & ecosystem contribution
@@ -182,15 +190,15 @@ Flow:
 
 ### 5. Player Faction (BGS) tracking path
 
-Builds and maintains the full system-presence list for your squadron-aligned minor faction.
+Builds and maintains the full system-presence list for your squadron-aligned minor faction, and the bucket dashboard built on top of it.
 
 Flow:
 
 1. `edc/core/squadron_scanner.py` scans full journal history at startup to detect the squadron-aligned faction and any already-known presence
-2. Live `Docked`/`FSDJump`/`Location` events save a faction snapshot for the current system (`faction_snapshots` table) via `MainWindow._save_faction_snapshots()`
+2. Live `Docked`/`FSDJump`/`Location` events save a faction snapshot for the current system (`faction_snapshots` table) via `MainWindow._save_faction_snapshots()`, and `MainWindow.update_reference_state()` pushes the current position to the panel on every event (cheap — just a reference update, not a rebuild) so distance calculations stay correct even without the tab open
 3. The EDDN network-wide listener (path 4) supplies presence data for systems never personally visited
-4. `edc/core/edsm_faction_lookup.py` + `edc/core/inara_faction_csv.py` support manual add and bulk CSV import, resolving each system live against EDSM with retry-on-block
-5. `edc/ui/panels/player_faction_panel.py` renders the combined result; the bulk table rebuild is decoupled from live event cadence (only on tab-show or a periodic timer) to stay responsive at hundreds of tracked systems, with single-system targeted updates on arrival
+4. `edc/core/edsm_faction_lookup.py` + `edc/core/inara_faction_csv.py` support manual add and bulk CSV import, resolving each system live against EDSM with retry-on-block; a daily `_FactionRefreshWorker` re-queries every tracked system (skipping any refreshed within 24h) and backfills `system_coords` via `fetch_system_coords()`
+5. `edc/ui/panels/player_faction_panel.py` classifies every system into 0+ status buckets (`_compute_buckets()`, pure in-memory, no extra queries) and renders them as tiles; clicking one opens a `_FactionBucketDialog` (non-modal `QDialog`, kept alive in a dict so it survives tab switches) which re-renders live as buckets are recomputed on arrival or after a manual recheck
 
 ## Current top-level module ownership
 
@@ -211,8 +219,11 @@ Notable files:
 - `eddn_publisher.py` — opt-in journal/1 schema publishing back to EDDN
 - `canonn_client.py` — Canonn Codex/POI community intel
 - `inara_faction_csv.py` — parses Inara's faction-presence CSV export format
-- `bgs_conflicts.py` — finds who your squadron faction is at active war with, in the current system
+- `bgs_conflicts.py` — squadron-aligned faction lookup, finds who it's at active war with in the current system, and backs BGS activity attribution (bounty/trade crediting)
 - `ship_loadout.py` — classifies current ship hardpoints as armed/unarmed from `Loadout` events
+- `faction_refresh_tracker.py` — persists the last full-EDSM-refresh timestamp for the Player Faction tab's 24h auto-refresh gate
+- `rank_names.py` — Rank/Progress category index → real rank name tables (Elite I-V aware), verified against the community Journal Manual
+- `rank_scanner.py` — full-journal-history scan for the most recent Rank/Progress values at startup (same reasoning as `notoriety_scanner.py`)
 - `bounty_scanner.py` / `notoriety_scanner.py` / `squadron_scanner.py` / `carrier_scanner.py` / `mission_scanner.py` — full-journal-history scanners that reconstruct current state at startup (bounties, notoriety, squadron, fleet carrier, active missions)
 - `squadron_events.py` / `mission_events.py` — shared event-application logic used by both the live engine and the corresponding `_scanner.py`
 - `market_destination.py` — persists the currently pinned Market-tab destination
