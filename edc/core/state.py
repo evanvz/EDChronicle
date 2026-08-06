@@ -219,6 +219,23 @@ class GameState:
     # missions, keyed by MissionID — see edc.core.mission_events.
     active_missions: Dict[int, Dict[str, Any]] = field(default_factory=dict)
 
+    # CMDR rank/progress per category (Combat, Trade, Explore, Soldier,
+    # Exobiologist, Empire, Federation, CQC) — from Rank/Progress journal
+    # events, see edc.core.rank_scanner for startup backfill.
+    ranks: Dict[str, int] = field(default_factory=dict)
+    rank_progress: Dict[str, int] = field(default_factory=dict)
+
+    # Trade profit (session-scoped; resets on app start, like mining_refined_totals)
+    session_trade_profit: int = 0
+    session_trade_spent: int = 0
+    session_trade_revenue: int = 0
+
+    # BGS activity credited to the squadron-aligned faction this session —
+    # bounty redemptions and trade transactions at a station it controls.
+    # See event_engine.py::_at_squadron_faction_station.
+    squadron_bgs_bounty_cr: int = 0
+    squadron_bgs_trade_cr: int = 0
+
     # Mining (session-scoped; resets on app start, like the other session_collected fields)
     mining_refined_totals: Dict[str, int] = field(default_factory=dict)     # material(lower) -> units refined this session
     mining_prospected_count: int = 0

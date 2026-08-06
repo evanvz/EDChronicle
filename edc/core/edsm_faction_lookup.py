@@ -22,6 +22,7 @@ import cloudscraper
 log = logging.getLogger(__name__)
 
 _FACTIONS_URL = "https://www.edsm.net/api-system-v1/factions"
+_SYSTEM_URL = "https://www.edsm.net/api-v1/system"
 _TIMEOUT = 20
 
 # Confirmed via live testing (a 743-system bulk import): EDSM's Cloudflare
@@ -59,6 +60,33 @@ def fetch_system_factions(system_name: str) -> Tuple[Optional[Dict[str, Any]], O
             return result, error
         time.sleep(_RETRY_DELAYS_S[attempt])
         attempt += 1
+
+
+def fetch_system_coords(system_name: str) -> Optional[Tuple[float, float, float]]:
+    """
+    EDSM's faction endpoint has no coordinate data (confirmed via live
+    testing) — this is EDSM's separate system endpoint, used to backfill
+    system_coords for tracked systems EDDN has never happened to see live
+    (needed for Player Faction distance sorting). One-shot, no retry —
+    coords are a nice-to-have here, not worth doubling request volume for.
+    """
+    try:
+        scraper = cloudscraper.create_scraper()
+        resp = scraper.get(
+            _SYSTEM_URL, params={"systemName": system_name, "showCoordinates": 1}, timeout=_TIMEOUT,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as exc:
+        log.error("EDSM system-coords lookup failed for %r: %s", system_name, exc)
+        return None
+    coords = data.get("coords") if isinstance(data, dict) else None
+    if not isinstance(coords, dict):
+        return None
+    x, y, z = coords.get("x"), coords.get("y"), coords.get("z")
+    if all(isinstance(v, (int, float)) for v in (x, y, z)):
+        return (x, y, z)
+    return None
 
 
 def _fetch_once(system_name: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:

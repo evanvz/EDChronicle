@@ -59,6 +59,7 @@ from edc.core.canonn_client import CanonnClient, SystemPoi
 from edc.core.engineering_blueprints import EngineeringBlueprintTable
 from edc.core.engineering_wishlist import EngineeringWishlist
 from edc.core.market_destination import MarketDestinationStore
+from edc.core.faction_refresh_tracker import FactionRefreshTracker
 from edc.ui.panels.engineering_panel import EngineeringPanel
 from edc.audio.handlers.engineering import EngineeringPhrases
 from edc.ui.panels.fleet_carrier_panel import FleetCarrierPanel
@@ -68,6 +69,7 @@ from edc.core.eddn_market import EddnMarketCache
 from edc.core.station_pads import extract_station_info
 from edc.core.bounty_scanner import scan_active_bounties
 from edc.core.notoriety_scanner import scan_latest_notoriety
+from edc.core.rank_scanner import scan_latest_rank_progress
 from edc.core.squadron_scanner import scan_squadron_status
 from edc.core.carrier_scanner import scan_carrier_status
 from edc.core.mission_scanner import scan_active_missions
@@ -573,6 +575,19 @@ class MainWindow(QMainWindow):
             self.state.notoriety = notoriety_rec.get("notoriety")
             self.state.notoriety_timestamp = notoriety_rec.get("timestamp")
 
+        # Same reasoning again: Rank/Progress fire once at session login,
+        # which a long play session can push outside the tail-replay window.
+        try:
+            rank_rec, progress_rec = scan_latest_rank_progress(Path(self.cfg.journal_dir)) \
+                if getattr(self.cfg, "journal_dir", None) else (None, None)
+        except Exception:
+            log.exception("Failed to scan journal history for rank/progress")
+            rank_rec, progress_rec = None, None
+        if rank_rec:
+            self.state.ranks = rank_rec
+        if progress_rec:
+            self.state.rank_progress = progress_rec
+
         try:
             squadron_rec = scan_squadron_status(Path(self.cfg.journal_dir)) \
                 if getattr(self.cfg, "journal_dir", None) else None
@@ -651,6 +666,7 @@ class MainWindow(QMainWindow):
         self.engineering_wishlist_store = EngineeringWishlist(data_dir / "engineering_wishlist.json")
         self.market_destination_store = MarketDestinationStore(data_dir / "market_destination.json")
         self._pinned_destination: dict | None = self.market_destination_store.load()
+        self.faction_refresh_tracker = FactionRefreshTracker(data_dir / "faction_refresh.json")
         self.eddn_powerplay = EddnPowerPlayCache(settings_base)
         self._eddn_worker: EddnPowerPlayWorker | None = None
         self._eddn_thread: QThread | None = None
@@ -842,7 +858,7 @@ class MainWindow(QMainWindow):
         self.market_panel.destination_selected.connect(self._on_market_destination_selected)
 
         # Player Faction tab
-        self.player_faction_panel = PlayerFactionPanel(self.repo)
+        self.player_faction_panel = PlayerFactionPanel(self.repo, self.faction_refresh_tracker)
 
         # Squadron tab
         self.squadron_panel = SquadronPanel(self.repo)
@@ -2656,34 +2672,21 @@ class MainWindow(QMainWindow):
             pp_merits_session = int(
                 getattr(self.state, "pp_merits_session", 0) or 0
             )
+            pp_cell = f"<span style='color:#DDA0DD;'>PP Merits: +{pp_merits_session:,}</span>" if pp_merits_session > 0 else ""
 
-            pp_line = ""
-            if pp_merits_session > 0:
-                pp_line = (
-                    f"<br><span style='color:#DDA0DD;'>"
-                    f"PP Merits: +{pp_merits_session:,}</span>"
-                )
-
-            pp_merits_session = int(
-                getattr(self.state, "pp_merits_session", 0) or 0
-            )
-            pp_line = ""
-            if pp_merits_session > 0:
-                pp_line = (
-                    f"<br><span style='color:#DDA0DD;'>"
-                    f"PP Merits: +{pp_merits_session:,}</span>"
-                )
-
+            # Two-column grid instead of one tall stacked column — was pushing
+            # everything below the header down by 8 lines' worth of height.
             self.session_panel.setText(
-                "Session<br>"
-                f"Kills: {kills}<br>"
-                f"<span style='color:#FF8C66;'>Combat: {combat_session:,} cr</span><br>"
-                f"<span style='color:#FFB199;'>Combat Unsold: {combat_unsold:,} cr</span><br>"
-                f"<span style='color:#87CEFA;'>Exploration: {exploration_session:,} cr</span><br>"
-                f"<span style='color:#B7E3FF;'>Expl. Unsold: {exploration_unsold:,} cr</span><br>"
-                f"<span style='color:#7CFC98;'>Exobio: {exo_session:,} cr</span><br>"
-                f"<span style='color:#BDFCC9;'>Exo Unsold: {exo_unsold:,} cr</span>"
-                f"{pp_line}"
+                "<table cellspacing='0' cellpadding='0' style='margin-top:2px;'>"
+                f"<tr><td style='padding-right:14px;'>Session</td><td></td></tr>"
+                f"<tr><td style='padding-right:14px;'>Kills: {kills}</td><td>{pp_cell}</td></tr>"
+                f"<tr><td style='padding-right:14px;color:#FF8C66;'>Combat: {combat_session:,} cr</td>"
+                f"<td style='color:#FFB199;'>Combat Unsold: {combat_unsold:,} cr</td></tr>"
+                f"<tr><td style='padding-right:14px;color:#87CEFA;'>Exploration: {exploration_session:,} cr</td>"
+                f"<td style='color:#B7E3FF;'>Expl. Unsold: {exploration_unsold:,} cr</td></tr>"
+                f"<tr><td style='padding-right:14px;color:#7CFC98;'>Exobio: {exo_session:,} cr</td>"
+                f"<td style='color:#BDFCC9;'>Exo Unsold: {exo_unsold:,} cr</td></tr>"
+                "</table>"
             )
 
         except Exception:
@@ -3136,6 +3139,7 @@ class MainWindow(QMainWindow):
         self._refresh_fleet_carrier()
         self._refresh_mining()
         self._refresh_market()
+        self.player_faction_panel.update_reference_state(self.state)
 
     def _animate_overview_update(self, html: str):
         self.overview_panel.animate_overview_update(html)

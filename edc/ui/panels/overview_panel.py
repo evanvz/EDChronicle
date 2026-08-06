@@ -18,6 +18,7 @@ from PyQt6.QtCore import (
 from PyQt6.QtGui import QColor, QPainter, QPen, QFont, QFontMetrics
 
 from edc.ui import formatting as fmt
+from edc.core.rank_names import rank_name
 
 log = logging.getLogger(__name__)
 
@@ -354,6 +355,28 @@ class OverviewPanel(QWidget):
         )
         layout.addWidget(self.squadron_faction_badge)
 
+        # ── CMDR rank badge ──────────────────────────────────────────────────
+        self.rank_badge = QLabel("")
+        self.rank_badge.setTextFormat(Qt.TextFormat.RichText)
+        self.rank_badge.setWordWrap(True)
+        self.rank_badge.setVisible(False)
+        self.rank_badge.setStyleSheet(
+            "QLabel { background: #0d0d1a; border: 1px solid #1e1e4a;"
+            "border-radius: 6px; padding: 6px 10px; color: #9BA8FF; }"
+        )
+        layout.addWidget(self.rank_badge)
+
+        # ── Trade profit badge (session-scoped) ─────────────────────────────
+        self.trade_profit_badge = QLabel("")
+        self.trade_profit_badge.setTextFormat(Qt.TextFormat.RichText)
+        self.trade_profit_badge.setWordWrap(True)
+        self.trade_profit_badge.setVisible(False)
+        self.trade_profit_badge.setStyleSheet(
+            "QLabel { background: #1a1a0d; border: 1px solid #4a4a1e;"
+            "border-radius: 6px; padding: 6px 10px; color: #E6D96B; }"
+        )
+        layout.addWidget(self.trade_profit_badge)
+
         # ── Engineering wishlist alert ─────────────────────────────────────
         self.engineering_alert = QLabel("")
         self.engineering_alert.setTextFormat(Qt.TextFormat.RichText)
@@ -573,6 +596,34 @@ class OverviewPanel(QWidget):
         self._refresh_conflicts(state)
         self._refresh_factions(state)
         self._refresh_squadron_faction_badge(state)
+        self._refresh_rank_badge(state)
+        self._refresh_trade_profit_badge(state)
+
+    def _refresh_rank_badge(self, state):
+        ranks = getattr(state, "ranks", None) or {}
+        progress = getattr(state, "rank_progress", None) or {}
+        if not ranks:
+            self.rank_badge.setVisible(False)
+            return
+        parts = [
+            f"{cat} {rank_name(cat, rank)} ({progress.get(cat, 0)}%)"
+            for cat, rank in ranks.items()
+        ]
+        self.rank_badge.setText("🎖 <b>Ranks:</b> " + " &nbsp;·&nbsp; ".join(parts))
+        self.rank_badge.setVisible(True)
+
+    def _refresh_trade_profit_badge(self, state):
+        profit = getattr(state, "session_trade_profit", 0) or 0
+        revenue = getattr(state, "session_trade_revenue", 0) or 0
+        if not revenue:
+            self.trade_profit_badge.setVisible(False)
+            return
+        sign = "+" if profit >= 0 else "-"
+        self.trade_profit_badge.setText(
+            f"💰 <b>Trade profit this session:</b> {sign}{abs(profit):,} Cr "
+            f"(Revenue {revenue:,} / Spent {getattr(state, 'session_trade_spent', 0) or 0:,})"
+        )
+        self.trade_profit_badge.setVisible(True)
 
     def _refresh_squadron_faction_badge(self, state):
         squadron_faction = None

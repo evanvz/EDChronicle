@@ -7,18 +7,23 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 
+def squadron_faction_name(factions: List[dict]) -> Optional[str]:
+    """Name of the squadron-aligned faction (SquadronFaction:true in the
+    journal's Factions[] array), or None if not currently known."""
+    for f in (factions or []):
+        if isinstance(f, dict) and f.get("SquadronFaction") is True:
+            return f.get("Name")
+    return None
+
+
 def find_squadron_war_enemy(factions: List[dict], system_conflicts: List[dict]) -> Optional[str]:
     """
     Returns the name of the faction currently opposing our squadron-aligned
     faction in an active War/CivilWar in the current system, or None if
     we're not in a squadron-aligned faction or it isn't at war here.
     """
-    squadron_faction_name = None
-    for f in (factions or []):
-        if isinstance(f, dict) and f.get("SquadronFaction") is True:
-            squadron_faction_name = f.get("Name")
-            break
-    if not squadron_faction_name:
+    squadron_faction = squadron_faction_name(factions)
+    if not squadron_faction:
         return None
 
     for c in (system_conflicts or []):
@@ -30,8 +35,8 @@ def find_squadron_war_enemy(factions: List[dict], system_conflicts: List[dict]) 
             continue
         f1_name = (c.get("Faction1") or {}).get("Name")
         f2_name = (c.get("Faction2") or {}).get("Name")
-        if squadron_faction_name == f1_name:
+        if squadron_faction == f1_name:
             return f2_name
-        if squadron_faction_name == f2_name:
+        if squadron_faction == f2_name:
             return f1_name
     return None

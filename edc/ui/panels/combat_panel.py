@@ -123,6 +123,54 @@ class CombatPanel(QWidget):
         content_l.addWidget(self.bounty_card)
         self.bounty_card.setVisible(False)
 
+        # ── Massacre mission stacking card (hidden if no massacre missions
+        # currently active) ────────────────────────────────────────────────
+        self.massacre_card = QFrame()
+        self.massacre_card.setStyleSheet(
+            "QFrame { background: #1a0d0d; border: 1px solid #4a1e1e;"
+            "border-radius: 5px; }"
+        )
+        massacre_l = QVBoxLayout(self.massacre_card)
+        massacre_l.setContentsMargins(8, 6, 8, 6)
+        massacre_l.setSpacing(4)
+
+        massacre_hdr = QLabel("MASSACRE MISSIONS")
+        massacre_hdr.setStyleSheet(
+            "color: #d06060; font-size:12px; font-weight: bold; "
+            "letter-spacing: 1px; background: transparent; border: none;"
+        )
+        massacre_l.addWidget(massacre_hdr)
+
+        self.massacre_table = QTableWidget()
+        self.massacre_table.setColumnCount(5)
+        self.massacre_table.setHorizontalHeaderLabels(
+            ["Target Faction", "System", "Kills", "Stacked", "Status"]
+        )
+        self.massacre_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.massacre_table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+        self.massacre_table.verticalHeader().setVisible(False)
+        self.massacre_table.setSortingEnabled(False)
+        self.massacre_table.setStyleSheet(
+            "QTableWidget { background: transparent; border: none; }"
+            "QHeaderView::section { background: #2a1a1a; color: #888888; "
+            "font-size:12px; font-weight: bold; letter-spacing: 1px; "
+            "border: none; padding: 4px; }"
+        )
+        self.massacre_table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.Stretch
+        )
+        self.massacre_table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.ResizeMode.Stretch
+        )
+        for col in [2, 3, 4]:
+            self.massacre_table.horizontalHeader().setSectionResizeMode(
+                col, QHeaderView.ResizeMode.ResizeToContents
+            )
+        massacre_l.addWidget(self.massacre_table)
+
+        content_l.addWidget(self.massacre_card)
+        self.massacre_card.setVisible(False)
+
         # ── Combat contacts card ──────────────────────────────────────────
         card = QFrame()
         card.setStyleSheet(
@@ -206,6 +254,11 @@ class CombatPanel(QWidget):
             self._refresh_bounty_card(state)
         except Exception:
             log.exception("CombatPanel._refresh_bounty_card failed")
+
+        try:
+            self._refresh_massacre_card(state)
+        except Exception:
+            log.exception("CombatPanel._refresh_massacre_card failed")
 
         try:
             contacts = getattr(state, "combat_contacts", None) or {}
@@ -385,3 +438,37 @@ class CombatPanel(QWidget):
             f"Confirmed as of {last_visited} — Interstellar Factors availability "
             f"shifts with system security/BGS, so verify on arrival."
         )
+
+    def _refresh_massacre_card(self, state):
+        active = getattr(state, "active_missions", None) or {}
+        rows = [rec for rec in active.values() if isinstance(rec.get("kill_count"), int) and rec["kill_count"] > 0]
+        if not rows:
+            self.massacre_card.setVisible(False)
+            return
+        self.massacre_card.setVisible(True)
+
+        stack_counts = {}
+        for rec in rows:
+            key = (rec.get("target_faction"), rec.get("destination_system"))
+            stack_counts[key] = stack_counts.get(key, 0) + 1
+
+        rows.sort(key=lambda r: (r.get("target_faction") or "", r.get("destination_system") or ""))
+
+        self.massacre_table.setRowCount(len(rows))
+        for r, rec in enumerate(rows):
+            target = rec.get("target_faction") or "?"
+            system = rec.get("destination_system") or "?"
+            credited = rec.get("kills_credited", 0)
+            needed = rec["kill_count"]
+            stacked = stack_counts[(rec.get("target_faction"), rec.get("destination_system"))]
+            ready = credited >= needed
+            status = "Ready to turn in" if ready else ""
+
+            self.massacre_table.setItem(r, 0, QTableWidgetItem(target))
+            self.massacre_table.setItem(r, 1, QTableWidgetItem(system))
+            self.massacre_table.setItem(r, 2, QTableWidgetItem(f"{credited}/{needed}"))
+            self.massacre_table.setItem(r, 3, QTableWidgetItem(str(stacked) if stacked > 1 else "-"))
+            status_item = QTableWidgetItem(status)
+            if ready:
+                status_item.setForeground(QColor("#60d060"))
+            self.massacre_table.setItem(r, 4, status_item)

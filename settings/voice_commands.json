@@ -116,7 +116,7 @@
     }
   ],
   "input_device": "Microphone Array (Realtek(R) Audio)",
-  "output_device": "Headphones (Realtek(R) Audio)",
+  "output_device": "Speakers (Realtek(R) Audio)",
   "nav_trigger_word": "menu",
-  "feedback_volume": 0.1
+  "feedback_volume": 0.13
 }

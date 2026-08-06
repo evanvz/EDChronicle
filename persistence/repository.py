@@ -1,5 +1,5 @@
 import json
-from typing import Optional
+from typing import List, Optional
 
 from .database import Database
 from edc.core.station_pads import effective_pad_size
@@ -416,6 +416,125 @@ class Repository:
         ).fetchone()
         return dict(row) if row else None
 
+    def get_faction_predictions(self, faction_name: str) -> List[dict]:
+        """
+        BGS expansion/retreat/conflict prediction, per tracked system, built
+        entirely from faction_snapshots history already being collected —
+        no new data source. Thresholds are the real Elite Dangerous BGS
+        mechanics (not guessed): expansion triggers at >=75% influence,
+        retreat triggers below 2.5% (with a 5-6 day grace window), and a
+        conflict (War/CivilWar/Election) triggers when two factions'
+        influence converges within a few points, both above a 7% floor.
+
+        Each entry:
+          system_address, system_name, influence, trend ("up"/"down"/"flat"/None),
+          days_in_expansion_range (int or None), days_in_retreat_range (int or None),
+          conflict_risk (None or {"faction_name", "influence", "diff"})
+
+        trend/day-counts are None when there isn't enough history yet (a
+        system seen only once) — deliberately not guessed from a single
+        data point.
+        """
+        systems = self.db.conn.execute(
+            """
+            SELECT DISTINCT fs.system_address, s.system_name
+            FROM faction_snapshots fs
+            LEFT JOIN systems s ON s.system_address = fs.system_address
+            WHERE fs.faction_name = ?
+              AND NOT EXISTS (
+                  SELECT 1 FROM dismissed_faction_systems d
+                  WHERE d.faction_name = fs.faction_name AND d.system_address = fs.system_address
+              )
+            """,
+            (faction_name,),
+        ).fetchall()
+
+        out: List[dict] = []
+        for row in systems:
+            system_address = row["system_address"]
+            system_name = row["system_name"]
+
+            history = [
+                dict(h) for h in self.db.conn.execute(
+                    """
+                    SELECT snapshot_date, influence FROM faction_snapshots
+                    WHERE system_address = ? AND faction_name = ? AND influence IS NOT NULL
+                    ORDER BY snapshot_date DESC
+                    LIMIT 14
+                    """,
+                    (system_address, faction_name),
+                ).fetchall()
+            ]
+
+            trend = None
+            if len(history) >= 2:
+                newest, oldest = history[0]["influence"], history[-1]["influence"]
+                if newest - oldest > 0.02:
+                    trend = "up"
+                elif oldest - newest > 0.02:
+                    trend = "down"
+                else:
+                    trend = "flat"
+
+            our_influence = history[0]["influence"] if history else None
+
+            days_in_expansion_range = None
+            if our_influence is not None and our_influence >= 0.70:
+                days_in_expansion_range = 0
+                for h in history:
+                    if h["influence"] >= 0.70:
+                        days_in_expansion_range += 1
+                    else:
+                        break
+
+            days_in_retreat_range = None
+            if our_influence is not None and our_influence < 0.05:
+                days_in_retreat_range = 0
+                for h in history:
+                    if h["influence"] < 0.05:
+                        days_in_retreat_range += 1
+                    else:
+                        break
+
+            conflict_risk = None
+            if our_influence is not None and our_influence >= 0.07:
+                rivals = self.db.conn.execute(
+                    """
+                    SELECT fs.faction_name, fs.influence
+                    FROM faction_snapshots fs
+                    WHERE fs.system_address = ? AND fs.faction_name != ?
+                      AND fs.influence IS NOT NULL AND fs.influence >= 0.07
+                      AND fs.snapshot_date = (
+                          SELECT MAX(snapshot_date) FROM faction_snapshots fs2
+                          WHERE fs2.system_address = fs.system_address
+                            AND fs2.faction_name = fs.faction_name
+                      )
+                    """,
+                    (system_address, faction_name),
+                ).fetchall()
+                best, best_diff = None, None
+                for r in rivals:
+                    diff = abs(r["influence"] - our_influence)
+                    if diff <= 0.05 and (best_diff is None or diff < best_diff):
+                        best, best_diff = r, diff
+                if best is not None:
+                    conflict_risk = {
+                        "faction_name": best["faction_name"],
+                        "influence": best["influence"],
+                        "diff": best_diff,
+                    }
+
+            out.append({
+                "system_address": system_address,
+                "system_name": system_name,
+                "influence": our_influence,
+                "trend": trend,
+                "days_in_expansion_range": days_in_expansion_range,
+                "days_in_retreat_range": days_in_retreat_range,
+                "conflict_risk": conflict_risk,
+            })
+        return out
+
     def save_ring(
         self,
         system_address: int,
@@ -552,6 +671,19 @@ class Repository:
             records,
         )
         self.db.conn.commit()
+
+    def get_system_coords_for_names(self, names: list[str]) -> dict:
+        """{system_name: (x, y, z)} for whichever of `names` we have EDDN-
+        harvested coords for — used to distance-sort a bucket of tracked
+        systems from the player's current location."""
+        if not names:
+            return {}
+        placeholders = ",".join("?" for _ in names)
+        rows = self.db.conn.execute(
+            f"SELECT system_name, x, y, z FROM system_coords WHERE system_name IN ({placeholders})",
+            names,
+        ).fetchall()
+        return {r["system_name"]: (r["x"], r["y"], r["z"]) for r in rows}
 
     def save_market_snapshot_batch(self, records: list[tuple]):
         """

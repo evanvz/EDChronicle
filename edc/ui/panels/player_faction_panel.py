@@ -10,21 +10,31 @@ from __future__ import annotations
 import json
 import logging
 import time
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from PyQt6.QtCore import Qt, QObject, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QObject, QThread, QStringListModel, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QTableWidget, QTableWidgetItem, QHeaderView, QFrame, QFileDialog,
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit, QPushButton,
+    QTableWidget, QTableWidgetItem, QHeaderView, QFrame, QFileDialog, QDialog,
+    QApplication, QCompleter,
 )
 
-from edc.core.edsm_faction_lookup import fetch_system_factions, ERROR_BLOCKED, ERROR_NOT_FOUND
+from edc.core.edsm_faction_lookup import fetch_system_factions, fetch_system_coords, ERROR_BLOCKED, ERROR_NOT_FOUND
 from edc.core.inara_faction_csv import parse_inara_faction_csv
 
 log = logging.getLogger(__name__)
+
+
+def _in_weekly_maintenance_window() -> bool:
+    """Frontier's weekly Elite Dangerous server maintenance — Thursdays,
+    roughly 09:00-11:00 in the user's local time (typically 1-2h, occasionally
+    longer on issues). Used to skip the automatic daily full-refresh only —
+    manual refresh/recheck clicks are never blocked."""
+    now = datetime.now()
+    return now.weekday() == 3 and 9 <= now.hour < 11
 
 _CARD_STYLE = "QFrame { background:#0d1a2a; border:1px solid #1e3a5a; border-radius:5px; }"
 _HDR_STYLE = "color:#555555; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
@@ -76,6 +86,8 @@ def derive_bgs_action(sys_rec: Dict[str, Any]) -> Tuple[str, str]:
         return ("🗳 Election in progress — trade/mission activity favors your faction's chances.", "#FFD93D")
     if "civilunrest" in active:
         return ("⚠ Civil Unrest — security/combat missions help stabilize.", "#FF8C00")
+    if "pirateattack" in active:
+        return ("🏴‍☠️ Pirate Attack — expect frequent interdictions; bounty hunting here pays extra and helps resolve it.", "#FF6B6B")
     if "lockdown" in active:
         return ("🔒 Lockdown — reduced mission availability; ride it out.", "#888888")
     if "outbreak" in active:
@@ -104,6 +116,68 @@ def derive_bgs_action(sys_rec: Dict[str, Any]) -> Tuple[str, str]:
     if is_controlling:
         return ("Stable control — no immediate action needed.", "#4D96FF")
     return ("Present, not controlling — monitor influence trend.", "#888888")
+
+
+def _format_forecast(prediction: Optional[Dict[str, Any]]) -> Tuple[str, str]:
+    """Returns (text, color_hex) for the Forecast column, from a
+    Repository.get_faction_predictions() entry. Priority: conflict risk
+    (a rival converging on your influence) > expansion/retreat risk (both
+    are "impending event" signals from the real BGS thresholds) > plain
+    trend > "not enough history yet"."""
+    if not prediction:
+        return ("—", "#555555")
+
+    conflict = prediction.get("conflict_risk")
+    if conflict:
+        diff_pct = conflict.get("diff", 0.0) * 100
+        return (
+            f"⚔ Conflict risk vs {conflict.get('faction_name', '?')} (Δ{diff_pct:.1f}%)",
+            "#FFB347",
+        )
+
+    days_exp = prediction.get("days_in_expansion_range")
+    if days_exp is not None:
+        return (f"🚀 Expansion likely (≥75% for {days_exp}d)", "#6BCB77")
+
+    days_ret = prediction.get("days_in_retreat_range")
+    if days_ret is not None:
+        return (f"⬇ Retreat risk ({days_ret}/~5d in window)", "#FF6B6B")
+
+    trend = prediction.get("trend")
+    if trend == "up":
+        return ("↑ Rising", "#6BCB77")
+    if trend == "down":
+        return ("↓ Falling", "#FF8C00")
+    if trend == "flat":
+        return ("→ Stable", "#4D96FF")
+    return ("Not enough history yet", "#555555")
+
+
+# (bucket key, tile label, tile bg color) — order is display order. A system
+# can land in several buckets at once (e.g. War + Stale Data); "No Action"
+# only gets a system that matched none of the others.
+_BUCKET_DEFS: List[Tuple[str, str, str]] = [
+    ("war", "War / Civil War", "#5F2323"),
+    ("election", "Election", "#5a4a10"),
+    ("civilunrest", "Civil Unrest", "#5a3a10"),
+    ("pirateattack", "Pirate Attack", "#5a3210"),
+    ("boom", "Boom", "#1e4a1e"),
+    ("bust", "Bust", "#3a3a3a"),
+    ("outbreak", "Outbreak", "#5F2323"),
+    ("famine", "Famine", "#5a3a10"),
+    ("drought", "Drought", "#5a3a10"),
+    ("blight", "Blight", "#5a3a10"),
+    ("lockdown", "Lockdown", "#3a3a3a"),
+    ("expansion_pending", "Expansion Pending", "#1e4a1e"),
+    ("retreat_pending", "Retreat Pending", "#5F2323"),
+    ("conflict_pending", "Conflict Pending", "#5a4a10"),
+    ("expansion_likely", "Expansion Likely", "#1e4a1e"),
+    ("retreat_risk", "Retreat Risk", "#5F2323"),
+    ("conflict_risk", "Conflict Risk", "#5a4a10"),
+    ("stale", "Stale Data (>7d)", "#3a3a3a"),
+    ("no_data", "No Data / Lookup Failed", "#3a3a3a"),
+    ("no_action", "No Action", "#1a3a5a"),
+]
 
 
 class _EdsmFactionLookupWorker(QObject):
@@ -206,6 +280,76 @@ class _CsvImportWorker(QObject):
         self.finished.emit(imported, fallback_used, not_found, cancelled_at, blocked_rows)
 
 
+class _FactionRefreshWorker(QObject):
+    """
+    Re-queries EDSM for every currently tracked system, saving EVERY
+    faction present there — not filtered down to the squadron-aligned one,
+    unlike the CSV import worker above. This is what makes rival-faction
+    influence available at all (needed for conflict-risk prediction) for
+    systems only ever known via EDDN/CSV, never personally visited, and
+    keeps every tracked system's data from going stale. Paced the same as
+    CSV import to avoid Cloudflare blocking at this scale.
+    """
+    progress = pyqtSignal(int, int, str)  # current, total, system_name
+    finished = pyqtSignal(int, int)  # systems_refreshed, systems_failed
+
+    def __init__(self, db_path, system_names: List[str]):
+        super().__init__()
+        self._db_path = db_path
+        self._system_names = system_names
+        self._cancel = False
+
+    def cancel(self):
+        self._cancel = True
+
+    def run(self):
+        from persistence.database import Database
+        from persistence.repository import Repository
+
+        db = Database(self._db_path)
+        repo = Repository(db)
+        refreshed = 0
+        failed = 0
+        total = len(self._system_names)
+
+        try:
+            # Distance sorting needs system_coords, which the faction
+            # endpoint never provides — only fetch it (extra request) for
+            # systems that don't already have it, e.g. from EDDN.
+            has_coords = set(repo.get_system_coords_for_names(self._system_names).keys())
+
+            for i, system_name in enumerate(self._system_names, start=1):
+                if self._cancel:
+                    break
+                self.progress.emit(i, total, system_name)
+
+                result, error = fetch_system_factions(system_name)
+                if not result:
+                    failed += 1
+                    time.sleep(0.3)
+                    continue
+
+                snapshot_date = date.today().isoformat()
+                for faction in result["factions"]:
+                    is_controlling = bool(faction.pop("is_controlling", False))
+                    repo.save_faction_snapshot(
+                        result["system_address"], faction, snapshot_date, is_controlling
+                    )
+
+                if system_name not in has_coords:
+                    coords = fetch_system_coords(system_name)
+                    if coords:
+                        now_iso = datetime.now(timezone.utc).isoformat()
+                        repo.save_system_coords_batch([(system_name, *coords, now_iso)])
+
+                refreshed += 1
+                time.sleep(0.3)
+        finally:
+            db.close()
+
+        self.finished.emit(refreshed, failed)
+
+
 class PlayerFactionPanel(QWidget):
     """
     Owns all widgets and refresh logic for the Player Faction tab.
@@ -213,9 +357,10 @@ class PlayerFactionPanel(QWidget):
     cross-system query, not something derivable from live GameState alone.
     """
 
-    def __init__(self, repo, parent=None):
+    def __init__(self, repo, refresh_tracker=None, parent=None):
         super().__init__(parent)
         self._repo = repo
+        self._refresh_tracker = refresh_tracker
         self._faction_name: Optional[str] = None
         self._last_state = None
         self._lookup_thread: Optional[QThread] = None
@@ -223,6 +368,15 @@ class PlayerFactionPanel(QWidget):
         self._csv_thread: Optional[QThread] = None
         self._csv_worker: Optional[_CsvImportWorker] = None
         self._last_csv_names: set = set()
+        self._refresh_all_thread: Optional[QThread] = None
+        self._refresh_all_worker: Optional["_FactionRefreshWorker"] = None
+        self._auto_refresh_checked: bool = False
+        # Populated once per bulk rebuild (not on every single-system
+        # arrival update — predictions only meaningfully change once a day,
+        # matching the BGS tick, so recomputing them more often buys nothing
+        # and would reintroduce the per-event overhead already fixed once
+        # this session). Keyed by system_address.
+        self._last_predictions: Dict[int, dict] = {}
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 8)
@@ -243,7 +397,50 @@ class PlayerFactionPanel(QWidget):
         self._summary_label.setStyleSheet("background:transparent; border:none; color:#c8c8c8;")
         frame_l.addWidget(self._summary_label)
 
+        self._bgs_contribution_label = QLabel("")
+        self._bgs_contribution_label.setWordWrap(True)
+        self._bgs_contribution_label.setStyleSheet("background:transparent; border:none; color:#9BE68C;")
+        self._bgs_contribution_label.setVisible(False)
+        frame_l.addWidget(self._bgs_contribution_label)
+
         root.addWidget(frame)
+
+        # ── Full EDSM refresh (all known systems, all factions present —
+        # not just squadron's, so rival-faction data becomes available for
+        # conflict-risk prediction) — runs automatically about once a day,
+        # or on demand via this button. ─────────────────────────────────
+        refresh_row = QHBoxLayout()
+        refresh_row.setSpacing(6)
+        self._refresh_status_label = QLabel("")
+        self._refresh_status_label.setStyleSheet(
+            "background:transparent; border:none; color:#888888; font-size:11px;"
+        )
+        refresh_row.addWidget(self._refresh_status_label, 1)
+        self._refresh_all_btn = QPushButton("Refresh All from EDSM")
+        self._refresh_all_btn.setStyleSheet(
+            "QPushButton { background:#1a3a5a; color:#FFB347; border:1px solid #2a5a8a;"
+            " border-radius:3px; padding:3px 12px; font-weight:bold; }"
+            "QPushButton:hover { background:#2a5a8a; }"
+            "QPushButton:disabled { background:#111; color:#555; border-color:#333; }"
+        )
+        self._refresh_all_btn.setToolTip(
+            "Re-queries EDSM for every currently tracked system, saving every faction "
+            "present there (not just this one) — refreshes stale data and captures "
+            "rival-faction influence for conflict-risk detection. Runs automatically "
+            "about once a day; this forces it now."
+        )
+        self._refresh_all_btn.clicked.connect(self._on_refresh_all_clicked)
+        refresh_row.addWidget(self._refresh_all_btn)
+        self._cancel_refresh_btn = QPushButton("Cancel")
+        self._cancel_refresh_btn.setStyleSheet(
+            "QPushButton { background:#2a0d0d; color:#d06060; border:1px solid #4a1e1e;"
+            " border-radius:3px; padding:3px 12px; font-weight:bold; }"
+            "QPushButton:hover { background:#4a1e1e; }"
+        )
+        self._cancel_refresh_btn.clicked.connect(self._on_cancel_refresh_clicked)
+        self._cancel_refresh_btn.setVisible(False)
+        refresh_row.addWidget(self._cancel_refresh_btn)
+        root.addLayout(refresh_row)
 
         # ── Manually add a system (e.g. from Inara's faction page) ────────
         csv_note = QLabel(
@@ -333,7 +530,6 @@ class PlayerFactionPanel(QWidget):
         self._last_rebuild_at: float = 0.0
         self._force_rebuild_next: bool = True
         self._REBUILD_MIN_INTERVAL_S = 15.0
-        self._row_by_system_address: Dict[int, int] = {}
 
         root.addLayout(add_row)
 
@@ -375,49 +571,33 @@ class PlayerFactionPanel(QWidget):
         self._stale_frame.setVisible(False)
         self._stale_system_addresses: List[int] = []
 
-        self._table = QTableWidget()
-        self._table.setColumnCount(8)
-        self._table.setHorizontalHeaderLabels(
-            ["System", "Influence", "Controlling", "Active", "Pending", "Reputation", "Action", ""]
+        # ── Bucket dashboard (replaces the old flat ~700-row table) ────────
+        buckets_hdr = QLabel("SYSTEMS BY STATUS — CLICK A TILE FOR DETAILS")
+        buckets_hdr.setStyleSheet(_HDR_STYLE)
+        root.addWidget(buckets_hdr)
+
+        search_row = QHBoxLayout()
+        search_row.addWidget(QLabel("Search:"))
+        self._system_search_edit = QLineEdit()
+        self._system_search_edit.setPlaceholderText("System name…")
+        self._system_search_completer = QCompleter([])
+        self._system_search_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self._system_search_completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        self._system_search_completer.popup().setStyleSheet(
+            "QAbstractItemView { background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;"
+            " selection-background-color:#1a3a5a; selection-color:#FFB347; }"
         )
-        self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self._table.verticalHeader().setVisible(False)
-        self._table.setAlternatingRowColors(True)
-        self._table.setStyleSheet(
-            "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
-            " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
-            "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
-            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
-            "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
-        )
-        h = self._table.horizontalHeader()
-        # ResizeToContents forces Qt to re-measure every row in that column
-        # on every single setItem() call (dataChanged -> sizeHintForColumn()
-        # scans the whole column) — fine at a handful of rows, but O(rows)
-        # per insert makes populating this table O(rows^2) at the ~hundreds
-        # of systems this tab tracks (confirmed via live profiling: this is
-        # what actually made the bulk rebuild pathologically slow, distinct
-        # from how often the rebuild ran). Fixed/Interactive widths avoid
-        # the per-insert remeasurement entirely.
-        h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        h.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
-        h.setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
-        h.setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)
-        h.setSectionResizeMode(4, QHeaderView.ResizeMode.Interactive)
-        h.setSectionResizeMode(5, QHeaderView.ResizeMode.Interactive)
-        h.setSectionResizeMode(6, QHeaderView.ResizeMode.Stretch)
-        h.setSectionResizeMode(7, QHeaderView.ResizeMode.Interactive)
-        self._table.setColumnWidth(1, 70)
-        self._table.setColumnWidth(2, 90)
-        self._table.setColumnWidth(3, 160)
-        self._table.setColumnWidth(4, 140)
-        self._table.setColumnWidth(5, 80)
-        self._table.setColumnWidth(7, 90)
-        self._table.setSortingEnabled(True)
-        self._table.cellClicked.connect(self._on_table_cell_clicked)
-        root.addWidget(self._table, 1)
+        self._system_search_edit.setCompleter(self._system_search_completer)
+        self._system_search_edit.returnPressed.connect(self._on_system_search)
+        search_row.addWidget(self._system_search_edit, 1)
+        root.addLayout(search_row)
+
+        self._buckets_widget = QWidget()
+        self._buckets_layout = QGridLayout(self._buckets_widget)
+        self._buckets_layout.setSpacing(6)
+        root.addWidget(self._buckets_widget, 1)
+        self._bucket_dialogs: Dict[str, "_FactionBucketDialog"] = {}
+        self._last_buckets: Dict[str, List[dict]] = {}
 
         # ── Active missions for this faction (what to complete) ───────────
         missions_hdr = QLabel("ACTIVE MISSIONS — HELP THIS FACTION")
@@ -461,6 +641,23 @@ class PlayerFactionPanel(QWidget):
         # tab needs to trigger its own refresh to show current data.
         self.refresh(self._last_state)
 
+    def update_reference_state(self, state) -> None:
+        """Cheap position-only update — keeps distance calcs fresh every
+        event without triggering the expensive full bucket rebuild."""
+        self._last_state = state
+
+        bounty_cr = getattr(state, "squadron_bgs_bounty_cr", 0) or 0
+        trade_cr = getattr(state, "squadron_bgs_trade_cr", 0) or 0
+        if not self._faction_name or (not bounty_cr and not trade_cr):
+            self._bgs_contribution_label.setVisible(False)
+            return
+        self._bgs_contribution_label.setText(
+            f"Your BGS contribution to {self._faction_name} this session — "
+            f"bounties redeemed: {bounty_cr:,} cr, trade: {trade_cr:,} cr "
+            "(only counted at stations it controls)."
+        )
+        self._bgs_contribution_label.setVisible(True)
+
     def refresh(self, state=None) -> None:
         self._last_state = state
         try:
@@ -475,7 +672,7 @@ class PlayerFactionPanel(QWidget):
                 "You're not currently aligned with a squadron-supported minor faction — "
                 "this tab activates automatically once your squadron adopts one."
             )
-            self._table.setRowCount(0)
+            self._rebuild_buckets([])
             self._missions_status_label.setText("")
             self._missions_table.setRowCount(0)
             return
@@ -487,6 +684,7 @@ class PlayerFactionPanel(QWidget):
             f"Faction: {overview['faction_name']} — present in {len(systems)} system"
             f"{'s' if len(systems) != 1 else ''}, controlling {controlling_count}."
         )
+        self._maybe_auto_refresh_all()
 
         if not self.isVisible():
             # Tab isn't the one currently on screen — no point paying for
@@ -507,21 +705,139 @@ class PlayerFactionPanel(QWidget):
         self._last_overview = overview
         self._last_rebuild_at = now
 
-        self._table.setSortingEnabled(False)
-        self._table.setRowCount(len(systems))
-        self._row_by_system_address = {}
-        for row, s in enumerate(systems):
-            for col, item in enumerate(self._build_row_items(s)):
-                self._table.setItem(row, col, item)
-            system_address = s.get("system_address")
-            if isinstance(system_address, int):
-                self._row_by_system_address[system_address] = row
+        try:
+            self._last_predictions = {
+                p["system_address"]: p
+                for p in self._repo.get_faction_predictions(self._faction_name)
+                if isinstance(p.get("system_address"), int)
+            }
+        except Exception:
+            log.exception("Failed to compute faction predictions")
+            self._last_predictions = {}
 
-        self._table.setSortingEnabled(True)
+        self._rebuild_buckets(systems)
         self._refresh_active_missions(self._faction_name, state)
 
+    def _compute_buckets(self, systems: List[dict]) -> Dict[str, List[dict]]:
+        """Sorts tracked systems into status buckets — a system can land in
+        several at once (e.g. War + Stale Data). "No Action" only gets a
+        system that matched none of the "needs attention" buckets; "Stale
+        Data" is checked independently of that, on its own axis."""
+        buckets: Dict[str, List[dict]] = {key: [] for key, _, _ in _BUCKET_DEFS}
+        today = date.today()
+
+        for s in systems:
+            active_names = [s.get("faction_state")] if s.get("faction_state") and s.get("faction_state") != "None" else []
+            active_names += [st for st in _parse_states(s.get("active_states")) if st not in active_names]
+            active_lower = {n.lower() for n in active_names}
+            pending_lower = {n.lower() for n in _parse_states(s.get("pending_states"))}
+            system_address = s.get("system_address")
+            prediction = self._last_predictions.get(system_address) if isinstance(system_address, int) else None
+
+            has_action = False
+            for key in ("war", "election", "civilunrest", "pirateattack", "boom", "bust",
+                        "outbreak", "famine", "drought", "blight", "lockdown"):
+                matched = bool(active_lower & {"war", "civilwar"}) if key == "war" else key in active_lower
+                if matched:
+                    buckets[key].append(s)
+                    has_action = True
+
+            if "expansion" in pending_lower:
+                buckets["expansion_pending"].append(s)
+                has_action = True
+            if "retreat" in pending_lower:
+                buckets["retreat_pending"].append(s)
+                has_action = True
+            if pending_lower & {"war", "civilwar"}:
+                buckets["conflict_pending"].append(s)
+                has_action = True
+
+            if prediction:
+                if prediction.get("conflict_risk"):
+                    buckets["conflict_risk"].append(s)
+                    has_action = True
+                elif prediction.get("days_in_expansion_range") is not None:
+                    buckets["expansion_likely"].append(s)
+                    has_action = True
+                elif prediction.get("days_in_retreat_range") is not None:
+                    buckets["retreat_risk"].append(s)
+                    has_action = True
+
+            snapshot_date = s.get("snapshot_date")
+            if isinstance(snapshot_date, str):
+                try:
+                    if (today - date.fromisoformat(snapshot_date[:10])).days > 7:
+                        buckets["stale"].append(s)
+                except ValueError:
+                    pass
+
+            if not isinstance(s.get("influence"), (int, float)):
+                buckets["no_data"].append(s)
+
+            if not has_action:
+                buckets["no_action"].append(s)
+
+        return buckets
+
+    def _rebuild_buckets(self, systems: List[dict]) -> None:
+        self._last_buckets = self._compute_buckets(systems)
+
+        names = sorted({s.get("system_name") for s in systems if s.get("system_name")})
+        model = self._system_search_completer.model()
+        if isinstance(model, QStringListModel):
+            model.setStringList(names)
+        else:
+            self._system_search_completer.setModel(QStringListModel(names, self._system_search_completer))
+
+        while self._buckets_layout.count():
+            item = self._buckets_layout.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
+
+        cols = 4
+        for i, (key, label, color) in enumerate(_BUCKET_DEFS):
+            count = len(self._last_buckets[key])
+            btn = QPushButton(f"{label}\n{count} system{'s' if count != 1 else ''}")
+            btn.setMinimumHeight(54)
+            btn.setEnabled(count > 0)
+            btn.setStyleSheet(
+                f"QPushButton {{ background:{color}; color:#e6e6e6; border:1px solid #2a5a8a;"
+                " border-radius:5px; font-weight:bold; padding:6px; }"
+                "QPushButton:hover { background:#2a5a8a; }"
+                "QPushButton:disabled { background:#161616; color:#555; border-color:#333; }"
+            )
+            btn.clicked.connect(lambda _checked=False, k=key, l=label: self._open_bucket_dialog(k, l))
+            self._buckets_layout.addWidget(btn, i // cols, i % cols)
+
+        for key, dlg in self._bucket_dialogs.items():
+            if dlg.isVisible() and key != "search":
+                dlg.set_systems(self._last_buckets.get(key, []))
+
+    def _open_bucket_dialog(self, key: str, label: str) -> None:
+        systems = self._last_buckets.get(key, [])
+        dlg = self._bucket_dialogs.get(key)
+        if dlg is None:
+            dlg = _FactionBucketDialog(self, label)
+            self._bucket_dialogs[key] = dlg
+        dlg.set_systems(systems)
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
+
+    def _on_system_search(self) -> None:
+        query = self._system_search_edit.text().strip().lower()
+        if not query or not self._last_overview:
+            return
+        systems = [
+            s for s in (self._last_overview.get("systems") or [])
+            if query in (s.get("system_name") or "").lower()
+        ]
+        self._open_bucket_dialog("search", "Search Results")
+        self._bucket_dialogs["search"].set_systems(systems)
+
     def _build_row_items(self, s: dict) -> List[QTableWidgetItem]:
-        """Builds the 8 QTableWidgetItems for one systems-table row from a
+        """Builds the 9 QTableWidgetItems for one systems-table row from a
         faction-status dict. Shared by the full rebuild in refresh() and by
         refresh_single_system()'s targeted single-row update."""
         name_item = QTableWidgetItem(s.get("system_name") or f"Unknown ({s.get('system_address')})")
@@ -539,6 +855,7 @@ class PlayerFactionPanel(QWidget):
         active_lower = {n.lower() for n in active_names}
         is_war = bool(active_lower & {"war", "civilwar"})
         is_election = "election" in active_lower
+        is_pirate_attack = "pirateattack" in active_lower
 
         pending_names = _parse_states(s.get("pending_states"))
         pending_item = QTableWidgetItem(", ".join(pending_names) if pending_names else "—")
@@ -551,17 +868,23 @@ class PlayerFactionPanel(QWidget):
         action_item = QTableWidgetItem(action_text)
         action_item.setForeground(QColor(color))
 
-        for it in (infl_item, ctrl_item, active_item, pending_item, rep_item):
+        system_address = s.get("system_address")
+        prediction = self._last_predictions.get(system_address) if isinstance(system_address, int) else None
+        forecast_text, forecast_color = _format_forecast(prediction)
+        forecast_item = QTableWidgetItem(forecast_text)
+        forecast_item.setForeground(QColor(forecast_color))
+
+        for it in (infl_item, ctrl_item, active_item, pending_item, rep_item, forecast_item):
             it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         if s.get("is_controlling"):
             ctrl_item.setForeground(QColor("#6BCB77"))
         if pending_names:
             pending_item.setForeground(QColor("#FFD93D"))
 
-        row_items = [name_item, infl_item, ctrl_item, active_item, pending_item, rep_item, action_item]
-        # War/Civil War/Election are the states that most urgently need
-        # squadron attention — highlight the whole row, not just a cell,
-        # so it's obvious scanning down the System column alone.
+        row_items = [name_item, infl_item, ctrl_item, active_item, pending_item, rep_item, action_item, forecast_item]
+        # War/Civil War/Election/Pirate Attack are the states that most
+        # urgently need squadron attention — highlight the whole row, not
+        # just a cell, so it's obvious scanning down the System column alone.
         if is_war:
             for it in row_items:
                 it.setBackground(QColor(90, 30, 30))
@@ -570,6 +893,10 @@ class PlayerFactionPanel(QWidget):
             for it in row_items:
                 it.setBackground(QColor(80, 65, 10))
             active_item.setForeground(QColor("#FFD93D"))
+        elif is_pirate_attack:
+            for it in row_items:
+                it.setBackground(QColor(90, 50, 10))
+            active_item.setForeground(QColor("#FF9933"))
 
         # A setCellWidget() button would not follow its row when the table
         # is sorted (a real QTableWidgetItem does) — a plain clickable-styled
@@ -584,12 +911,14 @@ class PlayerFactionPanel(QWidget):
 
     def refresh_single_system(self, system_address: int) -> None:
         """
-        Called on arrival in a system — checks/updates just that one row
-        instead of the full ~hundreds-of-systems bulk refresh. BGS state
-        only ticks daily server-side, so there's no need to re-check every
-        tracked system just because the player jumped somewhere.
+        Called on arrival in a system — patches just that one system's data
+        instead of a full DB requery. BGS state only ticks daily server-side,
+        so there's no need to re-check every tracked system just because the
+        player jumped somewhere. Bucket tiles are cheap to recompute (a Python
+        scan over a few hundred small dicts, no widget churn), so they're
+        refreshed every time — unlike the old flat table's per-row rebuild.
         """
-        if not self._faction_name or not isinstance(system_address, int):
+        if not self._faction_name or not isinstance(system_address, int) or not self._last_overview:
             return
         try:
             status = self._repo.get_player_faction_system_status(self._faction_name, system_address)
@@ -599,12 +928,12 @@ class PlayerFactionPanel(QWidget):
         if not status:
             return  # not a tracked system — nothing to update
 
-        row = self._row_by_system_address.get(system_address)
-        if row is None or row >= self._table.rowCount():
-            return  # table not built yet / row map stale — next bulk refresh will pick it up
-
-        for col, item in enumerate(self._build_row_items(status)):
-            self._table.setItem(row, col, item)
+        systems = self._last_overview.get("systems") or []
+        for i, s in enumerate(systems):
+            if s.get("system_address") == system_address:
+                systems[i] = status
+                break
+        self._rebuild_buckets(systems)
 
     def _refresh_active_missions(self, faction_name: str, state) -> None:
         active_missions = getattr(state, "active_missions", None) or {} if state else {}
@@ -708,15 +1037,6 @@ class PlayerFactionPanel(QWidget):
         self._add_system_status.setText(f"Added {result['system_name']}.")
         self._add_system_edit.clear()
         self.refresh(self._last_state)
-
-    def _on_table_cell_clicked(self, row: int, column: int):
-        if column != 7:
-            return
-        item = self._table.item(row, 7)
-        if item is None:
-            return
-        system_address = item.data(Qt.ItemDataRole.UserRole)
-        self._on_remove_system_clicked(system_address)
 
     # ── Bulk CSV import ──────────────────────────────────────────────────
 
@@ -873,6 +1193,116 @@ class PlayerFactionPanel(QWidget):
         self._stale_frame.setVisible(False)
         self.refresh(self._last_state)
 
+    # ── Full EDSM refresh (all systems, all factions) ────────────────────
+
+    def _maybe_auto_refresh_all(self) -> None:
+        """Called once per session, the first time a squadron-aligned
+        faction is known — auto-starts the full refresh if it's been about
+        a day (or never) since the last one."""
+        if self._auto_refresh_checked or not self._refresh_tracker or not self._faction_name:
+            return
+        self._auto_refresh_checked = True
+        last = self._refresh_tracker.last_refresh()
+        self._update_refresh_status_label(last)
+        if last is not None:
+            age_hours = (datetime.now(timezone.utc) - last).total_seconds() / 3600.0
+            if age_hours < 24.0:
+                return
+        if _in_weekly_maintenance_window():
+            # Frontier's weekly server maintenance (Thursdays ~09:00-11:00
+            # local) — EDSM tends to be unreliable then too, no point
+            # burning ~700 requests into it. Manual "Refresh All"/"Recheck"
+            # clicks are NOT gated — this only skips the automatic trigger.
+            return
+        self._start_refresh_all()
+
+    def _update_refresh_status_label(self, last) -> None:
+        if last is None:
+            self._refresh_status_label.setText("Full EDSM refresh: never run yet")
+            return
+        from datetime import datetime, timezone
+        age_hours = (datetime.now(timezone.utc) - last).total_seconds() / 3600.0
+        if age_hours < 1:
+            age_txt = "less than an hour ago"
+        elif age_hours < 24:
+            age_txt = f"{int(age_hours)}h ago"
+        else:
+            age_txt = f"{int(age_hours // 24)}d ago"
+        self._refresh_status_label.setText(f"Full EDSM refresh: {age_txt}")
+
+    def _on_refresh_all_clicked(self):
+        if not self._faction_name:
+            self._refresh_status_label.setText(
+                "No squadron-aligned faction known yet — this activates once one is detected."
+            )
+            return
+        self._start_refresh_all()
+
+    def _start_refresh_all(self):
+        if not self._faction_name:
+            return
+        if (self._lookup_thread and self._lookup_thread.isRunning()) or \
+           (self._csv_thread and self._csv_thread.isRunning()) or \
+           (self._refresh_all_thread and self._refresh_all_thread.isRunning()):
+            return
+        try:
+            system_names = sorted(self._repo.get_known_system_names(self._faction_name))
+        except Exception:
+            log.exception("Failed to load known system names for full refresh")
+            return
+        if not system_names:
+            return
+
+        # Snapshot dates are day-granularity, so "older than 24h" means
+        # "not already refreshed today" — skips systems a live arrival (or
+        # an earlier refresh today) already updated, cutting EDSM request
+        # volume instead of re-querying every tracked system every time.
+        today = date.today().isoformat()
+        fresh_today = {
+            s.get("system_name")
+            for s in (self._last_overview.get("systems") if self._last_overview else None) or []
+            if isinstance(s.get("snapshot_date"), str) and s["snapshot_date"][:10] == today
+        }
+        system_names = [n for n in system_names if n not in fresh_today]
+        if not system_names:
+            self._refresh_status_label.setText("Full EDSM refresh: all systems already current today.")
+            return
+
+        self._refresh_all_btn.setEnabled(False)
+        self._cancel_refresh_btn.setVisible(True)
+        self._refresh_status_label.setText(f"Refreshing 0 / {len(system_names)}…")
+
+        self._refresh_all_worker = _FactionRefreshWorker(self._repo.db.db_path, system_names)
+        self._refresh_all_thread = QThread()
+        self._refresh_all_worker.moveToThread(self._refresh_all_thread)
+        self._refresh_all_thread.started.connect(self._refresh_all_worker.run)
+        self._refresh_all_worker.progress.connect(self._on_refresh_all_progress)
+        self._refresh_all_worker.finished.connect(self._on_refresh_all_finished)
+        self._refresh_all_worker.finished.connect(self._refresh_all_thread.quit)
+        self._refresh_all_thread.start()
+
+    def _on_cancel_refresh_clicked(self):
+        if self._refresh_all_worker:
+            self._refresh_all_worker.cancel()
+        self._cancel_refresh_btn.setEnabled(False)
+
+    def _on_refresh_all_progress(self, current: int, total: int, system_name: str):
+        self._refresh_status_label.setText(f"Refreshing {current} / {total}: {system_name}")
+
+    def _on_refresh_all_finished(self, refreshed: int, failed: int):
+        self._refresh_all_btn.setEnabled(True)
+        self._cancel_refresh_btn.setVisible(False)
+        self._cancel_refresh_btn.setEnabled(True)
+
+        if self._refresh_tracker:
+            self._refresh_tracker.mark_refreshed()
+
+        failed_txt = f", {failed} failed (blocked/not found)" if failed else ""
+        self._refresh_status_label.setText(
+            f"Full EDSM refresh: just now — {refreshed} refreshed{failed_txt}"
+        )
+        self.refresh(self._last_state)
+
     def _on_remove_system_clicked(self, system_address):
         if not self._faction_name or not isinstance(system_address, int):
             return
@@ -882,3 +1312,176 @@ class PlayerFactionPanel(QWidget):
             log.exception("Failed to dismiss faction system")
             return
         self.refresh(self._last_state)
+
+
+class _FactionBucketDialog(QDialog):
+    """
+    Non-modal detail window for one status bucket — stays open, movable, and
+    independent of the main window's tab switching (a plain QDialog with no
+    parent-modality set does this for free). Reuses PlayerFactionPanel's own
+    row-building so a bucket's table looks identical to the old flat table.
+    """
+
+    def __init__(self, panel: "PlayerFactionPanel", label: str):
+        super().__init__(None)
+        self._panel = panel
+        self._all_systems: List[dict] = []
+        self.setWindowTitle(f"Player Faction — {label}")
+        self.resize(900, 500)
+
+        layout = QVBoxLayout(self)
+        search_row = QHBoxLayout()
+        search_row.addWidget(QLabel("Search:"))
+        self._search_edit = QLineEdit()
+        self._search_edit.setPlaceholderText("System name…")
+        self._search_edit.textChanged.connect(self._apply_filter)
+        search_row.addWidget(self._search_edit, 1)
+        self._sort_distance_btn = QPushButton("Sort by Distance")
+        self._sort_distance_btn.setToolTip(
+            "Distance from your current system — visit the closest first. "
+            "Systems with no known coordinates sink to the bottom."
+        )
+        self._sort_distance_btn.clicked.connect(self._sort_by_distance)
+        search_row.addWidget(self._sort_distance_btn)
+        self._recheck_btn = QPushButton("Recheck via EDSM")
+        self._recheck_btn.setToolTip("Re-queries EDSM for exactly the systems currently shown here.")
+        self._recheck_btn.clicked.connect(self._on_recheck_clicked)
+        search_row.addWidget(self._recheck_btn)
+        layout.addLayout(search_row)
+
+        self._recheck_status = QLabel("")
+        self._recheck_status.setStyleSheet("background:transparent; border:none; color:#888888; font-size:11px;")
+        layout.addWidget(self._recheck_status)
+
+        self._table = QTableWidget()
+        self._table.setColumnCount(10)
+        self._table.setHorizontalHeaderLabels(
+            ["System", "Influence", "Controlling", "Active", "Pending", "Reputation", "Action", "Forecast", "Distance (ly)", ""]
+        )
+        self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self._table.verticalHeader().setVisible(False)
+        self._table.setAlternatingRowColors(True)
+        self._table.setStyleSheet(
+            "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
+            " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
+            "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
+            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
+            "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
+        )
+        h = self._table.horizontalHeader()
+        h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        for c in (1, 2, 3, 4, 5, 8, 9):
+            h.setSectionResizeMode(c, QHeaderView.ResizeMode.Interactive)
+        h.setSectionResizeMode(6, QHeaderView.ResizeMode.Stretch)
+        h.setSectionResizeMode(7, QHeaderView.ResizeMode.Stretch)
+        self._table.setColumnWidth(1, 70)
+        self._table.setColumnWidth(2, 90)
+        self._table.setColumnWidth(3, 160)
+        self._table.setColumnWidth(4, 140)
+        self._table.setColumnWidth(5, 80)
+        self._table.setColumnWidth(8, 90)
+        self._table.setColumnWidth(9, 90)
+        self._table.setSortingEnabled(True)
+        self._table.cellClicked.connect(self._on_cell_clicked)
+        layout.addWidget(self._table, 1)
+
+    def set_systems(self, systems: List[dict]) -> None:
+        self._all_systems = systems
+        self._apply_filter()
+
+    def _reference_coords(self):
+        """Returns (x, y, z) of the player's current system, or None if unknown."""
+        state = self._panel._last_state
+        x = getattr(state, "system_x", None) if state else None
+        y = getattr(state, "system_y", None) if state else None
+        z = getattr(state, "system_z", None) if state else None
+        if all(isinstance(v, (int, float)) for v in (x, y, z)):
+            return (x, y, z)
+        return None
+
+    def _apply_filter(self) -> None:
+        query = self._search_edit.text().strip().lower()
+        rows = [
+            s for s in self._all_systems
+            if not query or query in (s.get("system_name") or "").lower()
+        ]
+
+        ref = self._reference_coords()
+        coords = self._panel._repo.get_system_coords_for_names(
+            [s.get("system_name") for s in rows if s.get("system_name")]
+        ) if ref else {}
+
+        self._table.setSortingEnabled(False)
+        self._table.setRowCount(len(rows))
+        for row, s in enumerate(rows):
+            items = self._panel._build_row_items(s)
+
+            dist_value = float("inf")
+            dist_text = "—"
+            c = coords.get(s.get("system_name"))
+            if ref and c:
+                dist_value = ((c[0] - ref[0]) ** 2 + (c[1] - ref[1]) ** 2 + (c[2] - ref[2]) ** 2) ** 0.5
+                dist_text = f"{dist_value:.1f} ly"
+            dist_item = _NumericTableWidgetItem(dist_text, dist_value)
+            dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            items.insert(8, dist_item)
+
+            for col, item in enumerate(items):
+                self._table.setItem(row, col, item)
+        self._table.setSortingEnabled(True)
+
+    def _sort_by_distance(self) -> None:
+        ref = self._reference_coords()
+        if not ref:
+            return
+        names = [s.get("system_name") for s in self._all_systems if s.get("system_name")]
+        coords = self._panel._repo.get_system_coords_for_names(names)
+
+        def _dist(s: dict) -> float:
+            c = coords.get(s.get("system_name"))
+            if not c:
+                return float("inf")
+            return ((c[0] - ref[0]) ** 2 + (c[1] - ref[1]) ** 2 + (c[2] - ref[2]) ** 2) ** 0.5
+
+        self._all_systems.sort(key=_dist)
+        self._apply_filter()
+
+    def _on_recheck_clicked(self) -> None:
+        names = [s.get("system_name") for s in self._all_systems if s.get("system_name")]
+        if not names:
+            return
+        self._recheck_btn.setEnabled(False)
+        self._recheck_status.setText(f"Rechecking 0 / {len(names)}…")
+        self._recheck_worker = _FactionRefreshWorker(self._panel._repo.db.db_path, names)
+        self._recheck_thread = QThread()
+        self._recheck_worker.moveToThread(self._recheck_thread)
+        self._recheck_thread.started.connect(self._recheck_worker.run)
+        self._recheck_worker.progress.connect(
+            lambda cur, total, name: self._recheck_status.setText(f"Rechecking {cur} / {total}: {name}")
+        )
+        self._recheck_worker.finished.connect(self._on_recheck_finished)
+        self._recheck_worker.finished.connect(self._recheck_thread.quit)
+        self._recheck_thread.start()
+
+    def _on_recheck_finished(self, refreshed: int, failed: int) -> None:
+        self._recheck_btn.setEnabled(True)
+        self._recheck_status.setText(f"Done — {refreshed} refreshed, {failed} failed.")
+        self._panel.refresh(self._panel._last_state)
+        self._apply_filter()
+
+    def _on_cell_clicked(self, row: int, column: int) -> None:
+        if column == 9:  # Remove
+            item = self._table.item(row, 9)
+            if item is None:
+                return
+            system_address = item.data(Qt.ItemDataRole.UserRole)
+            self._panel._on_remove_system_clicked(system_address)
+            self._all_systems = [s for s in self._all_systems if s.get("system_address") != system_address]
+            self._apply_filter()
+            return
+        if column == 0:  # System name — click to copy
+            item = self._table.item(row, 0)
+            if item and item.text():
+                QApplication.clipboard().setText(item.text())

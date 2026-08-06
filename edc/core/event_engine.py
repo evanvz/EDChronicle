@@ -9,7 +9,7 @@ from .external_intel import ExternalIntel
 from edc.engine.handlers import exploration, exobio, inventory, powerplay, misc, fleet_carrier, mining, engineers
 from edc.core.squadron_events import SQUADRON_EVENT_NAMES, apply_squadron_event
 from edc.core.mission_events import MISSION_EVENT_NAMES, apply_mission_event
-from edc.core.bgs_conflicts import find_squadron_war_enemy
+from edc.core.bgs_conflicts import find_squadron_war_enemy, squadron_faction_name
 from edc.core.ship_loadout import has_any_weapon
 from edc.core.ring_signals import RING_NAME_RE as _RING_NAME_RE, parse_ring_hotspots
 
@@ -169,6 +169,14 @@ class EventEngine:
             else:
                 loc[key] = key.replace("_", " ").title()
         return counts, loc           
+
+    def _at_squadron_faction_station(self) -> bool:
+        """True if the current system's controlling faction is the
+        squadron-aligned faction — the BGS crediting rule for bounty
+        redemption and trading (verified: influence is credited to
+        whichever faction owns the station you transact at)."""
+        faction = self.state.controlling_faction
+        return bool(faction) and faction == squadron_faction_name(self.state.factions)
 
     def process(self, event: Dict[str, Any]) -> Tuple[GameState, List[str]]:
         """
@@ -703,6 +711,21 @@ class EventEngine:
             msgs.append(f"Cargo: {self.state.cargo_count} (Limpets {self.state.limpets})")
 
         elif name == "Bounty":
+            victim_faction = event.get("VictimFaction")
+            if isinstance(victim_faction, str) and victim_faction:
+                # One kill credits every currently-stacked massacre mission
+                # against that faction in this system simultaneously — real
+                # game behavior, not per-mission independent progress.
+                for rec in (self.state.active_missions or {}).values():
+                    kill_count = rec.get("kill_count")
+                    if (
+                        isinstance(kill_count, int)
+                        and rec.get("target_faction") == victim_faction
+                        and rec.get("destination_system") == self.state.system
+                        and rec.get("kills_credited", 0) < kill_count
+                    ):
+                        rec["kills_credited"] = rec.get("kills_credited", 0) + 1
+
             reward = event.get("TotalReward")
             if isinstance(reward, int):
                 ts = event.get("timestamp") or ""
@@ -761,6 +784,41 @@ class EventEngine:
                     self.state.combat_contacts = contacts
             except Exception:
                 pass
+
+        elif name == "MarketBuy":
+            cost = event.get("TotalCost")
+            if isinstance(cost, int):
+                self.state.session_trade_spent += cost
+                if self._at_squadron_faction_station():
+                    self.state.squadron_bgs_trade_cr += cost
+
+        elif name == "MarketSell":
+            # Profit uses the game's own AvgPricePaid cost basis per sale
+            # (not a running buy/sell subtraction) — correctly nets out to
+            # full profit for cargo that was never bought (mined, looted,
+            # mission reward), where AvgPricePaid is 0.
+            sale = event.get("TotalSale")
+            count = event.get("Count")
+            avg_paid = event.get("AvgPricePaid")
+            if isinstance(sale, int):
+                self.state.session_trade_revenue += sale
+                cost_basis = avg_paid * count if isinstance(avg_paid, (int, float)) and isinstance(count, int) else 0
+                self.state.session_trade_profit += sale - cost_basis
+                if self._at_squadron_faction_station():
+                    # BGS credits transaction volume at the controlling
+                    # station, not personal profit margin — both buy and
+                    # sell value count toward that faction's economy.
+                    self.state.squadron_bgs_trade_cr += sale
+
+        elif name == "Rank":
+            self.state.ranks = {
+                k: v for k, v in event.items() if k not in ("timestamp", "event") and isinstance(v, int)
+            }
+
+        elif name == "Progress":
+            self.state.rank_progress = {
+                k: v for k, v in event.items() if k not in ("timestamp", "event") and isinstance(v, int)
+            }
 
         elif name == "CommitCrime":
             bounty = event.get("Bounty")
@@ -834,6 +892,9 @@ class EventEngine:
 
         elif name == "RedeemVoucher":
             if event.get("Type") == "bounty":
+                amount = event.get("Amount")
+                if isinstance(amount, int) and self._at_squadron_faction_station():
+                    self.state.squadron_bgs_bounty_cr += amount
                 try:
                     self.state.session_bounties = 0
                     self.state.session_kills = 0

@@ -183,6 +183,8 @@ class MarketPanel(QWidget):
         self._trade_thread: Optional[QThread] = None
         self._trade_worker: Optional[_TradeOpportunityWorker] = None
         self._last_market_id_computed: Optional[int] = None
+        self._last_results: Optional[list] = None
+        self._last_search_desc = ("", 0, False)
 
         # Remembers "where to sell X" per commodity across station visits —
         # merged (not replaced) on each new Trade Opportunities computation,
@@ -288,6 +290,15 @@ class MarketPanel(QWidget):
         self._range_spin.setSuffix(" ly")
         self._range_spin.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
 
+        pad_label = QLabel("Min pad:")
+        pad_label.setStyleSheet(_LABEL_STYLE)
+        self._pad_filter_combo = QComboBox()
+        self._pad_filter_combo.addItem("Any", None)
+        self._pad_filter_combo.addItem("Medium+", "M")
+        self._pad_filter_combo.addItem("Large only", "L")
+        self._pad_filter_combo.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
+        self._pad_filter_combo.currentIndexChanged.connect(self._apply_pad_filter)
+
         self._search_btn = QPushButton("Search")
         self._search_btn.setStyleSheet(
             "QPushButton { background:#1a3a5a; color:#FFB347; border:1px solid #2a5a8a;"
@@ -300,6 +311,8 @@ class MarketPanel(QWidget):
         row.addWidget(self._commodity_edit, 1)
         row.addWidget(range_label)
         row.addWidget(self._range_spin)
+        row.addWidget(pad_label)
+        row.addWidget(self._pad_filter_combo)
         row.addWidget(self._search_btn)
         search_layout.addLayout(row)
 
@@ -633,6 +646,28 @@ class MarketPanel(QWidget):
             log.exception("Market price search failed")
             self._status_label.setText("Search failed — see log.")
             return
+
+        self._last_results = results
+        self._last_search_desc = (raw, radius, buy_mode)
+        self._render_results()
+
+    def _apply_pad_filter(self) -> None:
+        if self._last_results is not None:
+            self._render_results()
+
+    def _render_results(self) -> None:
+        results = self._last_results or []
+        raw, radius, buy_mode = self._last_search_desc
+
+        min_pad = self._pad_filter_combo.currentData()
+        if min_pad:
+            rank = {"S": 1, "M": 2, "L": 3}
+            min_rank = rank[min_pad]
+            results = [
+                r for r in results
+                if (r.get("pad_size") or pad_size_hint(r.get("station_type"))) not in rank
+                or rank[r.get("pad_size") or pad_size_hint(r.get("station_type"))] >= min_rank
+            ]
 
         verb = "buying" if buy_mode else "selling"
         self._status_label.setText(

@@ -32,6 +32,8 @@ def apply_mission_event(active: Dict[int, Dict[str, Any]], event: Dict[str, Any]
             "expiry": event.get("Expiry"),
             "target_faction": event.get("TargetFaction"),
             "wing": bool(event.get("Wing")),
+            "kill_count": event.get("KillCount"),
+            "kills_credited": 0,
         }
     elif name in ("MissionCompleted", "MissionFailed", "MissionAbandoned"):
         active.pop(mission_id, None)
