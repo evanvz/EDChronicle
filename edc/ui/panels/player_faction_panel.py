@@ -874,12 +874,21 @@ class PlayerFactionPanel(QWidget):
         action_text, color = derive_bgs_action(s)
         action_item = QTableWidgetItem(action_text)
         action_item.setForeground(QColor(color))
+        action_item.setToolTip(action_text)
 
         system_address = s.get("system_address")
         prediction = self._last_predictions.get(system_address) if isinstance(system_address, int) else None
         forecast_text, forecast_color = _format_forecast(prediction)
         forecast_item = QTableWidgetItem(forecast_text)
         forecast_item.setForeground(QColor(forecast_color))
+        forecast_item.setToolTip(forecast_text)
+
+        # Active/Pending states can list several comma-joined names too —
+        # same narrow-window truncation risk as Action/Forecast.
+        if active_names:
+            active_item.setToolTip(", ".join(active_names))
+        if pending_names:
+            pending_item.setToolTip(", ".join(pending_names))
 
         for it in (infl_item, ctrl_item, active_item, pending_item, rep_item, forecast_item):
             it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)

@@ -8,13 +8,13 @@ from PyQt6.QtCore import Qt, QObject, QThread, QStringListModel, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QLineEdit, QSpinBox, QCompleter, QTableWidget, QTableWidgetItem,
+    QLineEdit, QSpinBox, QComboBox, QCompleter, QTableWidget, QTableWidgetItem,
     QHeaderView, QFrame,
 )
 
 from edc.core.spansh_client import SpanshClient, MiningRingResult
 from edc.core.station_pads import pad_size_hint
-from edc.ui.panels.market_panel import normalize_commodity_name
+from edc.ui.panels.market_panel import normalize_commodity_name, _NumericTableWidgetItem
 
 log = logging.getLogger(__name__)
 
@@ -68,6 +68,9 @@ class MiningPanel(QWidget):
         self._market_radius_ly: int = 100
         self._thread: Optional[QThread] = None
         self._worker: Optional[_RingSearchWorker] = None
+        self._last_ring_results: List[MiningRingResult] = []
+        self._cargo_rows_raw: list = []
+        self._cargo_commodity_count: int = 0
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 8)
@@ -118,6 +121,16 @@ class MiningPanel(QWidget):
         cargo_hdr.setStyleSheet(_HDR_STYLE)
         cargo_hdr_row.addWidget(cargo_hdr)
         cargo_hdr_row.addStretch(1)
+        cargo_pad_label = QLabel("Min pad:")
+        cargo_pad_label.setStyleSheet(_LABEL_STYLE)
+        cargo_hdr_row.addWidget(cargo_pad_label)
+        self._cargo_pad_filter_combo = QComboBox()
+        self._cargo_pad_filter_combo.addItem("Any", None)
+        self._cargo_pad_filter_combo.addItem("Medium+", "M")
+        self._cargo_pad_filter_combo.addItem("Large only", "L")
+        self._cargo_pad_filter_combo.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
+        self._cargo_pad_filter_combo.currentIndexChanged.connect(self._render_cargo_markets)
+        cargo_hdr_row.addWidget(self._cargo_pad_filter_combo)
         self._cargo_search_btn = QPushButton("Search Markets for Cargo")
         self._cargo_search_btn.setStyleSheet(
             "QPushButton { background:#1a3a5a; color:#FFB347; border:1px solid #2a5a8a;"
@@ -206,6 +219,14 @@ class MiningPanel(QWidget):
         self._range_spin.setSuffix(" ly")
         self._range_spin.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
 
+        reserve_label = QLabel("Reserve:")
+        reserve_label.setStyleSheet(_LABEL_STYLE)
+        self._reserve_filter_combo = QComboBox()
+        self._reserve_filter_combo.addItem("All (Pristine+Major)", None)
+        self._reserve_filter_combo.addItem("Pristine only", "Pristine")
+        self._reserve_filter_combo.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
+        self._reserve_filter_combo.currentIndexChanged.connect(self._render_ring_results)
+
         self._search_btn = QPushButton("Search")
         self._search_btn.setStyleSheet(
             "QPushButton { background:#1a3a5a; color:#FFB347; border:1px solid #2a5a8a;"
@@ -218,6 +239,8 @@ class MiningPanel(QWidget):
         row.addWidget(self._material_edit, 1)
         row.addWidget(range_label)
         row.addWidget(self._range_spin)
+        row.addWidget(reserve_label)
+        row.addWidget(self._reserve_filter_combo)
         row.addWidget(self._search_btn)
         finder_layout.addLayout(row)
 
@@ -374,6 +397,10 @@ class MiningPanel(QWidget):
             qty_by_commodity[key] = qty_by_commodity.get(key, 0) + int(c.get("Count") or 0)
             display_by_commodity.setdefault(key, c.get("Name_Localised") or raw_name.title())
 
+        # Fetch more than the top-3-per-commodity we'll actually show, since
+        # the pad filter is applied afterward at render time — otherwise
+        # filtering could leave fewer than 3 shown even when a valid 4th or
+        # 5th destination exists.
         rows = []
         for key, qty in qty_by_commodity.items():
             try:
@@ -384,9 +411,15 @@ class MiningPanel(QWidget):
             except Exception:
                 log.exception("Cargo market search failed for %s", key)
                 continue
-            for r in results[:3]:
+            for r in results[:8]:
                 rows.append((display_by_commodity[key], qty, r))
 
+        self._cargo_rows_raw = rows
+        self._cargo_commodity_count = len(qty_by_commodity)
+        self._render_cargo_markets()
+
+    def _render_cargo_markets(self) -> None:
+        rows = self._cargo_rows_raw
         if not rows:
             self._cargo_status_label.setText(
                 "No known market data for anything in your cargo within "
@@ -395,21 +428,34 @@ class MiningPanel(QWidget):
             self._cargo_market_table.setRowCount(0)
             return
 
+        min_pad = self._cargo_pad_filter_combo.currentData()
+        rank = {"S": 1, "M": 2, "L": 3}
+        shown_per_commodity: dict = {}
+        shown_rows = []
+        for name, qty, r in rows:
+            pad = r.get("pad_size") or pad_size_hint(r.get("station_type"))
+            if min_pad and pad in rank and rank[pad] < rank[min_pad]:
+                continue
+            if shown_per_commodity.get(name, 0) >= 3:
+                continue
+            shown_per_commodity[name] = shown_per_commodity.get(name, 0) + 1
+            shown_rows.append((name, qty, r, pad))
+
         self._cargo_status_label.setText(
-            f"{len(qty_by_commodity)} commodit{'y' if len(qty_by_commodity) == 1 else 'ies'} "
+            f"{self._cargo_commodity_count} commodit{'y' if self._cargo_commodity_count == 1 else 'ies'} "
             f"in cargo — showing up to 3 destinations each, within {self._market_radius_ly} ly."
         )
 
-        # Grouped by commodity (insertion order already groups them, since
-        # we appended per-key in a batch above).
-        self._cargo_market_table.setRowCount(len(rows))
-        for row, (name, qty, r) in enumerate(rows):
+        self._cargo_market_table.setSortingEnabled(False)
+        self._cargo_market_table.setRowCount(len(shown_rows))
+        for row, (name, qty, r, pad) in enumerate(shown_rows):
             name_item = QTableWidgetItem(name)
-            qty_item = QTableWidgetItem(str(qty))
+            qty_item = _NumericTableWidgetItem(str(qty), float(qty))
             station_item = QTableWidgetItem(r.get("station_name") or "—")
             system_item = QTableWidgetItem(r.get("system_name") or "—")
-            pad_item = QTableWidgetItem(r.get("pad_size") or pad_size_hint(r.get("station_type")))
-            price_item = QTableWidgetItem(f"{r.get('sell_price', 0):,}")
+            pad_item = QTableWidgetItem(pad)
+            price_value = float(r.get("sell_price") or 0)
+            price_item = _NumericTableWidgetItem(f"{r.get('sell_price', 0):,}", price_value)
             if pad_item.text() == "?":
                 pad_item.setForeground(QColor("#888888"))
                 pad_item.setToolTip("Landing pad size unknown for this station type")
@@ -422,6 +468,8 @@ class MiningPanel(QWidget):
             self._cargo_market_table.setItem(row, 3, system_item)
             self._cargo_market_table.setItem(row, 4, pad_item)
             self._cargo_market_table.setItem(row, 5, price_item)
+        self._cargo_market_table.setSortingEnabled(True)
+        self._cargo_market_table.sortItems(5, Qt.SortOrder.DescendingOrder)
 
     # ── Search ────────────────────────────────────────────────────────────
 
@@ -457,19 +505,28 @@ class MiningPanel(QWidget):
         if error:
             self._status_label.setText(f"Error: {error}")
             return
+        self._last_ring_results = results
+        self._render_ring_results()
+
+    def _render_ring_results(self) -> None:
+        results = self._last_ring_results
+        reserve_filter = self._reserve_filter_combo.currentData()
+        if reserve_filter:
+            results = [r for r in results if r.reserve_level == reserve_filter]
 
         self._status_label.setText(
             f"Found {len(results)} ring{'s' if len(results) != 1 else ''} "
             f"within {self._range_spin.value()} ly."
         )
+        self._table.setSortingEnabled(False)
         self._table.setRowCount(len(results))
         for row, r in enumerate(results):
             name_item = QTableWidgetItem(r.system_name)
             body_item = QTableWidgetItem(r.body_name)
             type_item = QTableWidgetItem(r.ring_type)
             reserve_item = QTableWidgetItem(r.reserve_level)
-            dist_item = QTableWidgetItem(f"{r.distance:.1f}")
-            hotspot_item = QTableWidgetItem(str(r.hotspot_count))
+            dist_item = _NumericTableWidgetItem(f"{r.distance:.1f}", r.distance)
+            hotspot_item = _NumericTableWidgetItem(str(r.hotspot_count), float(r.hotspot_count))
             for it in (type_item, reserve_item, dist_item, hotspot_item):
                 it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
@@ -479,3 +536,5 @@ class MiningPanel(QWidget):
             self._table.setItem(row, 3, reserve_item)
             self._table.setItem(row, 4, dist_item)
             self._table.setItem(row, 5, hotspot_item)
+        self._table.setSortingEnabled(True)
+        self._table.sortItems(4, Qt.SortOrder.AscendingOrder)

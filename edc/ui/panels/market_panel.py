@@ -641,16 +641,17 @@ class MarketPanel(QWidget):
             f"destination{'s' if len(opportunities) != 1 else ''} found."
         )
 
+        self._trade_table.setSortingEnabled(False)
         self._trade_table.setRowCount(len(opportunities))
         for row, o in enumerate(opportunities):
             name_item = QTableWidgetItem(o["name"])
-            buy_item = QTableWidgetItem(f"{o['buy_price']:,}")
-            stock_item = QTableWidgetItem(f"{o.get('stock', 0):,}")
-            sell_item = QTableWidgetItem(f"{o['sell_price']:,}")
+            buy_item = _NumericTableWidgetItem(f"{o['buy_price']:,}", float(o["buy_price"]))
+            stock_item = _NumericTableWidgetItem(f"{o.get('stock', 0):,}", float(o.get("stock", 0)))
+            sell_item = _NumericTableWidgetItem(f"{o['sell_price']:,}", float(o["sell_price"]))
             dest_item = QTableWidgetItem(f"{o['station_name']} ({o['system_name']})")
             pad_item = QTableWidgetItem(o.get("pad_size") or pad_size_hint(o.get("station_type")))
-            dist_item = QTableWidgetItem(f"{o['distance_ly']:.1f}")
-            profit_item = QTableWidgetItem(f"+{o['profit_pct']:.1f}%")
+            dist_item = _NumericTableWidgetItem(f"{o['distance_ly']:.1f}", float(o["distance_ly"]))
+            profit_item = _NumericTableWidgetItem(f"+{o['profit_pct']:.1f}%", float(o["profit_pct"]))
             profit_item.setForeground(QColor("#6BCB77"))
             if pad_item.text() == "?":
                 pad_item.setForeground(QColor("#888888"))
@@ -666,6 +667,10 @@ class MarketPanel(QWidget):
             self._trade_table.setItem(row, 5, pad_item)
             self._trade_table.setItem(row, 6, dist_item)
             self._trade_table.setItem(row, 7, profit_item)
+        self._trade_table.setSortingEnabled(True)
+        # Auto-sort best-profit-first by default — still click-sortable by
+        # any column afterward like the search results table.
+        self._trade_table.sortItems(7, Qt.SortOrder.DescendingOrder)
 
     def search_for(self, commodity_display_name: str) -> None:
         """External entry point (e.g. from the Mining tab) to search a specific commodity."""
