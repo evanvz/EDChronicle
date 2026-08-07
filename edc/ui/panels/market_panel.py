@@ -149,15 +149,55 @@ class _TradeOpportunityWorker(QObject):
         self.finished.emit(opportunities, self._station)
 
 
+class _MarketSearchWorker(QObject):
+    """
+    Opens its own SQLite connection rather than reusing the main thread's
+    Repository — sqlite3 connections cannot be shared across threads.
+    market_prices' commodity_name lookup is index-backed but still scans a
+    lot of scattered rows once the table reaches many millions of rows
+    (confirmed: 20+ seconds for a common commodity) — too slow to run
+    synchronously on the UI thread.
+    """
+    finished = pyqtSignal(list, str, int, bool)  # (results, raw_query_text, radius, buy_mode)
+
+    def __init__(self, db_path, commodity, raw_query_text, x, y, z, radius, buy_mode):
+        super().__init__()
+        self._db_path = db_path
+        self._commodity = commodity
+        self._raw_query_text = raw_query_text
+        self._x, self._y, self._z = x, y, z
+        self._radius = radius
+        self._buy_mode = buy_mode
+
+    def run(self):
+        from persistence.database import Database
+        from persistence.repository import Repository
+
+        db = Database(self._db_path)
+        repo = Repository(db)
+        try:
+            if self._buy_mode:
+                results = repo.search_market_buy_prices(self._commodity, self._x, self._y, self._z, float(self._radius))
+            else:
+                results = repo.search_market_prices(self._commodity, self._x, self._y, self._z, float(self._radius))
+        except Exception:
+            log.exception("Market price search failed")
+            results = []
+        finally:
+            db.close()
+        self.finished.emit(results, self._raw_query_text, self._radius, self._buy_mode)
+
+
 class MarketPanel(QWidget):
     """
     Owns all widgets and refresh logic for the Market tab.
     Receives state via refresh(state, radius_ly). Unlike most panels this
-    one is constructed with a Repository directly — the manual search is a
-    single local SQLite query (fast, synchronous). Trade Opportunities is
-    not — it's one query per commodity in the current market, so that runs
-    on a background thread (see refresh_trade_opportunities) rather than
-    blocking the UI.
+    one is constructed with a Repository directly, but the manual search
+    itself runs on a background thread (_MarketSearchWorker) — at real
+    scale (millions of rows in market_prices) it's not fast enough to run
+    synchronously without freezing the UI. Trade Opportunities is likewise
+    backgrounded (see refresh_trade_opportunities), one query per commodity
+    in the current market.
     """
 
     # system_name, station_name, commodity, mode ("buy"/"sell") — emitted
@@ -177,6 +217,8 @@ class MarketPanel(QWidget):
         self._ref_z: float = 0.0
         self._trade_thread: Optional[QThread] = None
         self._trade_worker: Optional[_TradeOpportunityWorker] = None
+        self._search_thread: Optional[QThread] = None
+        self._search_worker: Optional[_MarketSearchWorker] = None
         self._last_market_id_computed: Optional[int] = None
         self._last_results: Optional[list] = None
         self._last_search_desc = ("", 0, False)
@@ -679,20 +721,21 @@ class MarketPanel(QWidget):
         radius = self._range_spin.value()
         buy_mode = self._mode() == "buy"
 
-        try:
-            if buy_mode:
-                results = self._repo.search_market_buy_prices(
-                    commodity, self._ref_x, self._ref_y, self._ref_z, float(radius)
-                )
-            else:
-                results = self._repo.search_market_prices(
-                    commodity, self._ref_x, self._ref_y, self._ref_z, float(radius)
-                )
-        except Exception:
-            log.exception("Market price search failed")
-            self._status_label.setText("Search failed — see log.")
-            return
+        self._search_btn.setEnabled(False)
+        self._status_label.setText(f"Searching for {raw}…")
 
+        self._search_worker = _MarketSearchWorker(
+            self._repo.db.db_path, commodity, raw, self._ref_x, self._ref_y, self._ref_z, radius, buy_mode,
+        )
+        self._search_thread = QThread()
+        self._search_worker.moveToThread(self._search_thread)
+        self._search_thread.started.connect(self._search_worker.run)
+        self._search_worker.finished.connect(self._on_search_finished)
+        self._search_worker.finished.connect(self._search_thread.quit)
+        self._search_thread.start()
+
+    def _on_search_finished(self, results: list, raw: str, radius: int, buy_mode: bool) -> None:
+        self._search_btn.setEnabled(True)
         self._last_results = results
         self._last_search_desc = (raw, radius, buy_mode)
         self._render_results()

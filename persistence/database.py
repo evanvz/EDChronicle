@@ -134,6 +134,12 @@ class Database:
                 hotspots       TEXT,
                 PRIMARY KEY (system_address, ring_name)
             )""",
+            # market_prices' PRIMARY KEY is (market_id, commodity_name) — great
+            # for market_id lookups (Rare Goods, service finders), useless for
+            # a commodity_name-only search (the Market tab's main search),
+            # which was a confirmed full-table-scan taking 20+ seconds once
+            # this table reached ~12M rows.
+            "CREATE INDEX IF NOT EXISTS idx_market_prices_commodity ON market_prices(commodity_name)",
         ]
         for sql in migrations:
             try:

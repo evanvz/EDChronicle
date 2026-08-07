@@ -709,6 +709,7 @@ class MainWindow(QMainWindow):
         self._market_flush_timer = QTimer(self)
         self._market_flush_timer.setInterval(45 * 1000)  # batch-write buffered EDDN market data periodically
         self._market_flush_timer.timeout.connect(self.eddn_market_cache.flush)
+        self._market_flush_timer.timeout.connect(self._checkpoint_wal)
 
         self._player_faction_refresh_timer = QTimer(self)
         # BGS ticks server-side once a day — this only needs to be frequent
@@ -3278,6 +3279,20 @@ class MainWindow(QMainWindow):
             )
         except Exception:
             log.exception("Failed to find closest Interstellar Factors station")
+
+    def _checkpoint_wal(self):
+        """
+        WAL mode's own auto-checkpoint (default ~4MB threshold) wasn't
+        keeping up with the periodic EDDN flush's write volume — confirmed
+        live: the WAL file grew to ~290MB before an explicit checkpoint was
+        added. TRUNCATE merges it into the main file and truncates it back
+        to empty; safe to call this often, it's fast when there's little to
+        checkpoint (confirmed: <0.2s even for a 290MB backlog).
+        """
+        try:
+            self.repo.db.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except Exception:
+            log.exception("WAL checkpoint failed")
 
     def _refresh_squadron_station(self):
         """
