@@ -417,7 +417,7 @@ This project is built and maintained by a solo developer in personal time. If yo
 
 ## License
 
-MIT License — free to use, modify and distribute, provided the original copyright notice and author credit are retained in all copies or substantial portions of the software.
+[PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0) — free to use, study, modify, and share for any noncommercial purpose (personal use, hobby projects, research, education, and similar). Commercial use — selling it, selling derivatives, or using it in a paid product or service — is not permitted without the copyright holder's permission.
 
 Copyright © 2026 CMDR B0B R0GERS
 
