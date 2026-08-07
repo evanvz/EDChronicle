@@ -442,6 +442,12 @@ class PlayerFactionPanel(QWidget):
         refresh_row.addWidget(self._cancel_refresh_btn)
         root.addLayout(refresh_row)
 
+        self._data_freshness_label = QLabel("")
+        self._data_freshness_label.setStyleSheet(
+            "background:transparent; border:none; color:#888888; font-size:11px;"
+        )
+        root.addWidget(self._data_freshness_label)
+
         # ── Manually add a system (e.g. from Inara's faction page) ────────
         csv_note = QLabel(
             "To bulk-import: on Inara, open your minor faction's page and export its full "
@@ -781,6 +787,7 @@ class PlayerFactionPanel(QWidget):
 
     def _rebuild_buckets(self, systems: List[dict]) -> None:
         self._last_buckets = self._compute_buckets(systems)
+        self._update_data_freshness_label(systems)
 
         names = sorted({s.get("system_name") for s in systems if s.get("system_name")})
         model = self._system_search_completer.model()
@@ -1230,6 +1237,38 @@ class PlayerFactionPanel(QWidget):
             age_txt = f"{int(age_hours // 24)}d ago"
         self._refresh_status_label.setText(f"Full EDSM refresh: {age_txt}")
 
+    def _update_data_freshness_label(self, systems: List[dict]) -> None:
+        """Per-system snapshot age breakdown — day-granularity only, since
+        that's all snapshot_date tracks (no exact BGS tick-time available)."""
+        if not systems:
+            self._data_freshness_label.setText("")
+            return
+        today = date.today()
+        today_count = 0
+        recent_count = 0  # 1-6 days
+        stale_count = 0   # 7+ days (matches the Stale Data bucket threshold)
+        no_data_count = 0
+        for s in systems:
+            snapshot_date = s.get("snapshot_date")
+            if not isinstance(snapshot_date, str):
+                no_data_count += 1
+                continue
+            try:
+                age_days = (today - date.fromisoformat(snapshot_date[:10])).days
+            except ValueError:
+                no_data_count += 1
+                continue
+            if age_days <= 0:
+                today_count += 1
+            elif age_days < 7:
+                recent_count += 1
+            else:
+                stale_count += 1
+        self._data_freshness_label.setText(
+            f"Data freshness: {today_count} today · {recent_count} this week · "
+            f"{stale_count} stale (7d+) · {no_data_count} no data"
+        )
+
     def _on_refresh_all_clicked(self):
         if not self._faction_name:
             self._refresh_status_label.setText(
@@ -1324,6 +1363,7 @@ class _FactionBucketDialog(QDialog):
 
     def __init__(self, panel: "PlayerFactionPanel", label: str):
         super().__init__(None)
+        self.setStyleSheet("QDialog { background:#080f18; color:#c8c8c8; }")
         self._panel = panel
         self._all_systems: List[dict] = []
         self.setWindowTitle(f"Player Faction — {label}")

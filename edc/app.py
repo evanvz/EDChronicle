@@ -165,6 +165,11 @@ def run():
         color: #E6E6E6;
     }
 
+    QTableCornerButton::section {
+        background-color: #151515;
+        border: none;
+    }
+
     QTextEdit {
         background-color: #101010;
         border: 1px solid #2A2A2A;

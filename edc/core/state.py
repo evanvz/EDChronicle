@@ -114,6 +114,7 @@ class GameState:
     # Closest known station offering Interstellar Factors, not owned by any
     # currently-bounty-issuing faction — see main_window._refresh_bounty_status.
     closest_interstellar_factors: Optional[Dict[str, Any]] = None
+    closest_squadron_station: Optional[Dict[str, Any]] = None
 
     # Notoriety (from the "Statistics" event's Crime.Notoriety) — distinct
     # from bounties: decays 1 point per 2 hours of active in-game time, not
@@ -235,6 +236,13 @@ class GameState:
     # See event_engine.py::_at_squadron_faction_station.
     squadron_bgs_bounty_cr: int = 0
     squadron_bgs_trade_cr: int = 0
+
+    # Conflict Zone participation (session-scoped) — set on ApproachSettlement
+    # / SupercruiseExit into a warzone, confirmed only once a FactionKillBond
+    # actually lands within the 5-minute window. See event_engine.py.
+    cz_pending_settlement: Optional[Dict[str, Any]] = None
+    cz_pending_space: Optional[Dict[str, Any]] = None
+    cz_kills: Dict[str, Dict[str, int]] = field(default_factory=dict)
 
     # Mining (session-scoped; resets on app start, like the other session_collected fields)
     mining_refined_totals: Dict[str, int] = field(default_factory=dict)     # material(lower) -> units refined this session

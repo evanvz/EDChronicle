@@ -171,6 +171,49 @@ class CombatPanel(QWidget):
         content_l.addWidget(self.massacre_card)
         self.massacre_card.setVisible(False)
 
+        # ── Conflict Zone participation card (hidden if none this session) ──
+        self.cz_card = QFrame()
+        self.cz_card.setStyleSheet(
+            "QFrame { background: #0d0d1a; border: 1px solid #1e1e4a;"
+            "border-radius: 5px; }"
+        )
+        cz_l = QVBoxLayout(self.cz_card)
+        cz_l.setContentsMargins(8, 6, 8, 6)
+        cz_l.setSpacing(4)
+
+        cz_hdr = QLabel("CONFLICT ZONES THIS SESSION")
+        cz_hdr.setStyleSheet(
+            "color: #9BA8FF; font-size:12px; font-weight: bold; "
+            "letter-spacing: 1px; background: transparent; border: none;"
+        )
+        cz_l.addWidget(cz_hdr)
+
+        self.cz_table = QTableWidget()
+        self.cz_table.setColumnCount(4)
+        self.cz_table.setHorizontalHeaderLabels(["Faction", "Ground (L/M/H)", "Space (L/M/H)", "Total"])
+        self.cz_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.cz_table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+        self.cz_table.verticalHeader().setVisible(False)
+        self.cz_table.setSortingEnabled(False)
+        self.cz_table.setStyleSheet(
+            "QTableWidget { background: transparent; border: none; }"
+            "QHeaderView::section { background: #1a1a2a; color: #888888; "
+            "font-size:12px; font-weight: bold; letter-spacing: 1px; "
+            "border: none; padding: 4px; }"
+        )
+        self.cz_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        for col in [1, 2, 3]:
+            self.cz_table.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
+        cz_l.addWidget(self.cz_table)
+
+        self.cz_station_note = QLabel("")
+        self.cz_station_note.setWordWrap(True)
+        self.cz_station_note.setStyleSheet("color:#888888; font-size:11px; background:transparent; border:none;")
+        cz_l.addWidget(self.cz_station_note)
+
+        content_l.addWidget(self.cz_card)
+        self.cz_card.setVisible(False)
+
         # ── Combat contacts card ──────────────────────────────────────────
         card = QFrame()
         card.setStyleSheet(
@@ -259,6 +302,11 @@ class CombatPanel(QWidget):
             self._refresh_massacre_card(state)
         except Exception:
             log.exception("CombatPanel._refresh_massacre_card failed")
+
+        try:
+            self._refresh_cz_card(state)
+        except Exception:
+            log.exception("CombatPanel._refresh_cz_card failed")
 
         try:
             contacts = getattr(state, "combat_contacts", None) or {}
@@ -472,3 +520,36 @@ class CombatPanel(QWidget):
             if ready:
                 status_item.setForeground(QColor("#60d060"))
             self.massacre_table.setItem(r, 4, status_item)
+
+    def _refresh_cz_card(self, state):
+        cz_kills = getattr(state, "cz_kills", None) or {}
+        rows = [(faction, tally) for faction, tally in cz_kills.items() if any(tally.values())]
+        if not rows:
+            self.cz_card.setVisible(False)
+            return
+        self.cz_card.setVisible(True)
+        rows.sort(key=lambda kv: kv[0])
+
+        self.cz_table.setRowCount(len(rows))
+        for r, (faction, tally) in enumerate(rows):
+            ground = f"{tally.get('ground_l', 0)}/{tally.get('ground_m', 0)}/{tally.get('ground_h', 0)}"
+            space = f"{tally.get('space_l', 0)}/{tally.get('space_m', 0)}/{tally.get('space_h', 0)}"
+            total = sum(tally.values())
+            self.cz_table.setItem(r, 0, QTableWidgetItem(faction))
+            self.cz_table.setItem(r, 1, QTableWidgetItem(ground))
+            self.cz_table.setItem(r, 2, QTableWidgetItem(space))
+            self.cz_table.setItem(r, 3, QTableWidgetItem(str(total)))
+
+        station = getattr(state, "closest_squadron_station", None)
+        if isinstance(station, dict):
+            dist = station.get("distance_ly")
+            dist_txt = f"{dist:.1f} ly" if isinstance(dist, (int, float)) else "? ly"
+            self.cz_station_note.setText(
+                f"Redeem bonds at a station your faction controls to count — closest known: "
+                f"{station.get('station_name') or '?'} ({station.get('system_name') or '?'}), {dist_txt}."
+            )
+        else:
+            self.cz_station_note.setText(
+                "Redeem bonds at a station your squadron faction controls to count toward the war — "
+                "no confirmed station known yet (dock somewhere it controls to record it)."
+            )

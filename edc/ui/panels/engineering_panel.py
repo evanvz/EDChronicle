@@ -1,4 +1,6 @@
-"""Engineering Blueprint Wishlist panel — pick blueprints to build, track missing materials."""
+"""Engineering panel — Ships (blueprint wishlist) and Suits & Weapons
+(Odyssey on-foot grade/module tracking) sub-tabs, each a master-detail
+split: wishlist on the left, materials + engineer info on the right."""
 from __future__ import annotations
 
 import logging
@@ -9,11 +11,13 @@ from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QComboBox, QSpinBox, QTableWidget, QTableWidgetItem,
-    QHeaderView, QFrame,
+    QHeaderView, QFrame, QTabWidget,
 )
 
 from edc.core.engineering_blueprints import EngineeringBlueprintTable
 from edc.core.engineering_wishlist import EngineeringWishlist
+from edc.core.odyssey_engineering import OdysseyEngineeringTable
+from edc.core.odyssey_wishlist import OdysseyWishlist
 
 log = logging.getLogger(__name__)
 
@@ -23,83 +27,136 @@ _CATEGORY_STATE_ATTR = {
     "encoded": "materials_encoded",
 }
 
+_CARD_STYLE = "QFrame { background:#0d1a2a; border:1px solid #1e3a5a; border-radius:5px; }"
+_HDR_STYLE = "color:#555555; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
+_LABEL_STYLE = "background:transparent; border:none; color:#c8c8c8;"
+_COMBO_STYLE = "background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;"
+_TABLE_STYLE = (
+    "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
+    " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
+    "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
+    " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
+    "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
+)
+
+
+def _make_table(headers: List[str]) -> QTableWidget:
+    t = QTableWidget()
+    t.setColumnCount(len(headers))
+    t.setHorizontalHeaderLabels(headers)
+    t.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+    t.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+    t.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+    t.verticalHeader().setVisible(False)
+    t.setAlternatingRowColors(True)
+    t.setStyleSheet(_TABLE_STYLE)
+    return t
+
 
 class EngineeringPanel(QWidget):
-    """
-    Owns all widgets and refresh logic for the Engineering (Blueprint
-    Wishlist) tab. Receives state via refresh(state). Knows nothing
-    about main_window or repo.
-    """
+    """Owns the Engineering tab: a QTabWidget with Ships and Suits & Weapons
+    sub-tabs. Receives state via refresh(state)."""
 
-    _CARD_STYLE = "QFrame { background:#0d1a2a; border:1px solid #1e3a5a; border-radius:5px; }"
-    _HDR_STYLE = "color:#555555; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
-    _LABEL_STYLE = "background:transparent; border:none; color:#c8c8c8;"
+    def __init__(
+        self,
+        blueprint_table: EngineeringBlueprintTable,
+        wishlist_store: EngineeringWishlist,
+        odyssey_table: OdysseyEngineeringTable,
+        odyssey_wishlist_store: OdysseyWishlist,
+        parent=None,
+    ):
+        super().__init__(parent)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
 
+        self._tabs = QTabWidget()
+        self._tabs.setStyleSheet(
+            "QTabWidget::pane { border:1px solid #1e3a5a; background:#080f18; }"
+            "QTabBar::tab { background:#0d1a2a; color:#888888; padding:5px 14px;"
+            " border:1px solid #1e3a5a; border-bottom:none; margin-right:2px; }"
+            "QTabBar::tab:selected { background:#080f18; color:#FFB347; border-bottom:1px solid #080f18; }"
+            "QTabBar::tab:hover { color:#c8c8c8; }"
+        )
+        root.addWidget(self._tabs)
+
+        self._ship_tab = _ShipEngineeringTab(blueprint_table, wishlist_store)
+        self._odyssey_tab = _OdysseyEngineeringTab(odyssey_table, blueprint_table, odyssey_wishlist_store)
+        self._tabs.addTab(self._ship_tab, "Ships")
+        self._tabs.addTab(self._odyssey_tab, "Suits & Weapons")
+
+    def missing_materials_for_wishlist(self) -> Dict[str, int]:
+        """Ship-only — used by main_window's farming-location alert hook."""
+        return self._ship_tab.missing_materials_for_wishlist()
+
+    def refresh(self, state) -> None:
+        self._ship_tab.refresh(state)
+        self._odyssey_tab.refresh(state)
+
+
+class _ShipEngineeringTab(QWidget):
     def __init__(self, blueprint_table: EngineeringBlueprintTable, wishlist_store: EngineeringWishlist, parent=None):
         super().__init__(parent)
+        self.setStyleSheet("background:#080f18;")
         self._blueprints = blueprint_table
         self._store = wishlist_store
         self._wishlist: List[Dict[str, Any]] = self._store.load()
         self._state = None
 
-        root = QVBoxLayout(self)
+        root = QHBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 8)
-        root.setSpacing(6)
+        root.setSpacing(8)
 
-        # ── Add-to-wishlist card ──────────────────────────────────────────
+        # ── Left column: add form + wishlist ────────────────────────────
+        left = QVBoxLayout()
+        left.setSpacing(6)
+
         add_frame = QFrame()
-        add_frame.setStyleSheet(self._CARD_STYLE)
+        add_frame.setStyleSheet(_CARD_STYLE)
         add_layout = QVBoxLayout(add_frame)
         add_layout.setContentsMargins(8, 6, 8, 8)
         add_layout.setSpacing(6)
 
-        hdr = QLabel("ENGINEERING — BLUEPRINT WISHLIST")
-        hdr.setStyleSheet(self._HDR_STYLE)
+        hdr = QLabel("BLUEPRINT WISHLIST")
+        hdr.setStyleSheet(_HDR_STYLE)
         add_layout.addWidget(hdr)
 
-        row = QHBoxLayout()
-        row.setSpacing(8)
-
         self._bp_combo = QComboBox()
-        self._bp_combo.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
+        self._bp_combo.setStyleSheet(_COMBO_STYLE)
         self._bp_fdnames: List[str] = self._blueprints.blueprint_names()
         for fdname in self._bp_fdnames:
             bp = self._blueprints.get(fdname) or {}
             label = f"{bp.get('display_name', fdname)} — {bp.get('short_name', '')}"
             self._bp_combo.addItem(label, fdname)
         self._bp_combo.currentIndexChanged.connect(self._on_blueprint_changed)
+        add_layout.addWidget(self._bp_combo)
 
+        grade_row = QHBoxLayout()
         grade_label = QLabel("Grade:")
-        grade_label.setStyleSheet(self._LABEL_STYLE)
-
+        grade_label.setStyleSheet(_LABEL_STYLE)
         self._grade_spin = QSpinBox()
         self._grade_spin.setRange(1, 5)
-        self._grade_spin.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
-
-        add_btn = QPushButton("Add to Wishlist")
+        self._grade_spin.setStyleSheet(_COMBO_STYLE)
+        add_btn = QPushButton("Add")
         add_btn.setStyleSheet(
             "QPushButton { background:#1a3a5a; color:#FFB347; border:1px solid #2a5a8a;"
             " border-radius:3px; padding:3px 12px; font-weight:bold; }"
             "QPushButton:hover { background:#2a5a8a; }"
         )
         add_btn.clicked.connect(self._add_to_wishlist)
+        grade_row.addWidget(grade_label)
+        grade_row.addWidget(self._grade_spin, 1)
+        grade_row.addWidget(add_btn)
+        add_layout.addLayout(grade_row)
 
-        row.addWidget(self._bp_combo, 1)
-        row.addWidget(grade_label)
-        row.addWidget(self._grade_spin)
-        row.addWidget(add_btn)
-        add_layout.addLayout(row)
-
-        root.addWidget(add_frame)
+        left.addWidget(add_frame)
         self._on_blueprint_changed()
 
-        # ── Wishlist table ────────────────────────────────────────────────
         wl_hdr_row = QHBoxLayout()
         wl_hdr = QLabel("TRACKED BUILDS")
-        wl_hdr.setStyleSheet(self._HDR_STYLE)
+        wl_hdr.setStyleSheet(_HDR_STYLE)
         wl_hdr_row.addWidget(wl_hdr)
         wl_hdr_row.addStretch()
-        remove_btn = QPushButton("Remove Selected")
+        remove_btn = QPushButton("Remove")
         remove_btn.setStyleSheet(
             "QPushButton { background:#2a1010; color:#FF8080; border:1px solid #5a2a2a;"
             " border-radius:3px; padding:2px 10px; }"
@@ -107,79 +164,45 @@ class EngineeringPanel(QWidget):
         )
         remove_btn.clicked.connect(self._remove_selected)
         wl_hdr_row.addWidget(remove_btn)
-        root.addLayout(wl_hdr_row)
+        left.addLayout(wl_hdr_row)
 
-        self._wl_table = QTableWidget()
-        self._wl_table.setColumnCount(3)
-        self._wl_table.setHorizontalHeaderLabels(["Blueprint", "Grade", "Status"])
-        self._wl_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self._wl_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self._wl_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self._wl_table.verticalHeader().setVisible(False)
-        self._wl_table.setAlternatingRowColors(True)
-        self._wl_table.setStyleSheet(
-            "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
-            " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
-            "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
-            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
-            "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
-        )
+        self._wl_table = _make_table(["Blueprint", "Grade", "Status"])
         h = self._wl_table.horizontalHeader()
         h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         h.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         self._wl_table.itemSelectionChanged.connect(self._refresh_detail_table)
-        root.addWidget(self._wl_table)
+        left.addWidget(self._wl_table, 1)
 
-        # ── Materials detail table (for selected wishlist row) ────────────
+        root.addLayout(left, 2)
+
+        # ── Right column: materials + engineer detail ───────────────────
+        right = QVBoxLayout()
+        right.setSpacing(6)
+
         detail_hdr = QLabel("MATERIALS REQUIRED")
-        detail_hdr.setStyleSheet(self._HDR_STYLE)
-        root.addWidget(detail_hdr)
+        detail_hdr.setStyleSheet(_HDR_STYLE)
+        right.addWidget(detail_hdr)
 
-        self._detail_table = QTableWidget()
-        self._detail_table.setColumnCount(4)
-        self._detail_table.setHorizontalHeaderLabels(["Material", "Type", "Held", "Required"])
-        self._detail_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self._detail_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self._detail_table.verticalHeader().setVisible(False)
-        self._detail_table.setAlternatingRowColors(True)
-        self._detail_table.setStyleSheet(
-            "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
-            " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
-            "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
-            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
-        )
+        self._detail_table = _make_table(["Material", "Type", "Held", "Required"])
         dh = self._detail_table.horizontalHeader()
         dh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         dh.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         dh.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         dh.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        root.addWidget(self._detail_table, 1)
+        right.addWidget(self._detail_table, 1)
 
-        # ── Available-from engineer table (for selected wishlist row) ─────
         eng_hdr = QLabel("AVAILABLE FROM — CLOSEST FIRST")
-        eng_hdr.setStyleSheet(self._HDR_STYLE)
-        root.addWidget(eng_hdr)
+        eng_hdr.setStyleSheet(_HDR_STYLE)
+        right.addWidget(eng_hdr)
 
-        self._engineer_table = QTableWidget()
-        self._engineer_table.setColumnCount(4)
-        self._engineer_table.setHorizontalHeaderLabels(["Engineer", "System", "Dist (ly)", "Unlock Status"])
-        self._engineer_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self._engineer_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self._engineer_table.verticalHeader().setVisible(False)
-        self._engineer_table.setAlternatingRowColors(True)
-        self._engineer_table.setStyleSheet(
-            "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
-            " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
-            "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
-            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
-        )
+        self._engineer_table = _make_table(["Engineer", "System", "Dist (ly)", "Unlock Status"])
         eh = self._engineer_table.horizontalHeader()
         eh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         eh.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         eh.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         eh.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        root.addWidget(self._engineer_table, 1)
+        right.addWidget(self._engineer_table, 1)
 
         self._engineer_note = QLabel(
             "Coverage of which engineer offers which blueprint is community-sourced "
@@ -187,7 +210,9 @@ class EngineeringPanel(QWidget):
         )
         self._engineer_note.setWordWrap(True)
         self._engineer_note.setStyleSheet("color:#555555; font-size:11px; background:transparent; border:none;")
-        root.addWidget(self._engineer_note)
+        right.addWidget(self._engineer_note)
+
+        root.addLayout(right, 3)
 
     # ── Helpers ──────────────────────────────────────────────────────────
 
@@ -208,15 +233,10 @@ class EngineeringPanel(QWidget):
         return int(src.get(symbol.lower(), 0))
 
     def _missing_count(self, fdname: str, grade: int) -> int:
-        """Number of distinct materials where held < required."""
         reqs = self._blueprints.cumulative_requirements(fdname, grade)
         return sum(1 for sym, qty in reqs.items() if self._held_count(sym) < qty)
 
     def missing_materials_for_wishlist(self) -> Dict[str, int]:
-        """
-        Aggregated {material_symbol: shortfall} across the whole wishlist —
-        used by the alerting hook in main_window to check farming locations.
-        """
         shortfall: Dict[str, int] = {}
         for entry in self._wishlist:
             reqs = self._blueprints.cumulative_requirements(entry["fdname"], entry["grade"])
@@ -312,7 +332,7 @@ class EngineeringPanel(QWidget):
         ref_z = getattr(self._state, "system_z", 0.0) if self._state else 0.0
         progress = getattr(self._state, "engineer_progress", {}) or {} if self._state else {}
 
-        rows = []  # (distance_or_None, engineer, system_name, status_text, status_color)
+        rows = []
         for eng_name in engineers:
             home = self._blueprints.engineer_home(eng_name)
             dist = None
@@ -355,7 +375,329 @@ class EngineeringPanel(QWidget):
             self._engineer_table.setItem(r, 2, dist_item)
             self._engineer_table.setItem(r, 3, status_item)
 
-    # ── Public API ────────────────────────────────────────────────────────
+    def refresh(self, state) -> None:
+        self._state = state
+        self._refresh_wishlist_table()
+
+
+_KIND_LABELS = {
+    "suit_grade": "Suit Grade",
+    "weapon_grade": "Weapon Grade",
+    "suit_module": "Suit Mod",
+    "weapon_module": "Weapon Mod",
+}
+
+
+class _OdysseyEngineeringTab(QWidget):
+    """
+    Suit/weapon grade upgrades cost materials at every step 1->5 and can be
+    performed at any on-foot Engineer terminal. Modules (mod slots) are a
+    single material cost each, gated to specific Engineers, and once
+    applied can't be swapped — so unlike ship blueprints there's no
+    "held/required" retry loop once you've committed.
+    """
+
+    def __init__(
+        self,
+        odyssey_table: OdysseyEngineeringTable,
+        blueprint_table: EngineeringBlueprintTable,
+        wishlist_store: OdysseyWishlist,
+        parent=None,
+    ):
+        super().__init__(parent)
+        self.setStyleSheet("background:#080f18;")
+        self._table = odyssey_table
+        self._blueprints = blueprint_table  # for engineer_home() lookups only
+        self._store = wishlist_store
+        self._wishlist: List[Dict[str, Any]] = self._store.load()
+        self._state = None
+
+        root = QHBoxLayout(self)
+        root.setContentsMargins(8, 6, 8, 8)
+        root.setSpacing(8)
+
+        # ── Left column: add form + wishlist ────────────────────────────
+        left = QVBoxLayout()
+        left.setSpacing(6)
+
+        add_frame = QFrame()
+        add_frame.setStyleSheet(_CARD_STYLE)
+        add_layout = QVBoxLayout(add_frame)
+        add_layout.setContentsMargins(8, 6, 8, 8)
+        add_layout.setSpacing(6)
+
+        hdr = QLabel("ODYSSEY WISHLIST")
+        hdr.setStyleSheet(_HDR_STYLE)
+        add_layout.addWidget(hdr)
+
+        self._kind_combo = QComboBox()
+        self._kind_combo.setStyleSheet(_COMBO_STYLE)
+        for kind, label in _KIND_LABELS.items():
+            self._kind_combo.addItem(label, kind)
+        self._kind_combo.currentIndexChanged.connect(self._on_kind_changed)
+        add_layout.addWidget(self._kind_combo)
+
+        self._item_combo = QComboBox()
+        self._item_combo.setStyleSheet(_COMBO_STYLE)
+        add_layout.addWidget(self._item_combo)
+
+        grade_row = QHBoxLayout()
+        self._grade_label = QLabel("Target grade:")
+        self._grade_label.setStyleSheet(_LABEL_STYLE)
+        self._grade_spin = QSpinBox()
+        self._grade_spin.setRange(2, 5)
+        self._grade_spin.setStyleSheet(_COMBO_STYLE)
+        add_btn = QPushButton("Add")
+        add_btn.setStyleSheet(
+            "QPushButton { background:#1a3a5a; color:#FFB347; border:1px solid #2a5a8a;"
+            " border-radius:3px; padding:3px 12px; font-weight:bold; }"
+            "QPushButton:hover { background:#2a5a8a; }"
+        )
+        add_btn.clicked.connect(self._add_to_wishlist)
+        grade_row.addWidget(self._grade_label)
+        grade_row.addWidget(self._grade_spin, 1)
+        grade_row.addWidget(add_btn)
+        add_layout.addLayout(grade_row)
+
+        left.addWidget(add_frame)
+        self._on_kind_changed()
+
+        wl_hdr_row = QHBoxLayout()
+        wl_hdr = QLabel("TRACKED TARGETS")
+        wl_hdr.setStyleSheet(_HDR_STYLE)
+        wl_hdr_row.addWidget(wl_hdr)
+        wl_hdr_row.addStretch()
+        remove_btn = QPushButton("Remove")
+        remove_btn.setStyleSheet(
+            "QPushButton { background:#2a1010; color:#FF8080; border:1px solid #5a2a2a;"
+            " border-radius:3px; padding:2px 10px; }"
+            "QPushButton:hover { background:#3a1818; }"
+        )
+        remove_btn.clicked.connect(self._remove_selected)
+        wl_hdr_row.addWidget(remove_btn)
+        left.addLayout(wl_hdr_row)
+
+        self._wl_table = _make_table(["Item", "Kind", "Status"])
+        h = self._wl_table.horizontalHeader()
+        h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        h.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self._wl_table.itemSelectionChanged.connect(self._refresh_detail_table)
+        left.addWidget(self._wl_table, 1)
+
+        root.addLayout(left, 2)
+
+        # ── Right column: materials + engineer detail ───────────────────
+        right = QVBoxLayout()
+        right.setSpacing(6)
+
+        detail_hdr = QLabel("MATERIALS REQUIRED")
+        detail_hdr.setStyleSheet(_HDR_STYLE)
+        right.addWidget(detail_hdr)
+
+        self._detail_table = _make_table(["Material", "Held", "Required"])
+        dh = self._detail_table.horizontalHeader()
+        dh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        dh.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        dh.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        right.addWidget(self._detail_table, 1)
+
+        eng_hdr = QLabel("AVAILABLE FROM — CLOSEST FIRST")
+        eng_hdr.setStyleSheet(_HDR_STYLE)
+        right.addWidget(eng_hdr)
+
+        self._engineer_table = _make_table(["Engineer", "System", "Dist (ly)"])
+        eh = self._engineer_table.horizontalHeader()
+        eh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        eh.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        eh.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        right.addWidget(self._engineer_table, 1)
+
+        self._engineer_note = QLabel("")
+        self._engineer_note.setWordWrap(True)
+        self._engineer_note.setStyleSheet("color:#555555; font-size:11px; background:transparent; border:none;")
+        right.addWidget(self._engineer_note)
+
+        root.addLayout(right, 3)
+
+    # ── Helpers ──────────────────────────────────────────────────────────
+
+    def _on_kind_changed(self):
+        kind = self._kind_combo.currentData()
+        is_grade = kind in ("suit_grade", "weapon_grade")
+        self._grade_label.setVisible(is_grade)
+        self._grade_spin.setVisible(is_grade)
+
+        self._item_combo.clear()
+        if kind == "suit_grade":
+            for name in self._table.suit_names():
+                self._item_combo.addItem(name, name)
+        elif kind == "weapon_grade":
+            for name in self._table.weapon_names():
+                self._item_combo.addItem(name, name)
+        elif kind == "suit_module":
+            for key in self._table.suit_module_keys():
+                self._item_combo.addItem(self._table.module_display_name("suit", key), key)
+        elif kind == "weapon_module":
+            for key in self._table.weapon_module_keys():
+                self._item_combo.addItem(self._table.module_display_name("weapon", key), key)
+
+    def _held_count(self, symbol: str) -> int:
+        if self._state is None:
+            return 0
+        src = getattr(self._state, "shiplocker_items", None) or {}
+        return int(src.get(symbol.lower(), 0))
+
+    def _material_name(self, symbol: str) -> str:
+        loc = getattr(self._state, "shiplocker_localised", None) or {} if self._state else {}
+        return loc.get(symbol.lower(), symbol)
+
+    def _requirements_for(self, entry: Dict[str, Any]) -> Dict[str, int]:
+        kind = entry["kind"]
+        if kind == "suit_grade":
+            return self._table.suit_cumulative_requirements(entry["name"], entry["grade"])
+        if kind == "weapon_grade":
+            return self._table.weapon_cumulative_requirements(entry["name"], entry["grade"])
+        if kind == "suit_module":
+            return self._table.module_requirements("suit", entry["name"])
+        if kind == "weapon_module":
+            return self._table.module_requirements("weapon", entry["name"])
+        return {}
+
+    def _missing_count(self, entry: Dict[str, Any]) -> int:
+        reqs = self._requirements_for(entry)
+        return sum(1 for sym, qty in reqs.items() if self._held_count(sym) < qty)
+
+    def _add_to_wishlist(self):
+        kind = self._kind_combo.currentData()
+        name = self._item_combo.currentData()
+        if not kind or not name:
+            return
+        entry = {"kind": kind, "name": name}
+        if kind in ("suit_grade", "weapon_grade"):
+            entry["grade"] = self._grade_spin.value()
+        if any(e == entry for e in self._wishlist):
+            return
+        self._wishlist.append(entry)
+        self._store.save(self._wishlist)
+        self._refresh_wishlist_table()
+
+    def _remove_selected(self):
+        row = self._wl_table.currentRow()
+        if row < 0 or row >= len(self._wishlist):
+            return
+        del self._wishlist[row]
+        self._store.save(self._wishlist)
+        self._refresh_wishlist_table()
+
+    def _display_name(self, entry: Dict[str, Any]) -> str:
+        kind = entry["kind"]
+        if kind == "suit_grade":
+            return f"{entry['name']} (grade {entry['grade']})"
+        if kind == "weapon_grade":
+            return f"{entry['name']} (grade {entry['grade']})"
+        if kind == "suit_module":
+            return self._table.module_display_name("suit", entry["name"])
+        if kind == "weapon_module":
+            return self._table.module_display_name("weapon", entry["name"])
+        return entry["name"]
+
+    def _refresh_wishlist_table(self):
+        self._wl_table.setRowCount(len(self._wishlist))
+        for r, entry in enumerate(self._wishlist):
+            name_item = QTableWidgetItem(self._display_name(entry))
+            kind_item = QTableWidgetItem(_KIND_LABELS.get(entry["kind"], entry["kind"]))
+
+            missing = self._missing_count(entry)
+            if missing == 0:
+                status_item = QTableWidgetItem("Ready")
+                status_item.setForeground(QColor("#6BCB77"))
+            else:
+                status_item = QTableWidgetItem(f"{missing} missing")
+                status_item.setForeground(QColor("#FF8C00"))
+
+            self._wl_table.setItem(r, 0, name_item)
+            self._wl_table.setItem(r, 1, kind_item)
+            self._wl_table.setItem(r, 2, status_item)
+        self._refresh_detail_table()
+
+    def _refresh_detail_table(self):
+        row = self._wl_table.currentRow()
+        if row < 0 or row >= len(self._wishlist):
+            self._detail_table.setRowCount(0)
+            self._refresh_engineer_table()
+            return
+        entry = self._wishlist[row]
+        reqs = self._requirements_for(entry)
+        rows = sorted(reqs.items(), key=lambda kv: self._material_name(kv[0]))
+
+        self._detail_table.setRowCount(len(rows))
+        for r, (sym, qty) in enumerate(rows):
+            held = self._held_count(sym)
+            name_item = QTableWidgetItem(self._material_name(sym))
+            held_item = QTableWidgetItem(str(held))
+            req_item = QTableWidgetItem(str(qty))
+            held_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            req_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            color = QColor("#6BCB77") if held >= qty else QColor("#FF6B6B")
+            name_item.setForeground(color)
+            held_item.setForeground(color)
+
+            self._detail_table.setItem(r, 0, name_item)
+            self._detail_table.setItem(r, 1, held_item)
+            self._detail_table.setItem(r, 2, req_item)
+
+        self._refresh_engineer_table(entry)
+
+    def _refresh_engineer_table(self, entry: Optional[Dict[str, Any]] = None):
+        if entry is None:
+            row = self._wl_table.currentRow()
+            if row < 0 or row >= len(self._wishlist):
+                self._engineer_table.setRowCount(0)
+                self._engineer_note.setText("")
+                return
+            entry = self._wishlist[row]
+
+        kind = entry["kind"]
+        if kind in ("suit_grade", "weapon_grade"):
+            self._engineer_table.setRowCount(0)
+            self._engineer_note.setText(
+                "Grade upgrades can be performed at any on-foot Engineer terminal — "
+                "not gated to a specific Engineer."
+            )
+            return
+
+        module_kind = "suit" if kind == "suit_module" else "weapon"
+        engineers = self._table.module_engineers(module_kind, entry["name"])
+        self._engineer_note.setText(
+            "Once a module is applied it can't be changed — buy a fresh suit/weapon copy "
+            "to try a different mod."
+        )
+
+        ref_x = getattr(self._state, "system_x", 0.0) if self._state else 0.0
+        ref_y = getattr(self._state, "system_y", 0.0) if self._state else 0.0
+        ref_z = getattr(self._state, "system_z", 0.0) if self._state else 0.0
+
+        rows = []
+        for eng_name in engineers:
+            home = self._blueprints.engineer_home(eng_name)
+            dist = None
+            system_name = "—"
+            if home and isinstance(home.get("x"), (int, float)):
+                dist = ((home["x"] - ref_x) ** 2 + (home["y"] - ref_y) ** 2 + (home["z"] - ref_z) ** 2) ** 0.5
+                system_name = home.get("system_name") or "—"
+            rows.append((dist, eng_name, system_name))
+
+        rows.sort(key=lambda r: (r[0] is None, r[0] if r[0] is not None else 0.0))
+
+        self._engineer_table.setRowCount(len(rows))
+        for r, (dist, eng_name, system_name) in enumerate(rows):
+            dist_item = QTableWidgetItem(f"{dist:.1f}" if dist is not None else "—")
+            dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._engineer_table.setItem(r, 0, QTableWidgetItem(eng_name))
+            self._engineer_table.setItem(r, 1, QTableWidgetItem(system_name))
+            self._engineer_table.setItem(r, 2, dist_item)
 
     def refresh(self, state) -> None:
         self._state = state

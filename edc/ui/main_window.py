@@ -58,7 +58,11 @@ from edc.core.eddn_publisher import EddnPublisher
 from edc.core.canonn_client import CanonnClient, SystemPoi
 from edc.core.engineering_blueprints import EngineeringBlueprintTable
 from edc.core.engineering_wishlist import EngineeringWishlist
+from edc.core.odyssey_engineering import OdysseyEngineeringTable
+from edc.core.odyssey_wishlist import OdysseyWishlist
 from edc.core.market_destination import MarketDestinationStore
+from edc.core.megaship_tracker import MegashipTracker
+from edc.core.megaship_scanner import scan_visited_megaships
 from edc.core.faction_refresh_tracker import FactionRefreshTracker
 from edc.ui.panels.engineering_panel import EngineeringPanel
 from edc.audio.handlers.engineering import EngineeringPhrases
@@ -68,6 +72,8 @@ from edc.core.eddn_listener import EddnPowerPlayWorker
 from edc.core.eddn_market import EddnMarketCache
 from edc.core.station_pads import extract_station_info
 from edc.core.bounty_scanner import scan_active_bounties
+from edc.core.bgs_conflicts import squadron_faction_name
+from edc.core.combat_bond_scanner import scan_unredeemed_combat_total
 from edc.core.notoriety_scanner import scan_latest_notoriety
 from edc.core.rank_scanner import scan_latest_rank_progress
 from edc.core.squadron_scanner import scan_squadron_status
@@ -546,7 +552,6 @@ class MainWindow(QMainWindow):
 
         self.engineer_progress_store = EngineerProgressStore(data_dir / "engineer_progress.json")
         self.state.engineer_progress = self.engineer_progress_store.load()
-        self.state.combat_unsold_total = int(ledger.get("combat_unsold_total", 0) or 0)
         self.state.exploration_unsold_total_est = int(ledger.get("exploration_unsold_total_est", 0) or 0)
         self.state.exobiology_unsold_total_est = int(ledger.get("exobiology_unsold_total_est", 0) or 0)
 
@@ -561,6 +566,19 @@ class MainWindow(QMainWindow):
         except Exception:
             log.exception("Failed to scan journal history for active bounties")
             self.state.active_bounties = {}
+
+        # Same reasoning as active_bounties: session_ledger.json only captures
+        # what got saved before the app's last exit — a gap that showed up
+        # for real (a run spanning 3 journal files under-counted unredeemed
+        # combat bonds by ~795k cr after an app restart mid-session). Full
+        # journal replay is authoritative and self-heals regardless of
+        # whether prior sessions saved cleanly.
+        try:
+            self.state.combat_unsold_total = scan_unredeemed_combat_total(Path(self.cfg.journal_dir)) \
+                if getattr(self.cfg, "journal_dir", None) else 0
+        except Exception:
+            log.exception("Failed to scan journal history for unredeemed combat bonds")
+            self.state.combat_unsold_total = int(ledger.get("combat_unsold_total", 0) or 0)
 
         # Same reasoning as active_bounties: the live bootstrap only re-reads
         # the tail of the current journal, which can miss the Statistics
@@ -664,7 +682,15 @@ class MainWindow(QMainWindow):
         self._spansh_rings_by_system: Dict[int, List[dict]] = {}
         self.engineering_blueprints = EngineeringBlueprintTable(settings_base)
         self.engineering_wishlist_store = EngineeringWishlist(data_dir / "engineering_wishlist.json")
+        self.odyssey_engineering = OdysseyEngineeringTable(settings_base)
+        self.odyssey_wishlist_store = OdysseyWishlist(data_dir / "odyssey_engineering_wishlist.json")
         self.market_destination_store = MarketDestinationStore(data_dir / "market_destination.json")
+        self.megaship_tracker = MegashipTracker(data_dir / "megaships_seen.json")
+        try:
+            if getattr(self.cfg, "journal_dir", None):
+                self.megaship_tracker.merge_seen(scan_visited_megaships(Path(self.cfg.journal_dir)))
+        except Exception:
+            log.exception("Failed to scan journal history for visited megaships")
         self._pinned_destination: dict | None = self.market_destination_store.load()
         self.faction_refresh_tracker = FactionRefreshTracker(data_dir / "faction_refresh.json")
         self.eddn_powerplay = EddnPowerPlayCache(settings_base)
@@ -811,9 +837,13 @@ class MainWindow(QMainWindow):
         self.sidebar.setFrameShape(QFrame.Shape.NoFrame)
         self.sidebar.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.sidebar.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.sidebar.setFixedWidth(200)
+        self.sidebar.setFixedWidth(150)
         self.sidebar.setIconSize(QSize(20, 20))
-        self.sidebar.setSpacing(4)
+        self.sidebar.setSpacing(2)
+        # Scoped to this instance only — the global QListWidget::item rule
+        # (12px padding) is generous for other lists in the app, but here it
+        # was eating width that should go to the main content area instead.
+        self.sidebar.setStyleSheet("QListWidget::item { padding: 8px 10px; font-size: 12px; }")
 
         # Stacked content
         self.stack = QStackedWidget()
@@ -844,7 +874,10 @@ class MainWindow(QMainWindow):
         self.powerplay_panel = PowerplayPanel(edsm_powerplay=self.edsm_powerplay, eddn_powerplay=self.eddn_powerplay)
 
         # Engineering tab
-        self.engineering_panel = EngineeringPanel(self.engineering_blueprints, self.engineering_wishlist_store)
+        self.engineering_panel = EngineeringPanel(
+            self.engineering_blueprints, self.engineering_wishlist_store,
+            self.odyssey_engineering, self.odyssey_wishlist_store,
+        )
 
         # Fleet Carrier tab
         self.fleet_carrier_panel = FleetCarrierPanel()
@@ -1070,6 +1103,7 @@ class MainWindow(QMainWindow):
         self.tts.start()
         self._tts_spoken_ships: set = set()  # pilot|ship keys spoken this system
         self._tts_spoken_signal_bodies: set = set()  # body keys with signals already announced this system
+        self._tts_fss_complete_systems: set = set()  # system_address values already announced "FSS complete"
         self._tts_ship_cooldown_until: float = 0.0  # monotonic timestamp
         self._commander_quip_cooldown_until: float = 0.0
         self._replaying: bool = False  # True during journal bootstrap; suppresses all TTS
@@ -1461,6 +1495,7 @@ class MainWindow(QMainWindow):
 
         if name in (
             "Bounty",
+            "FactionKillBond",
             "RedeemVoucher",
             "Scan",
             "MultiSellExplorationData",
@@ -1532,6 +1567,21 @@ class MainWindow(QMainWindow):
 
         if name == "StartJump" and evt.get("JumpType") == "Hyperspace":
             self._clear_all_panels()
+
+        if name == "SupercruiseDestinationDrop":
+            # Confirms an actual visit to this specific destination — a
+            # megaship's Ship Uplinks (the real merit source, verified via
+            # journal cross-reference) are a fixed, exhaustible set per
+            # megaship, so once visited it's done regardless of PP state at
+            # the time. More reliable than guessing from FSS detection alone.
+            drop_type = evt.get("Type")
+            if isinstance(drop_type, str) and drop_type:
+                for s in (getattr(self.state, "system_signals", None) or []):
+                    if isinstance(s, dict) and s.get("Category") == "Megaship" and s.get("SignalName") == drop_type:
+                        self.megaship_tracker.mark_seen(
+                            MegashipTracker.key(self.state.system_address, drop_type)
+                        )
+                        break
 
         _tts_on = getattr(self.cfg, "tts_enabled", False)
         _tts_events = getattr(self.cfg, "tts_events", {}) or {}
@@ -1814,16 +1864,22 @@ class MainWindow(QMainWindow):
 
                 sig_type = (evt.get("SignalType") or "").strip().lower()
                 if sig_type == "megaship":
-                    pledged = (getattr(state, "pp_power", None) or "").strip()
-                    ctrl = (getattr(state, "system_controlling_power", None) or "").strip()
-                    pp_state_val = (getattr(state, "system_powerplay_state", None) or "").strip()
-                    if pledged:
-                        # Reinforcement: our own power controls this system
-                        if ctrl and ctrl.lower() == pledged.lower():
-                            return ExplorationPhrases.megaship_pp_merits("reinforcement")
-                        # Acquisition: no controlling power, but PP-active
-                        if not ctrl and pp_state_val:
-                            return ExplorationPhrases.megaship_pp_merits("acquisition")
+                    signal_name = evt.get("SignalName") or ""
+                    mega_key = MegashipTracker.key(evt.get("SystemAddress"), signal_name)
+                    if signal_name and not self.megaship_tracker.has_seen(mega_key):
+                        pledged = (getattr(state, "pp_power", None) or "").strip()
+                        ctrl = (getattr(state, "system_controlling_power", None) or "").strip()
+                        pp_state_val = (getattr(state, "system_powerplay_state", None) or "").strip()
+                        if pledged:
+                            # Marking "done" happens on confirmed drop-in
+                            # (SupercruiseDestinationDrop), not here — this
+                            # only decides whether it's worth alerting about.
+                            # Reinforcement: our own power controls this system
+                            if ctrl and ctrl.lower() == pledged.lower():
+                                return ExplorationPhrases.megaship_pp_merits("reinforcement")
+                            # Acquisition: no controlling power, but PP-active
+                            if not ctrl and pp_state_val:
+                                return ExplorationPhrases.megaship_pp_merits("acquisition")
                 return ""
 
             if event_type == "USSDrop":
@@ -1929,6 +1985,15 @@ class MainWindow(QMainWindow):
                     return ExplorationPhrases.human_signals(body, human)
 
             if event_type == "FSSAllBodiesFound":
+                # The game can genuinely emit this more than once for the
+                # same system (e.g. multi-star systems re-confirming
+                # completeness as distant bodies resolve) — announce once
+                # per system, not once per event.
+                system_address = evt.get("SystemAddress") or getattr(state, "system_address", None)
+                if isinstance(system_address, int):
+                    if system_address in self._tts_fss_complete_systems:
+                        return ""
+                    self._tts_fss_complete_systems.add(system_address)
                 count = int(evt.get("Count") or evt.get("BodyCount") or getattr(state, "system_body_count", None) or 0)
                 if count:
                     return ExplorationPhrases.fss_complete(count)
@@ -2945,7 +3010,9 @@ class MainWindow(QMainWindow):
                 if s.get("Category") == "Phenomena":
                     phen += 1
                 if s.get("Category") == "Megaship":
-                    mega += 1
+                    mega_key = MegashipTracker.key(getattr(self.state, "system_address", None), s.get("SignalName") or "")
+                    if not self.megaship_tracker.has_seen(mega_key):
+                        mega += 1
                 if s.get("Category") == "TouristBeacon":
                     tour += 1
             if phen:
@@ -3130,6 +3197,7 @@ class MainWindow(QMainWindow):
         self._refresh_exobiology()
         self._refresh_powerplay()
         self._refresh_bounty_status()
+        self._refresh_squadron_station()
         self._refresh_combat()
         self._refresh_squadron()
         self._refresh_intel()
@@ -3207,6 +3275,24 @@ class MainWindow(QMainWindow):
             )
         except Exception:
             log.exception("Failed to find closest Interstellar Factors station")
+
+    def _refresh_squadron_station(self):
+        """
+        Closest known station controlled by the squadron-aligned faction —
+        combat bonds/bounty vouchers only credit that faction's BGS
+        influence when redeemed at a station it actually controls.
+        """
+        faction = squadron_faction_name(getattr(self.state, "factions", None))
+        if not faction:
+            self.state.closest_squadron_station = None
+            return
+        x, y, z = self.state.system_x, self.state.system_y, self.state.system_z
+        if not all(isinstance(v, (int, float)) for v in (x, y, z)):
+            return
+        try:
+            self.state.closest_squadron_station = self.repo.find_closest_station_for_faction(x, y, z, faction)
+        except Exception:
+            log.exception("Failed to find closest squadron-faction station")
 
     def _refresh_powerplay(self):
         self.powerplay_panel.refresh(self.state, self.pp_activities)

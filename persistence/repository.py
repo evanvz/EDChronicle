@@ -836,6 +836,50 @@ class Repository:
         )
         return best
 
+    def find_closest_station_for_faction(
+        self, x: float, y: float, z: float, faction_name: str,
+    ) -> Optional[dict]:
+        """
+        Closest known station (from our own past Docked visits) controlled
+        by faction_name — e.g. for redeeming combat bonds/bounty vouchers
+        somewhere that actually credits that faction's BGS influence.
+        Same bounded-to-visited-stations caveat as find_closest_interstellar_factors.
+        """
+        target = (faction_name or "").strip().lower()
+        if not target:
+            return None
+
+        rows = self.db.conn.execute(
+            """
+            SELECT si.market_id, si.station_name, si.system_name, si.station_faction,
+                   si.station_type, si.pads_small, si.pads_medium, si.pads_large,
+                   si.last_visited, c.x, c.y, c.z
+            FROM station_info si
+            JOIN system_coords c ON c.system_name = si.system_name
+            WHERE LOWER(si.station_faction) = ?
+            """,
+            (target,),
+        ).fetchall()
+
+        best = None
+        best_dist = None
+        for r in rows:
+            rx, ry, rz = r["x"], r["y"], r["z"]
+            if rx is None or ry is None or rz is None:
+                continue
+            dist = ((rx - x) ** 2 + (ry - y) ** 2 + (rz - z) ** 2) ** 0.5
+            if best_dist is None or dist < best_dist:
+                best_dist = dist
+                best = dict(r)
+
+        if best is None:
+            return None
+        best["distance_ly"] = best_dist
+        best["pad_size"] = effective_pad_size(
+            best["station_type"], best.get("pads_small"), best.get("pads_medium"), best.get("pads_large")
+        )
+        return best
+
     def search_market_prices(
         self, commodity_name: str, x: float, y: float, z: float, radius_ly: float,
         exclude_market_id: Optional[int] = None,

@@ -19,6 +19,7 @@ from PyQt6.QtGui import QColor, QPainter, QPen, QFont, QFontMetrics
 
 from edc.ui import formatting as fmt
 from edc.core.rank_names import rank_name
+from edc.core.bgs_conflicts import squadron_faction_name
 
 log = logging.getLogger(__name__)
 
@@ -358,7 +359,7 @@ class OverviewPanel(QWidget):
         # ── CMDR rank badge ──────────────────────────────────────────────────
         self.rank_badge = QLabel("")
         self.rank_badge.setTextFormat(Qt.TextFormat.RichText)
-        self.rank_badge.setWordWrap(True)
+        self.rank_badge.setWordWrap(False)
         self.rank_badge.setVisible(False)
         self.rank_badge.setStyleSheet(
             "QLabel { background: #0d0d1a; border: 1px solid #1e1e4a;"
@@ -369,7 +370,7 @@ class OverviewPanel(QWidget):
         # ── Trade profit badge (session-scoped) ─────────────────────────────
         self.trade_profit_badge = QLabel("")
         self.trade_profit_badge.setTextFormat(Qt.TextFormat.RichText)
-        self.trade_profit_badge.setWordWrap(True)
+        self.trade_profit_badge.setWordWrap(False)
         self.trade_profit_badge.setVisible(False)
         self.trade_profit_badge.setStyleSheet(
             "QLabel { background: #1a1a0d; border: 1px solid #4a4a1e;"
@@ -391,7 +392,7 @@ class OverviewPanel(QWidget):
         # ── Canonn community intel (POI / codex) ────────────────────────────
         self.canonn_intel = QLabel("")
         self.canonn_intel.setTextFormat(Qt.TextFormat.RichText)
-        self.canonn_intel.setWordWrap(True)
+        self.canonn_intel.setWordWrap(False)
         self.canonn_intel.setVisible(False)
         self.canonn_intel.setStyleSheet(
             "QLabel { background: #0d2a2a; border: 1px solid #1e5a5a;"
@@ -430,7 +431,12 @@ class OverviewPanel(QWidget):
             "QListWidget { background: transparent; border: none; }"
             "QListWidget::item { border: none; }"
         )
-        layout.addWidget(self.factions_list, 1)
+        layout.addWidget(self.factions_list)
+        # factions_list is setFixedHeight()'d dynamically to fit its content
+        # (see _refresh_factions), so it can't act as the layout's overflow
+        # sink itself — without a real stretch item here, leftover vertical
+        # space gets redistributed into the preceding badges/labels instead.
+        layout.addStretch(1)
 
     # ── Pinned Market destination ────────────────────────────────────────────
     def set_pinned_destination(self, pin: dict | None) -> None:
@@ -739,6 +745,7 @@ class OverviewPanel(QWidget):
     # ── Conflicts section ─────────────────────────────────────────────────────
     def _refresh_conflicts(self, state):
         conflicts = getattr(state, "system_conflicts", None) or []
+        squadron_faction = squadron_faction_name(getattr(state, "factions", None))
 
         # Clear existing conflict widgets
         while self.conflict_layout.count():
@@ -822,9 +829,11 @@ class OverviewPanel(QWidget):
             score_row = QHBoxLayout()
             score_row.setSpacing(8)
 
+            f1_color = "#FFD93D" if squadron_faction and f1_name == squadron_faction else hdr_color
+            f1_star = "★ " if squadron_faction and f1_name == squadron_faction else ""
             f1_lbl = QLabel(
-                f'<span style="color:{hdr_color};font-weight:700;">'
-                f'{self._esc(f1_name)}</span>'
+                f'<span style="color:{f1_color};font-weight:700;">'
+                f'{f1_star}{self._esc(f1_name)}</span>'
                 + (f'<br><span style="color:#E6E6E6;font-size:12px;">'
                    f'Asset: {self._esc(f1_stake)}</span>' if f1_stake else "")
             )
@@ -838,9 +847,11 @@ class OverviewPanel(QWidget):
             score_lbl.setTextFormat(Qt.TextFormat.RichText)
             score_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
+            f2_color = "#FFD93D" if squadron_faction and f2_name == squadron_faction else hdr_color
+            f2_star = "★ " if squadron_faction and f2_name == squadron_faction else ""
             f2_lbl = QLabel(
-                f'<span style="color:{hdr_color};font-weight:700;">'
-                f'{self._esc(f2_name)}</span>'
+                f'<span style="color:{f2_color};font-weight:700;">'
+                f'{f2_star}{self._esc(f2_name)}</span>'
                 + (f'<br><span style="color:#E6E6E6;font-size:12px;">'
                    f'Asset: {self._esc(f2_stake)}</span>' if f2_stake else "")
             )
@@ -857,8 +868,15 @@ class OverviewPanel(QWidget):
                 hint = "Non-combat only — trade, exploration, passengers"
             else:
                 hint = "Fight in CZs · Hand in bonds at faction station"
+                # War/CivilWar is a 7-day cycle decided purely by CZ combat —
+                # first side to 4 WonDays wins outright. Elections resolve
+                # differently (missions/trade), so this doesn't apply there.
+                if status == "active":
+                    f1_needed = max(0, 4 - f1_won)
+                    f2_needed = max(0, 4 - f2_won)
+                    hint += f" · {self._esc(f1_name)} needs {f1_needed} more, {self._esc(f2_name)} needs {f2_needed} more (first to 4 of 7)"
             tip_lbl = QLabel(
-                f'<span style="color:#999999;font-size:11px;">→ {self._esc(hint)}</span>'
+                f'<span style="color:#999999;font-size:11px;">→ {hint}</span>'
             )
             tip_lbl.setTextFormat(Qt.TextFormat.RichText)
             card_l.addWidget(tip_lbl)

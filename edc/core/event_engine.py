@@ -1,5 +1,6 @@
 import logging
 import math
+from datetime import datetime
 from typing import Any, Dict, List, Tuple
 from .state import GameState
 from pathlib import Path
@@ -16,6 +17,22 @@ from edc.core.ring_signals import RING_NAME_RE as _RING_NAME_RE, parse_ring_hots
 log = logging.getLogger("edc.event_engine")
 
 logger = logging.getLogger(__name__)
+
+# Ground CZ intensity thresholds, verified against the real-world reference
+# implementation (aussig/BGS-Tally) — Frontier doesn't report CZ size
+# directly, so it's inferred from the combat bond amount, self-correcting
+# upward as bigger bonds arrive (kills split across a team start low).
+_CZ_GROUND_LOW_CB_MAX = 5000
+_CZ_GROUND_MED_CB_MAX = 38000
+_CZ_PENDING_TIMEOUT_S = 300  # 5 minutes since approach/drop, else assume we've moved on
+
+
+def _journal_age_seconds(older_ts: str, newer_ts: str) -> float:
+    try:
+        fmt = "%Y-%m-%dT%H:%M:%SZ"
+        return (datetime.strptime(newer_ts, fmt) - datetime.strptime(older_ts, fmt)).total_seconds()
+    except (TypeError, ValueError):
+        return float("inf")
 
 
 def _derive_conflicts_from_factions(factions: list) -> list:
@@ -170,6 +187,48 @@ class EventEngine:
                 loc[key] = key.replace("_", " ").title()
         return counts, loc           
 
+    def _credit_cz_kill(self, event: Dict[str, Any]) -> None:
+        """A FactionKillBond landing inside the pending-CZ window confirms
+        the zone was real (not just a settlement/warzone we passed near)
+        and credits the awarding faction's CZ tally at the inferred size."""
+        reward = event.get("Reward")
+        faction_name = event.get("AwardingFaction")
+        ts = event.get("timestamp") or ""
+        if not isinstance(reward, int) or not isinstance(faction_name, str) or not faction_name:
+            return
+
+        pending_settlement = self.state.cz_pending_settlement
+        pending_space = self.state.cz_pending_space
+
+        if pending_settlement and _journal_age_seconds(pending_settlement.get("timestamp") or "", ts) <= _CZ_PENDING_TIMEOUT_S:
+            pending_settlement["timestamp"] = ts
+            previous_size = pending_settlement.get("size")
+            if reward < _CZ_GROUND_LOW_CB_MAX:
+                new_size = "l"
+            elif reward < _CZ_GROUND_MED_CB_MAX:
+                new_size = "m"
+            else:
+                new_size = "h"
+            # Self-corrects upward only (team kills can split a bond low at
+            # first) — never downgrades an already-confirmed larger size.
+            size_rank = {"l": 1, "m": 2, "h": 3}
+            if previous_size is None or size_rank[new_size] > size_rank[previous_size]:
+                tally = self.state.cz_kills.setdefault(faction_name, {})
+                if previous_size is not None:
+                    key = f"ground_{previous_size}"
+                    tally[key] = max(0, tally.get(key, 0) - 1)
+                tally[f"ground_{new_size}"] = tally.get(f"ground_{new_size}", 0) + 1
+                pending_settlement["size"] = new_size
+            return
+
+        if pending_space and _journal_age_seconds(pending_space.get("timestamp") or "", ts) <= _CZ_PENDING_TIMEOUT_S:
+            pending_space["timestamp"] = ts
+            if not pending_space.get("counted"):
+                pending_space["counted"] = True
+                size = pending_space.get("type", "l")
+                tally = self.state.cz_kills.setdefault(faction_name, {})
+                tally[f"space_{size}"] = tally.get(f"space_{size}", 0) + 1
+
     def _at_squadron_faction_station(self) -> bool:
         """True if the current system's controlling faction is the
         squadron-aligned faction — the BGS crediting rule for bounty
@@ -251,6 +310,9 @@ class EventEngine:
             self.state.system = new_sys
             if isinstance(new_system_address, int):
                 self.state.system_address = new_system_address
+            entry_body_id = event.get("BodyID")
+            if isinstance(entry_body_id, int):
+                self.state.resolved_body_ids.add(entry_body_id)
             self.state.in_hyperspace = False
             self.state.jump_star_class = None
 
@@ -767,6 +829,12 @@ class EventEngine:
                 reward_key = f"{ts}|{reward}|{cur_key}"
                 if reward_key not in self.state.counted_combat_keys:
                     self.state.counted_combat_keys.add(reward_key)
+                    self.state.combat_session_collected += reward
+                    self.state.combat_unsold_total += reward
+                    try:
+                        self.state.session_bounties += reward
+                    except Exception:
+                        pass
                 kill_key = f"kill|{ts}|{cur_key}"
                 if kill_key not in self.state.counted_combat_keys:
                     self.state.counted_combat_keys.add(kill_key)
@@ -784,6 +852,30 @@ class EventEngine:
                     self.state.combat_contacts = contacts
             except Exception:
                 pass
+
+            self._credit_cz_kill(event)
+
+        elif name == "ApproachSettlement":
+            settlement_name = event.get("Name")
+            if isinstance(settlement_name, str) and settlement_name:
+                self.state.cz_pending_settlement = {
+                    "timestamp": event.get("timestamp"), "name": settlement_name, "size": None,
+                }
+                self.state.cz_pending_space = None
+
+        elif name == "SupercruiseExit":
+            zone_type = (event.get("Type") or "").lower()
+            for prefix, size in (("$warzone_pointrace_low", "l"), ("$warzone_pointrace_med", "m"), ("$warzone_pointrace_high", "h")):
+                if zone_type.startswith(prefix):
+                    self.state.cz_pending_space = {"timestamp": event.get("timestamp"), "type": size}
+                    self.state.cz_pending_settlement = None
+                    break
+
+        elif name == "SupercruiseEntry":
+            # Leaving the CZ instance (jumping to supercruise) — any further
+            # kill bonds belong to whatever comes next, not this zone.
+            self.state.cz_pending_settlement = None
+            self.state.cz_pending_space = None
 
         elif name == "MarketBuy":
             cost = event.get("TotalCost")
@@ -891,7 +983,7 @@ class EventEngine:
                 pass
 
         elif name == "RedeemVoucher":
-            if event.get("Type") == "bounty":
+            if event.get("Type") in ("bounty", "CombatBond"):
                 amount = event.get("Amount")
                 if isinstance(amount, int) and self._at_squadron_faction_station():
                     self.state.squadron_bgs_bounty_cr += amount

@@ -1,0 +1,640 @@
+{
+  "last_updated": "2026-08-06",
+  "source": "Recipe data ported (not code reused) from jixxed/ed-odyssey-materials-helper (MIT licensed), OdysseyBlueprintConstants.java. Engineer home-system coordinates reuse the existing engineering_blueprints.json engineer_locations table (FDevIDs) since Odyssey engineers share that same roster.",
+  "suits": {
+    "Maverick": {
+      "2": {
+        "suitschematic": 1,
+        "healthmonitor": 1,
+        "manufacturinginstructions": 1,
+        "carbonfibreplating": 2,
+        "graphene": 2
+      },
+      "3": {
+        "suitschematic": 2,
+        "healthmonitor": 2,
+        "manufacturinginstructions": 2,
+        "carbonfibreplating": 5,
+        "graphene": 5
+      },
+      "4": {
+        "suitschematic": 4,
+        "healthmonitor": 4,
+        "manufacturinginstructions": 4,
+        "carbonfibreplating": 9,
+        "graphene": 9
+      },
+      "5": {
+        "suitschematic": 5,
+        "healthmonitor": 5,
+        "manufacturinginstructions": 5,
+        "carbonfibreplating": 12,
+        "graphene": 12
+      }
+    },
+    "Dominator": {
+      "2": {
+        "suitschematic": 1,
+        "healthmonitor": 1,
+        "manufacturinginstructions": 1,
+        "titaniumplating": 2,
+        "graphene": 2
+      },
+      "3": {
+        "suitschematic": 2,
+        "healthmonitor": 2,
+        "manufacturinginstructions": 2,
+        "titaniumplating": 5,
+        "graphene": 5
+      },
+      "4": {
+        "suitschematic": 4,
+        "healthmonitor": 4,
+        "manufacturinginstructions": 4,
+        "titaniumplating": 9,
+        "graphene": 9
+      },
+      "5": {
+        "suitschematic": 5,
+        "healthmonitor": 5,
+        "manufacturinginstructions": 5,
+        "titaniumplating": 12,
+        "graphene": 12
+      }
+    },
+    "Artemis": {
+      "2": {
+        "suitschematic": 1,
+        "healthmonitor": 1,
+        "manufacturinginstructions": 1,
+        "aerogel": 2,
+        "graphene": 2
+      },
+      "3": {
+        "suitschematic": 2,
+        "healthmonitor": 2,
+        "manufacturinginstructions": 2,
+        "aerogel": 5,
+        "graphene": 5
+      },
+      "4": {
+        "suitschematic": 4,
+        "healthmonitor": 4,
+        "manufacturinginstructions": 4,
+        "aerogel": 9,
+        "graphene": 9
+      },
+      "5": {
+        "suitschematic": 5,
+        "healthmonitor": 5,
+        "manufacturinginstructions": 5,
+        "aerogel": 12,
+        "graphene": 12
+      }
+    }
+  },
+  "weapons": {
+    "Karma": {
+      "2": {
+        "weaponschematic": 1,
+        "compressionliquefiedgas": 1,
+        "manufacturinginstructions": 1,
+        "weaponcomponent": 2,
+        "tungstencarbide": 2
+      },
+      "3": {
+        "weaponschematic": 2,
+        "compressionliquefiedgas": 2,
+        "manufacturinginstructions": 2,
+        "weaponcomponent": 5,
+        "tungstencarbide": 5
+      },
+      "4": {
+        "weaponschematic": 4,
+        "compressionliquefiedgas": 4,
+        "manufacturinginstructions": 4,
+        "weaponcomponent": 9,
+        "tungstencarbide": 9
+      },
+      "5": {
+        "weaponschematic": 5,
+        "compressionliquefiedgas": 5,
+        "manufacturinginstructions": 5,
+        "weaponcomponent": 12,
+        "tungstencarbide": 12
+      }
+    },
+    "TK": {
+      "2": {
+        "weaponschematic": 1,
+        "ionisedgas": 1,
+        "manufacturinginstructions": 1,
+        "microelectrode": 2,
+        "opticalfibre": 2
+      },
+      "3": {
+        "weaponschematic": 2,
+        "ionisedgas": 2,
+        "manufacturinginstructions": 2,
+        "microelectrode": 5,
+        "opticalfibre": 5
+      },
+      "4": {
+        "weaponschematic": 4,
+        "ionisedgas": 4,
+        "manufacturinginstructions": 4,
+        "microelectrode": 9,
+        "opticalfibre": 9
+      },
+      "5": {
+        "weaponschematic": 5,
+        "ionisedgas": 5,
+        "manufacturinginstructions": 5,
+        "microelectrode": 12,
+        "opticalfibre": 12
+      }
+    },
+    "Manticore": {
+      "2": {
+        "weaponschematic": 1,
+        "ionisedgas": 1,
+        "manufacturinginstructions": 1,
+        "microelectrode": 2,
+        "chemicalsuperbase": 2
+      },
+      "3": {
+        "weaponschematic": 2,
+        "ionisedgas": 2,
+        "manufacturinginstructions": 2,
+        "microelectrode": 5,
+        "chemicalsuperbase": 5
+      },
+      "4": {
+        "weaponschematic": 4,
+        "ionisedgas": 4,
+        "manufacturinginstructions": 4,
+        "microelectrode": 9,
+        "chemicalsuperbase": 9
+      },
+      "5": {
+        "weaponschematic": 5,
+        "ionisedgas": 5,
+        "manufacturinginstructions": 5,
+        "microelectrode": 12,
+        "chemicalsuperbase": 12
+      }
+    }
+  },
+  "suit_modules": {
+    "added_melee_damage": {
+      "display_name": "Added Melee Damage",
+      "materials": {
+        "combattrainingmaterial": 5,
+        "combatantperformance": 5,
+        "epinephrine": 5,
+        "microthrusters": 8
+      },
+      "engineers": [
+        "Jude Navarro",
+        "Kit Fowler",
+        "Eleanor Bresa"
+      ]
+    },
+    "combat_movement_speed": {
+      "display_name": "Combat Movement Speed",
+      "materials": {
+        "evacuationprotocols": 5,
+        "geneticresearch": 3,
+        "epinephrine": 5,
+        "phneutraliser": 8
+      },
+      "engineers": [
+        "Terra Velasquez",
+        "Yarden Bond",
+        "Baltanos"
+      ]
+    },
+    "damage_resistance": {
+      "display_name": "Damage Resistance",
+      "materials": {
+        "weaponinventory": 5,
+        "ballisticsdata": 5,
+        "titaniumplating": 3,
+        "epoxyadhesive": 8,
+        "carbonfibreplating": 3
+      },
+      "engineers": [
+        "Jude Navarro",
+        "Uma Laszlo",
+        "Eleanor Bresa"
+      ]
+    },
+    "enhanced_tracking": {
+      "display_name": "Enhanced Tracking",
+      "materials": {
+        "topographicalsurveys": 5,
+        "stellaractivitylogs": 5,
+        "spectralanalysisdata": 5,
+        "transmitter": 3,
+        "circuitboard": 3
+      },
+      "engineers": [
+        "Domino Green",
+        "Oden Geiger",
+        "Rosa Dayette"
+      ]
+    },
+    "extra_ammo_capacity": {
+      "display_name": "Extra Ammo Capacity",
+      "materials": {
+        "recyclinglogs": 8,
+        "weapontestdata": 5,
+        "productionreports": 5,
+        "weaponcomponent": 3
+      },
+      "engineers": [
+        "Jude Navarro",
+        "Kit Fowler",
+        "Eleanor Bresa"
+      ]
+    },
+    "extra_backpack_capacity": {
+      "display_name": "Extra Backpack Capacity",
+      "materials": {
+        "weaponinventory": 5,
+        "chemicalinventory": 5,
+        "digitaldesigns": 5,
+        "epoxyadhesive": 5,
+        "memorychip": 3
+      },
+      "engineers": [
+        "Domino Green",
+        "Wellington Beck",
+        "Rosa Dayette"
+      ]
+    },
+    "faster_shield_regen": {
+      "display_name": "Faster Shield Regen",
+      "materials": {
+        "reactoroutputreview": 5,
+        "ionbattery": 3,
+        "microtransformer": 8,
+        "electricalwiring": 8
+      },
+      "engineers": [
+        "Kit Fowler",
+        "Uma Laszlo",
+        "Eleanor Bresa"
+      ]
+    },
+    "improved_battery_capacity": {
+      "display_name": "Improved Battery Capacity",
+      "materials": {
+        "reactoroutputreview": 5,
+        "maintenancelogs": 8,
+        "ionbattery": 3,
+        "microsupercapacitor": 5,
+        "electricalwiring": 5
+      },
+      "engineers": [
+        "Oden Geiger",
+        "Wellington Beck",
+        "Rosa Dayette"
+      ]
+    },
+    "improved_jump_assist": {
+      "display_name": "Improved Jump Assist",
+      "materials": {
+        "gmeds": 5,
+        "topographicalsurveys": 5,
+        "microthrusters": 3,
+        "motor": 5
+      },
+      "engineers": [
+        "Hero Ferrari",
+        "Yarden Bond",
+        "Baltanos"
+      ]
+    },
+    "increased_air_reserves": {
+      "display_name": "Increased Air Reserves",
+      "materials": {
+        "pharmaceuticalpatents": 3,
+        "airqualityreports": 8,
+        "oxygenicbacteria": 5,
+        "phneutraliser": 8
+      },
+      "engineers": [
+        "Hero Ferrari",
+        "Terra Velasquez",
+        "Baltanos"
+      ]
+    },
+    "increased_sprint_duration": {
+      "display_name": "Increased Sprint Duration",
+      "materials": {
+        "troopdeploymentrecords": 3,
+        "genesequencingdata": 3,
+        "medicaltrialrecords": 3,
+        "oxygenicbacteria": 5,
+        "chemicalcatalyst": 8
+      },
+      "engineers": [
+        "Hero Ferrari",
+        "Terra Velasquez",
+        "Baltanos"
+      ]
+    },
+    "night_vision": {
+      "display_name": "Night Vision",
+      "materials": {
+        "surveillanceequipment": 5,
+        "surveilleancelogs": 3,
+        "nocdata": 3,
+        "radioactivitydata": 3,
+        "circuitswitch": 5
+      },
+      "engineers": [
+        "Oden Geiger",
+        "Yi Shen"
+      ]
+    },
+    "quieter_footsteps": {
+      "display_name": "Quieter Footsteps",
+      "materials": {
+        "settlementassaultplans": 3,
+        "tacticalplans": 5,
+        "patrolroutes": 5,
+        "microhydraulics": 3,
+        "viscoelasticpolymer": 8
+      },
+      "engineers": [
+        "Yarden Bond",
+        "Yi Shen"
+      ]
+    },
+    "reduced_tool_battery_consumption": {
+      "display_name": "Reduced Tool Battery Consumption",
+      "materials": {
+        "reactoroutputreview": 5,
+        "electricalwiring": 8,
+        "electricalfuse": 3,
+        "microtransformer": 5
+      },
+      "engineers": [
+        "Domino Green",
+        "Wellington Beck",
+        "Rosa Dayette"
+      ]
+    }
+  },
+  "weapon_modules": {
+    "audio_masking": {
+      "display_name": "Audio Masking",
+      "materials": {
+        "audiologs": 3,
+        "patrolroutes": 5,
+        "scrambler": 5,
+        "transmitter": 8,
+        "circuitboard": 3
+      },
+      "engineers": [
+        "Yarden Bond",
+        "Yi Shen"
+      ]
+    },
+    "faster_handling": {
+      "display_name": "Faster Handling",
+      "materials": {
+        "operationalmanual": 5,
+        "combatantperformance": 5,
+        "combattrainingmaterial": 5,
+        "viscoelasticpolymer": 3
+      },
+      "engineers": [
+        "Hero Ferrari",
+        "Yarden Bond",
+        "Baltanos"
+      ]
+    },
+    "greater_range_kinetic": {
+      "display_name": "Greater Range Kinetic",
+      "materials": {
+        "ballisticsdata": 10,
+        "topographicalsurveys": 10,
+        "metalcoil": 10,
+        "rdx": 10,
+        "weaponcomponent": 5
+      },
+      "engineers": [
+        "Domino Green",
+        "Wellington Beck",
+        "Rosa Dayette"
+      ]
+    },
+    "greater_range_laser": {
+      "display_name": "Greater Range Laser",
+      "materials": {
+        "stellaractivitylogs": 5,
+        "riskassessments": 8,
+        "opticallens": 3,
+        "microtransformer": 8,
+        "circuitboard": 3
+      },
+      "engineers": [
+        "Domino Green",
+        "Wellington Beck",
+        "Rosa Dayette"
+      ]
+    },
+    "greater_range_plasma": {
+      "display_name": "Greater Range Plasma",
+      "materials": {
+        "chemicalformulae": 10,
+        "mineralsurvey": 15,
+        "electromagnet": 10,
+        "motor": 5,
+        "electricalfuse": 5
+      },
+      "engineers": [
+        "Domino Green",
+        "Wellington Beck",
+        "Rosa Dayette"
+      ]
+    },
+    "headshot_damage_kinetic": {
+      "display_name": "Headshot Damage Kinetic",
+      "materials": {
+        "weapontestdata": 10,
+        "medicalrecords": 5,
+        "chemicalcatalyst": 10,
+        "rdx": 15,
+        "weaponcomponent": 5
+      },
+      "engineers": [
+        "Uma Laszlo",
+        "Yi Shen"
+      ]
+    },
+    "headshot_damage_laser": {
+      "display_name": "Headshot Damage Laser",
+      "materials": {
+        "spectralanalysisdata": 5,
+        "biometricdata": 3,
+        "ionbattery": 5,
+        "opticallens": 3,
+        "scrambler": 5
+      },
+      "engineers": [
+        "Uma Laszlo",
+        "Yi Shen"
+      ]
+    },
+    "headshot_damage_plasma": {
+      "display_name": "Headshot Damage Plasma",
+      "materials": {
+        "chemicalexperimentdata": 10,
+        "bloodtestresults": 5,
+        "ionbattery": 10,
+        "electromagnet": 10,
+        "microsupercapacitor": 15
+      },
+      "engineers": [
+        "Uma Laszlo",
+        "Yi Shen"
+      ]
+    },
+    "higher_accuracy_kinetic": {
+      "display_name": "Higher Accuracy Kinetic",
+      "materials": {
+        "extractionyielddata": 10,
+        "biometricdata": 5,
+        "combatantperformance": 10,
+        "rdx": 10,
+        "viscoelasticpolymer": 10
+      },
+      "engineers": [
+        "Yarden Bond",
+        "Terra Velasquez",
+        "Baltanos"
+      ]
+    },
+    "higher_accuracy_laser": {
+      "display_name": "Higher Accuracy Laser",
+      "materials": {
+        "radioactivitydata": 3,
+        "combatantperformance": 5,
+        "opticallens": 3,
+        "electricalwiring": 8,
+        "metalcoil": 5
+      },
+      "engineers": [
+        "Yarden Bond",
+        "Terra Velasquez",
+        "Baltanos"
+      ]
+    },
+    "higher_accuracy_plasma": {
+      "display_name": "Higher Accuracy Plasma",
+      "materials": {
+        "chemicalpatents": 5,
+        "combatantperformance": 10,
+        "chemicalcatalyst": 10,
+        "electromagnet": 10,
+        "metalcoil": 10
+      },
+      "engineers": [
+        "Yarden Bond",
+        "Terra Velasquez",
+        "Baltanos"
+      ]
+    },
+    "magazine_size": {
+      "display_name": "Magazine Size",
+      "materials": {
+        "weapontestdata": 5,
+        "securityexpenses": 3,
+        "weaponcomponent": 3,
+        "tungstencarbide": 3,
+        "metalcoil": 5
+      },
+      "engineers": [
+        "Jude Navarro",
+        "Kit Fowler",
+        "Eleanor Bresa"
+      ]
+    },
+    "noise_suppressor": {
+      "display_name": "Noise Suppressor",
+      "materials": {
+        "atmosphericdata": 5,
+        "mininganalytics": 5,
+        "viscoelasticpolymer": 8,
+        "weaponcomponent": 3
+      },
+      "engineers": [
+        "Hero Ferrari",
+        "Terra Velasquez",
+        "Baltanos"
+      ]
+    },
+    "reload_speed": {
+      "display_name": "Reload Speed",
+      "materials": {
+        "operationalmanual": 5,
+        "productionreports": 5,
+        "combattrainingmaterial": 5,
+        "microhydraulics": 5,
+        "electromagnet": 5
+      },
+      "engineers": [
+        "Jude Navarro",
+        "Uma Laszlo",
+        "Eleanor Bresa"
+      ]
+    },
+    "scope": {
+      "display_name": "Scope",
+      "materials": {
+        "spectralanalysisdata": 5,
+        "biometricdata": 3,
+        "opticallens": 5,
+        "opticalfibre": 3
+      },
+      "engineers": [
+        "Oden Geiger",
+        "Wellington Beck",
+        "Rosa Dayette"
+      ]
+    },
+    "stability": {
+      "display_name": "Stability",
+      "materials": {
+        "mininganalytics": 5,
+        "riskassessments": 8,
+        "viscoelasticpolymer": 5,
+        "microhydraulics": 5
+      },
+      "engineers": [
+        "Domino Green",
+        "Oden Geiger",
+        "Rosa Dayette"
+      ]
+    },
+    "stowed_reloading": {
+      "display_name": "Stowed Reloading",
+      "materials": {
+        "digitaldesigns": 5,
+        "operationalmanual": 5,
+        "productionschedule": 5,
+        "circuitboard": 3,
+        "encryptedmemorychip": 8
+      },
+      "engineers": [
+        "Kit Fowler",
+        "Uma Laszlo",
+        "Eleanor Bresa"
+      ]
+    }
+  }
+}
