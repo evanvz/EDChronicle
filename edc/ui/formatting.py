@@ -1,5 +1,34 @@
 from __future__ import annotations
-from typing import Any, Optional
+from datetime import datetime, timezone
+from typing import Any, Optional, Tuple
+
+
+def relative_time(iso_str: str) -> Tuple[str, float]:
+    """Returns (display text, age in seconds) for an ISO-8601 timestamp —
+    "3h ago" instead of a raw timestamp is what's actually useful at a
+    glance; age in seconds doubles as a sort key so a column sorts by
+    actual recency, not alphabetically. The older the data, the more
+    likely a BGS/security/faction shift has made it stale or wrong —
+    always show this next to anything sourced from a past visit or sighting."""
+    if not iso_str:
+        return "—", float("inf")
+    try:
+        ts = iso_str.strip()
+        if ts.endswith("Z"):
+            ts = ts[:-1] + "+00:00"
+        dt = datetime.fromisoformat(ts)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        age = max(0.0, (datetime.now(timezone.utc) - dt).total_seconds())
+        if age < 3600:
+            mins = int(age // 60)
+            return (f"{mins}m ago" if mins > 0 else "just now"), age
+        if age < 86400:
+            return f"{int(age // 3600)}h ago", age
+        return f"{int(age // 86400)}d ago", age
+    except (ValueError, TypeError):
+        return iso_str, float("inf")
+
 
 def clean_token(value: Any) -> Any:
     """

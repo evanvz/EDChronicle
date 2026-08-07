@@ -784,6 +784,51 @@ class Repository:
              station_faction),
         )
 
+    def save_station_info_batch(self, records: list[dict]) -> None:
+        """
+        Same upsert as save_station_info, batched — for EDDN-sourced Docked
+        sightings from other commanders (buffered and flushed periodically,
+        same pattern as save_market_snapshot_batch). Each record is a dict
+        shaped like edc.core.station_pads.extract_station_info()'s return
+        value. A later sighting (ours or another commander's) always wins;
+        EDDN traffic is near-live, so this keeps station services/pad sizes
+        current without being limited to only our own past visits.
+        """
+        if not records:
+            return
+        rows = [
+            (
+                r["market_id"], r.get("station_name"), r.get("system_name"), r.get("station_type"),
+                r.get("pads_small"), r.get("pads_medium"), r.get("pads_large"), r.get("timestamp"),
+                json.dumps(r["station_services"]) if r.get("station_services") else None,
+                r.get("station_faction"),
+            )
+            for r in records
+        ]
+        cur = self.db.conn.cursor()
+        cur.executemany(
+            """
+            INSERT INTO station_info (
+                market_id, station_name, system_name, station_type,
+                pads_small, pads_medium, pads_large, last_visited,
+                station_services, station_faction
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(market_id) DO UPDATE SET
+                station_name     = excluded.station_name,
+                system_name      = excluded.system_name,
+                station_type     = excluded.station_type,
+                pads_small       = excluded.pads_small,
+                pads_medium      = excluded.pads_medium,
+                pads_large       = excluded.pads_large,
+                last_visited     = excluded.last_visited,
+                station_services = excluded.station_services,
+                station_faction  = excluded.station_faction
+            """,
+            rows,
+        )
+        self.db.conn.commit()
+
     def find_closest_interstellar_factors(
         self, x: float, y: float, z: float, exclude_factions: Optional[list[str]] = None,
     ) -> Optional[dict]:
@@ -879,6 +924,100 @@ class Repository:
             best["station_type"], best.get("pads_small"), best.get("pads_medium"), best.get("pads_large")
         )
         return best
+
+    def find_stations_with_service(
+        self, x: float, y: float, z: float, service_tags: list[str],
+    ) -> list[dict]:
+        """
+        Every known station (from our own past Docked visits) whose
+        StationServices includes ALL of service_tags (e.g. "pioneersupplies"
+        alone finds Pioneer Supplies kiosks generally, but buying something
+        like E-Breach specifically also requires "blackmarket" present at
+        the same station — pass both when that distinction matters). Same
+        bounded-to-visited-stations caveat as find_closest_interstellar_factors.
+        """
+        where_clause = " AND ".join(["si.station_services LIKE ?"] * len(service_tags))
+        params = [f'%"{tag}"%' for tag in service_tags]
+        rows = self.db.conn.execute(
+            f"""
+            SELECT si.market_id, si.station_name, si.system_name, si.station_faction,
+                   si.station_type, si.pads_small, si.pads_medium, si.pads_large,
+                   si.last_visited, c.x, c.y, c.z
+            FROM station_info si
+            JOIN system_coords c ON c.system_name = si.system_name
+            WHERE {where_clause}
+            """,
+            params,
+        ).fetchall()
+
+        results = []
+        for r in rows:
+            rx, ry, rz = r["x"], r["y"], r["z"]
+            if rx is None or ry is None or rz is None:
+                continue
+            rec = dict(r)
+            rec["distance_ly"] = ((rx - x) ** 2 + (ry - y) ** 2 + (rz - z) ** 2) ** 0.5
+            rec["pad_size"] = effective_pad_size(
+                rec["station_type"], rec.get("pads_small"), rec.get("pads_medium"), rec.get("pads_large")
+            )
+            results.append(rec)
+        results.sort(key=lambda r: r["distance_ly"])
+        return results
+
+    def get_known_rare_goods(
+        self, rare_items: list[dict], x: float, y: float, z: float,
+    ) -> list[dict]:
+        """
+        Cross-references the real rare-goods reference list (EDCD/FDevIDs,
+        each with its one true canonical market_id) against whatever the
+        EDDN commodity feed has actually reported for that exact
+        (market_id, commodity_name) pair — grounding results in the
+        canonical station rather than any station that happens to have a
+        stale/noisy listing under the same commodity name. Rare goods we've
+        never seen reported are simply omitted, not guessed.
+        """
+        if not rare_items:
+            return []
+        market_ids = [it["market_id"] for it in rare_items]
+        placeholders = ",".join("?" * len(market_ids))
+        rows = self.db.conn.execute(
+            f"""
+            SELECT m.market_id, m.commodity_name, m.station_name, m.station_type, m.system_name,
+                   m.sell_price, m.buy_price, m.stock, m.demand, m.last_updated,
+                   c.x, c.y, c.z,
+                   si.pads_small, si.pads_medium, si.pads_large
+            FROM market_prices m
+            LEFT JOIN system_coords c ON c.system_name = m.system_name
+            LEFT JOIN station_info si ON si.market_id = m.market_id
+            WHERE m.market_id IN ({placeholders})
+            """,
+            market_ids,
+        ).fetchall()
+
+        by_market: dict[int, list] = {}
+        for r in rows:
+            by_market.setdefault(r["market_id"], []).append(r)
+
+        results = []
+        for it in rare_items:
+            match = next(
+                (r for r in by_market.get(it["market_id"], []) if r["commodity_name"] == it["symbol"]),
+                None,
+            )
+            if match is None:
+                continue
+            rec = dict(match)
+            rec["rare_name"] = it["name"]
+            rec["category"] = it.get("category")
+            if match["x"] is not None and match["y"] is not None and match["z"] is not None:
+                rec["distance_ly"] = ((match["x"] - x) ** 2 + (match["y"] - y) ** 2 + (match["z"] - z) ** 2) ** 0.5
+            else:
+                rec["distance_ly"] = None
+            rec["pad_size"] = effective_pad_size(
+                rec.get("station_type"), rec.get("pads_small"), rec.get("pads_medium"), rec.get("pads_large")
+            )
+            results.append(rec)
+        return results
 
     def search_market_prices(
         self, commodity_name: str, x: float, y: float, z: float, radius_ly: float,

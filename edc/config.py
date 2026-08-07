@@ -42,7 +42,7 @@ class AppConfig:
     comms_rate: int = 210
     voice_commands_enabled: bool = False
     always_on_top: bool = False
-    eddn_contribute_enabled: bool = False
+    eddn_contribute_enabled: bool = True
     market_search_radius_ly: int = 100
 
     def __post_init__(self):
@@ -178,7 +178,7 @@ class ConfigStore:
                 comms_rate=int(data.get("comms_rate", 210) or 210),
                 voice_commands_enabled=bool(data.get("voice_commands_enabled", False)),
                 always_on_top=bool(data.get("always_on_top", False)),
-                eddn_contribute_enabled=bool(data.get("eddn_contribute_enabled", False)),
+                eddn_contribute_enabled=bool(data.get("eddn_contribute_enabled", True)),
                 market_search_radius_ly=int(data.get("market_search_radius_ly", 100) or 100),
             )
             if isinstance(data.get("tts_events"), dict):
@@ -210,7 +210,7 @@ class ConfigStore:
                         "comms_rate": int(getattr(cfg, "comms_rate", 210) or 210),
                         "voice_commands_enabled": bool(getattr(cfg, "voice_commands_enabled", False)),
                         "always_on_top": bool(getattr(cfg, "always_on_top", False)),
-                        "eddn_contribute_enabled": bool(getattr(cfg, "eddn_contribute_enabled", False)),
+                        "eddn_contribute_enabled": bool(getattr(cfg, "eddn_contribute_enabled", True)),
                         "market_search_radius_ly": int(getattr(cfg, "market_search_radius_ly", 100) or 100),
                     },
                     indent=2,

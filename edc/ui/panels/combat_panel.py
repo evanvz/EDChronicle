@@ -13,6 +13,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 
 from edc.core.bgs_conflicts import find_squadron_war_enemy
+from edc.ui import formatting as fmt
 
 log = logging.getLogger(__name__)
 
@@ -476,14 +477,14 @@ class CombatPanel(QWidget):
 
         dist = station.get("distance_ly")
         dist_txt = f"{dist:.1f} ly" if isinstance(dist, (int, float)) else "? ly"
-        last_visited = station.get("last_visited") or "unknown date"
+        visited_txt, _ = fmt.relative_time(station.get("last_visited") or "")
         pad_size = station.get("pad_size") or "?"
         pad_txt = f"{pad_size} pad" if pad_size != "?" else "pad size unknown"
         self.bounty_station.setText(
             f"Closest known: {station.get('station_name') or '?'} "
             f"({station.get('system_name') or '?'}), {dist_txt}, {pad_txt} — "
             f"controlled by {station.get('station_faction') or 'unknown faction'}. "
-            f"Confirmed as of {last_visited} — Interstellar Factors availability "
+            f"Confirmed {visited_txt} — Interstellar Factors availability "
             f"shifts with system security/BGS, so verify on arrival."
         )
 
@@ -544,9 +545,11 @@ class CombatPanel(QWidget):
         if isinstance(station, dict):
             dist = station.get("distance_ly")
             dist_txt = f"{dist:.1f} ly" if isinstance(dist, (int, float)) else "? ly"
+            visited_txt, _ = fmt.relative_time(station.get("last_visited") or "")
             self.cz_station_note.setText(
                 f"Redeem bonds at a station your faction controls to count — closest known: "
-                f"{station.get('station_name') or '?'} ({station.get('system_name') or '?'}), {dist_txt}."
+                f"{station.get('station_name') or '?'} ({station.get('system_name') or '?'}), {dist_txt}. "
+                f"Confirmed {visited_txt} — control can shift with BGS."
             )
         else:
             self.cz_station_note.setText(

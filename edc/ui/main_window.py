@@ -71,6 +71,7 @@ from edc.core.eddn_powerplay import EddnPowerPlayCache
 from edc.core.eddn_listener import EddnPowerPlayWorker
 from edc.core.eddn_market import EddnMarketCache
 from edc.core.station_pads import extract_station_info
+from edc.core.rare_commodities import RareCommodityTable
 from edc.core.bounty_scanner import scan_active_bounties
 from edc.core.bgs_conflicts import squadron_faction_name
 from edc.core.combat_bond_scanner import scan_unredeemed_combat_total
@@ -681,6 +682,7 @@ class MainWindow(QMainWindow):
         self._canonn_worker: _CanonnRefreshWorker | None = None
         self._spansh_rings_by_system: Dict[int, List[dict]] = {}
         self.engineering_blueprints = EngineeringBlueprintTable(settings_base)
+        self.rare_commodities = RareCommodityTable(settings_base)
         self.engineering_wishlist_store = EngineeringWishlist(data_dir / "engineering_wishlist.json")
         self.odyssey_engineering = OdysseyEngineeringTable(settings_base)
         self.odyssey_wishlist_store = OdysseyWishlist(data_dir / "odyssey_engineering_wishlist.json")
@@ -886,7 +888,7 @@ class MainWindow(QMainWindow):
         self.mining_panel = MiningPanel(self.repo)
 
         # Market tab
-        self.market_panel = MarketPanel(self.repo)
+        self.market_panel = MarketPanel(self.repo, self.rare_commodities)
         self.mining_panel.sell_search_requested.connect(self._on_mining_sell_search_requested)
         self.market_panel.destination_selected.connect(self._on_market_destination_selected)
 
@@ -1167,6 +1169,7 @@ class MainWindow(QMainWindow):
         self._eddn_worker.system_coords_seen.connect(self.eddn_market_cache.on_coords_seen)
         self._eddn_worker.commodity_seen.connect(self.eddn_market_cache.on_commodity_message)
         self._eddn_worker.faction_seen.connect(self.eddn_market_cache.on_faction_seen)
+        self._eddn_worker.station_seen.connect(self.eddn_market_cache.on_station_seen)
         self._eddn_thread.start()
         self._eddn_save_timer.start()
         self._market_flush_timer.start()

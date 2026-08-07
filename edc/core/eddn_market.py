@@ -19,6 +19,8 @@ import logging
 from datetime import date, datetime, timezone
 from typing import Any, Dict, Tuple
 
+from edc.core.station_pads import extract_station_info
+
 log = logging.getLogger(__name__)
 
 
@@ -32,6 +34,9 @@ class EddnMarketCache:
         # system_address — deduped so re-sightings of the same system
         # between flushes only cost one write, not one per sighting.
         self._faction_buffer: Dict[int, Tuple[str, Dict[str, Any], bool, str]] = {}
+        # Keyed by market_id — Docked sightings from any commander network-wide,
+        # the same crowdsourcing model Inara/EDSM use for station-service data.
+        self._station_buffer: Dict[int, Dict[str, Any]] = {}
 
     def on_coords_seen(self, system_name: str, x: float, y: float, z: float) -> None:
         if not system_name:
@@ -64,14 +69,19 @@ class EddnMarketCache:
                 timestamp,
             )
 
+    def on_station_seen(self, msg: Dict[str, Any]) -> None:
+        info = extract_station_info(msg)
+        if info is not None:
+            self._station_buffer[info["market_id"]] = info
+
     def on_faction_seen(self, system_address: int, system_name: str, faction: Dict[str, Any], is_controlling: bool, timestamp: str) -> None:
         if not (isinstance(system_address, int) and system_name):
             return
         self._faction_buffer[system_address] = (system_name, faction, is_controlling, timestamp)
 
-    def buffered_counts(self) -> Tuple[int, int, int]:
-        """Returns (coord_count, market_row_count, faction_count) currently buffered — for status/logging."""
-        return len(self._coord_buffer), len(self._market_buffer), len(self._faction_buffer)
+    def buffered_counts(self) -> Tuple[int, int, int, int]:
+        """Returns (coord_count, market_row_count, faction_count, station_count) currently buffered — for status/logging."""
+        return len(self._coord_buffer), len(self._market_buffer), len(self._faction_buffer), len(self._station_buffer)
 
     def flush(self) -> None:
         if self._coord_buffer:
@@ -97,3 +107,10 @@ class EddnMarketCache:
                 except Exception:
                     log.exception("Failed to flush faction sighting for system_address=%s", system_address)
             self._faction_buffer.clear()
+
+        if self._station_buffer:
+            try:
+                self._repo.save_station_info_batch(list(self._station_buffer.values()))
+            except Exception:
+                log.exception("Failed to flush station_info batch")
+            self._station_buffer.clear()

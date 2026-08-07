@@ -70,6 +70,8 @@ Inspired by [EDCoPilot](https://www.razzafrag.com/) by CMDR RazzaFrag.
 - Click a result to copy the station/system name, or pin it as your active destination — shown as a persistent banner on the Overview tab (surviving a crash/restart) until you dock there or dismiss it manually
 - Automatic Trade Opportunities: cross-references your current market's buy prices against known sell prices elsewhere within range
 - "In Cargo — Sell At" tracking that persists across jumps and undocking
+- **Rare Goods** finder: cross-references the real list of ~140 rare goods (EDCD/FDevIDs) against their one true canonical station each, grounded by market ID rather than a plain name search — avoids the stale/duplicate listings a normal commodity search can surface for these
+- **Concourse & broker service finder**: Pioneer Supplies (with Black Market confirmed too, for contraband like E-Breach), Black Market, Apex Interstellar, Frontline Solutions, Vista Genomics, Bartender, Material Trader, and Technology Broker — closest known station offering each, from a small color-coded button row, each opening its own detached window
 
 ### Mining
 - Live session stats: asteroids prospected, cores cracked, tons refined per material
@@ -118,11 +120,11 @@ EDChronicle draws on the same community data network the rest of the Elite Dange
 
 - **[Spansh](https://spansh.co.uk)** — body enrichment, PowerPlay system search, ring/hotspot mining search, ring hotspot community-data gaps
 - **[EDSM](https://www.edsm.net)** — daily PowerPlay dump (independent cross-check against Spansh), and per-system faction lookups for Player Faction CSV import
-- **[EDDN](https://github.com/EDCD/EDDN)** — live subscription for real-time PowerPlay cross-checking, network-wide squadron faction presence tracking, and the galaxy-wide commodity price feed behind the Market tab — the same feed Spansh and EDSM themselves are built from
+- **[EDDN](https://github.com/EDCD/EDDN)** — live subscription for real-time PowerPlay cross-checking, network-wide squadron faction presence tracking, the galaxy-wide commodity price feed behind the Market tab, and station services/pad sizes crowdsourced from every commander's dockings (the same model Inara/EDSM use) — the same feed Spansh and EDSM themselves are built from
 - **[Canonn](https://canonn.tech)** — community-sourced Codex/POI intel for the current system and nearest unclaimed Codex challenge
 - **[Inara](https://inara.cz)** — optional bulk CSV export of a minor faction's full system presence list, for the Player Faction tab's bulk import
 
-EDChronicle can also **optionally** contribute back: with "Contribute data to EDDN" enabled in Settings (off by default), a subset of your journal events (jumps, docking, scans, surface signal scans, carrier jumps, codex entries) is published to EDDN in its standard schema, benefiting every tool that consumes it — the same mechanism EDMarketConnector uses. No personal data beyond your commander name is included, and EDDN obfuscates that before distributing it further.
+EDChronicle can also contribute back: "Contribute data to EDDN" in Settings (on by default, matching EDMarketConnector's own default — turn it off if you'd rather not) publishes a subset of your journal events (jumps, docking, scans, surface signal scans, carrier jumps, codex entries) to EDDN in its standard schema, benefiting every tool that consumes it. No personal data beyond your commander name is included, and EDDN obfuscates that before distributing it further.
 
 ## Screenshots
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timezone
 from typing import Optional
 
 from PyQt6.QtCore import Qt, QObject, QThread, QStringListModel, pyqtSignal
@@ -12,16 +11,32 @@ from PyQt6.QtWidgets import (
     QApplication,
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QSpinBox, QComboBox, QCompleter, QTableWidget, QTableWidgetItem,
-    QHeaderView, QFrame,
+    QHeaderView, QFrame, QDialog,
 )
 
 from edc.core.station_pads import pad_size_hint
+from edc.ui import formatting as fmt
 
 log = logging.getLogger(__name__)
 
 _CARD_STYLE = "QFrame { background:#0d1a2a; border:1px solid #1e3a5a; border-radius:5px; }"
 _HDR_STYLE = "color:#555555; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
 _LABEL_STYLE = "background:transparent; border:none; color:#c8c8c8;"
+
+# (required StationServices tags, button label, (bg, text) accent) —
+# Pioneer Supplies needs Black Market too for contraband items like
+# E-Breach specifically, not just the kiosk itself. Distinct colors so the
+# row of buttons is scannable at a glance, not one undifferentiated block.
+_CONCOURSE_SERVICES = [
+    (["pioneersupplies", "blackmarket"], "Pioneer Supplies (+Black Market)", ("#3a1a1a", "#FF8080")),
+    (["blackmarket"], "Black Market", ("#3a2410", "#FFA060")),
+    (["apexinterstellar"], "Apex Interstellar", ("#1a2a3a", "#8CC8FF")),
+    (["frontlinesolutions"], "Frontline Solutions", ("#1a3a1a", "#8CFF8C")),
+    (["vistagenomics"], "Vista Genomics", ("#0d2a2a", "#6BE6D9")),
+    (["bartender"], "Bartender", ("#3a3010", "#FFD93D")),
+    (["materialtrader"], "Material Trader", ("#2a1a3a", "#C89CFF")),
+    (["techBroker"], "Technology Broker", ("#1a3a30", "#6BFFB3")),
+]
 
 
 def normalize_commodity_name(name: str) -> str:
@@ -33,29 +48,7 @@ def normalize_commodity_name(name: str) -> str:
     return re.sub(r"[^a-z0-9]", "", (name or "").lower())
 
 
-def _format_relative_time(iso_str: str) -> tuple[str, float]:
-    """Returns (display text, age in seconds) for an EDDN commodity
-    message's ISO-8601 timestamp — "Updated" showing a raw timestamp
-    string wasn't useful at a glance; age in seconds doubles as the sort
-    key so the column sorts by actual recency, not alphabetically."""
-    if not iso_str:
-        return "—", float("inf")
-    try:
-        ts = iso_str.strip()
-        if ts.endswith("Z"):
-            ts = ts[:-1] + "+00:00"
-        dt = datetime.fromisoformat(ts)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        age = max(0.0, (datetime.now(timezone.utc) - dt).total_seconds())
-        if age < 3600:
-            mins = int(age // 60)
-            return (f"{mins}m ago" if mins > 0 else "just now"), age
-        if age < 86400:
-            return f"{int(age // 3600)}h ago", age
-        return f"{int(age // 86400)}d ago", age
-    except (ValueError, TypeError):
-        return iso_str, float("inf")
+_format_relative_time = fmt.relative_time
 
 
 class _NumericTableWidgetItem(QTableWidgetItem):
@@ -173,9 +166,11 @@ class MarketPanel(QWidget):
     # until they actually reach it.
     destination_selected = pyqtSignal(str, str, str, str)
 
-    def __init__(self, repo, parent=None):
+    def __init__(self, repo, rare_table=None, parent=None):
         super().__init__(parent)
         self._repo = repo
+        self._rare_table = rare_table
+        self._rare_dialog: Optional["_RareGoodsDialog"] = None
         self._system: str = ""
         self._ref_x: float = 0.0
         self._ref_y: float = 0.0
@@ -315,6 +310,38 @@ class MarketPanel(QWidget):
         row.addWidget(self._pad_filter_combo)
         row.addWidget(self._search_btn)
         search_layout.addLayout(row)
+
+        service_row = QHBoxLayout()
+        service_row.setSpacing(4)
+
+        self._rare_goods_btn = QPushButton("Rare Goods…")
+        self._rare_goods_btn.setStyleSheet(
+            "QPushButton { background:#2a1a3a; color:#D9A8FF; border:1px solid #5a3a8a;"
+            " border-radius:3px; padding:3px 10px; font-weight:bold; }"
+            "QPushButton:hover { background:#3a2a5a; }"
+        )
+        self._rare_goods_btn.setToolTip(
+            "Real rare goods only have one true source station each — this cross-references "
+            "the known list against actual EDDN reports for that exact station, not a plain "
+            "name search (which can surface noisy/incorrect duplicate listings)."
+        )
+        self._rare_goods_btn.clicked.connect(self._open_rare_goods_dialog)
+        service_row.addWidget(self._rare_goods_btn)
+
+        self._service_dialogs: dict = {}
+        for tags, label, (bg, fg) in _CONCOURSE_SERVICES:
+            btn = QPushButton(f"{label}…")
+            btn.setStyleSheet(
+                f"QPushButton {{ background:{bg}; color:{fg}; border:1px solid {fg};"
+                " border-radius:3px; padding:3px 10px; font-weight:bold; }"
+                f"QPushButton:hover {{ background:{fg}; color:{bg}; }}"
+            )
+            btn.setToolTip(f"Known stations (from your own past dockings) offering {label}, closest first.")
+            btn.clicked.connect(lambda _checked=False, t=tags, l=label: self._open_service_dialog(t, l))
+            service_row.addWidget(btn)
+
+        service_row.addStretch(1)
+        search_layout.addLayout(service_row)
 
         note = QLabel(
             "Sourced from EDDN's live galaxy-wide commodity feed — other commanders' "
@@ -617,6 +644,25 @@ class MarketPanel(QWidget):
                 ["Station", "Pad", "System", "Sell Price", "Dist (ly)", "Demand", "Updated"]
             )
 
+    def _open_rare_goods_dialog(self) -> None:
+        if self._rare_dialog is None:
+            self._rare_dialog = _RareGoodsDialog(self)
+        self._rare_dialog.refresh_results()
+        self._rare_dialog.show()
+        self._rare_dialog.raise_()
+        self._rare_dialog.activateWindow()
+
+    def _open_service_dialog(self, tags: list, label: str) -> None:
+        key = ",".join(tags)
+        dlg = self._service_dialogs.get(key)
+        if dlg is None:
+            dlg = _StationServiceDialog(self, tags, label)
+            self._service_dialogs[key] = dlg
+        dlg.refresh_results()
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
+
     def _mode(self) -> str:
         return self._mode_combo.currentData() or "sell"
 
@@ -703,3 +749,222 @@ class MarketPanel(QWidget):
             self._table.setItem(row, 5, count_item)
             self._table.setItem(row, 6, updated_item)
         self._table.setSortingEnabled(True)
+
+
+class _RareGoodsDialog(QDialog):
+    """
+    Non-modal detail window (stays open, movable, independent of tab
+    switching) listing every real rare good the reference table knows
+    about that EDDN has actually reported data for at its one true
+    canonical station — see Repository.get_known_rare_goods.
+    """
+
+    def __init__(self, panel: "MarketPanel"):
+        super().__init__(None)
+        self.setStyleSheet("QDialog { background:#080f18; color:#c8c8c8; }")
+        self._panel = panel
+        self._all_rows: list = []
+        self.setWindowTitle("Rare Goods")
+        self.resize(900, 500)
+
+        layout = QVBoxLayout(self)
+
+        search_row = QHBoxLayout()
+        search_row.addWidget(QLabel("Search:"))
+        self._search_edit = QLineEdit()
+        self._search_edit.setPlaceholderText("Rare good name…")
+        self._search_edit.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
+        self._search_edit.textChanged.connect(self._apply_filter)
+        search_row.addWidget(self._search_edit, 1)
+        layout.addLayout(search_row)
+
+        self._status_label = QLabel("")
+        self._status_label.setStyleSheet("color:#888888; font-size:11px; background:transparent; border:none;")
+        layout.addWidget(self._status_label)
+
+        self._table = QTableWidget()
+        self._table.setColumnCount(7)
+        self._table.setHorizontalHeaderLabels(
+            ["Rare Good", "Station", "Pad", "System", "Dist (ly)", "Available", "Updated"]
+        )
+        self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self._table.verticalHeader().setVisible(False)
+        self._table.setAlternatingRowColors(True)
+        self._table.setStyleSheet(
+            "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
+            " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
+            "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
+            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
+            "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
+        )
+        h = self._table.horizontalHeader()
+        h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        h.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        h.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        h.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
+        self._table.setToolTip("Click a Station or System cell to copy its name to the clipboard.")
+        self._table.cellClicked.connect(self._on_cell_clicked)
+        layout.addWidget(self._table, 1)
+
+        note = QLabel(
+            "Only rare goods EDDN has actually reported data for at their real canonical "
+            "station are listed here — no data yet means no row, not a guess."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet("color:#555555; font-size:11px; background:transparent; border:none;")
+        layout.addWidget(note)
+
+    def refresh_results(self) -> None:
+        rare_table = self._panel._rare_table
+        if rare_table is None:
+            self._all_rows = []
+        else:
+            self._all_rows = self._panel._repo.get_known_rare_goods(
+                rare_table.all(), self._panel._ref_x, self._panel._ref_y, self._panel._ref_z,
+            )
+        self._apply_filter()
+
+    def _apply_filter(self) -> None:
+        query = self._search_edit.text().strip().lower()
+        rows = [
+            r for r in self._all_rows
+            if not query or query in (r.get("rare_name") or "").lower()
+        ]
+        rows.sort(key=lambda r: (r.get("distance_ly") is None, r.get("distance_ly") or 0.0))
+
+        self._status_label.setText(f"{len(rows)} of {len(self._all_rows)} known rare goods.")
+
+        self._table.setSortingEnabled(False)
+        self._table.setRowCount(len(rows))
+        for row, r in enumerate(rows):
+            name_item = QTableWidgetItem(r.get("rare_name") or "—")
+            station_item = QTableWidgetItem(r.get("station_name") or "—")
+            pad_item = QTableWidgetItem(r.get("pad_size") or pad_size_hint(r.get("station_type")))
+            system_item = QTableWidgetItem(r.get("system_name") or "—")
+            dist_value = r.get("distance_ly")
+            dist_text = f"{dist_value:.1f}" if isinstance(dist_value, (int, float)) else "—"
+            dist_item = _NumericTableWidgetItem(dist_text, dist_value if isinstance(dist_value, (int, float)) else float("inf"))
+            stock_value = float(r.get("stock") or 0)
+            stock_item = _NumericTableWidgetItem(str(int(stock_value)), stock_value)
+            updated_text, updated_age = _format_relative_time(r.get("last_updated") or "")
+            updated_item = _NumericTableWidgetItem(updated_text, updated_age)
+            if pad_item.text() == "?":
+                pad_item.setForeground(QColor("#888888"))
+                pad_item.setToolTip("Landing pad size unknown for this station type")
+            for it in (pad_item, dist_item, stock_item, updated_item):
+                it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            self._table.setItem(row, 0, name_item)
+            self._table.setItem(row, 1, station_item)
+            self._table.setItem(row, 2, pad_item)
+            self._table.setItem(row, 3, system_item)
+            self._table.setItem(row, 4, dist_item)
+            self._table.setItem(row, 5, stock_item)
+            self._table.setItem(row, 6, updated_item)
+        self._table.setSortingEnabled(True)
+
+    def _on_cell_clicked(self, row: int, column: int) -> None:
+        if column not in (1, 3):  # Station, System
+            return
+        item = self._table.item(row, column)
+        if item and item.text():
+            QApplication.clipboard().setText(item.text())
+
+
+class _StationServiceDialog(QDialog):
+    """
+    Non-modal detail window listing every known station (from our own past
+    dockings) offering a given set of StationServices tags, closest first —
+    same pattern as _RareGoodsDialog, generalized to any Concourse/ship
+    service rather than a specific commodity list.
+    """
+
+    def __init__(self, panel: "MarketPanel", tags: list, label: str):
+        super().__init__(None)
+        self.setStyleSheet("QDialog { background:#080f18; color:#c8c8c8; }")
+        self._panel = panel
+        self._tags = tags
+        self.setWindowTitle(f"Market — {label}")
+        self.resize(700, 450)
+
+        layout = QVBoxLayout(self)
+
+        self._status_label = QLabel("")
+        self._status_label.setStyleSheet("color:#888888; font-size:11px; background:transparent; border:none;")
+        layout.addWidget(self._status_label)
+
+        self._table = QTableWidget()
+        self._table.setColumnCount(5)
+        self._table.setHorizontalHeaderLabels(["Station", "Pad", "System", "Dist (ly)", "Last Visited"])
+        self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self._table.verticalHeader().setVisible(False)
+        self._table.setAlternatingRowColors(True)
+        self._table.setStyleSheet(
+            "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
+            " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
+            "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
+            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
+            "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
+        )
+        h = self._table.horizontalHeader()
+        h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        h.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        h.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        self._table.setToolTip("Click a Station or System cell to copy its name to the clipboard.")
+        self._table.cellClicked.connect(self._on_cell_clicked)
+        layout.addWidget(self._table, 1)
+
+        note = QLabel(
+            "Bounded to stations you've personally docked at — Frontier's journal doesn't "
+            "expose station services for anywhere you haven't visited. Services can change "
+            "over time (BGS/security/faction shifts) — check \"Last Visited\" before flying somewhere."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet("color:#555555; font-size:11px; background:transparent; border:none;")
+        layout.addWidget(note)
+
+    def refresh_results(self) -> None:
+        rows = self._panel._repo.find_stations_with_service(
+            self._panel._ref_x, self._panel._ref_y, self._panel._ref_z, self._tags,
+        )
+        self._status_label.setText(f"{len(rows)} known station{'s' if len(rows) != 1 else ''}.")
+
+        self._table.setSortingEnabled(False)
+        self._table.setRowCount(len(rows))
+        for row, r in enumerate(rows):
+            station_item = QTableWidgetItem(r.get("station_name") or "—")
+            pad_item = QTableWidgetItem(r.get("pad_size") or pad_size_hint(r.get("station_type")))
+            system_item = QTableWidgetItem(r.get("system_name") or "—")
+            dist_value = r.get("distance_ly")
+            dist_text = f"{dist_value:.1f}" if isinstance(dist_value, (int, float)) else "—"
+            dist_item = _NumericTableWidgetItem(dist_text, dist_value if isinstance(dist_value, (int, float)) else float("inf"))
+            visited_text, visited_age = _format_relative_time(r.get("last_visited") or "")
+            visited_item = _NumericTableWidgetItem(visited_text, visited_age)
+            if pad_item.text() == "?":
+                pad_item.setForeground(QColor("#888888"))
+                pad_item.setToolTip("Landing pad size unknown for this station type")
+            for it in (pad_item, dist_item, visited_item):
+                it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            self._table.setItem(row, 0, station_item)
+            self._table.setItem(row, 1, pad_item)
+            self._table.setItem(row, 2, system_item)
+            self._table.setItem(row, 3, dist_item)
+            self._table.setItem(row, 4, visited_item)
+        self._table.setSortingEnabled(True)
+
+    def _on_cell_clicked(self, row: int, column: int) -> None:
+        if column not in (0, 2):  # Station, System
+            return
+        item = self._table.item(row, column)
+        if item and item.text():
+            QApplication.clipboard().setText(item.text())

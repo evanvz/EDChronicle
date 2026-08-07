@@ -22,7 +22,7 @@ log = logging.getLogger(__name__)
 _RELAY_URL = "tcp://eddn.edcd.io:9500"
 _JOURNAL_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/journal/"
 _COMMODITY_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/commodity/"
-_RELEVANT_EVENTS = {"FSDJump", "Location", "CarrierJump"}
+_RELEVANT_EVENTS = {"FSDJump", "Location", "CarrierJump", "Docked"}
 _RECV_TIMEOUT_MS = 5000
 _RECONNECT_DELAY_S = 5
 
@@ -57,6 +57,11 @@ class EddnPowerPlayWorker(QObject):
     system_seen = pyqtSignal(object, str, str, str)  # id64, power, power_state, timestamp
     system_coords_seen = pyqtSignal(str, float, float, float)  # StarSystem, x, y, z
     commodity_seen = pyqtSignal(dict)  # raw commodity/3 message body
+    # Raw journal/1 Docked message body — same shape extract_station_info()
+    # already parses for our own dockings, just sourced from other
+    # commanders' visits too (the same crowdsourcing model Inara/EDSM use
+    # for station-service data, rather than being limited to our own).
+    station_seen = pyqtSignal(dict)
     # id64, StarSystem, faction record (dict), is_controlling, timestamp — only
     # emitted for factions in watched_factions, so this stays rare rather than
     # firing on every journal/1 message network-wide.
@@ -132,6 +137,13 @@ class EddnPowerPlayWorker(QObject):
                     and isinstance(star_pos, list) and len(star_pos) == 3
                     and all(isinstance(v, (int, float)) for v in star_pos)):
                 self.system_coords_seen.emit(star_system, float(star_pos[0]), float(star_pos[1]), float(star_pos[2]))
+
+            if msg.get("event") == "Docked":
+                # No PowerPlay fields on Docked messages — handled entirely
+                # separately from the FSDJump/Location/CarrierJump path below.
+                if isinstance(msg.get("MarketID"), int):
+                    self.station_seen.emit(msg)
+                continue
 
             power = msg.get("ControllingPower")
             power_state = msg.get("PowerplayState")
