@@ -115,8 +115,8 @@
       "confirm": ""
     }
   ],
-  "input_device": "Headset (2- TOZO H20)",
-  "output_device": "Headphones (2- TOZO H20)",
+  "input_device": "Microphone (TOZO H20)",
+  "output_device": "Speakers (TOZO H20)",
   "nav_trigger_word": "menu",
   "feedback_volume": 0.1
 }
