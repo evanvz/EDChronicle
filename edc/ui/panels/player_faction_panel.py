@@ -1713,6 +1713,9 @@ class _FactionBucketDialog(QDialog):
         self.setStyleSheet("QDialog { background:#080f18; color:#c8c8c8; }")
         self._panel = panel
         self._all_systems: List[dict] = []
+        self._route_mode: bool = False
+        self._route_leg_distances: Dict[str, float] = {}
+        self._route_position: Dict[str, int] = {}
         self.setWindowTitle(f"Player Faction — {label}")
         self.resize(900, 500)
 
@@ -1730,6 +1733,14 @@ class _FactionBucketDialog(QDialog):
         )
         self._sort_distance_btn.clicked.connect(self._sort_by_distance)
         search_row.addWidget(self._sort_distance_btn)
+        self._plan_route_btn = QPushButton("Plan Route")
+        self._plan_route_btn.setToolTip(
+            "Nearest-neighbor visiting order starting from your current system — each stop "
+            "is the closest not-yet-visited system to the previous one, not just sorted by "
+            "distance from where you are now."
+        )
+        self._plan_route_btn.clicked.connect(self._plan_route)
+        search_row.addWidget(self._plan_route_btn)
         self._recheck_btn = QPushButton("Recheck via EDSM")
         self._recheck_btn.setToolTip("Re-queries EDSM for exactly the systems currently shown here.")
         self._recheck_btn.clicked.connect(self._on_recheck_clicked)
@@ -1800,29 +1811,40 @@ class _FactionBucketDialog(QDialog):
             [s.get("system_name") for s in rows if s.get("system_name")]
         ) if ref else {}
 
+        header_label = "Leg (ly)" if self._route_mode else "Distance (ly)"
+        self._table.setHorizontalHeaderItem(8, QTableWidgetItem(header_label))
+
         self._table.setSortingEnabled(False)
         self._table.setRowCount(len(rows))
         for row, s in enumerate(rows):
             items = self._panel._build_row_items(s)
+            name = s.get("system_name")
 
-            dist_value = float("inf")
-            dist_text = "—"
-            c = coords.get(s.get("system_name"))
-            if ref and c:
-                dist_value = ((c[0] - ref[0]) ** 2 + (c[1] - ref[1]) ** 2 + (c[2] - ref[2]) ** 2) ** 0.5
-                dist_text = f"{dist_value:.1f} ly"
+            if self._route_mode and name in self._route_position:
+                items[0] = QTableWidgetItem(f"{self._route_position[name]}. {name}")
+                leg = self._route_leg_distances.get(name)
+                dist_value = leg if leg is not None else float("inf")
+                dist_text = f"{leg:.1f} ly" if leg is not None else "—"
+            else:
+                dist_value = float("inf")
+                dist_text = "—"
+                c = coords.get(name)
+                if ref and c:
+                    dist_value = ((c[0] - ref[0]) ** 2 + (c[1] - ref[1]) ** 2 + (c[2] - ref[2]) ** 2) ** 0.5
+                    dist_text = f"{dist_value:.1f} ly"
             dist_item = _NumericTableWidgetItem(dist_text, dist_value)
             dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             items.insert(8, dist_item)
 
             for col, item in enumerate(items):
                 self._table.setItem(row, col, item)
-        self._table.setSortingEnabled(True)
+        self._table.setSortingEnabled(not self._route_mode)
 
     def _sort_by_distance(self) -> None:
         ref = self._reference_coords()
         if not ref:
             return
+        self._route_mode = False
         names = [s.get("system_name") for s in self._all_systems if s.get("system_name")]
         coords = self._panel._repo.get_system_coords_for_names(names)
 
@@ -1834,6 +1856,53 @@ class _FactionBucketDialog(QDialog):
 
         self._all_systems.sort(key=_dist)
         self._apply_filter()
+
+    def _plan_route(self) -> None:
+        """Greedy nearest-neighbor visiting order — not the same as sorting
+        by distance from origin, since after the first stop the next-best
+        move is often a system that was far from origin but close to that
+        first stop. Good enough for a "which order should I visit these
+        in" plan; not a true shortest-path solver (unnecessary at this
+        system count and this isn't a hard TSP the player needs optimal)."""
+        ref = self._reference_coords()
+        if not ref:
+            self._recheck_status.setText("No current position known yet — jump to a system first.")
+            return
+
+        names = [s.get("system_name") for s in self._all_systems if s.get("system_name")]
+        coords = self._panel._repo.get_system_coords_for_names(names)
+
+        known = [s for s in self._all_systems if coords.get(s.get("system_name"))]
+        unknown = [s for s in self._all_systems if not coords.get(s.get("system_name"))]
+
+        self._route_leg_distances = {}
+        route: List[dict] = []
+        remaining = known[:]
+        cur = ref
+        while remaining:
+            best_i, best_d = 0, None
+            for i, s in enumerate(remaining):
+                c = coords[s["system_name"]]
+                d = ((c[0] - cur[0]) ** 2 + (c[1] - cur[1]) ** 2 + (c[2] - cur[2]) ** 2) ** 0.5
+                if best_d is None or d < best_d:
+                    best_d, best_i = d, i
+            chosen = remaining.pop(best_i)
+            self._route_leg_distances[chosen["system_name"]] = best_d
+            route.append(chosen)
+            cur = coords[chosen["system_name"]]
+
+        self._route_position = {s["system_name"]: i + 1 for i, s in enumerate(route)}
+        self._all_systems = route + unknown
+        self._route_mode = True
+        self._search_edit.clear()
+        self._apply_filter()
+
+        status = f"Route planned — {len(route)} system{'s' if len(route) != 1 else ''} in visiting order"
+        if unknown:
+            status += f", {len(unknown)} with unknown coordinates left unordered at the end."
+        else:
+            status += "."
+        self._recheck_status.setText(status)
 
     def _on_recheck_clicked(self) -> None:
         names = [s.get("system_name") for s in self._all_systems if s.get("system_name")]

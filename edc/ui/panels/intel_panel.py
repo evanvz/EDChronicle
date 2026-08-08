@@ -606,13 +606,20 @@ class IntelPanel(QWidget):
                         domain = str(fm.get("domain") or "")
                         name = str(fm.get("name") or "")
                         fg, _ = self._domain_color(domain)
-                        body_farm_html.append(
-                            f'<br><span style="color:{fg};font-size:12px;">'
-                            f'&nbsp;&nbsp;⛏ {self._esc(name)}</span>'
-                        )
+
+                        # This is a guide reference elsewhere in the galaxy that
+                        # happens to share a material name with this body's own
+                        # surface composition — not a claim that this body IS
+                        # that site. Location comes from the record itself, or
+                        # (e.g. "Crashed Anaconda") from the specific nested
+                        # site whose materials matched, so it's never shown
+                        # without saying where it actually is.
                         mat_names_lower = [n.lower() for n in mat_names]
                         mats = fm.get("key_materials") or []
                         matched = [m for m in mats if m.lower() in mat_names_lower] if isinstance(mats, list) else []
+                        location = ""
+                        if fm.get("system"):
+                            location = str(fm["system"]) + (f" {fm['body']}" if fm.get("body") else "")
                         if not matched:
                             for site in (fm.get("sites") or []):
                                 if not isinstance(site, dict):
@@ -620,6 +627,16 @@ class IntelPanel(QWidget):
                                 for sm in (site.get("materials") or []):
                                     if sm.lower() in mat_names_lower and sm not in matched:
                                         matched.append(sm)
+                                        if not location:
+                                            location = str(site.get("system") or "") + (
+                                                f" {site['body']}" if site.get("body") else ""
+                                            )
+
+                        label = f"{name} — {location}" if location else f"{name} (location unknown)"
+                        body_farm_html.append(
+                            f'<br><span style="color:{fg};font-size:12px;">'
+                            f'&nbsp;&nbsp;⛏ {self._esc(label)}</span>'
+                        )
                         if matched:
                             body_farm_html.append(
                                 f'<span style="color:#888888;font-size:12px;">'
