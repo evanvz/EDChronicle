@@ -3463,11 +3463,6 @@ class MainWindow(QMainWindow):
                 f"EDDN-confirmed before DSS — {', '.join(parts)}{suffix} — worth landing to scan"
             )
 
-        if bio_need_dss > 0:
-            out["exobiology"].append(
-                f"🔬 Action: {bio_need_dss} bodies have exobiological signals — DSS/map to reveal genus"
-            )
-
         # Rings with no hotspot data anywhere — checked against Spansh
         # (community/EDDN) once per system via _maybe_start_ring_hotspot_check(),
         # but Spansh's snapshot goes stale the moment you personally DSS a
@@ -3475,7 +3470,6 @@ class MainWindow(QMainWindow):
         # after a real scan, Spansh still showed it as ungathered), so a
         # ring this commander has already scanned this session must also be
         # excluded here even if Spansh hasn't caught up yet.
-        system_address = getattr(self.state, "system_address", None)
         spansh_rings = self._spansh_rings_by_system.get(system_address) or []
         personally_scanned = {
             name for name, rec in (self.state.rings or {}).items()
@@ -3499,10 +3493,19 @@ class MainWindow(QMainWindow):
                     dss_hv += 1
                     break
 
-        if dss_hv > 0:
-            out["exobiology"].append(
-                f"🔬 Action: {dss_hv} bodies with possible high-value exo genus (DSS confirmed, ≥ {exo_m}M)"
-            )
+        # One combined line for "genus not yet known" vs "genus known and
+        # high-value" — these used to be two separate bullet lines with
+        # near-identical wording (only "DSS confirmed" distinguishing
+        # them), which read as duplicate/overlapping notifications even
+        # though they describe disjoint sets of bodies (unscanned vs
+        # already-scanned).
+        if bio_need_dss > 0 or dss_hv > 0:
+            bits = []
+            if bio_need_dss > 0:
+                bits.append(f"{bio_need_dss} unidentified — DSS/map to reveal genus")
+            if dss_hv > 0:
+                bits.append(f"{dss_hv} DSS-confirmed high-value (≥ {exo_m}M)")
+            out["exobiology"].append(f"🔬 Action: Exobiology — {' | '.join(bits)}")
 
         return out
 
