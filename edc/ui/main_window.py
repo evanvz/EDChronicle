@@ -1288,6 +1288,10 @@ class MainWindow(QMainWindow):
             self.overview_panel.set_canonn_intel(self._canonn_poi, self._canonn_challenge)
         except Exception:
             log.exception("Failed to update Canonn intel card")
+        try:
+            self._refresh_exobiology()
+        except Exception:
+            log.exception("Failed to refresh Exobiology tab with Canonn data")
 
     def _maybe_start_spansh_enrichment(self):
         system_name    = getattr(self.state, "system",         None) or ""
@@ -3287,7 +3291,7 @@ class MainWindow(QMainWindow):
 
     def _refresh_exobiology(self):
         self.exobiology_panel.refresh(
-            self.state, self.cfg, self.exo_values
+            self.state, self.cfg, self.exo_values, canonn_poi=self._canonn_poi
         )
 
     def _open_planet_detail(self, body_name: str):
@@ -3355,7 +3359,7 @@ class MainWindow(QMainWindow):
             pass
         try:
             self.exobiology_panel.refresh(
-                self.state, self.cfg, self.exo_values
+                self.state, self.cfg, self.exo_values, canonn_poi=self._canonn_poi
             )
         except Exception:
             pass

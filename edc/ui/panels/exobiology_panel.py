@@ -1,4 +1,5 @@
 import logging
+from typing import Dict, List
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -118,7 +119,7 @@ class ExobiologyPanel(QWidget):
                 return s
         return s
 
-    def refresh(self, state, cfg, exo_values):
+    def refresh(self, state, cfg, exo_values, canonn_poi=None):
         try:
             if not isinstance(state.bodies, dict):
                 state.bodies = {}
@@ -233,6 +234,21 @@ class ExobiologyPanel(QWidget):
         codex_hint_base_name = {}
         codex_hint_base_id = {}
         codex_pending = []
+
+        # Canonn's per-system POI already carries a body name per codex
+        # entry (community-sourced, other commanders' finds) — a body still
+        # showing "NEEDS DSS" here (genus not yet revealed by our own FSS/DSS)
+        # can still show what's likely there if Canonn already knows.
+        canonn_species_by_body: Dict[str, List[str]] = {}
+        for entry in (getattr(canonn_poi, "codex", None) or []):
+            body = getattr(entry, "body", "") or ""
+            name = getattr(entry, "name", "") or ""
+            if not body or not name:
+                continue
+            key = self._norm_text(body).strip().lower()
+            canonn_species_by_body.setdefault(key, [])
+            if name not in canonn_species_by_body[key]:
+                canonn_species_by_body[key].append(name)
 
         for key, rec in (state.exo or {}).items():
             body_id = rec.get("BodyID")
@@ -474,9 +490,20 @@ class ExobiologyPanel(QWidget):
             else:
                 genus_txt = f"{bio} exobiological signals"
                 status_txt = f"NEEDS DSS (Bio: {bio})"
+
+                canonn_species = canonn_species_by_body.get(self._norm_text(body).strip().lower()) or []
+                sp_hint = ""
+                base_hint = ""
+                if canonn_species:
+                    sp_hint = f"Canonn: {', '.join(canonn_species[:3])}"
+                    if len(canonn_species) == 1 and exo_values:
+                        exo_rec = exo_values.by_species.get(canonn_species[0])
+                        if exo_rec is not None and isinstance(getattr(exo_rec, "base_value", None), int):
+                            base_hint = f"~{exo_rec.base_value:,} cr"
+
                 rows.append((
                     0, status_txt, body, genus_txt,
-                    "", "", "", "", "0/3", status_txt
+                    sp_hint, "", "", base_hint, "0/3", status_txt
                 ))
                 targets += 1
 
