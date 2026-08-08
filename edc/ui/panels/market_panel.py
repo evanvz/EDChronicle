@@ -436,10 +436,13 @@ class MarketPanel(QWidget):
         root.addWidget(self._trade_status_label)
 
         self._trade_table = QTableWidget()
-        self._trade_table.setColumnCount(8)
+        self._trade_table.setColumnCount(9)
         self._trade_table.setHorizontalHeaderLabels(
-            ["Commodity", "Buy Here", "Stock", "Best Sell", "Destination", "Pad", "Dist (ly)", "Profit %"]
+            ["Commodity", "Buy Here", "Stock", "Best Sell", "Destination Station",
+             "Destination System", "Pad", "Dist (ly)", "Profit %"]
         )
+        self._trade_table.setToolTip("Click a Destination Station or System cell to copy its name to the clipboard.")
+        self._trade_table.cellClicked.connect(self._on_trade_cell_clicked)
         self._trade_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._trade_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._trade_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
@@ -460,9 +463,10 @@ class MarketPanel(QWidget):
         th.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         th.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         th.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
-        th.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+        th.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
         th.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
         th.setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)
+        th.setSectionResizeMode(8, QHeaderView.ResizeMode.ResizeToContents)
         self._trade_table.setVisible(False)
         # Fixed vertical policy + cap so a large manual search result below
         # (also stretch=1) can never starve this table for space when both
@@ -694,7 +698,8 @@ class MarketPanel(QWidget):
             buy_item = _NumericTableWidgetItem(f"{o['buy_price']:,}", float(o["buy_price"]))
             stock_item = _NumericTableWidgetItem(f"{o.get('stock', 0):,}", float(o.get("stock", 0)))
             sell_item = _NumericTableWidgetItem(f"{o['sell_price']:,}", float(o["sell_price"]))
-            dest_item = QTableWidgetItem(f"{o['station_name']} ({o['system_name']})")
+            dest_station_item = QTableWidgetItem(o.get("station_name") or "—")
+            dest_system_item = QTableWidgetItem(o.get("system_name") or "—")
             pad_item = QTableWidgetItem(o.get("pad_size") or pad_size_hint(o.get("station_type")))
             dist_item = _NumericTableWidgetItem(f"{o['distance_ly']:.1f}", float(o["distance_ly"]))
             profit_item = _NumericTableWidgetItem(f"+{o['profit_pct']:.1f}%", float(o["profit_pct"]))
@@ -709,14 +714,22 @@ class MarketPanel(QWidget):
             self._trade_table.setItem(row, 1, buy_item)
             self._trade_table.setItem(row, 2, stock_item)
             self._trade_table.setItem(row, 3, sell_item)
-            self._trade_table.setItem(row, 4, dest_item)
-            self._trade_table.setItem(row, 5, pad_item)
-            self._trade_table.setItem(row, 6, dist_item)
-            self._trade_table.setItem(row, 7, profit_item)
+            self._trade_table.setItem(row, 4, dest_station_item)
+            self._trade_table.setItem(row, 5, dest_system_item)
+            self._trade_table.setItem(row, 6, pad_item)
+            self._trade_table.setItem(row, 7, dist_item)
+            self._trade_table.setItem(row, 8, profit_item)
         self._trade_table.setSortingEnabled(True)
         # Auto-sort best-profit-first by default — still click-sortable by
         # any column afterward like the search results table.
-        self._trade_table.sortItems(7, Qt.SortOrder.DescendingOrder)
+        self._trade_table.sortItems(8, Qt.SortOrder.DescendingOrder)
+
+    def _on_trade_cell_clicked(self, row: int, column: int) -> None:
+        if column not in (4, 5):  # Destination Station, Destination System
+            return
+        item = self._trade_table.item(row, column)
+        if item and item.text():
+            QApplication.clipboard().setText(item.text())
 
     def search_for(self, commodity_display_name: str) -> None:
         """External entry point (e.g. from the Mining tab) to search a specific commodity."""

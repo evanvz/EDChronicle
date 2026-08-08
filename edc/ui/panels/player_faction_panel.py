@@ -22,7 +22,9 @@ from PyQt6.QtWidgets import (
     QApplication, QCompleter, QSizePolicy,
 )
 
-from edc.core.edsm_faction_lookup import fetch_system_factions, fetch_system_coords, ERROR_BLOCKED, ERROR_NOT_FOUND
+from edc.core.edsm_faction_lookup import (
+    fetch_system_factions, fetch_system_coords, fetch_system_stations, ERROR_BLOCKED, ERROR_NOT_FOUND,
+)
 from edc.core.inara_faction_csv import parse_inara_faction_csv
 
 log = logging.getLogger(__name__)
@@ -193,6 +195,39 @@ class _EdsmFactionLookupWorker(QObject):
     def run(self):
         result, error = fetch_system_factions(self._system_name)
         self.finished.emit(result, error, self._system_name)
+
+
+class _EdsmStationLookupWorker(QObject):
+    """
+    EDSM's static station catalog knows about every station in a system
+    regardless of recent Docked traffic — our own station_info table only
+    knows about ones someone has actually docked at recently. Cross-refs
+    each result's market_id against our local station_info for a pad size
+    when we happen to have one (EDSM doesn't provide pad size at all).
+    """
+    finished = pyqtSignal(object, object, str)  # (stations list or None, error code or None, queried system name)
+
+    def __init__(self, db_path, system_name: str):
+        super().__init__()
+        self._db_path = db_path
+        self._system_name = system_name
+
+    def run(self):
+        stations, error = fetch_system_stations(self._system_name)
+        if stations:
+            from persistence.database import Database
+            from persistence.repository import Repository
+
+            db = Database(self._db_path)
+            try:
+                repo = Repository(db)
+                market_ids = [s["market_id"] for s in stations if isinstance(s.get("market_id"), int)]
+                pads_by_market_id = repo.get_pad_sizes_for_markets(market_ids)
+                for s in stations:
+                    s["pad_size"] = pads_by_market_id.get(s.get("market_id"), "?")
+            finally:
+                db.close()
+        self.finished.emit(stations, error, self._system_name)
 
 
 class _CsvImportWorker(QObject):
@@ -381,6 +416,9 @@ class PlayerFactionPanel(QWidget):
         # this session). Keyed by system_address.
         self._last_predictions: Dict[int, dict] = {}
         self._last_stations_system: Optional[str] = None
+        self._station_thread: Optional[QThread] = None
+        self._station_worker: Optional[_EdsmStationLookupWorker] = None
+        self._station_lookup_system: Optional[str] = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 8)
@@ -709,6 +747,7 @@ class PlayerFactionPanel(QWidget):
             self._last_stations_system = system_name
             if self._faction_name:
                 self._refresh_faction_stations(self._faction_name, state)
+                self._start_station_lookup(system_name)
 
         bounty_cr = getattr(state, "squadron_bgs_bounty_cr", 0) or 0
         trade_cr = getattr(state, "squadron_bgs_trade_cr", 0) or 0
@@ -1066,12 +1105,15 @@ class PlayerFactionPanel(QWidget):
             self._stations_table.setVisible(False)
             return
 
-        self._stations_table.setVisible(True)
-
         self._stations_status_label.setText(
             f"{len(stations)} known station{'s' if len(stations) != 1 else ''} "
-            f"controlled by {faction_name} in {system_name}."
+            f"controlled by {faction_name} in {system_name} (from our own visits — "
+            "checking EDSM for the full list…)."
         )
+        self._populate_stations_table(stations)
+
+    def _populate_stations_table(self, stations: List[dict]) -> None:
+        self._stations_table.setVisible(True)
         self._stations_table.setSortingEnabled(False)
         self._stations_table.setRowCount(len(stations))
         for row, s in enumerate(stations):
@@ -1088,6 +1130,54 @@ class PlayerFactionPanel(QWidget):
         row_h = self._stations_table.verticalHeader().defaultSectionSize()
         content_h = self._stations_table.horizontalHeader().height() + len(stations) * row_h + 4
         self._stations_table.setMaximumHeight(min(content_h, 160))
+
+    def _start_station_lookup(self, system_name: Optional[str]) -> None:
+        """EDSM's static station catalog knows about every station in a
+        system regardless of recent Docked traffic — confirmed live that
+        our own EDDN-sourced station_info can know about just 1 of 7
+        stations a faction actually controls in a system. Runs once per
+        system arrival, on a background thread (real network call)."""
+        if not system_name or not self._faction_name:
+            return
+        if system_name == self._station_lookup_system:
+            return  # already queried (or in flight) for this exact system
+        if self._station_thread and self._station_thread.isRunning():
+            return
+        self._station_lookup_system = system_name
+
+        self._station_worker = _EdsmStationLookupWorker(self._repo.db.db_path, system_name)
+        self._station_thread = QThread()
+        self._station_worker.moveToThread(self._station_thread)
+        self._station_thread.started.connect(self._station_worker.run)
+        self._station_worker.finished.connect(self._on_station_lookup_finished)
+        self._station_worker.finished.connect(self._station_thread.quit)
+        self._station_thread.start()
+
+    def _on_station_lookup_finished(self, stations, error, system_name: str) -> None:
+        if system_name != self._last_stations_system:
+            return  # player already moved on — this result is stale
+        if not stations:
+            # Blocked/not-found — leave whatever the fast local-DB pass
+            # already showed rather than clobbering it with nothing.
+            return
+
+        target = self._faction_name.strip().lower() if self._faction_name else ""
+        matched = [s for s in stations if (s.get("controlling_faction") or "").strip().lower() == target]
+
+        if not matched:
+            self._stations_status_label.setText(
+                f"EDSM: no stations/settlements controlled by {self._faction_name} in {system_name}."
+            )
+            self._stations_table.setRowCount(0)
+            self._stations_table.setVisible(False)
+            return
+
+        matched.sort(key=lambda s: s.get("station_name") or "")
+        self._stations_status_label.setText(
+            f"{len(matched)} station{'s' if len(matched) != 1 else ''} controlled by "
+            f"{self._faction_name} in {system_name} (EDSM's full system catalog)."
+        )
+        self._populate_stations_table(matched)
 
     def _on_stations_cell_clicked(self, row: int, column: int) -> None:
         if column != 0:  # Station

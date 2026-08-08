@@ -23,6 +23,7 @@ log = logging.getLogger(__name__)
 
 _FACTIONS_URL = "https://www.edsm.net/api-system-v1/factions"
 _SYSTEM_URL = "https://www.edsm.net/api-v1/system"
+_STATIONS_URL = "https://www.edsm.net/api-system-v1/stations"
 _TIMEOUT = 20
 
 # Confirmed via live testing (a 743-system bulk import): EDSM's Cloudflare
@@ -60,6 +61,70 @@ def fetch_system_factions(system_name: str) -> Tuple[Optional[Dict[str, Any]], O
             return result, error
         time.sleep(_RETRY_DELAYS_S[attempt])
         attempt += 1
+
+
+def fetch_system_stations(system_name: str) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
+    """
+    Full static station/settlement list for a system, with controlling
+    faction per station — from EDSM's own galaxy catalog, not from live
+    Docked-event sightings. This is the fix for our station_info table
+    only ever knowing about stations someone has actually docked at
+    recently: confirmed live that a system can have 7 stations controlled
+    by one faction while our own EDDN-sourced data only knew about 1.
+
+    Same retry/error shape as fetch_system_factions. Each entry is
+    {"market_id": int|None, "station_name": str, "station_type": str,
+    "controlling_faction": str|None} — Fleet Carriers and stations with no
+    recorded controlling faction are dropped, since neither is useful here.
+    """
+    attempt = 0
+    while True:
+        result, error = _fetch_stations_once(system_name)
+        if result is not None or error != ERROR_BLOCKED or attempt >= len(_RETRY_DELAYS_S):
+            return result, error
+        time.sleep(_RETRY_DELAYS_S[attempt])
+        attempt += 1
+
+
+def _fetch_stations_once(system_name: str) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
+    try:
+        scraper = cloudscraper.create_scraper()
+        resp = scraper.get(_STATIONS_URL, params={"systemName": system_name}, timeout=_TIMEOUT)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as exc:
+        log.error("EDSM system-stations lookup failed for %r: %s", system_name, exc)
+        return None, ERROR_BLOCKED
+
+    if not isinstance(data, dict):
+        return None, ERROR_BLOCKED
+
+    raw_stations = data.get("stations")
+    if not isinstance(raw_stations, list):
+        log.warning("EDSM stations response for %r missing expected fields — raw body: %r", system_name, data)
+        return None, ERROR_NOT_FOUND
+
+    stations: List[Dict[str, Any]] = []
+    for st in raw_stations:
+        if not isinstance(st, dict):
+            continue
+        if st.get("type") == "Fleet Carrier":
+            continue
+        name = st.get("name")
+        if not isinstance(name, str) or not name:
+            continue
+        controlling = st.get("controllingFaction")
+        controlling_name = controlling.get("name") if isinstance(controlling, dict) else None
+        if not controlling_name:
+            continue
+        stations.append({
+            "market_id": st.get("marketId"),
+            "station_name": name,
+            "station_type": st.get("type") or "",
+            "controlling_faction": controlling_name,
+        })
+
+    return stations, None
 
 
 def fetch_system_coords(system_name: str) -> Optional[Tuple[float, float, float]]:

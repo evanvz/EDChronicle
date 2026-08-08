@@ -937,6 +937,28 @@ class Repository:
         )
         return best
 
+    def get_pad_sizes_for_markets(self, market_ids: list[int]) -> dict[int, str]:
+        """
+        {market_id: pad_size} for whichever of market_ids we happen to have
+        our own station_info row for — used to enrich EDSM's station
+        catalog (which has no pad size at all) with our own ground truth
+        from actual past Docked visits, where we have it.
+        """
+        if not market_ids:
+            return {}
+        placeholders = ",".join("?" for _ in market_ids)
+        rows = self.db.conn.execute(
+            f"SELECT market_id, station_type, pads_small, pads_medium, pads_large "
+            f"FROM station_info WHERE market_id IN ({placeholders})",
+            market_ids,
+        ).fetchall()
+        return {
+            r["market_id"]: effective_pad_size(
+                r["station_type"], r["pads_small"], r["pads_medium"], r["pads_large"]
+            )
+            for r in rows
+        }
+
     def find_faction_stations_in_system(
         self, system_name: str, faction_name: str,
     ) -> List[dict]:
