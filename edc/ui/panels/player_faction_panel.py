@@ -14,7 +14,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from PyQt6.QtCore import Qt, QObject, QThread, QStringListModel, pyqtSignal
+from PyQt6.QtCore import Qt, QObject, QThread, QStringListModel, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit, QPushButton,
@@ -40,6 +40,27 @@ def _in_weekly_maintenance_window() -> bool:
 
 _CARD_STYLE = "QFrame { background:#0d1a2a; border:1px solid #1e3a5a; border-radius:5px; }"
 _HDR_STYLE = "color:#555555; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
+
+# EDSM's per-system faction check can confirm a tracked system is still
+# present or has retreated, but has no bulk "every system for this faction"
+# endpoint — the only way to discover NEW systems is re-importing a fresh
+# Inara CSV export. This banner nudges that on a rolling basis rather than
+# a fixed weekday, so it can't be missed just by not opening the app that day.
+_CSV_STALE_DAYS = 7
+_BANNER_STYLE_BRIGHT = (
+    "QLabel { background:#c0392b; color:#ffffff; border:1px solid #ff6b6b;"
+    " border-radius:5px; padding:3px 10px; font-weight:bold; font-size:12px; }"
+)
+_BANNER_STYLE_DIM = (
+    "QLabel { background:#5a1a1a; color:#ffb3b3; border:1px solid #7a2a2a;"
+    " border-radius:5px; padding:3px 10px; font-weight:bold; font-size:12px; }"
+)
+_STATION_CHIP_STYLE = (
+    "QPushButton { background:#132a1c; color:#c8c8c8; border:1px solid #2a5a3a;"
+    " border-radius:4px; padding:4px 8px; font-size:12px; text-align:left; }"
+    "QPushButton:hover { background:#1a3a26; }"
+)
+_STATION_CHIP_COLS = 3
 # Distinct green accent, set apart from the standard blue _CARD_STYLE cards above/below it.
 _CARD_STYLE_ACCENT = "QFrame { background:#0d1a12; border:1px solid #2a5a3a; border-radius:5px; }"
 _HDR_STYLE_ACCENT = "color:#6BCB77; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
@@ -182,7 +203,29 @@ _BUCKET_DEFS: List[Tuple[str, str, str]] = [
     ("stale", "Stale Data (>7d)", "#3a3a3a"),
     ("no_data", "No Data / Lookup Failed", "#3a3a3a"),
     ("no_action", "No Action", "#1a3a5a"),
+    # Rarer real BGS/Thargoid states — hidden when 0 systems match (see
+    # _ALWAYS_SHOW_BUCKETS) so the grid doesn't grow just from listing every
+    # theoretically-possible state.
+    ("incursion", "Incursion", "#5F2323"),
+    ("infested", "Infested", "#5F2323"),
+    ("infrastructurefailure", "Infrastructure Failure", "#5a3a10"),
+    ("naturaldisaster", "Natural Disaster", "#5F2323"),
+    ("revolution", "Revolution", "#5F2323"),
+    ("coldwar", "Cold War", "#5a3a10"),
+    ("tradewar", "Trade War", "#5a3a10"),
+    ("terroristattack", "Terrorist Attack", "#5F2323"),
+    ("publicholiday", "Public Holiday", "#1e4a1e"),
+    ("technologicalleap", "Technological Leap", "#1e4a1e"),
+    ("historicevent", "Historic Event", "#3a3a3a"),
+    ("colonisation", "Colonisation", "#1e4a1e"),
 ]
+
+# Always rendered regardless of count (0 shown as a disabled tile) — the
+# rest of _BUCKET_DEFS only gets a tile when at least one system matches.
+_ALWAYS_SHOW_BUCKETS = {
+    "war", "election", "expansion_pending", "retreat_pending", "conflict_pending",
+    "expansion_likely", "retreat_risk", "conflict_risk", "stale", "no_data", "no_action",
+}
 
 
 class _EdsmFactionLookupWorker(QObject):
@@ -329,12 +372,18 @@ class _FactionRefreshWorker(QObject):
     CSV import to avoid Cloudflare blocking at this scale.
     """
     progress = pyqtSignal(int, int, str)  # current, total, system_name
-    finished = pyqtSignal(int, int)  # systems_refreshed, systems_failed
+    finished = pyqtSignal(int, int, int)  # systems_refreshed, systems_failed, systems_retreated
 
-    def __init__(self, db_path, system_names: List[str]):
+    def __init__(self, db_path, system_names: List[str], squadron_faction_name: Optional[str] = None):
         super().__init__()
         self._db_path = db_path
         self._system_names = system_names
+        # When set, a system where EDSM no longer lists this faction at all
+        # gets auto-dismissed — EDSM can't tell us about NEW systems the
+        # faction has expanded into (no bulk "list every system for this
+        # faction" endpoint exists), but it can confirm one we're already
+        # tracking has been fully retreated from.
+        self._squadron_faction_name = squadron_faction_name
         self._cancel = False
 
     def cancel(self):
@@ -348,7 +397,9 @@ class _FactionRefreshWorker(QObject):
         repo = Repository(db)
         refreshed = 0
         failed = 0
+        retreated = 0
         total = len(self._system_names)
+        target = (self._squadron_faction_name or "").strip().lower()
 
         try:
             # Distance sorting needs system_coords, which the faction
@@ -368,11 +419,19 @@ class _FactionRefreshWorker(QObject):
                     continue
 
                 snapshot_date = date.today().isoformat()
+                present_names = set()
                 for faction in result["factions"]:
                     is_controlling = bool(faction.pop("is_controlling", False))
                     repo.save_faction_snapshot(
                         result["system_address"], faction, snapshot_date, is_controlling
                     )
+                    name = (faction.get("Name") or "").strip().lower()
+                    if name:
+                        present_names.add(name)
+
+                if target and target not in present_names:
+                    repo.dismiss_faction_system(self._squadron_faction_name, result["system_address"])
+                    retreated += 1
 
                 if system_name not in has_coords:
                     coords = fetch_system_coords(system_name)
@@ -385,7 +444,7 @@ class _FactionRefreshWorker(QObject):
         finally:
             db.close()
 
-        self.finished.emit(refreshed, failed)
+        self.finished.emit(refreshed, failed, retreated)
 
 
 class PlayerFactionPanel(QWidget):
@@ -419,10 +478,20 @@ class PlayerFactionPanel(QWidget):
         self._station_thread: Optional[QThread] = None
         self._station_worker: Optional[_EdsmStationLookupWorker] = None
         self._station_lookup_system: Optional[str] = None
+        self._csv_stale_flash_on: bool = False
+        self._csv_stale_flash_timer = QTimer(self)
+        self._csv_stale_flash_timer.setInterval(600)
+        self._csv_stale_flash_timer.timeout.connect(self._toggle_csv_stale_flash)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 8)
         root.setSpacing(6)
+
+        self._csv_stale_banner = QLabel("")
+        self._csv_stale_banner.setWordWrap(True)
+        self._csv_stale_banner.setVisible(False)
+        self._csv_stale_banner.setStyleSheet(_BANNER_STYLE_BRIGHT)
+        root.addWidget(self._csv_stale_banner)
 
         frame = QFrame()
         frame.setStyleSheet(_CARD_STYLE)
@@ -457,41 +526,38 @@ class PlayerFactionPanel(QWidget):
         stations_l.setContentsMargins(8, 6, 8, 8)
         stations_l.setSpacing(4)
 
+        stations_hdr_row = QHBoxLayout()
         stations_hdr = QLabel("FACTION-CONTROLLED STATIONS & SETTLEMENTS — CURRENT SYSTEM")
         stations_hdr.setStyleSheet(_HDR_STYLE_ACCENT)
-        stations_l.addWidget(stations_hdr)
+        stations_hdr_row.addWidget(stations_hdr)
+        stations_hdr_row.addStretch(1)
+        self._stations_refresh_btn = QPushButton("Refresh")
+        self._stations_refresh_btn.setStyleSheet(
+            "QPushButton { background:#1a3a5a; color:#FFB347; border:1px solid #2a5a8a;"
+            " border-radius:3px; padding:2px 10px; font-weight:bold; }"
+            "QPushButton:hover { background:#2a5a8a; }"
+            "QPushButton:disabled { background:#111; color:#555; border-color:#333; }"
+        )
+        self._stations_refresh_btn.setToolTip(
+            "Re-check EDSM's full station catalog — the previous check may have been blocked "
+            "by EDSM's Cloudflare protection (happens on roughly 1 in 8 attempts)."
+        )
+        self._stations_refresh_btn.clicked.connect(self._on_stations_refresh_clicked)
+        stations_hdr_row.addWidget(self._stations_refresh_btn)
+        stations_l.addLayout(stations_hdr_row)
 
         self._stations_status_label = QLabel("")
         self._stations_status_label.setWordWrap(True)
         self._stations_status_label.setStyleSheet("background:transparent; border:none; color:#888888; font-size:12px;")
         stations_l.addWidget(self._stations_status_label)
 
-        self._stations_table = QTableWidget()
-        self._stations_table.setColumnCount(3)
-        self._stations_table.setHorizontalHeaderLabels(["Station", "Type", "Pad"])
-        self._stations_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self._stations_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self._stations_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self._stations_table.verticalHeader().setVisible(False)
-        self._stations_table.verticalHeader().setDefaultSectionSize(18)
-        self._stations_table.setAlternatingRowColors(True)
-        self._stations_table.setStyleSheet(
-            "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
-            " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
-            "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
-            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
-            "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
-        )
-        sth = self._stations_table.horizontalHeader()
-        sth.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        sth.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        sth.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        self._stations_table.verticalHeader().setDefaultSectionSize(20)
-        self._stations_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
-        self._stations_table.setMaximumHeight(160)
-        self._stations_table.setToolTip("Click the Station cell to copy its name to the clipboard.")
-        self._stations_table.cellClicked.connect(self._on_stations_cell_clicked)
-        stations_l.addWidget(self._stations_table)
+        # Compact chip grid, several per row, instead of a one-per-row table
+        # — each station is only ever "name, type, pad", not enough data to
+        # justify a full-width table row each.
+        self._stations_grid_widget = QWidget()
+        self._stations_grid_layout = QGridLayout(self._stations_grid_widget)
+        self._stations_grid_layout.setSpacing(4)
+        stations_l.addWidget(self._stations_grid_widget)
 
         root.addWidget(stations_frame)
 
@@ -741,13 +807,25 @@ class PlayerFactionPanel(QWidget):
         """Cheap position-only update — keeps distance calcs fresh every
         event without triggering the expensive full bucket rebuild."""
         self._last_state = state
+        self._maybe_refresh_stations_for_current_system(state)
 
+    def _maybe_refresh_stations_for_current_system(self, state) -> None:
+        """Triggers the local-DB + EDSM station lookup for the current
+        system. Called both here (every event, cheap no-op once already
+        done for this system) and from refresh() — _faction_name usually
+        isn't known yet on the very first call of a session (refresh()
+        hasn't run), so relying on update_reference_state() alone could
+        wait indefinitely for the next journal event if the game isn't
+        currently running to produce one."""
         system_name = getattr(state, "system", None) if state else None
-        if system_name != self._last_stations_system:
+        # Only marks the system "handled" once _faction_name is actually
+        # known — otherwise a system seen before the faction name resolves
+        # would get silently skipped forever, since the "system changed"
+        # signal was already consumed with nothing done about it.
+        if system_name != self._last_stations_system and self._faction_name:
             self._last_stations_system = system_name
-            if self._faction_name:
-                self._refresh_faction_stations(self._faction_name, state)
-                self._start_station_lookup(system_name)
+            self._refresh_faction_stations(self._faction_name, state)
+            self._start_station_lookup(system_name)
 
         bounty_cr = getattr(state, "squadron_bgs_bounty_cr", 0) or 0
         trade_cr = getattr(state, "squadron_bgs_trade_cr", 0) or 0
@@ -779,7 +857,7 @@ class PlayerFactionPanel(QWidget):
             self._missions_status_label.setText("")
             self._missions_table.setRowCount(0)
             self._stations_status_label.setText("")
-            self._stations_table.setRowCount(0)
+            self._clear_stations_grid()
             return
 
         self._faction_name = overview["faction_name"]
@@ -790,6 +868,7 @@ class PlayerFactionPanel(QWidget):
             f"{'s' if len(systems) != 1 else ''}, controlling {controlling_count}."
         )
         self._maybe_auto_refresh_all()
+        self._maybe_refresh_stations_for_current_system(state)
 
         if not self.isVisible():
             # Tab isn't the one currently on screen — no point paying for
@@ -842,7 +921,10 @@ class PlayerFactionPanel(QWidget):
 
             has_action = False
             for key in ("war", "election", "civilunrest", "pirateattack", "boom", "bust",
-                        "outbreak", "famine", "drought", "blight", "lockdown"):
+                        "outbreak", "famine", "drought", "blight", "lockdown",
+                        "incursion", "infested", "infrastructurefailure", "naturaldisaster",
+                        "revolution", "coldwar", "tradewar", "terroristattack",
+                        "publicholiday", "technologicalleap", "historicevent", "colonisation"):
                 matched = bool(active_lower & {"war", "civilwar"}) if key == "war" else key in active_lower
                 if matched:
                     buckets[key].append(s)
@@ -902,11 +984,15 @@ class PlayerFactionPanel(QWidget):
             if w:
                 w.deleteLater()
 
-        cols = 4
-        for i, (key, label, color) in enumerate(_BUCKET_DEFS):
+        cols = 7
+        visible_defs = [
+            (key, label, color) for key, label, color in _BUCKET_DEFS
+            if key in _ALWAYS_SHOW_BUCKETS or self._last_buckets[key]
+        ]
+        for i, (key, label, color) in enumerate(visible_defs):
             count = len(self._last_buckets[key])
             btn = QPushButton(f"{label}\n{count} system{'s' if count != 1 else ''}")
-            btn.setMinimumHeight(54)
+            btn.setMinimumHeight(48)
             btn.setEnabled(count > 0)
             btn.setStyleSheet(
                 f"QPushButton {{ background:{color}; color:#e6e6e6; border:1px solid #2a5a8a;"
@@ -1087,8 +1173,7 @@ class PlayerFactionPanel(QWidget):
         system_name = getattr(state, "system", None) if state else None
         if not system_name:
             self._stations_status_label.setText("No current system yet — jump to a system first.")
-            self._stations_table.setRowCount(0)
-            self._stations_table.setVisible(False)
+            self._clear_stations_grid()
             return
 
         try:
@@ -1101,8 +1186,7 @@ class PlayerFactionPanel(QWidget):
             self._stations_status_label.setText(
                 f"No known stations/settlements controlled by {faction_name} in {system_name}."
             )
-            self._stations_table.setRowCount(0)
-            self._stations_table.setVisible(False)
+            self._clear_stations_grid()
             return
 
         self._stations_status_label.setText(
@@ -1110,26 +1194,24 @@ class PlayerFactionPanel(QWidget):
             f"controlled by {faction_name} in {system_name} (from our own visits — "
             "checking EDSM for the full list…)."
         )
-        self._populate_stations_table(stations)
+        self._populate_stations_grid(stations)
 
-    def _populate_stations_table(self, stations: List[dict]) -> None:
-        self._stations_table.setVisible(True)
-        self._stations_table.setSortingEnabled(False)
-        self._stations_table.setRowCount(len(stations))
-        for row, s in enumerate(stations):
-            name_item = QTableWidgetItem(s.get("station_name") or "—")
-            type_item = QTableWidgetItem(s.get("station_type") or "—")
-            pad_item = QTableWidgetItem(s.get("pad_size") or "?")
-            for it in (type_item, pad_item):
-                it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+    def _clear_stations_grid(self) -> None:
+        while self._stations_grid_layout.count():
+            item = self._stations_grid_layout.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
 
-            self._stations_table.setItem(row, 0, name_item)
-            self._stations_table.setItem(row, 1, type_item)
-            self._stations_table.setItem(row, 2, pad_item)
-        self._stations_table.setSortingEnabled(True)
-        row_h = self._stations_table.verticalHeader().defaultSectionSize()
-        content_h = self._stations_table.horizontalHeader().height() + len(stations) * row_h + 4
-        self._stations_table.setMaximumHeight(min(content_h, 160))
+    def _populate_stations_grid(self, stations: List[dict]) -> None:
+        self._clear_stations_grid()
+        for i, s in enumerate(stations):
+            name = s.get("station_name") or "—"
+            chip = QPushButton(f"{name}\n{s.get('station_type') or '—'} · Pad {s.get('pad_size') or '?'}")
+            chip.setStyleSheet(_STATION_CHIP_STYLE)
+            chip.setToolTip(f"Click to copy \"{name}\" to the clipboard.")
+            chip.clicked.connect(lambda _checked=False, n=name: QApplication.clipboard().setText(n))
+            self._stations_grid_layout.addWidget(chip, i // _STATION_CHIP_COLS, i % _STATION_CHIP_COLS)
 
     def _start_station_lookup(self, system_name: Optional[str]) -> None:
         """EDSM's static station catalog knows about every station in a
@@ -1144,6 +1226,7 @@ class PlayerFactionPanel(QWidget):
         if self._station_thread and self._station_thread.isRunning():
             return
         self._station_lookup_system = system_name
+        self._stations_refresh_btn.setEnabled(False)
 
         self._station_worker = _EdsmStationLookupWorker(self._repo.db.db_path, system_name)
         self._station_thread = QThread()
@@ -1153,12 +1236,30 @@ class PlayerFactionPanel(QWidget):
         self._station_worker.finished.connect(self._station_thread.quit)
         self._station_thread.start()
 
+    def _on_stations_refresh_clicked(self) -> None:
+        system_name = self._last_stations_system
+        if not system_name or not self._faction_name:
+            return
+        self._station_lookup_system = None  # allow re-querying this same system
+        self._start_station_lookup(system_name)
+
     def _on_station_lookup_finished(self, stations, error, system_name: str) -> None:
+        self._stations_refresh_btn.setEnabled(True)
         if system_name != self._last_stations_system:
             return  # player already moved on — this result is stale
         if not stations:
             # Blocked/not-found — leave whatever the fast local-DB pass
-            # already showed rather than clobbering it with nothing.
+            # already showed, but stop claiming we're still checking, and
+            # allow a manual Refresh click to retry this same system.
+            self._station_lookup_system = None
+            current_text = self._stations_status_label.text()
+            if "checking EDSM" in current_text:
+                self._stations_status_label.setText(
+                    current_text.replace(
+                        "checking EDSM for the full list…",
+                        "EDSM check was blocked — press Refresh to retry",
+                    )
+                )
             return
 
         target = self._faction_name.strip().lower() if self._faction_name else ""
@@ -1168,8 +1269,7 @@ class PlayerFactionPanel(QWidget):
             self._stations_status_label.setText(
                 f"EDSM: no stations/settlements controlled by {self._faction_name} in {system_name}."
             )
-            self._stations_table.setRowCount(0)
-            self._stations_table.setVisible(False)
+            self._clear_stations_grid()
             return
 
         matched.sort(key=lambda s: s.get("station_name") or "")
@@ -1177,14 +1277,7 @@ class PlayerFactionPanel(QWidget):
             f"{len(matched)} station{'s' if len(matched) != 1 else ''} controlled by "
             f"{self._faction_name} in {system_name} (EDSM's full system catalog)."
         )
-        self._populate_stations_table(matched)
-
-    def _on_stations_cell_clicked(self, row: int, column: int) -> None:
-        if column != 0:  # Station
-            return
-        item = self._stations_table.item(row, column)
-        if item and item.text():
-            QApplication.clipboard().setText(item.text())
+        self._populate_stations_grid(matched)
 
     # ── Manual add / remove ─────────────────────────────────────────────
 
@@ -1382,6 +1475,9 @@ class PlayerFactionPanel(QWidget):
         # cancelled import only covered part of the CSV, so comparing
         # against it would wrongly flag not-yet-reached systems as stale.
         if not cancelled_at and self._faction_name:
+            if self._refresh_tracker:
+                self._refresh_tracker.mark_csv_imported()
+                self._check_csv_staleness()
             try:
                 stale = self._repo.get_stale_faction_systems(self._faction_name, self._last_csv_names)
             except Exception:
@@ -1421,6 +1517,7 @@ class PlayerFactionPanel(QWidget):
         if self._auto_refresh_checked or not self._refresh_tracker or not self._faction_name:
             return
         self._auto_refresh_checked = True
+        self._check_csv_staleness()
         last = self._refresh_tracker.last_refresh()
         self._update_refresh_status_label(last)
         if last is not None:
@@ -1448,6 +1545,42 @@ class PlayerFactionPanel(QWidget):
         else:
             age_txt = f"{int(age_hours // 24)}d ago"
         self._refresh_status_label.setText(f"Full EDSM refresh: {age_txt}")
+
+    def _toggle_csv_stale_flash(self) -> None:
+        self._csv_stale_flash_on = not self._csv_stale_flash_on
+        self._csv_stale_banner.setStyleSheet(
+            _BANNER_STYLE_BRIGHT if self._csv_stale_flash_on else _BANNER_STYLE_DIM
+        )
+
+    def _check_csv_staleness(self) -> None:
+        """EDSM's daily refresh can confirm a tracked system is still
+        present or has retreated, but can't discover new ones — only a
+        fresh Inara CSV export/import does that. Nudges on a rolling
+        7-day basis rather than a fixed weekday."""
+        if not self._refresh_tracker or not self._faction_name:
+            self._csv_stale_banner.setVisible(False)
+            self._csv_stale_flash_timer.stop()
+            return
+
+        last = self._refresh_tracker.last_csv_import()
+        if last is None:
+            stale, age_txt = True, "never imported"
+        else:
+            age_days = (datetime.now(timezone.utc) - last).total_seconds() / 86400.0
+            stale = age_days >= _CSV_STALE_DAYS
+            age_txt = f"{int(age_days)}d ago"
+
+        if not stale:
+            self._csv_stale_banner.setVisible(False)
+            self._csv_stale_flash_timer.stop()
+            return
+
+        self._csv_stale_banner.setText(
+            f"⚠ Inara system list stale ({age_txt}) — new systems won't be detected. Re-import the CSV below."
+        )
+        self._csv_stale_banner.setVisible(True)
+        if not self._csv_stale_flash_timer.isActive():
+            self._csv_stale_flash_timer.start()
 
     def _update_data_freshness_label(self, systems: List[dict]) -> None:
         """Per-system snapshot age breakdown — day-granularity only, since
@@ -1523,7 +1656,7 @@ class PlayerFactionPanel(QWidget):
         self._cancel_refresh_btn.setVisible(True)
         self._refresh_status_label.setText(f"Refreshing 0 / {len(system_names)}…")
 
-        self._refresh_all_worker = _FactionRefreshWorker(self._repo.db.db_path, system_names)
+        self._refresh_all_worker = _FactionRefreshWorker(self._repo.db.db_path, system_names, self._faction_name)
         self._refresh_all_thread = QThread()
         self._refresh_all_worker.moveToThread(self._refresh_all_thread)
         self._refresh_all_thread.started.connect(self._refresh_all_worker.run)
@@ -1540,7 +1673,7 @@ class PlayerFactionPanel(QWidget):
     def _on_refresh_all_progress(self, current: int, total: int, system_name: str):
         self._refresh_status_label.setText(f"Refreshing {current} / {total}: {system_name}")
 
-    def _on_refresh_all_finished(self, refreshed: int, failed: int):
+    def _on_refresh_all_finished(self, refreshed: int, failed: int, retreated: int = 0):
         self._refresh_all_btn.setEnabled(True)
         self._cancel_refresh_btn.setVisible(False)
         self._cancel_refresh_btn.setEnabled(True)
@@ -1549,9 +1682,11 @@ class PlayerFactionPanel(QWidget):
             self._refresh_tracker.mark_refreshed()
 
         failed_txt = f", {failed} failed (blocked/not found)" if failed else ""
+        retreated_txt = f", {retreated} dropped (faction no longer present)" if retreated else ""
         self._refresh_status_label.setText(
-            f"Full EDSM refresh: just now — {refreshed} refreshed{failed_txt}"
+            f"Full EDSM refresh: just now — {refreshed} refreshed{failed_txt}{retreated_txt}"
         )
+        self._force_rebuild_next = True
         self.refresh(self._last_state)
 
     def _on_remove_system_clicked(self, system_address):
@@ -1706,7 +1841,9 @@ class _FactionBucketDialog(QDialog):
             return
         self._recheck_btn.setEnabled(False)
         self._recheck_status.setText(f"Rechecking 0 / {len(names)}…")
-        self._recheck_worker = _FactionRefreshWorker(self._panel._repo.db.db_path, names)
+        self._recheck_worker = _FactionRefreshWorker(
+            self._panel._repo.db.db_path, names, self._panel._faction_name
+        )
         self._recheck_thread = QThread()
         self._recheck_worker.moveToThread(self._recheck_thread)
         self._recheck_thread.started.connect(self._recheck_worker.run)
@@ -1717,9 +1854,11 @@ class _FactionBucketDialog(QDialog):
         self._recheck_worker.finished.connect(self._recheck_thread.quit)
         self._recheck_thread.start()
 
-    def _on_recheck_finished(self, refreshed: int, failed: int) -> None:
+    def _on_recheck_finished(self, refreshed: int, failed: int, retreated: int = 0) -> None:
         self._recheck_btn.setEnabled(True)
-        self._recheck_status.setText(f"Done — {refreshed} refreshed, {failed} failed.")
+        retreated_txt = f", {retreated} dropped (faction no longer present)" if retreated else ""
+        self._recheck_status.setText(f"Done — {refreshed} refreshed, {failed} failed{retreated_txt}.")
+        self._panel._force_rebuild_next = True
         self._panel.refresh(self._panel._last_state)
         self._apply_filter()
 

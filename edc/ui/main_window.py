@@ -1089,6 +1089,11 @@ class MainWindow(QMainWindow):
         self.sidebar.currentRowChanged.connect(self.stack.setCurrentIndex)
         self.sidebar.setCurrentRow(self._overview_tab_row)
         self._refresh_hud()
+        # QTimer.start() fires its first timeout 20 minutes from now, not
+        # immediately — without this, _faction_name (and everything gated
+        # on it, e.g. the faction-controlled stations lookup) stays unset
+        # for up to 20 minutes after every app start.
+        self._refresh_player_faction()
         self._maybe_start_edsm_powerplay_refresh()
         self._start_eddn_listener()
         if self.edsm_powerplay.is_stale():
