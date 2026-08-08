@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
     QApplication,
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QSpinBox, QComboBox, QCompleter, QTableWidget, QTableWidgetItem,
-    QHeaderView, QFrame, QDialog,
+    QHeaderView, QFrame, QDialog, QSizePolicy,
 )
 
 from edc.core.station_pads import pad_size_hint
@@ -436,7 +436,12 @@ class MarketPanel(QWidget):
         th.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
         th.setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)
         self._trade_table.setVisible(False)
-        root.addWidget(self._trade_table, 1)
+        # Fixed vertical policy + cap so a large manual search result below
+        # (also stretch=1) can never starve this table for space when both
+        # are visible at once — it scrolls internally instead of shrinking.
+        self._trade_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
+        self._trade_table.setMaximumHeight(260)
+        root.addWidget(self._trade_table)
 
         # ── Status + results ────────────────────────────────────────────
         self._status_label = QLabel("Enter a commodity and press Search.")

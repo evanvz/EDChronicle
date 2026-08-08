@@ -451,6 +451,8 @@ class PlayerFactionPanel(QWidget):
         self._stations_table.verticalHeader().setDefaultSectionSize(20)
         self._stations_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
         self._stations_table.setMaximumHeight(160)
+        self._stations_table.setToolTip("Click the Station cell to copy its name to the clipboard.")
+        self._stations_table.cellClicked.connect(self._on_stations_cell_clicked)
         stations_l.addWidget(self._stations_table)
 
         root.addWidget(stations_frame)
@@ -1086,6 +1088,13 @@ class PlayerFactionPanel(QWidget):
         row_h = self._stations_table.verticalHeader().defaultSectionSize()
         content_h = self._stations_table.horizontalHeader().height() + len(stations) * row_h + 4
         self._stations_table.setMaximumHeight(min(content_h, 160))
+
+    def _on_stations_cell_clicked(self, row: int, column: int) -> None:
+        if column != 0:  # Station
+            return
+        item = self._stations_table.item(row, column)
+        if item and item.text():
+            QApplication.clipboard().setText(item.text())
 
     # ── Manual add / remove ─────────────────────────────────────────────
 

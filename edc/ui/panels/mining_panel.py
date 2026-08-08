@@ -9,7 +9,7 @@ from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QSpinBox, QComboBox, QCompleter, QTableWidget, QTableWidgetItem,
-    QHeaderView, QFrame,
+    QHeaderView, QFrame, QApplication,
 )
 
 from edc.core.spansh_client import SpanshClient, MiningRingResult
@@ -174,6 +174,8 @@ class MiningPanel(QWidget):
         cmh.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         cmh.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
         self._cargo_market_table.setMaximumHeight(180)
+        self._cargo_market_table.setToolTip("Click the Station or System cell to copy its name to the clipboard.")
+        self._cargo_market_table.cellClicked.connect(self._on_cargo_cell_clicked)
         cargo_layout.addWidget(self._cargo_market_table)
 
         root.addWidget(cargo_frame)
@@ -283,6 +285,8 @@ class MiningPanel(QWidget):
         h.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+        self._table.setToolTip("Click the System or Body cell to copy its name to the clipboard.")
+        self._table.cellClicked.connect(self._on_ring_cell_clicked)
         root.addWidget(self._table, 1)
 
     # ── Public API ────────────────────────────────────────────────────────
@@ -471,6 +475,13 @@ class MiningPanel(QWidget):
         self._cargo_market_table.setSortingEnabled(True)
         self._cargo_market_table.sortItems(5, Qt.SortOrder.DescendingOrder)
 
+    def _on_cargo_cell_clicked(self, row: int, column: int) -> None:
+        if column not in (2, 3):  # Station, System
+            return
+        item = self._cargo_market_table.item(row, column)
+        if item and item.text():
+            QApplication.clipboard().setText(item.text())
+
     # ── Search ────────────────────────────────────────────────────────────
 
     def _start_search(self):
@@ -538,3 +549,10 @@ class MiningPanel(QWidget):
             self._table.setItem(row, 5, hotspot_item)
         self._table.setSortingEnabled(True)
         self._table.sortItems(4, Qt.SortOrder.AscendingOrder)
+
+    def _on_ring_cell_clicked(self, row: int, column: int) -> None:
+        if column not in (0, 1):  # System, Body
+            return
+        item = self._table.item(row, column)
+        if item and item.text():
+            QApplication.clipboard().setText(item.text())
