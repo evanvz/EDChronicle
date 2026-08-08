@@ -925,6 +925,39 @@ class Repository:
         )
         return best
 
+    def find_faction_stations_in_system(
+        self, system_name: str, faction_name: str,
+    ) -> List[dict]:
+        """
+        Known stations/settlements in system_name (from our own visits +
+        the EDDN network feed) controlled by faction_name — for finding
+        somewhere in the current system to hand in missions or redeem
+        bounties that actually credits this faction.
+        """
+        target = (faction_name or "").strip().lower()
+        if not target or not system_name:
+            return []
+
+        rows = self.db.conn.execute(
+            """
+            SELECT market_id, station_name, system_name, station_faction,
+                   station_type, pads_small, pads_medium, pads_large, last_visited
+            FROM station_info
+            WHERE LOWER(station_faction) = ? AND system_name = ?
+            ORDER BY station_name
+            """,
+            (target, system_name),
+        ).fetchall()
+
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["pad_size"] = effective_pad_size(
+                d["station_type"], d.get("pads_small"), d.get("pads_medium"), d.get("pads_large")
+            )
+            out.append(d)
+        return out
+
     def find_stations_with_service(
         self, x: float, y: float, z: float, service_tags: list[str],
     ) -> list[dict]:

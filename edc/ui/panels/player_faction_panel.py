@@ -19,7 +19,7 @@ from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QFrame, QFileDialog, QDialog,
-    QApplication, QCompleter,
+    QApplication, QCompleter, QSizePolicy,
 )
 
 from edc.core.edsm_faction_lookup import fetch_system_factions, fetch_system_coords, ERROR_BLOCKED, ERROR_NOT_FOUND
@@ -38,6 +38,9 @@ def _in_weekly_maintenance_window() -> bool:
 
 _CARD_STYLE = "QFrame { background:#0d1a2a; border:1px solid #1e3a5a; border-radius:5px; }"
 _HDR_STYLE = "color:#555555; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
+# Distinct green accent, set apart from the standard blue _CARD_STYLE cards above/below it.
+_CARD_STYLE_ACCENT = "QFrame { background:#0d1a12; border:1px solid #2a5a3a; border-radius:5px; }"
+_HDR_STYLE_ACCENT = "color:#6BCB77; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
 
 
 class _NumericTableWidgetItem(QTableWidgetItem):
@@ -377,6 +380,7 @@ class PlayerFactionPanel(QWidget):
         # and would reintroduce the per-event overhead already fixed once
         # this session). Keyed by system_address.
         self._last_predictions: Dict[int, dict] = {}
+        self._last_stations_system: Optional[str] = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 8)
@@ -404,6 +408,52 @@ class PlayerFactionPanel(QWidget):
         frame_l.addWidget(self._bgs_contribution_label)
 
         root.addWidget(frame)
+
+        # ── Faction-controlled stations/settlements — nearest first, for
+        # finding somewhere to hand in missions or redeem bounties that
+        # actually credits this faction. Green-accented card, set apart
+        # from the standard blue cards around it. ─────────────────────
+        stations_frame = QFrame()
+        stations_frame.setStyleSheet(_CARD_STYLE_ACCENT)
+        stations_l = QVBoxLayout(stations_frame)
+        stations_l.setContentsMargins(8, 6, 8, 8)
+        stations_l.setSpacing(4)
+
+        stations_hdr = QLabel("FACTION-CONTROLLED STATIONS & SETTLEMENTS — CURRENT SYSTEM")
+        stations_hdr.setStyleSheet(_HDR_STYLE_ACCENT)
+        stations_l.addWidget(stations_hdr)
+
+        self._stations_status_label = QLabel("")
+        self._stations_status_label.setWordWrap(True)
+        self._stations_status_label.setStyleSheet("background:transparent; border:none; color:#888888; font-size:12px;")
+        stations_l.addWidget(self._stations_status_label)
+
+        self._stations_table = QTableWidget()
+        self._stations_table.setColumnCount(3)
+        self._stations_table.setHorizontalHeaderLabels(["Station", "Type", "Pad"])
+        self._stations_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._stations_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._stations_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self._stations_table.verticalHeader().setVisible(False)
+        self._stations_table.verticalHeader().setDefaultSectionSize(18)
+        self._stations_table.setAlternatingRowColors(True)
+        self._stations_table.setStyleSheet(
+            "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
+            " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
+            "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
+            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
+            "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
+        )
+        sth = self._stations_table.horizontalHeader()
+        sth.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        sth.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        sth.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self._stations_table.verticalHeader().setDefaultSectionSize(20)
+        self._stations_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
+        self._stations_table.setMaximumHeight(160)
+        stations_l.addWidget(self._stations_table)
+
+        root.addWidget(stations_frame)
 
         # ── Full EDSM refresh (all known systems, all factions present —
         # not just squadron's, so rival-faction data becomes available for
@@ -652,6 +702,12 @@ class PlayerFactionPanel(QWidget):
         event without triggering the expensive full bucket rebuild."""
         self._last_state = state
 
+        system_name = getattr(state, "system", None) if state else None
+        if system_name != self._last_stations_system:
+            self._last_stations_system = system_name
+            if self._faction_name:
+                self._refresh_faction_stations(self._faction_name, state)
+
         bounty_cr = getattr(state, "squadron_bgs_bounty_cr", 0) or 0
         trade_cr = getattr(state, "squadron_bgs_trade_cr", 0) or 0
         if not self._faction_name or (not bounty_cr and not trade_cr):
@@ -681,6 +737,8 @@ class PlayerFactionPanel(QWidget):
             self._rebuild_buckets([])
             self._missions_status_label.setText("")
             self._missions_table.setRowCount(0)
+            self._stations_status_label.setText("")
+            self._stations_table.setRowCount(0)
             return
 
         self._faction_name = overview["faction_name"]
@@ -723,6 +781,7 @@ class PlayerFactionPanel(QWidget):
 
         self._rebuild_buckets(systems)
         self._refresh_active_missions(self._faction_name, state)
+        self._refresh_faction_stations(self._faction_name, state)
 
     def _compute_buckets(self, systems: List[dict]) -> Dict[str, List[dict]]:
         """Sorts tracked systems into status buckets — a system can land in
@@ -982,6 +1041,51 @@ class PlayerFactionPanel(QWidget):
             self._missions_table.setItem(row, 1, infl_item)
             self._missions_table.setItem(row, 2, dest_item)
             self._missions_table.setItem(row, 3, expiry_item)
+
+    def _refresh_faction_stations(self, faction_name: str, state) -> None:
+        system_name = getattr(state, "system", None) if state else None
+        if not system_name:
+            self._stations_status_label.setText("No current system yet — jump to a system first.")
+            self._stations_table.setRowCount(0)
+            self._stations_table.setVisible(False)
+            return
+
+        try:
+            stations = self._repo.find_faction_stations_in_system(system_name, faction_name)
+        except Exception:
+            log.exception("Failed to load faction-controlled stations")
+            stations = []
+
+        if not stations:
+            self._stations_status_label.setText(
+                f"No known stations/settlements controlled by {faction_name} in {system_name}."
+            )
+            self._stations_table.setRowCount(0)
+            self._stations_table.setVisible(False)
+            return
+
+        self._stations_table.setVisible(True)
+
+        self._stations_status_label.setText(
+            f"{len(stations)} known station{'s' if len(stations) != 1 else ''} "
+            f"controlled by {faction_name} in {system_name}."
+        )
+        self._stations_table.setSortingEnabled(False)
+        self._stations_table.setRowCount(len(stations))
+        for row, s in enumerate(stations):
+            name_item = QTableWidgetItem(s.get("station_name") or "—")
+            type_item = QTableWidgetItem(s.get("station_type") or "—")
+            pad_item = QTableWidgetItem(s.get("pad_size") or "?")
+            for it in (type_item, pad_item):
+                it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            self._stations_table.setItem(row, 0, name_item)
+            self._stations_table.setItem(row, 1, type_item)
+            self._stations_table.setItem(row, 2, pad_item)
+        self._stations_table.setSortingEnabled(True)
+        row_h = self._stations_table.verticalHeader().defaultSectionSize()
+        content_h = self._stations_table.horizontalHeader().height() + len(stations) * row_h + 4
+        self._stations_table.setMaximumHeight(min(content_h, 160))
 
     # ── Manual add / remove ─────────────────────────────────────────────
 

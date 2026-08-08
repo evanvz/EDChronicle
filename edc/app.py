@@ -204,6 +204,54 @@ def run():
         background-color: #FF8C00;
     }
 
+    QScrollBar:vertical {
+        background: #0A0A0A;
+        width: 12px;
+        margin: 0px;
+    }
+
+    QScrollBar::handle:vertical {
+        background: #2A2A2A;
+        border-radius: 5px;
+        min-height: 20px;
+    }
+
+    QScrollBar::handle:vertical:hover {
+        background: #FF8C00;
+    }
+
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+        height: 0px;
+    }
+
+    QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+        background: none;
+    }
+
+    QScrollBar:horizontal {
+        background: #0A0A0A;
+        height: 12px;
+        margin: 0px;
+    }
+
+    QScrollBar::handle:horizontal {
+        background: #2A2A2A;
+        border-radius: 5px;
+        min-width: 20px;
+    }
+
+    QScrollBar::handle:horizontal:hover {
+        background: #FF8C00;
+    }
+
+    QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+        width: 0px;
+    }
+
+    QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+        background: none;
+    }
+
     QLabel {
         font-size: 12px;
     }

@@ -392,7 +392,7 @@ class OverviewPanel(QWidget):
         # ── Canonn community intel (POI / codex) ────────────────────────────
         self.canonn_intel = QLabel("")
         self.canonn_intel.setTextFormat(Qt.TextFormat.RichText)
-        self.canonn_intel.setWordWrap(False)
+        self.canonn_intel.setWordWrap(True)
         self.canonn_intel.setVisible(False)
         self.canonn_intel.setStyleSheet(
             "QLabel { background: #0d2a2a; border: 1px solid #1e5a5a;"
