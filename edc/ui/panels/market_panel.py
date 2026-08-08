@@ -67,12 +67,12 @@ class _NumericTableWidgetItem(QTableWidgetItem):
 
 def _compute_trade_opportunities(repo, items, market_id, ref_x, ref_y, ref_z, radius_ly):
     """
-    Runs one search_market_prices query per purchasable commodity in the
-    current market. This can mean dozens of sequential DB queries for a
-    large station — deliberately kept off the UI thread (see
-    _TradeOpportunityWorker) so it never freezes the app.
+    One batched query for every purchasable commodity in the current
+    market, instead of a separate search_market_prices call per commodity
+    — confirmed live that the per-commodity loop made a large station's
+    market take minutes (100+ commodities x 1s+ each).
     """
-    opportunities = []
+    purchasable = {}  # commodity_name -> item
     for item in items:
         buy_price = item.get("buy_price") or 0
         if buy_price <= 0:
@@ -83,17 +83,27 @@ def _compute_trade_opportunities(repo, items, market_id, ref_x, ref_y, ref_z, ra
         commodity = normalize_commodity_name(item.get("name") or "")
         if not commodity:
             continue
-        try:
-            results = repo.search_market_prices(
-                commodity, ref_x, ref_y, ref_z, float(radius_ly),
-                exclude_market_id=market_id,
-            )
-        except Exception:
-            log.exception("Trade opportunity search failed for %s", commodity)
-            continue
+        purchasable[commodity] = item
+
+    if not purchasable:
+        return []
+
+    try:
+        results_by_commodity = repo.search_market_prices_multi(
+            list(purchasable.keys()), ref_x, ref_y, ref_z, float(radius_ly),
+            exclude_market_id=market_id,
+        )
+    except Exception:
+        log.exception("Trade opportunity batch search failed")
+        return []
+
+    opportunities = []
+    for commodity, item in purchasable.items():
+        results = results_by_commodity.get(commodity) or []
         if not results:
             continue
         best = results[0]
+        buy_price = item.get("buy_price") or 0
         sell_price = best.get("sell_price") or 0
         if sell_price <= 0:
             continue
@@ -103,7 +113,7 @@ def _compute_trade_opportunities(repo, items, market_id, ref_x, ref_y, ref_z, ra
         opportunities.append({
             "name": item.get("name"),
             "buy_price": buy_price,
-            "stock": stock,
+            "stock": item.get("stock") or 0,
             "sell_price": sell_price,
             "station_name": best.get("station_name"),
             "station_type": best.get("station_type"),
@@ -222,6 +232,8 @@ class MarketPanel(QWidget):
         self._last_market_id_computed: Optional[int] = None
         self._last_results: Optional[list] = None
         self._last_search_desc = ("", 0, False)
+        self._last_state = None
+        self._last_radius_ly: int = 100
 
         # Remembers "where to sell X" per commodity across station visits —
         # merged (not replaced) on each new Trade Opportunities computation,
@@ -397,10 +409,26 @@ class MarketPanel(QWidget):
         root.addWidget(search_frame)
 
         # ── Trade opportunities (current market) ────────────────────────
+        trade_hdr_row = QHBoxLayout()
         self._trade_hdr = QLabel("TRADE OPPORTUNITIES — CURRENT MARKET")
         self._trade_hdr.setStyleSheet(_HDR_STYLE)
         self._trade_hdr.setVisible(False)
-        root.addWidget(self._trade_hdr)
+        trade_hdr_row.addWidget(self._trade_hdr)
+        trade_hdr_row.addStretch(1)
+        self._trade_refresh_btn = QPushButton("Refresh")
+        self._trade_refresh_btn.setStyleSheet(
+            "QPushButton { background:#1a3a5a; color:#FFB347; border:1px solid #2a5a8a;"
+            " border-radius:3px; padding:2px 10px; font-weight:bold; }"
+            "QPushButton:hover { background:#2a5a8a; }"
+            "QPushButton:disabled { background:#111; color:#555; border-color:#333; }"
+        )
+        self._trade_refresh_btn.setToolTip(
+            "Re-check current best sell prices without leaving/reopening the market screen."
+        )
+        self._trade_refresh_btn.setVisible(False)
+        self._trade_refresh_btn.clicked.connect(self._on_refresh_trade_clicked)
+        trade_hdr_row.addWidget(self._trade_refresh_btn)
+        root.addLayout(trade_hdr_row)
 
         self._trade_status_label = QLabel("")
         self._trade_status_label.setStyleSheet("color:#888888; font-size:12px; background:transparent;")
@@ -523,6 +551,8 @@ class MarketPanel(QWidget):
         """Cheap, safe to call on every general refresh — location/radius only.
         Does NOT touch Trade Opportunities; call refresh_trade_opportunities()
         explicitly when a new Market event actually arrives."""
+        self._last_state = state
+        self._last_radius_ly = radius_ly
         self._system = (getattr(state, "system", None) or "").strip()
         self._ref_x = float(getattr(state, "system_x", 0.0) or 0.0)
         self._ref_y = float(getattr(state, "system_y", 0.0) or 0.0)
@@ -586,13 +616,16 @@ class MarketPanel(QWidget):
             self._cargo_table.setItem(row, 4, dist_item)
             self._cargo_table.setItem(row, 5, price_item)
 
-    def refresh_trade_opportunities(self, state, radius_ly: int) -> None:
+    def refresh_trade_opportunities(self, state, radius_ly: int, force: bool = False) -> None:
         """
         Call only when a new Market event has actually arrived (i.e. the
         commodity screen was just opened) — not on every general refresh.
         Runs the per-commodity price search on a background thread so a
         large station's market (dozens of commodities, one DB query each)
-        never freezes the UI.
+        never freezes the UI. force=True (manual Refresh button) bypasses
+        the "already computed for this market visit" dedupe, since the
+        underlying market_prices data keeps changing from live EDDN
+        traffic while you're still docked.
         """
         items = getattr(state, "current_market_items", None) or []
         market_id = getattr(state, "current_market_id", None)
@@ -602,11 +635,12 @@ class MarketPanel(QWidget):
             self._trade_hdr.setVisible(False)
             self._trade_status_label.setVisible(False)
             self._trade_table.setVisible(False)
+            self._trade_refresh_btn.setVisible(False)
             self._trade_table.setRowCount(0)
             self._last_market_id_computed = None
             return
 
-        if market_id == self._last_market_id_computed:
+        if market_id == self._last_market_id_computed and not force:
             return  # already computed for this exact market visit
 
         if self._trade_thread and self._trade_thread.isRunning():
@@ -620,6 +654,8 @@ class MarketPanel(QWidget):
         self._trade_status_label.setVisible(True)
         self._trade_status_label.setText(f"Checking {station or 'current station'}'s commodities…")
         self._trade_table.setVisible(True)
+        self._trade_refresh_btn.setVisible(True)
+        self._trade_refresh_btn.setEnabled(False)
 
         self._last_market_id_computed = market_id
         self._trade_worker = _TradeOpportunityWorker(
@@ -632,7 +668,12 @@ class MarketPanel(QWidget):
         self._trade_worker.finished.connect(self._trade_thread.quit)
         self._trade_thread.start()
 
+    def _on_refresh_trade_clicked(self) -> None:
+        if self._last_state is not None:
+            self.refresh_trade_opportunities(self._last_state, self._last_radius_ly, force=True)
+
     def _on_trade_opportunities_result(self, opportunities: list, station: str):
+        self._trade_refresh_btn.setEnabled(True)
         # Merge (don't replace) — a destination remembered from an earlier
         # station visit must survive later visits to other stations, since
         # whatever's still in cargo from that earlier stop still needs it.

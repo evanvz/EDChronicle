@@ -1,8 +1,20 @@
 import json
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from .database import Database
 from edc.core.station_pads import effective_pad_size
+
+# A commodity price this old is excluded from buy/sell search results
+# entirely — a BGS state change (war outcome, boom/bust, faction takeover)
+# or a station nobody's visited in a while can make it flatly wrong, and
+# unlike a Fleet Carrier's arbitrary price this isn't visible as an obvious
+# outlier, so it's safer to disallow it than merely flag it.
+_MARKET_DATA_MAX_AGE_DAYS = 30
+
+
+def _market_data_cutoff() -> str:
+    return (datetime.now(timezone.utc) - timedelta(days=_MARKET_DATA_MAX_AGE_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 class Repository:
@@ -1052,43 +1064,63 @@ class Repository:
             results.append(rec)
         return results
 
+    def _nearby_system_coords(self, x: float, y: float, z: float, radius_ly: float) -> dict:
+        """
+        Pre-filters system_coords to a bounding cube around (x,y,z) — cheap,
+        since system_coords has one row per system, not per station/commodity.
+        Used to avoid market_prices' commodity_name index returning every
+        station in the galaxy that ever sold a commodity (confirmed live:
+        1.5-7.5s per commodity for a common one like Gold/Tritium — a
+        station with 100+ commodities made Trade Opportunities take minutes)
+        before most of those rows get thrown away for being out of range.
+        Returns {system_name: (x, y, z)}; the cube is a loose superset of
+        the sphere, so callers still need their own exact distance check.
+        """
+        rows = self.db.conn.execute(
+            "SELECT system_name, x, y, z FROM system_coords "
+            "WHERE x BETWEEN ? AND ? AND y BETWEEN ? AND ? AND z BETWEEN ? AND ?",
+            (x - radius_ly, x + radius_ly, y - radius_ly, y + radius_ly, z - radius_ly, z + radius_ly),
+        ).fetchall()
+        return {r["system_name"]: (r["x"], r["y"], r["z"]) for r in rows}
+
     def search_market_prices(
         self, commodity_name: str, x: float, y: float, z: float, radius_ly: float,
         exclude_market_id: Optional[int] = None,
     ) -> list[dict]:
         """
-        Best sell prices for a commodity, joined against system_coords for
-        distance and station_info for a confirmed landing pad size (from our
-        own past visits, if any). Filtered to radius_ly. Sorted with known
-        pad size preferred over unknown, and best price within each tier —
-        never silently recommends a destination we can't confirm you can
-        physically dock at when a known-pad alternative exists.
-        Distance filtering/sorting happens in Python — dataset is bounded
-        (one row per station/commodity ever reported), no need for a
-        spatial index at this scale. exclude_market_id skips a specific
-        station (e.g. the one you're currently docked at).
+        Best sell prices for a commodity, filtered to radius_ly and joined
+        against station_info for a confirmed landing pad size (from our own
+        past visits, if any). Sorted with known pad size preferred over
+        unknown, and best price within each tier — never silently
+        recommends a destination we can't confirm you can physically dock
+        at when a known-pad alternative exists. exclude_market_id skips a
+        specific station (e.g. the one you're currently docked at).
         """
+        coords_by_system = self._nearby_system_coords(x, y, z, radius_ly)
+        if not coords_by_system:
+            return []
+
+        placeholders = ",".join("?" for _ in coords_by_system)
         rows = self.db.conn.execute(
-            """
+            f"""
             SELECT m.market_id, m.station_name, m.station_type, m.system_name,
                    m.sell_price, m.demand, m.stock, m.last_updated,
-                   c.x, c.y, c.z,
                    si.pads_small, si.pads_medium, si.pads_large
             FROM market_prices m
-            JOIN system_coords c ON c.system_name = m.system_name
             LEFT JOIN station_info si ON si.market_id = m.market_id
             WHERE m.commodity_name = ? AND m.sell_price IS NOT NULL
+                  AND (m.station_type IS NULL OR m.station_type != 'FleetCarrier')
+                  AND m.last_updated >= ?
+                  AND m.system_name IN ({placeholders})
             """,
-            (commodity_name,),
+            (commodity_name, _market_data_cutoff(), *coords_by_system.keys()),
         ).fetchall()
 
         results = []
         for r in rows:
             if exclude_market_id is not None and r["market_id"] == exclude_market_id:
                 continue
-            rx, ry, rz = r["x"], r["y"], r["z"]
-            if rx is None or ry is None or rz is None:
-                continue
+            rx, ry, rz = coords_by_system[r["system_name"]]
             dist = ((rx - x) ** 2 + (ry - y) ** 2 + (rz - z) ** 2) ** 0.5
             if dist > radius_ly:
                 continue
@@ -1109,6 +1141,63 @@ class Repository:
         results.sort(key=lambda r: (not r["pad_known"], -r["sell_price"]))
         return results
 
+    def search_market_prices_multi(
+        self, commodity_names: list[str], x: float, y: float, z: float, radius_ly: float,
+        exclude_market_id: Optional[int] = None,
+    ) -> dict[str, list[dict]]:
+        """
+        Same as search_market_prices, but for many commodities in a single
+        query — used by Trade Opportunities, which otherwise ran one
+        search_market_prices call per purchasable commodity at a station
+        (confirmed live: 100+ commodities x ~1s+ each made it take minutes).
+        Returns {commodity_name: [results sorted best-first]}, same shape
+        per-commodity as search_market_prices.
+        """
+        if not commodity_names:
+            return {}
+
+        coords_by_system = self._nearby_system_coords(x, y, z, radius_ly)
+        if not coords_by_system:
+            return {name: [] for name in commodity_names}
+
+        sys_placeholders = ",".join("?" for _ in coords_by_system)
+        commodity_placeholders = ",".join("?" for _ in commodity_names)
+        rows = self.db.conn.execute(
+            f"""
+            SELECT m.market_id, m.station_name, m.station_type, m.system_name,
+                   m.commodity_name, m.sell_price, m.demand, m.stock, m.last_updated,
+                   si.pads_small, si.pads_medium, si.pads_large
+            FROM market_prices m
+            LEFT JOIN station_info si ON si.market_id = m.market_id
+            WHERE m.commodity_name IN ({commodity_placeholders}) AND m.sell_price IS NOT NULL
+                  AND (m.station_type IS NULL OR m.station_type != 'FleetCarrier')
+                  AND m.last_updated >= ?
+                  AND m.system_name IN ({sys_placeholders})
+            """,
+            (*commodity_names, _market_data_cutoff(), *coords_by_system.keys()),
+        ).fetchall()
+
+        by_commodity: dict[str, list[dict]] = {name: [] for name in commodity_names}
+        for r in rows:
+            if exclude_market_id is not None and r["market_id"] == exclude_market_id:
+                continue
+            rx, ry, rz = coords_by_system[r["system_name"]]
+            dist = ((rx - x) ** 2 + (ry - y) ** 2 + (rz - z) ** 2) ** 0.5
+            if dist > radius_ly:
+                continue
+            rec = dict(r)
+            rec["distance_ly"] = dist
+            pad = effective_pad_size(
+                rec["station_type"], rec.get("pads_small"), rec.get("pads_medium"), rec.get("pads_large")
+            )
+            rec["pad_known"] = pad != "?"
+            rec["pad_size"] = pad
+            by_commodity[rec["commodity_name"]].append(rec)
+
+        for name, results in by_commodity.items():
+            results.sort(key=lambda r: (not r["pad_known"], -r["sell_price"]))
+        return by_commodity
+
     def search_market_buy_prices(
         self, commodity_name: str, x: float, y: float, z: float, radius_ly: float,
         exclude_market_id: Optional[int] = None,
@@ -1119,28 +1208,32 @@ class Repository:
         requiring stock > 0 since a listed buy_price with nothing in stock
         isn't actually purchasable.
         """
+        coords_by_system = self._nearby_system_coords(x, y, z, radius_ly)
+        if not coords_by_system:
+            return []
+
+        placeholders = ",".join("?" for _ in coords_by_system)
         rows = self.db.conn.execute(
-            """
+            f"""
             SELECT m.market_id, m.station_name, m.station_type, m.system_name,
                    m.buy_price, m.stock, m.last_updated,
-                   c.x, c.y, c.z,
                    si.pads_small, si.pads_medium, si.pads_large
             FROM market_prices m
-            JOIN system_coords c ON c.system_name = m.system_name
             LEFT JOIN station_info si ON si.market_id = m.market_id
             WHERE m.commodity_name = ? AND m.buy_price IS NOT NULL AND m.buy_price > 0
                   AND m.stock IS NOT NULL AND m.stock > 0
+                  AND (m.station_type IS NULL OR m.station_type != 'FleetCarrier')
+                  AND m.last_updated >= ?
+                  AND m.system_name IN ({placeholders})
             """,
-            (commodity_name,),
+            (commodity_name, _market_data_cutoff(), *coords_by_system.keys()),
         ).fetchall()
 
         results = []
         for r in rows:
             if exclude_market_id is not None and r["market_id"] == exclude_market_id:
                 continue
-            rx, ry, rz = r["x"], r["y"], r["z"]
-            if rx is None or ry is None or rz is None:
-                continue
+            rx, ry, rz = coords_by_system[r["system_name"]]
             dist = ((rx - x) ** 2 + (ry - y) ** 2 + (rz - z) ** 2) ** 0.5
             if dist > radius_ly:
                 continue
