@@ -60,7 +60,7 @@ _STATION_CHIP_STYLE = (
     " border-radius:4px; padding:4px 8px; font-size:12px; text-align:left; }"
     "QPushButton:hover { background:#1a3a26; }"
 )
-_STATION_CHIP_COLS = 3
+_STATION_CHIP_COLS = 4
 # Distinct green accent, set apart from the standard blue _CARD_STYLE cards above/below it.
 _CARD_STYLE_ACCENT = "QFrame { background:#0d1a12; border:1px solid #2a5a3a; border-radius:5px; }"
 _HDR_STYLE_ACCENT = "color:#6BCB77; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
