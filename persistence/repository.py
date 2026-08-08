@@ -841,6 +841,42 @@ class Repository:
         )
         self.db.conn.commit()
 
+    def save_codex_species_sightings_batch(self, records: list[tuple]) -> None:
+        """
+        Each record: (system_address, body_id, species_name_localised,
+        species_symbol, timestamp) — from EddnMarketCache's codex buffer.
+        Species are deterministic per body, so a later sighting can only
+        ever confirm the same species again; no conflict resolution needed
+        beyond keeping the freshest timestamp.
+        """
+        if not records:
+            return
+        cur = self.db.conn.cursor()
+        cur.executemany(
+            """
+            INSERT INTO codex_species_sightings (
+                system_address, body_id, species_name, species_symbol, last_seen
+            )
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(system_address, body_id) DO UPDATE SET
+                species_name   = excluded.species_name,
+                species_symbol = excluded.species_symbol,
+                last_seen      = excluded.last_seen
+            """,
+            records,
+        )
+        self.db.conn.commit()
+
+    def get_codex_species_sightings_for_system(self, system_address: int) -> dict[int, dict]:
+        """{body_id: {"species_name": str, "last_seen": str}} for every body
+        in this system another commander (or us, via our own EDDN publish
+        loopback) has already logged a biology CodexEntry for."""
+        rows = self.db.conn.execute(
+            "SELECT body_id, species_name, last_seen FROM codex_species_sightings WHERE system_address = ?",
+            (system_address,),
+        ).fetchall()
+        return {r["body_id"]: {"species_name": r["species_name"], "last_seen": r["last_seen"]} for r in rows}
+
     def find_closest_interstellar_factors(
         self, x: float, y: float, z: float, exclude_factions: Optional[list[str]] = None,
     ) -> Optional[dict]:

@@ -1176,6 +1176,7 @@ class MainWindow(QMainWindow):
         self._eddn_worker.commodity_seen.connect(self.eddn_market_cache.on_commodity_message)
         self._eddn_worker.faction_seen.connect(self.eddn_market_cache.on_faction_seen)
         self._eddn_worker.station_seen.connect(self.eddn_market_cache.on_station_seen)
+        self._eddn_worker.codex_entry_seen.connect(self.eddn_market_cache.on_codex_entry_seen)
         self._eddn_thread.start()
         self._eddn_save_timer.start()
         self._market_flush_timer.start()
@@ -2925,55 +2926,19 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-        # Build genus -> max known species value map (from exo_values.json)
-        genus_max_value = {}
-        if self.exo_values:
-            for rec in self.exo_values.by_species.values():
-                g = rec.genus
-                v = rec.base_value
-                if isinstance(g, str) and isinstance(v, int):
-                    prev = genus_max_value.get(g)
-                    if prev is None or v > prev:
-                        genus_max_value[g] = v
         if action_state["exploration"]:
             lines.append(action_state["exploration"])
 
         if action_state["rings"]:
             lines.append(action_state["rings"])
 
-
-        # Exobiology: split "bio signals exist" vs "we have real exobio targets/values"
-        # Bio signals from FSS may not include genus until DSS/mapping events arrive.
-        bio_need_dss = 0
-        for _body, rec in (self.state.bodies or {}).items():
-            if not isinstance(rec, dict):
-                continue
-            bio = rec.get("BioSignals", 0) or 0
-            gen = rec.get("BioGenuses", []) or []
-            if isinstance(bio, int) and bio > 0 and not gen:
-                bio_need_dss += 1
-
+        # _compute_action_state() is the single authority for all exobiology
+        # Action lines (including "possible high-value exo genus") — this
+        # used to also recompute the exact same high-value-genus check
+        # independently here, producing two near-identical lines back to
+        # back (one saying "DSS confirmed", one not, for the same bodies).
         if action_state["exobiology"]:
             lines.extend(action_state["exobiology"])
-
-        # DSS-confirmed genus → possible high-value exo (potential, not guaranteed)
-        dss_hv_genus_bodies = 0
-        for _body, rec in (self.state.bodies or {}).items():
-            if not isinstance(rec, dict):
-                continue
-            gen = rec.get("BioGenuses", []) or []
-            if not gen:
-                continue
-            for g in gen:
-                max_v = genus_max_value.get(g)
-                if isinstance(max_v, int) and max_v >= exo_min:
-                    dss_hv_genus_bodies += 1
-                    break
-
-        if dss_hv_genus_bodies:
-            lines.append(
-                f"🔬 Action: {dss_hv_genus_bodies} bodies with possible high-value exo genus (DSS confirmed, ≥ {exo_m}M)"
-            )
 
         # Only count "high value exo" when we have ScanOrganic-derived records (values may exist)
         exo_incomplete = 0
@@ -3443,6 +3408,18 @@ class MainWindow(QMainWindow):
                 if isinstance(g, str) and isinstance(v, int):
                     genus_max[g] = max(v, genus_max.get(g, 0))
 
+        # Species are deterministic per body — if another commander (or us,
+        # via our own EDDN publish loopback) already logged a biology
+        # CodexEntry here, we know the exact species and value before ever
+        # personally running a DSS, unlike the generic genus-range guess
+        # below that's all we have for a body nobody's reported yet.
+        system_address = getattr(self.state, "system_address", None)
+        codex_sightings = (
+            self.repo.get_codex_species_sightings_for_system(system_address)
+            if isinstance(system_address, int) else {}
+        )
+        confirmed_species: list[tuple[str, Optional[int]]] = []
+
         for _body, rec in (self.state.bodies or {}).items():
             if not isinstance(rec, dict):
                 continue
@@ -3461,11 +3438,29 @@ class MainWindow(QMainWindow):
                 hv_unmapped += 1
 
             if isinstance(bio, int) and bio > 0 and not gen:
-                bio_need_dss += 1
+                sighting = codex_sightings.get(rec.get("BodyID"))
+                if sighting:
+                    species_name = sighting["species_name"]
+                    value = self.exo_values.get_value(species_name) if self.exo_values else None
+                    confirmed_species.append((species_name, value))
+                else:
+                    bio_need_dss += 1
 
         if hv_unmapped > 0 or tf_unmapped > 0:
             out["exploration"] = (
                 f"🌍 Action: {hv_unmapped} bodies worth mapping (FSS) | {tf_unmapped} TF unmapped"
+            )
+
+        if confirmed_species:
+            parts = [
+                f"{name} (~{value / 1_000_000:.1f}M)" if isinstance(value, int) else name
+                for name, value in confirmed_species[:3]
+            ]
+            more = len(confirmed_species) - 3
+            suffix = f" +{more} more" if more > 0 else ""
+            out["exobiology"].append(
+                f"🔬 Action: {len(confirmed_species)} bod{'y' if len(confirmed_species) == 1 else 'ies'} "
+                f"EDDN-confirmed before DSS — {', '.join(parts)}{suffix} — worth landing to scan"
             )
 
         if bio_need_dss > 0:
@@ -3506,7 +3501,7 @@ class MainWindow(QMainWindow):
 
         if dss_hv > 0:
             out["exobiology"].append(
-                f"🔬 Action: {dss_hv} bodies with possible high-value exo genus (≥ {exo_m}M)"
+                f"🔬 Action: {dss_hv} bodies with possible high-value exo genus (DSS confirmed, ≥ {exo_m}M)"
             )
 
         return out

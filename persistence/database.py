@@ -140,6 +140,17 @@ class Database:
             # which was a confirmed full-table-scan taking 20+ seconds once
             # this table reached ~12M rows.
             "CREATE INDEX IF NOT EXISTS idx_market_prices_commodity ON market_prices(commodity_name)",
+            # Biology CodexEntry sightings from the EDDN network — species are
+            # deterministic per body, so another commander's already-reported
+            # find tells us exactly what's there before we personally DSS it.
+            """CREATE TABLE IF NOT EXISTS codex_species_sightings (
+                system_address  INTEGER NOT NULL,
+                body_id         INTEGER NOT NULL,
+                species_name    TEXT    NOT NULL,
+                species_symbol  TEXT,
+                last_seen       TEXT    NOT NULL,
+                PRIMARY KEY (system_address, body_id)
+            )""",
         ]
         for sql in migrations:
             try:

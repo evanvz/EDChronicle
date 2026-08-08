@@ -524,15 +524,20 @@ class IntelPanel(QWidget):
                 for body_name, rec in bodies.items():
                     if not isinstance(rec, dict):
                         continue
-                    materials = rec.get("Materials") or {}
-                    mat_names = list(materials.keys()) if isinstance(materials, dict) else []
-                    mat_matches = farming_locations.get_for_materials(mat_names) if mat_names else []
 
                     h_sig = int(human_signals.get(body_name, 0) or 0)
                     g_sig = int(guardian_signals.get(body_name, 0) or 0)
                     t_sig = int(thargoid_signals.get(body_name, 0) or 0)
 
-                    if not mat_matches and h_sig == 0 and g_sig == 0 and t_sig == 0:
+                    # Deliberately NOT matching on this body's own raw surface
+                    # composition (e.g. Zirconium, Selenium) against the guide's
+                    # material lists — those are common G1-G4 raws present on
+                    # huge numbers of landable bodies, so a name-only overlap
+                    # with a specific known site elsewhere (a wreck, a shard
+                    # field) told you nothing about this system and just read
+                    # as if that site were here. Only an actual detected
+                    # anomaly signal on this body is a genuine "match".
+                    if h_sig == 0 and g_sig == 0 and t_sig == 0:
                         continue
 
                     n_body_farm_matches += 1
@@ -600,48 +605,6 @@ class IntelPanel(QWidget):
                             body_farm_html.append(
                                 f'<br><span style="color:{fg};font-size:12px;">'
                                 f'&nbsp;&nbsp;⛏ {self._esc(name)}</span>'
-                            )
-
-                    for fm in mat_matches[:3]:
-                        domain = str(fm.get("domain") or "")
-                        name = str(fm.get("name") or "")
-                        fg, _ = self._domain_color(domain)
-
-                        # This is a guide reference elsewhere in the galaxy that
-                        # happens to share a material name with this body's own
-                        # surface composition — not a claim that this body IS
-                        # that site. Location comes from the record itself, or
-                        # (e.g. "Crashed Anaconda") from the specific nested
-                        # site whose materials matched, so it's never shown
-                        # without saying where it actually is.
-                        mat_names_lower = [n.lower() for n in mat_names]
-                        mats = fm.get("key_materials") or []
-                        matched = [m for m in mats if m.lower() in mat_names_lower] if isinstance(mats, list) else []
-                        location = ""
-                        if fm.get("system"):
-                            location = str(fm["system"]) + (f" {fm['body']}" if fm.get("body") else "")
-                        if not matched:
-                            for site in (fm.get("sites") or []):
-                                if not isinstance(site, dict):
-                                    continue
-                                for sm in (site.get("materials") or []):
-                                    if sm.lower() in mat_names_lower and sm not in matched:
-                                        matched.append(sm)
-                                        if not location:
-                                            location = str(site.get("system") or "") + (
-                                                f" {site['body']}" if site.get("body") else ""
-                                            )
-
-                        label = f"{name} — {location}" if location else f"{name} (location unknown)"
-                        body_farm_html.append(
-                            f'<br><span style="color:{fg};font-size:12px;">'
-                            f'&nbsp;&nbsp;⛏ {self._esc(label)}</span>'
-                        )
-                        if matched:
-                            body_farm_html.append(
-                                f'<span style="color:#888888;font-size:12px;">'
-                                f' ({self._esc(", ".join(matched[:3]))})'
-                                f'</span>'
                             )
 
                     body_farm_html.append('</div>')

@@ -37,6 +37,10 @@ class EddnMarketCache:
         # Keyed by market_id — Docked sightings from any commander network-wide,
         # the same crowdsourcing model Inara/EDSM use for station-service data.
         self._station_buffer: Dict[int, Dict[str, Any]] = {}
+        # Keyed by (system_address, body_id) — biology CodexEntry sightings
+        # from any commander. Species are deterministic per body, so this
+        # tells us exactly what's on a body before we personally DSS it.
+        self._codex_buffer: Dict[Tuple[int, int], tuple] = {}
 
     def on_coords_seen(self, system_name: str, x: float, y: float, z: float) -> None:
         if not system_name:
@@ -73,6 +77,17 @@ class EddnMarketCache:
         info = extract_station_info(msg)
         if info is not None:
             self._station_buffer[info["market_id"]] = info
+
+    def on_codex_entry_seen(self, msg: Dict[str, Any]) -> None:
+        system_address = msg.get("SystemAddress")
+        body_id = msg.get("BodyID")
+        name_localised = msg.get("Name_Localised")
+        if not (isinstance(system_address, int) and isinstance(body_id, int) and name_localised):
+            return
+        self._codex_buffer[(system_address, body_id)] = (
+            system_address, body_id, str(name_localised), str(msg.get("Name") or ""),
+            msg.get("timestamp") or datetime.now(timezone.utc).isoformat(),
+        )
 
     def on_faction_seen(self, system_address: int, system_name: str, faction: Dict[str, Any], is_controlling: bool, timestamp: str) -> None:
         if not (isinstance(system_address, int) and system_name):
@@ -114,3 +129,10 @@ class EddnMarketCache:
             except Exception:
                 log.exception("Failed to flush station_info batch")
             self._station_buffer.clear()
+
+        if self._codex_buffer:
+            try:
+                self._repo.save_codex_species_sightings_batch(list(self._codex_buffer.values()))
+            except Exception:
+                log.exception("Failed to flush codex_species_sightings batch")
+            self._codex_buffer.clear()

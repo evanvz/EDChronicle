@@ -22,7 +22,7 @@ log = logging.getLogger(__name__)
 _RELAY_URL = "tcp://eddn.edcd.io:9500"
 _JOURNAL_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/journal/"
 _COMMODITY_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/commodity/"
-_RELEVANT_EVENTS = {"FSDJump", "Location", "CarrierJump", "Docked"}
+_RELEVANT_EVENTS = {"FSDJump", "Location", "CarrierJump", "Docked", "CodexEntry"}
 _RECV_TIMEOUT_MS = 5000
 _RECONNECT_DELAY_S = 5
 
@@ -62,6 +62,10 @@ class EddnPowerPlayWorker(QObject):
     # commanders' visits too (the same crowdsourcing model Inara/EDSM use
     # for station-service data, rather than being limited to our own).
     station_seen = pyqtSignal(dict)
+    # Raw journal/1 CodexEntry message body, filtered to biology entries only
+    # — species are deterministic per body, so another commander's already-
+    # reported find tells us exactly what's there before we personally DSS it.
+    codex_entry_seen = pyqtSignal(dict)
     # id64, StarSystem, faction record (dict), is_controlling, timestamp — only
     # emitted for factions in watched_factions, so this stays rare rather than
     # firing on every journal/1 message network-wide.
@@ -143,6 +147,15 @@ class EddnPowerPlayWorker(QObject):
                 # separately from the FSDJump/Location/CarrierJump path below.
                 if isinstance(msg.get("MarketID"), int):
                     self.station_seen.emit(msg)
+                continue
+
+            if msg.get("event") == "CodexEntry":
+                category = str(msg.get("Category_Localised") or msg.get("Category") or "")
+                if ("biology" in category.lower()
+                        and isinstance(msg.get("SystemAddress"), int)
+                        and isinstance(msg.get("BodyID"), int)
+                        and isinstance(msg.get("Name_Localised"), str) and msg.get("Name_Localised")):
+                    self.codex_entry_seen.emit(msg)
                 continue
 
             power = msg.get("ControllingPower")
