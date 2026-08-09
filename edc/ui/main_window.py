@@ -62,6 +62,7 @@ from edc.core.odyssey_engineering import OdysseyEngineeringTable
 from edc.core.odyssey_wishlist import OdysseyWishlist
 from edc.core.market_destination import MarketDestinationStore
 from edc.core.megaship_tracker import MegashipTracker
+from edc.core.mission_events import MISSION_EVENT_NAMES
 from edc.core.megaship_scanner import scan_visited_megaships
 from edc.core.faction_refresh_tracker import FactionRefreshTracker
 from edc.ui.panels.engineering_panel import EngineeringPanel
@@ -1606,6 +1607,14 @@ class MainWindow(QMainWindow):
         if name == "ColonisationConstructionDepot":
             self._save_colonisation_depot(evt)
             self._refresh_squadron()
+
+        if name in MISSION_EVENT_NAMES:
+            # active_missions itself updates immediately in event_engine.py,
+            # but the Player Faction tab's Active Missions card only had a
+            # 20-minute recurring timer refreshing it — confirmed live:
+            # completing 2 more missions after the first didn't update the
+            # displayed count until the next tick.
+            self._refresh_player_faction()
 
         if name == "Market":
             self._load_current_market()
