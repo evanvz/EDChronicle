@@ -109,6 +109,27 @@ def handle(engine, name: str | None, event: Dict[str, Any], msgs: List[str]) -> 
         engine.state.carrier_finance = dict(finance) if isinstance(finance, dict) else {}
         return True
 
+    elif name == "CarrierLocation":
+        # Fires on login/session start with the carrier's current system —
+        # CarrierJump only tells us where it is once it actually jumps
+        # again, so without this a carrier that hasn't jumped yet this
+        # session shows no location at all.
+        carrier_id = event.get("CarrierID")
+        system = event.get("StarSystem")
+        if event.get("CarrierType") == "SquadronCarrier":
+            sc = dict(engine.state.squadron_carrier or {})
+            sc["market_id"] = carrier_id or sc.get("market_id")
+            if isinstance(system, str) and system:
+                sc["current_system"] = system
+            engine.state.squadron_carrier = sc
+            return True
+        if not _owned_id_matches(engine, carrier_id):
+            return True
+        engine.state.carrier_market_id = carrier_id or engine.state.carrier_market_id
+        if isinstance(system, str) and system:
+            engine.state.carrier_current_system = system
+        return True
+
     elif name == "CarrierJumpRequest":
         carrier_id = event.get("CarrierID")
         squadron_carrier = engine.state.squadron_carrier
