@@ -1126,6 +1126,25 @@ class EventEngine:
 
         elif name == "SAAScanComplete":
             body = self._norm_text(event.get("BodyName"))
+
+            ring_match = _RING_NAME_RE.match(body) if body else None
+            if ring_match:
+                # Confirmed via real journal data: SAASignalsFound only
+                # fires when there's at least one signal to report — a ring
+                # that's genuinely, fully probed but has zero hotspots gets
+                # ONLY this event, never SAASignalsFound. Without handling
+                # it here too, such a ring would show as "missing hotspot
+                # data" forever despite having already been correctly
+                # scanned to completion.
+                rec = self.state.rings.get(body, {})
+                rec.setdefault("system_address", self.state.system_address)
+                rec.setdefault("parent_body", ring_match.group(1))
+                rec.setdefault("ring_class", "")
+                rec.setdefault("distance_ls", None)
+                rec.setdefault("hotspots", [])
+                rec["scanned"] = True
+                self.state.rings[body] = rec
+
             if body and body in self.state.bodies:
                 rec = self.state.bodies[body]
                 rec["DSSMapped"] = True

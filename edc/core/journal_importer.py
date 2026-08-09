@@ -580,6 +580,23 @@ class JournalImporter:
         if not body_name:
             return
 
+        if RING_NAME_RE.match(body_name):
+            # Confirmed via real journal data: SAASignalsFound only fires
+            # when there's at least one hotspot to report — a ring that's
+            # fully probed with zero hotspots gets ONLY this event. Safe to
+            # call with hotspots=None regardless: save_ring() never
+            # clobbers existing hotspot data with an empty result.
+            self.repo.save_ring(
+                system_address=system_address,
+                ring_name=body_name,
+                parent_body=parent_body_from_ring_name(body_name),
+                ring_class=None,
+                distance_ls=None,
+                scanned=True,
+                hotspots=None,
+            )
+            return
+
         cached = self.bodies_by_name.get(body_name)
         if cached is None or not isinstance(cached.body_id, int) or cached.body_id < 0:
             return

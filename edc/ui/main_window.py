@@ -1706,10 +1706,15 @@ class MainWindow(QMainWindow):
 
         # Refresh exploration panel when signal or scan data arrives
         if name in ("FSSSignalDiscovered", "FSSDiscoveryScan", "SAASignalsFound",
-                    "Scan", "FSSBodySignals"):
+                    "Scan", "FSSBodySignals", "SAAScanComplete"):
             self._refresh_exploration()
 
-        if name in ("Scan", "SAASignalsFound"):
+        # SAAScanComplete without a matching SAASignalsFound means a ring
+        # was fully probed and found to have zero hotspots (confirmed via
+        # real journal data — SAASignalsFound only fires when there's at
+        # least one signal to report) — must persist that too, or the ring
+        # reverts to "not scanned" on the next restart.
+        if name in ("Scan", "SAASignalsFound", "SAAScanComplete"):
             self._save_ring_data()
 
         # Refresh intel panel when signal data, DSS scan, or a fresh BGS
