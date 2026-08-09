@@ -5,13 +5,13 @@ import logging
 import re
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QObject, QThread, QStringListModel, pyqtSignal
+from PyQt6.QtCore import Qt, QObject, QThread, QStringListModel, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QApplication,
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QSpinBox, QComboBox, QCompleter, QTableWidget, QTableWidgetItem,
-    QHeaderView, QFrame, QDialog, QSizePolicy, QCheckBox, QProgressBar,
+    QHeaderView, QFrame, QDialog, QSizePolicy, QCheckBox,
 )
 
 from edc.core.station_pads import pad_size_hint
@@ -236,6 +236,50 @@ class _NearSystemCoordsWorker(QObject):
             finally:
                 db.close()
         self.finished.emit(coords, self._system_name)
+
+
+class _BusySpinner(QLabel):
+    """
+    Small floating 'busy' indicator — cycles through braille spinner glyphs
+    on a timer, no image assets or custom painting needed. Not placed in
+    any layout; floats via manual positioning over whatever widget it's
+    given, as a sibling (same parent) so their geometries share one
+    coordinate space. Repositions on start(); doesn't track the parent
+    resizing mid-spin (a live search is brief enough that this is a
+    non-issue in practice).
+    """
+    _FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+    _SIZE = 32
+
+    def __init__(self, parent: QWidget):
+        super().__init__(parent)
+        self._frame_index = 0
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setStyleSheet("color:#FFB347; font-size:20px; background:transparent;")
+        self.resize(self._SIZE, self._SIZE)
+        self._timer = QTimer(self)
+        self._timer.setInterval(80)
+        self._timer.timeout.connect(self._tick)
+        self.hide()
+
+    def _tick(self) -> None:
+        self._frame_index = (self._frame_index + 1) % len(self._FRAMES)
+        self.setText(self._FRAMES[self._frame_index])
+
+    def start_over(self, target: QWidget) -> None:
+        """Shows the spinner centered over `target` (must share this
+        spinner's parent widget, so their .geometry() coordinates line up)."""
+        center = target.geometry().center()
+        self.move(center.x() - self._SIZE // 2, center.y() - self._SIZE // 2)
+        self._frame_index = 0
+        self.setText(self._FRAMES[0])
+        self.show()
+        self.raise_()
+        self._timer.start()
+
+    def stop(self) -> None:
+        self._timer.stop()
+        self.hide()
 
 
 class MarketPanel(QWidget):
@@ -546,19 +590,10 @@ class MarketPanel(QWidget):
         self._trade_table.setMaximumHeight(260)
         root.addWidget(self._trade_table)
 
-        # Indeterminate (range 0,0) — Qt's built-in "busy" animation, no
-        # custom drawing needed. Swaps in for the table while the
-        # background search runs instead of showing a stale/empty table.
-        self._trade_loading_bar = QProgressBar()
-        self._trade_loading_bar.setRange(0, 0)
-        self._trade_loading_bar.setTextVisible(False)
-        self._trade_loading_bar.setFixedHeight(6)
-        self._trade_loading_bar.setStyleSheet(
-            "QProgressBar { background:#0a1520; border:1px solid #1e3a5a; border-radius:3px; }"
-            "QProgressBar::chunk { background:#FFB347; }"
-        )
-        self._trade_loading_bar.setVisible(False)
-        root.addWidget(self._trade_loading_bar)
+        # Floats over the table (kept empty, not hidden, while loading, so
+        # the spinner has a stable target geometry to center itself on) —
+        # not placed in the layout itself, see _BusySpinner.
+        self._trade_loading_spinner = _BusySpinner(self)
 
         # ── Status + results ────────────────────────────────────────────
         self._status_label = QLabel("Enter a commodity and press Search.")
@@ -725,7 +760,7 @@ class MarketPanel(QWidget):
             self._trade_hdr.setVisible(False)
             self._trade_status_label.setVisible(False)
             self._trade_table.setVisible(False)
-            self._trade_loading_bar.setVisible(False)
+            self._trade_loading_spinner.stop()
             self._trade_refresh_btn.setVisible(False)
             self._trade_table.setRowCount(0)
             self._last_market_id_computed = None
@@ -744,10 +779,14 @@ class MarketPanel(QWidget):
         self._trade_hdr.setVisible(True)
         self._trade_status_label.setVisible(True)
         self._trade_status_label.setText(f"Checking {station or 'current station'}'s commodities…")
-        self._trade_table.setVisible(False)
-        self._trade_loading_bar.setVisible(True)
+        # Left visible but emptied (not hidden) — a hidden widget's layout
+        # space collapses, which would leave the spinner nothing stable to
+        # center itself on.
+        self._trade_table.setVisible(True)
+        self._trade_table.setRowCount(0)
         self._trade_refresh_btn.setVisible(True)
         self._trade_refresh_btn.setEnabled(False)
+        self._trade_loading_spinner.start_over(self._trade_table)
 
         self._last_market_id_computed = market_id
         self._trade_worker = _TradeOpportunityWorker(
@@ -792,7 +831,7 @@ class MarketPanel(QWidget):
             f"{station or 'Current station'}: {len(opportunities)} profitable "
             f"destination{'s' if len(opportunities) != 1 else ''} found.{excluded_note}"
         )
-        self._trade_loading_bar.setVisible(False)
+        self._trade_loading_spinner.stop()
         self._trade_table.setVisible(True)
 
         self._trade_table.setSortingEnabled(False)
