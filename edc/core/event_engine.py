@@ -710,6 +710,9 @@ class EventEngine:
             # enemy-contact alerts with "you have no weapons fitted" when
             # relevant (e.g. flying an unarmed hauler/explorer).
             self.state.ship_has_weapons = has_any_weapon(event.get("Modules"))
+            cargo_cap = event.get("CargoCapacity")
+            if isinstance(cargo_cap, int):
+                self.state.cargo_capacity = cargo_cap
 
         elif name == "Powerplay":
             self.state.pp_power = event.get("Power")

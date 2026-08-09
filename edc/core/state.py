@@ -31,6 +31,9 @@ class GameState:
     # assumed False by default, since "unknown" and "confirmed unarmed" are
     # different things for the enemy-alert caveat that reads this.
     ship_has_weapons: Optional[bool] = None
+    # From Loadout's CargoCapacity — always reflects the ship currently
+    # being flown, for the Trade Route Loop Planner's profit-per-loop math.
+    cargo_capacity: Optional[int] = None
     system_powerplay_conflict_progress: Dict[str, float] = field(default_factory=dict)
     system_conflicts: List[dict] = field(default_factory=list)
     system_powerplay_control_progress: Optional[float] = None

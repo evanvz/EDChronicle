@@ -1336,6 +1336,73 @@ class Repository:
         results.sort(key=lambda r: (not r["pad_known"], r["buy_price"]))
         return results
 
+    def get_market_snapshot_in_radius(self, x: float, y: float, z: float, radius_ly: float) -> dict[int, dict]:
+        """
+        Every station's full buy/sell commodity list within radius_ly, in
+        one query — for the Trade Route Loop Planner, which needs to pair
+        stations up (does A sell what B buys, and vice versa) rather than
+        look up one commodity at a time. One query beats N here for the
+        same reason search_market_prices_multi beat looping
+        search_market_prices per commodity for Trade Opportunities.
+
+        Returns {market_id: {"station_name", "system_name", "pad_size",
+        "controlling_faction", "x", "y", "z", "distance_ly",
+        "sells": {commodity: (sell_price, demand)},
+        "buys": {commodity: (buy_price, stock)}}} — station metadata
+        repeated per row collapses to one entry per market_id.
+        """
+        coords_by_system = self._nearby_system_coords(x, y, z, radius_ly)
+        if not coords_by_system:
+            return {}
+
+        placeholders = ",".join("?" for _ in coords_by_system)
+        rows = self.db.conn.execute(
+            f"""
+            SELECT m.market_id, m.station_name, m.station_type, m.system_name,
+                   m.commodity_name, m.sell_price, m.demand, m.buy_price, m.stock,
+                   si.pads_small, si.pads_medium, si.pads_large, si.station_faction
+            FROM market_prices m
+            LEFT JOIN station_info si ON si.market_id = m.market_id
+            WHERE (m.sell_price IS NOT NULL OR (m.buy_price IS NOT NULL AND m.buy_price > 0))
+                  AND (m.station_type IS NULL OR m.station_type != 'FleetCarrier')
+                  AND m.last_updated >= ?
+                  AND m.system_name IN ({placeholders})
+            """,
+            (_market_data_cutoff(), *coords_by_system.keys()),
+        ).fetchall()
+
+        stations: dict[int, dict] = {}
+        for r in rows:
+            rx, ry, rz = coords_by_system[r["system_name"]]
+            dist = ((rx - x) ** 2 + (ry - y) ** 2 + (rz - z) ** 2) ** 0.5
+            if dist > radius_ly:
+                continue
+
+            market_id = r["market_id"]
+            station = stations.get(market_id)
+            if station is None:
+                pad = effective_pad_size(
+                    r["station_type"], r["pads_small"], r["pads_medium"], r["pads_large"]
+                )
+                station = {
+                    "station_name": r["station_name"],
+                    "system_name": r["system_name"],
+                    "pad_size": pad,
+                    "controlling_faction": r["station_faction"],
+                    "x": rx, "y": ry, "z": rz,
+                    "distance_ly": dist,
+                    "sells": {}, "buys": {},
+                }
+                stations[market_id] = station
+
+            commodity = r["commodity_name"]
+            if r["sell_price"] is not None:
+                station["sells"][commodity] = (r["sell_price"], r["demand"])
+            if r["buy_price"] is not None and r["buy_price"] > 0:
+                station["buys"][commodity] = (r["buy_price"], r["stock"])
+
+        return stations
+
     def add_colonisation_depot_manual(self, system_name: str, station_name: str) -> None:
         """Adds a squadron construction site to track before ever visiting
         it — no market_id yet, since that's only known once you actually

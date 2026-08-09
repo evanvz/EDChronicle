@@ -84,6 +84,7 @@ from edc.core.mission_scanner import scan_active_missions
 from edc.ui.panels.squadron_panel import SquadronPanel
 from edc.ui.panels.mining_panel import MiningPanel
 from edc.ui.panels.market_panel import MarketPanel, normalize_commodity_name
+from edc.ui.panels.trade_route_panel import TradeRoutePanel
 from edc.ui.panels.player_faction_panel import PlayerFactionPanel
 from edc.ui import formatting as fmt
 from edc.audio.tts_engine import TTSEngine
@@ -1044,6 +1045,7 @@ class MainWindow(QMainWindow):
 
         # Market tab
         self.market_panel = MarketPanel(self.repo, self.rare_commodities, edsm_powerplay=self.edsm_powerplay)
+        self.trade_route_panel = TradeRoutePanel(self.repo, edsm_powerplay=self.edsm_powerplay)
         self.mining_panel.sell_search_requested.connect(self._on_mining_sell_search_requested)
         self.market_panel.destination_selected.connect(self._on_market_destination_selected)
 
@@ -1228,6 +1230,7 @@ class MainWindow(QMainWindow):
             (self.player_faction_panel,  "Player Faction"),
             (self.powerplay_panel,       "PowerPlay"),
             (self.squadron_panel,        "Squadron"),
+            (self.trade_route_panel,     "Trade Routes"),
             (self.voice_commands_panel,  "Voice Cmds"),
         ]:
             self.stack.addWidget(widget)
@@ -3494,6 +3497,7 @@ class MainWindow(QMainWindow):
     def _refresh_market(self):
         radius = int(getattr(self.cfg, "market_search_radius_ly", 100) or 100)
         self.market_panel.refresh(self.state, radius)
+        self.trade_route_panel.refresh(self.state)
 
     def _refresh_player_faction(self):
         self.player_faction_panel.refresh(self.state)
