@@ -1481,6 +1481,12 @@ class EventEngine:
                 rec["scanned"] = True
                 rec["hotspots"] = parse_ring_hotspots(event.get("Signals"))
                 self.state.rings[body] = rec
+                # Not a planetary body — skip the bio/geo/human bucket parsing
+                # and state.bodies record creation below (journal_importer.py's
+                # equivalent already does this; confirmed live this was
+                # missing here, inflating the Exploration tab's "detailed"
+                # body count with ring names, e.g. 14 vs a real total of 10).
+                return self.state, msgs
 
             body_id = event.get("BodyID")
             if isinstance(body_id, int):

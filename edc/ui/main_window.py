@@ -3054,8 +3054,12 @@ class MainWindow(QMainWindow):
         try:
             total = getattr(self.state, "system_body_count", None)
             resolved = len(getattr(self.state, "resolved_body_ids", set()) or set())
-            fss_complete = getattr(self.state, "fss_complete", False)
-            if isinstance(total, int) and not fss_complete and total > resolved:
+            # fss_complete tracks FSSDiscoveryScan's own Progress field (the
+            # honk's scan-progress %, often 1.0 immediately) — not whether
+            # every body has been individually resolved. Gating on it here
+            # let it suppress this warning while bodies were still unresolved
+            # (confirmed live: 8/10 resolved, fss_complete already True).
+            if isinstance(total, int) and total > resolved:
                 remaining = total - resolved
                 lines.append(f"🔎 Action: {remaining} bodies unresolved (FSS)")
         except Exception:

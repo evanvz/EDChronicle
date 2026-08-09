@@ -1,6 +1,8 @@
 from __future__ import annotations
 from typing import Any, Dict, List
 
+from edc.core.ring_signals import RING_NAME_RE
+
 def _pretty_token(v: Any) -> Any:
     """
     Convert Frontier internal tokens like '$economy_Extraction;' into 'Extraction'.
@@ -225,7 +227,13 @@ def handle(engine, name: str | None, event: Dict[str, Any], msgs: List[str]) -> 
     elif name == "SAAScanComplete":
         # Mark DSS complete
         body = event.get("BodyName")
-        if isinstance(body, str) and body.strip():
+        if isinstance(body, str) and body.strip() and not RING_NAME_RE.match(body.strip()):
+            # Rings are tracked in state.rings (see event_engine.py's own
+            # SAAScanComplete handling), not state.bodies — this handler
+            # runs unconditionally alongside that one for every event, so
+            # without this check a ring got a bogus "planet" record here
+            # too, confirmed live: inflated the Exploration tab's body
+            # count with ring names (e.g. 14 detailed vs a real total of 10).
             rec = engine.state.bodies.get(body) or {}
             rec["SAAScanComplete"] = True
             engine.state.bodies[body] = rec
