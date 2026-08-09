@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
 
 from edc.core.spansh_client import SpanshClient, MiningRingResult
 from edc.core.station_pads import pad_size_hint
+from edc.ui.busy_spinner import BusySpinner
 from edc.ui.panels.market_panel import normalize_commodity_name, _NumericTableWidgetItem
 
 log = logging.getLogger(__name__)
@@ -226,6 +227,7 @@ class MiningPanel(QWidget):
         cargo_layout.addWidget(self._cargo_market_table)
 
         root.addWidget(cargo_frame)
+        self._cargo_loading_spinner = BusySpinner(self)
 
         # ── Ring finder card ──────────────────────────────────────────────
         finder_frame = QFrame()
@@ -335,6 +337,7 @@ class MiningPanel(QWidget):
         self._table.setToolTip("Click the System or Body cell to copy its name to the clipboard.")
         self._table.cellClicked.connect(self._on_ring_cell_clicked)
         root.addWidget(self._table, 1)
+        self._ring_loading_spinner = BusySpinner(self)
 
     # ── Public API ────────────────────────────────────────────────────────
 
@@ -456,6 +459,8 @@ class MiningPanel(QWidget):
         # for 30-60s with a mixed cargo hold, before this fix).
         self._cargo_search_btn.setEnabled(False)
         self._cargo_status_label.setText(f"Searching markets for {len(qty_by_commodity)} commodities…")
+        self._cargo_market_table.setRowCount(0)
+        self._cargo_loading_spinner.start_over(self._cargo_market_table)
         self._cargo_worker = _CargoMarketSearchWorker(
             self._repo.db.db_path, qty_by_commodity, display_by_commodity,
             self._ref_x, self._ref_y, self._ref_z, self._market_radius_ly, self._current_market_id,
@@ -469,6 +474,7 @@ class MiningPanel(QWidget):
 
     def _on_cargo_search_finished(self, rows: list, commodity_count: int) -> None:
         self._cargo_search_btn.setEnabled(bool(self._system) and bool(self._cargo_inventory))
+        self._cargo_loading_spinner.stop()
         self._cargo_rows_raw = rows
         self._cargo_commodity_count = commodity_count
         self._render_cargo_markets()
@@ -549,6 +555,7 @@ class MiningPanel(QWidget):
         self._search_btn.setEnabled(False)
         self._status_label.setText(f"Searching for {material} hotspots…")
         self._table.setRowCount(0)
+        self._ring_loading_spinner.start_over(self._table)
 
         self._worker = _RingSearchWorker(
             material=material,
@@ -564,6 +571,7 @@ class MiningPanel(QWidget):
 
     def _on_results(self, results: List[MiningRingResult], error: str):
         self._search_btn.setEnabled(True)
+        self._ring_loading_spinner.stop()
         if error:
             self._status_label.setText(f"Error: {error}")
             return

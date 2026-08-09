@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
 
 from edc.core.spansh_client import SpanshClient, SpanshSystem
 from edc.core.powerplay_activities import PowerPlayActivityTable
+from edc.ui.busy_spinner import BusySpinner
 
 log = logging.getLogger(__name__)
 
@@ -292,6 +293,7 @@ class PowerplayFinderPanel(QWidget):
         h.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         self._table.cellDoubleClicked.connect(self._copy_system_name)
         root.addWidget(self._table, 1)
+        self._loading_spinner = BusySpinner(self)
 
         copy_hint = QLabel("Double-click a row to copy system name to clipboard.")
         copy_hint.setStyleSheet("color:#555555; font-size:11px; background:transparent;")
@@ -392,6 +394,7 @@ class PowerplayFinderPanel(QWidget):
         self._search_btn.setEnabled(False)
         self._status_label.setText("Searching Spansh…")
         self._table.setRowCount(0)
+        self._loading_spinner.start_over(self._table)
 
         self._worker = _SearchWorker(
             power=self._power,
@@ -413,6 +416,7 @@ class PowerplayFinderPanel(QWidget):
     def _on_results(self, results: List[SpanshSystem], error: str):
         from PyQt6.QtGui import QColor
         self._search_btn.setEnabled(True)
+        self._loading_spinner.stop()
         if error:
             self._status_label.setText(f"Error: {error}")
             return
