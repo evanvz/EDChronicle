@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
     QApplication,
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QSpinBox, QComboBox, QCompleter, QTableWidget, QTableWidgetItem,
-    QHeaderView, QFrame, QDialog, QSizePolicy, QCheckBox,
+    QHeaderView, QFrame, QDialog, QSizePolicy, QCheckBox, QProgressBar,
 )
 
 from edc.core.station_pads import pad_size_hint
@@ -391,6 +391,7 @@ class MarketPanel(QWidget):
             "yours (from EDSM's daily PowerPlay dump — systems with no known "
             "PowerPlay presence are left in, not treated as enemy)."
         )
+        self._exclude_enemy_pp_check.setChecked(True)
         self._exclude_enemy_pp_check.toggled.connect(self._on_exclude_enemy_pp_toggled)
 
         range_label = QLabel("Range:")
@@ -544,6 +545,20 @@ class MarketPanel(QWidget):
         self._trade_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
         self._trade_table.setMaximumHeight(260)
         root.addWidget(self._trade_table)
+
+        # Indeterminate (range 0,0) — Qt's built-in "busy" animation, no
+        # custom drawing needed. Swaps in for the table while the
+        # background search runs instead of showing a stale/empty table.
+        self._trade_loading_bar = QProgressBar()
+        self._trade_loading_bar.setRange(0, 0)
+        self._trade_loading_bar.setTextVisible(False)
+        self._trade_loading_bar.setFixedHeight(6)
+        self._trade_loading_bar.setStyleSheet(
+            "QProgressBar { background:#0a1520; border:1px solid #1e3a5a; border-radius:3px; }"
+            "QProgressBar::chunk { background:#FFB347; }"
+        )
+        self._trade_loading_bar.setVisible(False)
+        root.addWidget(self._trade_loading_bar)
 
         # ── Status + results ────────────────────────────────────────────
         self._status_label = QLabel("Enter a commodity and press Search.")
@@ -710,6 +725,7 @@ class MarketPanel(QWidget):
             self._trade_hdr.setVisible(False)
             self._trade_status_label.setVisible(False)
             self._trade_table.setVisible(False)
+            self._trade_loading_bar.setVisible(False)
             self._trade_refresh_btn.setVisible(False)
             self._trade_table.setRowCount(0)
             self._last_market_id_computed = None
@@ -728,7 +744,8 @@ class MarketPanel(QWidget):
         self._trade_hdr.setVisible(True)
         self._trade_status_label.setVisible(True)
         self._trade_status_label.setText(f"Checking {station or 'current station'}'s commodities…")
-        self._trade_table.setVisible(True)
+        self._trade_table.setVisible(False)
+        self._trade_loading_bar.setVisible(True)
         self._trade_refresh_btn.setVisible(True)
         self._trade_refresh_btn.setEnabled(False)
 
@@ -775,6 +792,8 @@ class MarketPanel(QWidget):
             f"{station or 'Current station'}: {len(opportunities)} profitable "
             f"destination{'s' if len(opportunities) != 1 else ''} found.{excluded_note}"
         )
+        self._trade_loading_bar.setVisible(False)
+        self._trade_table.setVisible(True)
 
         self._trade_table.setSortingEnabled(False)
         self._trade_table.setRowCount(len(opportunities))
