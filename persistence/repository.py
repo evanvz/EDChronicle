@@ -1310,6 +1310,82 @@ class Repository:
         results.sort(key=lambda r: (not r["pad_known"], r["buy_price"]))
         return results
 
+    def add_colonisation_depot_manual(self, system_name: str, station_name: str) -> None:
+        """Adds a squadron construction site to track before ever visiting
+        it — no market_id yet, since that's only known once you actually
+        dock there. No-op if this system+station is already tracked."""
+        system_name = (system_name or "").strip()
+        station_name = (station_name or "").strip()
+        if not system_name or not station_name:
+            return
+        existing = self.db.conn.execute(
+            "SELECT id FROM colonisation_depots WHERE LOWER(system_name) = ? AND LOWER(station_name) = ?",
+            (system_name.lower(), station_name.lower()),
+        ).fetchone()
+        if existing:
+            return
+        self.db.conn.execute(
+            "INSERT INTO colonisation_depots (system_name, station_name, complete) VALUES (?, ?, 0)",
+            (system_name, station_name),
+        )
+        self.db.conn.commit()
+
+    def save_colonisation_depot_visit(
+        self, market_id: int, system_address, system_name: str, station_name: str,
+        progress, complete: bool, resources_json: str, timestamp: str,
+    ) -> None:
+        """Upserts real visit data — matches an existing row by market_id
+        first (a revisit), then by system+station name for a manually-added
+        row not yet visited (fills in the real market_id), else inserts a
+        new row (a depot found by visiting, never manually added first)."""
+        row = self.db.conn.execute(
+            "SELECT id FROM colonisation_depots WHERE market_id = ?", (market_id,)
+        ).fetchone()
+        if row is None:
+            row = self.db.conn.execute(
+                "SELECT id FROM colonisation_depots WHERE market_id IS NULL "
+                "AND LOWER(system_name) = ? AND LOWER(station_name) = ?",
+                (system_name.strip().lower(), station_name.strip().lower()),
+            ).fetchone()
+
+        if row is not None:
+            self.db.conn.execute(
+                """UPDATE colonisation_depots SET
+                       market_id = ?, system_address = ?, system_name = ?, station_name = ?,
+                       progress = ?, complete = ?, resources = ?, last_updated = ?
+                   WHERE id = ?""",
+                (market_id, system_address, system_name, station_name,
+                 progress, int(bool(complete)), resources_json, timestamp, row["id"]),
+            )
+        else:
+            self.db.conn.execute(
+                """INSERT INTO colonisation_depots
+                       (market_id, system_address, system_name, station_name,
+                        progress, complete, resources, last_updated)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (market_id, system_address, system_name, station_name,
+                 progress, int(bool(complete)), resources_json, timestamp),
+            )
+        self.db.conn.commit()
+
+    def get_colonisation_depots(self) -> list[dict]:
+        rows = self.db.conn.execute(
+            "SELECT * FROM colonisation_depots ORDER BY system_name, station_name"
+        ).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            try:
+                d["resources"] = json.loads(d["resources"]) if d.get("resources") else []
+            except Exception:
+                d["resources"] = []
+            out.append(d)
+        return out
+
+    def remove_colonisation_depot(self, depot_id: int) -> None:
+        self.db.conn.execute("DELETE FROM colonisation_depots WHERE id = ?", (depot_id,))
+        self.db.conn.commit()
+
     def get_faction_history(self, system_address: int) -> list[dict]:
         rows = self.db.execute(
             """

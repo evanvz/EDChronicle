@@ -731,8 +731,14 @@ class MarketPanel(QWidget):
         if item and item.text():
             QApplication.clipboard().setText(item.text())
 
-    def search_for(self, commodity_display_name: str) -> None:
-        """External entry point (e.g. from the Mining tab) to search a specific commodity."""
+    def search_for(self, commodity_display_name: str, mode: str | None = None) -> None:
+        """External entry point (e.g. from the Mining or Squadron tab) to
+        search a specific commodity. mode="buy"/"sell" switches the search
+        direction first; omitted leaves whatever was last selected."""
+        if mode in ("buy", "sell"):
+            idx = self._mode_combo.findData(mode)
+            if idx >= 0:
+                self._mode_combo.setCurrentIndex(idx)
         self._commodity_edit.setText(commodity_display_name)
         self._start_search()
 

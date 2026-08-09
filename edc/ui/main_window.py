@@ -311,6 +311,50 @@ class MainWindow(QMainWindow):
         except Exception:
             log.exception("Failed to save station info")
 
+    def _save_colonisation_depot(self, evt: dict):
+        """
+        ColonisationConstructionDepot only fires in our own journal when we
+        personally dock at the depot and open its contribution screen — no
+        EDDN schema exists for this (confirmed against EDCD/EDDN's schema
+        repo), so it can't be crowdsourced like market/station data. The
+        event itself carries no system/station name, only MarketID — pulled
+        from current state instead, same as the Market event's own handling.
+        """
+        market_id = evt.get("MarketID")
+        if not isinstance(market_id, int):
+            return
+        system_name = getattr(self.state, "system", None) or ""
+        station_name = getattr(self.state, "current_market_station", None) or ""
+        if not system_name or not station_name:
+            return
+        system_address = getattr(self.state, "system_address", None)
+
+        resources = []
+        for r in (evt.get("ResourcesRequired") or []):
+            if not isinstance(r, dict):
+                continue
+            resources.append({
+                "name": r.get("Name_Localised") or r.get("Name") or "",
+                "required": r.get("RequiredAmount"),
+                "provided": r.get("ProvidedAmount"),
+                "payment": r.get("Payment"),
+            })
+
+        from datetime import datetime, timezone
+        try:
+            self.repo.save_colonisation_depot_visit(
+                market_id=market_id,
+                system_address=system_address,
+                system_name=system_name,
+                station_name=station_name,
+                progress=evt.get("ConstructionProgress"),
+                complete=bool(evt.get("ConstructionComplete")),
+                resources_json=json.dumps(resources),
+                timestamp=evt.get("timestamp") or datetime.now(timezone.utc).isoformat(),
+            )
+        except Exception:
+            log.exception("Failed to save colonisation depot data")
+
     def _on_market_destination_selected(self, system_name: str, station_name: str, commodity: str, mode: str):
         """
         Market tab — clicking a Station/System cell in the results table
@@ -898,6 +942,7 @@ class MainWindow(QMainWindow):
 
         # Squadron tab
         self.squadron_panel = SquadronPanel(self.repo)
+        self.squadron_panel.buy_search_requested.connect(self._on_squadron_buy_search_requested)
 
         # Combat tab (stub)
         self.combat_panel = CombatPanel()
@@ -1557,6 +1602,10 @@ class MainWindow(QMainWindow):
         if name == "Docked":
             self._save_station_info(evt)
             self._maybe_clear_pinned_destination(evt.get("StationName"))
+
+        if name == "ColonisationConstructionDepot":
+            self._save_colonisation_depot(evt)
+            self._refresh_squadron()
 
         if name == "Market":
             self._load_current_market()
@@ -3247,6 +3296,10 @@ class MainWindow(QMainWindow):
     def _on_mining_sell_search_requested(self, commodity_name: str):
         self.sidebar.setCurrentRow(self._market_tab_row)
         self.market_panel.search_for(commodity_name)
+
+    def _on_squadron_buy_search_requested(self, commodity_name: str):
+        self.sidebar.setCurrentRow(self._market_tab_row)
+        self.market_panel.search_for(commodity_name, mode="buy")
 
     def _refresh_intel(self):
         system_address = getattr(self.state, "system_address", None)

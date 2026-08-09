@@ -51,7 +51,7 @@ class FleetCarrierPanel(QWidget):
         row1 = QHBoxLayout()
         self._location_label = QLabel("Location: —")
         self._location_label.setStyleSheet(self._LABEL_STYLE)
-        self._fuel_label = QLabel("Fuel: —")
+        self._fuel_label = QLabel("Fuel (Tritium): —")
         self._fuel_label.setStyleSheet(self._LABEL_STYLE)
         self._docking_label = QLabel("Docking: —")
         self._docking_label.setStyleSheet(self._LABEL_STYLE)
@@ -115,7 +115,7 @@ class FleetCarrierPanel(QWidget):
         squad_row1 = QHBoxLayout()
         self._squad_location_label = QLabel("Location: —")
         self._squad_location_label.setStyleSheet(self._LABEL_STYLE)
-        self._squad_fuel_label = QLabel("Fuel: —")
+        self._squad_fuel_label = QLabel("Fuel (Tritium): —")
         self._squad_fuel_label.setStyleSheet(self._LABEL_STYLE)
         self._squad_docking_label = QLabel("Docking: —")
         self._squad_docking_label.setStyleSheet(self._LABEL_STYLE)
@@ -167,6 +167,18 @@ class FleetCarrierPanel(QWidget):
         h.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         root.addWidget(self._orders_table, 1)
 
+    # Real max Fleet Carrier fuel capacity — carriers run purely on Tritium,
+    # capped at 1000t, so a bare tonnage number doesn't convey how close to
+    # empty (or how full) that actually is.
+    _MAX_FUEL_T = 1000
+
+    def _fuel_text_and_color(self, fuel) -> tuple[str, str]:
+        if not isinstance(fuel, int):
+            return "Fuel (Tritium): —", ""
+        pct = fuel / self._MAX_FUEL_T * 100
+        color = "#FF6B6B" if pct < 20 else ("#FFD93D" if pct < 50 else "#6BCB77")
+        return f"Fuel (Tritium): {fuel:,} / {self._MAX_FUEL_T:,} t ({pct:.0f}%)", color
+
     def refresh(self, state) -> None:
         self._refresh_squadron_carrier(state)
 
@@ -174,7 +186,7 @@ class FleetCarrierPanel(QWidget):
         if not callsign:
             self._name_label.setText("No fleet carrier detected.")
             self._location_label.setText("Location: —")
-            self._fuel_label.setText("Fuel: —")
+            self._fuel_label.setText("Fuel (Tritium): —")
             self._docking_label.setText("Docking: —")
             self._jump_range_label.setText("Jump range: —")
             self._space_label.setText("Free space: —")
@@ -190,7 +202,9 @@ class FleetCarrierPanel(QWidget):
         self._location_label.setText(f"Location: {location}")
 
         fuel = getattr(state, "carrier_fuel_level", None)
-        self._fuel_label.setText(f"Fuel: {fuel} t" if isinstance(fuel, int) else "Fuel: —")
+        text, color = self._fuel_text_and_color(fuel)
+        self._fuel_label.setText(text)
+        self._fuel_label.setStyleSheet(self._LABEL_STYLE + f" color:{color};" if color else self._LABEL_STYLE)
 
         docking = getattr(state, "carrier_docking_access", None) or "—"
         self._docking_label.setText(f"Docking: {docking.title() if isinstance(docking, str) else docking}")
@@ -252,7 +266,7 @@ class FleetCarrierPanel(QWidget):
         if not isinstance(sc, dict) or not sc.get("callsign"):
             self._squad_name_label.setText("No squadron carrier data recorded yet.")
             self._squad_location_label.setText("Location: —")
-            self._squad_fuel_label.setText("Fuel: —")
+            self._squad_fuel_label.setText("Fuel (Tritium): —")
             self._squad_docking_label.setText("Docking: —")
             self._squad_jump_range_label.setText("Jump range: —")
             self._squad_space_label.setText("Free space: —")
@@ -267,7 +281,9 @@ class FleetCarrierPanel(QWidget):
         self._squad_location_label.setText(f"Location: {location}")
 
         fuel = sc.get("fuel_level")
-        self._squad_fuel_label.setText(f"Fuel: {fuel} t" if isinstance(fuel, int) else "Fuel: —")
+        text, color = self._fuel_text_and_color(fuel)
+        self._squad_fuel_label.setText(text)
+        self._squad_fuel_label.setStyleSheet(self._LABEL_STYLE + f" color:{color};" if color else self._LABEL_STYLE)
 
         docking = sc.get("docking_access") or "—"
         self._squad_docking_label.setText(f"Docking: {docking.title() if isinstance(docking, str) else docking}")

@@ -151,6 +151,24 @@ class Database:
                 last_seen       TEXT    NOT NULL,
                 PRIMARY KEY (system_address, body_id)
             )""",
+            # ColonisationConstructionDepot only ever fires in your own
+            # journal when you personally dock at the depot — no EDDN schema
+            # exists for it (confirmed against EDCD/EDDN's schema repo), so
+            # this can't be crowdsourced. market_id is nullable to support
+            # manually adding a squadron site before ever visiting it; once
+            # visited, that row is matched by system+station name and
+            # updated in place with the real market_id and progress data.
+            """CREATE TABLE IF NOT EXISTS colonisation_depots (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                market_id      INTEGER,
+                system_address INTEGER,
+                system_name    TEXT NOT NULL,
+                station_name   TEXT NOT NULL,
+                progress       REAL,
+                complete       INTEGER DEFAULT 0,
+                resources      TEXT,
+                last_updated   TEXT
+            )""",
         ]
         for sql in migrations:
             try:
