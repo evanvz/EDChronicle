@@ -232,6 +232,7 @@ class MarketPanel(QWidget):
         self._last_market_id_computed: Optional[int] = None
         self._last_results: Optional[list] = None
         self._last_search_desc = ("", 0, False)
+        self._last_near_label: Optional[str] = None
         self._last_state = None
         self._last_radius_ly: int = 100
 
@@ -330,6 +331,13 @@ class MarketPanel(QWidget):
         self._commodity_edit.setCompleter(self._commodity_completer)
         self.refresh_commodity_names()
 
+        near_label = QLabel("Near:")
+        near_label.setStyleSheet(_LABEL_STYLE)
+        self._near_edit = QLineEdit()
+        self._near_edit.setPlaceholderText("Optional — system name, e.g. a delivery destination. Blank = current location.")
+        self._near_edit.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
+        self._near_edit.returnPressed.connect(self._start_search)
+
         range_label = QLabel("Range:")
         range_label.setStyleSheet(_LABEL_STYLE)
         self._range_spin = QSpinBox()
@@ -364,6 +372,12 @@ class MarketPanel(QWidget):
         row.addWidget(self._pad_filter_combo)
         row.addWidget(self._search_btn)
         search_layout.addLayout(row)
+
+        near_row = QHBoxLayout()
+        near_row.setSpacing(8)
+        near_row.addWidget(near_label)
+        near_row.addWidget(self._near_edit, 1)
+        search_layout.addLayout(near_row)
 
         service_row = QHBoxLayout()
         service_row.setSpacing(4)
@@ -791,11 +805,28 @@ class MarketPanel(QWidget):
         radius = self._range_spin.value()
         buy_mode = self._mode() == "buy"
 
+        ref_x, ref_y, ref_z = self._ref_x, self._ref_y, self._ref_z
+        near_name = self._near_edit.text().strip()
+        near_label = self._system
+        if near_name:
+            coords = self._repo.get_system_coords_for_names([near_name])
+            found = coords.get(near_name)
+            if not found:
+                self._status_label.setText(
+                    f"Unknown system \"{near_name}\" — no coordinates on file yet "
+                    "(needs to have been reported via EDDN by someone). Check spelling/"
+                    "capitalization, or leave blank to search near your current location."
+                )
+                return
+            ref_x, ref_y, ref_z = found
+            near_label = near_name
+
+        self._last_near_label = near_label
         self._search_btn.setEnabled(False)
-        self._status_label.setText(f"Searching for {raw}…")
+        self._status_label.setText(f"Searching for {raw} near {near_label}…")
 
         self._search_worker = _MarketSearchWorker(
-            self._repo.db.db_path, commodity, raw, self._ref_x, self._ref_y, self._ref_z, radius, buy_mode,
+            self._repo.db.db_path, commodity, raw, ref_x, ref_y, ref_z, radius, buy_mode,
         )
         self._search_thread = QThread()
         self._search_worker.moveToThread(self._search_thread)
@@ -829,9 +860,10 @@ class MarketPanel(QWidget):
             ]
 
         verb = "buying" if buy_mode else "selling"
+        near_label = self._last_near_label or self._system
         self._status_label.setText(
             f"Found {len(results)} station{'s' if len(results) != 1 else ''} "
-            f"{verb} {raw} within {radius} ly."
+            f"{verb} {raw} within {radius} ly of {near_label}."
         )
         self._table.setSortingEnabled(False)
         self._table.setRowCount(len(results))
