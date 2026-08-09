@@ -984,6 +984,19 @@ class MarketPanel(QWidget):
                 kept.append(r)
         return kept, excluded
 
+    def _cargo_qty_of(self, commodity_key: str) -> int:
+        """Current cargo hold quantity for a normalized commodity name —
+        used for the bulk-sale-price warning (selling past ~25% of a
+        station's demand tapers the price down for the excess)."""
+        cargo = getattr(self._last_state, "cargo_inventory", None) or []
+        total = 0
+        for c in cargo:
+            if not isinstance(c, dict):
+                continue
+            if normalize_commodity_name(c.get("Name") or "") == commodity_key:
+                total += int(c.get("Count") or 0)
+        return total
+
     def _render_results(self) -> None:
         results = self._last_results or []
         raw, radius, buy_mode = self._last_search_desc
@@ -1007,6 +1020,8 @@ class MarketPanel(QWidget):
             f"Found {len(results)} station{'s' if len(results) != 1 else ''} "
             f"{verb} {raw} within {radius} ly of {near_label}.{excluded_note}"
         )
+        cargo_qty = self._cargo_qty_of(normalize_commodity_name(raw)) if not buy_mode else 0
+
         self._table.setSortingEnabled(False)
         self._table.setRowCount(len(results))
         for row, r in enumerate(results):
@@ -1025,6 +1040,19 @@ class MarketPanel(QWidget):
             if pad_item.text() == "?":
                 pad_item.setForeground(QColor("#888888"))
                 pad_item.setToolTip("Landing pad size unknown for this station type")
+
+            # Selling more than ~25% of a station's demand tapers the price
+            # down per unit past that point (real game mechanic).
+            if not buy_mode and cargo_qty > 0 and count_value > 0 and cargo_qty > 0.25 * count_value:
+                warn = (
+                    f"Your {cargo_qty} in cargo is {cargo_qty / count_value * 100:.0f}% of the "
+                    f"{int(count_value)} demand here — expect a lower price than shown for the excess."
+                )
+                count_item.setForeground(QColor("#FF8C00"))
+                count_item.setToolTip(warn)
+                price_item.setForeground(QColor("#FF8C00"))
+                price_item.setToolTip(warn)
+
             for it in (pad_item, price_item, dist_item, count_item, updated_item):
                 it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 

@@ -520,6 +520,19 @@ class MiningPanel(QWidget):
             if pad_item.text() == "?":
                 pad_item.setForeground(QColor("#888888"))
                 pad_item.setToolTip("Landing pad size unknown for this station type")
+
+            # Selling more than ~25% of a station's demand tapers the price
+            # down per unit past that point (real game mechanic — a low-
+            # demand station makes this easy to hit with a full cargo hold
+            # of one commodity, which mining trips often are).
+            demand = r.get("demand")
+            if isinstance(demand, int) and demand > 0 and qty > 0.25 * demand:
+                warn = f"Selling {qty} here is {qty / demand * 100:.0f}% of the {demand} demand — expect a lower price than shown for the excess."
+                qty_item.setForeground(QColor("#FF8C00"))
+                qty_item.setToolTip(warn)
+                price_item.setForeground(QColor("#FF8C00"))
+                price_item.setToolTip(warn)
+
             for it in (qty_item, pad_item, price_item):
                 it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
