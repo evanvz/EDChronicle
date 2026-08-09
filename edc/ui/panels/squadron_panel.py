@@ -40,9 +40,23 @@ class _ColonisationDetailDialog(QDialog):
         self.resize(700, 420)
 
         layout = QVBoxLayout(self)
+        hdr_row = QHBoxLayout()
         hdr = QLabel(title)
         hdr.setStyleSheet("color:#FFB347; font-size:14px; font-weight:bold; background:transparent; border:none;")
-        layout.addWidget(hdr)
+        hdr_row.addWidget(hdr, 1)
+        copy_system_btn = QPushButton("Copy System")
+        copy_system_btn.setStyleSheet(_BTN_STYLE)
+        copy_system_btn.clicked.connect(
+            lambda: QApplication.clipboard().setText(depot.get("system_name") or "")
+        )
+        hdr_row.addWidget(copy_system_btn)
+        copy_station_btn = QPushButton("Copy Station")
+        copy_station_btn.setStyleSheet(_BTN_STYLE)
+        copy_station_btn.clicked.connect(
+            lambda: QApplication.clipboard().setText(depot.get("station_name") or "")
+        )
+        hdr_row.addWidget(copy_station_btn)
+        layout.addLayout(hdr_row)
 
         progress = depot.get("progress")
         status = "Complete" if depot.get("complete") else (
