@@ -70,7 +70,7 @@ from edc.audio.handlers.engineering import EngineeringPhrases
 from edc.ui.panels.fleet_carrier_panel import FleetCarrierPanel
 from edc.core.eddn_powerplay import EddnPowerPlayCache
 from edc.core.eddn_listener import EddnPowerPlayWorker
-from edc.core.eddn_market import EddnMarketCache
+from edc.core.eddn_market import EddnMarketCache, write_buffers
 from edc.core.station_pads import extract_station_info
 from edc.core.rare_commodities import RareCommodityTable
 from edc.core.bounty_scanner import scan_active_bounties
@@ -211,6 +211,41 @@ class _MarketVacuumWorker(QObject):
             self.finished.emit(False, f"Compaction failed: {exc}")
         finally:
             db.close()
+
+
+class _EddnFlushWorker(QObject):
+    """
+    Writes a snapshot of EddnMarketCache's buffered EDDN data (popped by
+    the main thread via pop_buffers(), which is cheap) plus a WAL
+    checkpoint — both used to run directly on the main thread every 45s
+    via QTimer, freezing the UI for however long the batch write took.
+    Confirmed live: noticeably worse right after docking at a busy
+    station's market, since that's exactly when buffered commodity/
+    station/faction data peaks. Opens its own connection per the
+    project's cross-thread SQLite rule.
+    """
+    finished = pyqtSignal()
+
+    def __init__(self, db_path, coords, market, factions, stations, codex):
+        super().__init__()
+        self._db_path = db_path
+        self._coords, self._market, self._factions = coords, market, factions
+        self._stations, self._codex = stations, codex
+
+    def run(self):
+        from persistence.database import Database
+        from persistence.repository import Repository
+
+        db = Database(self._db_path)
+        try:
+            repo = Repository(db)
+            write_buffers(repo, self._coords, self._market, self._factions, self._stations, self._codex)
+            db.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except Exception:
+            log.exception("Background EDDN flush failed")
+        finally:
+            db.close()
+        self.finished.emit()
 
 
 class _CanonnRefreshWorker(QObject):
@@ -826,8 +861,9 @@ class MainWindow(QMainWindow):
         self.eddn_market_cache = EddnMarketCache(self.repo)
         self._market_flush_timer = QTimer(self)
         self._market_flush_timer.setInterval(45 * 1000)  # batch-write buffered EDDN market data periodically
-        self._market_flush_timer.timeout.connect(self.eddn_market_cache.flush)
-        self._market_flush_timer.timeout.connect(self._checkpoint_wal)
+        self._market_flush_timer.timeout.connect(self._on_market_flush_tick)
+        self._flush_thread: QThread | None = None
+        self._flush_worker: _EddnFlushWorker | None = None
 
         self._player_faction_refresh_timer = QTimer(self)
         # BGS ticks server-side once a day — this only needs to be frequent
@@ -3507,19 +3543,24 @@ class MainWindow(QMainWindow):
         except Exception:
             log.exception("Failed to find closest Interstellar Factors station")
 
-    def _checkpoint_wal(self):
+    def _on_market_flush_tick(self) -> None:
         """
-        WAL mode's own auto-checkpoint (default ~4MB threshold) wasn't
-        keeping up with the periodic EDDN flush's write volume — confirmed
-        live: the WAL file grew to ~290MB before an explicit checkpoint was
-        added. TRUNCATE merges it into the main file and truncates it back
-        to empty; safe to call this often, it's fast when there's little to
-        checkpoint (confirmed: <0.2s even for a 290MB backlog).
+        Pops the buffered EDDN data (cheap, main-thread dict ops) and hands
+        it to a background worker for the actual writes + WAL checkpoint —
+        see _EddnFlushWorker for why this moved off the main thread.
         """
-        try:
-            self.repo.db.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        except Exception:
-            log.exception("WAL checkpoint failed")
+        if self._flush_thread and self._flush_thread.isRunning():
+            return  # previous flush still running — next tick will catch up
+        coords, market, factions, stations, codex = self.eddn_market_cache.pop_buffers()
+        if not (coords or market or factions or stations or codex):
+            return
+
+        self._flush_worker = _EddnFlushWorker(self.repo.db.db_path, coords, market, factions, stations, codex)
+        self._flush_thread = QThread()
+        self._flush_worker.moveToThread(self._flush_thread)
+        self._flush_thread.started.connect(self._flush_worker.run)
+        self._flush_worker.finished.connect(self._flush_thread.quit)
+        self._flush_thread.start()
 
     def _refresh_squadron_station(self):
         """

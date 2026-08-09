@@ -98,41 +98,73 @@ class EddnMarketCache:
         """Returns (coord_count, market_row_count, faction_count, station_count) currently buffered — for status/logging."""
         return len(self._coord_buffer), len(self._market_buffer), len(self._faction_buffer), len(self._station_buffer)
 
+    def pop_buffers(self):
+        """
+        Snapshots and clears all five buffers, returning their contents as
+        plain lists/tuples — for handing off to a background worker with
+        its own DB connection (see main_window.py's _EddnFlushWorker).
+        Cheap, main-thread-only dict operations; the actual DB writes are
+        the expensive part, deliberately not done here.
+        """
+        coords = list(self._coord_buffer.values())
+        market = list(self._market_buffer.values())
+        factions = list(self._faction_buffer.items())
+        stations = list(self._station_buffer.values())
+        codex = list(self._codex_buffer.values())
+        self._coord_buffer.clear()
+        self._market_buffer.clear()
+        self._faction_buffer.clear()
+        self._station_buffer.clear()
+        self._codex_buffer.clear()
+        return coords, market, factions, stations, codex
+
     def flush(self) -> None:
-        if self._coord_buffer:
-            try:
-                self._repo.save_system_coords_batch(list(self._coord_buffer.values()))
-            except Exception:
-                log.exception("Failed to flush system_coords batch")
-            self._coord_buffer.clear()
+        """Synchronous flush on the caller's own thread/connection — only
+        safe to call from the main thread (uses self._repo, the main
+        thread's connection) and only when blocking briefly is acceptable
+        (e.g. on app shutdown). The periodic mid-session flush uses
+        pop_buffers() + write_buffers() on a background worker instead —
+        this was previously a QTimer-connected slot running directly on
+        the main thread every 45s, which froze the UI for however long a
+        big buffered batch took to write (confirmed live, worse right
+        after docking at a busy station's market)."""
+        coords, market, factions, stations, codex = self.pop_buffers()
+        write_buffers(self._repo, coords, market, factions, stations, codex)
 
-        if self._market_buffer:
-            try:
-                self._repo.save_market_snapshot_batch(list(self._market_buffer.values()))
-            except Exception:
-                log.exception("Failed to flush market_prices batch")
-            self._market_buffer.clear()
 
-        if self._faction_buffer:
-            for system_address, (system_name, faction, is_controlling, timestamp) in self._faction_buffer.items():
-                try:
-                    self._repo.save_system_name_if_missing(system_address, system_name)
-                    snapshot_date = (timestamp or "")[:10] or date.today().isoformat()
-                    self._repo.save_faction_snapshot(system_address, faction, snapshot_date, is_controlling)
-                except Exception:
-                    log.exception("Failed to flush faction sighting for system_address=%s", system_address)
-            self._faction_buffer.clear()
+def write_buffers(repo, coords, market, factions, stations, codex) -> None:
+    """The actual writes — factored out so both the main-thread flush()
+    (shutdown) and a background worker (periodic, see main_window.py) can
+    use the identical logic against whichever Repository they're given."""
+    if coords:
+        try:
+            repo.save_system_coords_batch(coords)
+        except Exception:
+            log.exception("Failed to flush system_coords batch")
 
-        if self._station_buffer:
-            try:
-                self._repo.save_station_info_batch(list(self._station_buffer.values()))
-            except Exception:
-                log.exception("Failed to flush station_info batch")
-            self._station_buffer.clear()
+    if market:
+        try:
+            repo.save_market_snapshot_batch(market)
+        except Exception:
+            log.exception("Failed to flush market_prices batch")
 
-        if self._codex_buffer:
+    if factions:
+        for system_address, (system_name, faction, is_controlling, timestamp) in factions:
             try:
-                self._repo.save_codex_species_sightings_batch(list(self._codex_buffer.values()))
+                repo.save_system_name_if_missing(system_address, system_name)
+                snapshot_date = (timestamp or "")[:10] or date.today().isoformat()
+                repo.save_faction_snapshot(system_address, faction, snapshot_date, is_controlling)
             except Exception:
-                log.exception("Failed to flush codex_species_sightings batch")
-            self._codex_buffer.clear()
+                log.exception("Failed to flush faction sighting for system_address=%s", system_address)
+
+    if stations:
+        try:
+            repo.save_station_info_batch(stations)
+        except Exception:
+            log.exception("Failed to flush station_info batch")
+
+    if codex:
+        try:
+            repo.save_codex_species_sightings_batch(codex)
+        except Exception:
+            log.exception("Failed to flush codex_species_sightings batch")
