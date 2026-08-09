@@ -57,11 +57,11 @@ _BANNER_STYLE_DIM = (
 )
 _STATION_CHIP_STYLE = (
     "QPushButton { background:#132a1c; color:#c8c8c8; border:1px solid #2a5a3a;"
-    " border-radius:4px; padding:4px 8px; font-size:12px; text-align:left; }"
+    " border-radius:4px; padding:3px 6px; font-size:11px; text-align:left; }"
     "QPushButton:hover { background:#1a3a26; }"
 )
-_STATION_CHIP_COLS = 4
-_STATION_CHIP_WIDTH = 190
+_STATION_CHIP_COLS = 6
+_STATION_CHIP_WIDTH = 155
 # Distinct green accent, set apart from the standard blue _CARD_STYLE cards above/below it.
 _CARD_STYLE_ACCENT = "QFrame { background:#0d1a12; border:1px solid #2a5a3a; border-radius:5px; }"
 _HDR_STYLE_ACCENT = "color:#6BCB77; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
@@ -514,6 +514,7 @@ class PlayerFactionPanel(QWidget):
         # this session). Keyed by system_address.
         self._last_predictions: Dict[int, dict] = {}
         self._last_stations_system: Optional[str] = None
+        self._last_local_stations: List[dict] = []
         self._station_thread: Optional[QThread] = None
         self._station_worker: Optional[_EdsmStationLookupWorker] = None
         self._station_lookup_system: Optional[str] = None
@@ -1219,6 +1220,12 @@ class PlayerFactionPanel(QWidget):
         except Exception:
             log.exception("Failed to load faction-controlled stations")
             stations = []
+        # Kept so the later EDSM pass can merge into this instead of
+        # replacing it outright — EDSM's static catalog can be stale/
+        # incomplete for a system (confirmed live: a freshly-expanded
+        # system showing 14 known settlements from personal visits dropped
+        # to 4 after the EDSM pass overwrote the list instead of merging).
+        self._last_local_stations = stations
 
         if not stations:
             self._stations_status_label.setText(
@@ -1251,7 +1258,8 @@ class PlayerFactionPanel(QWidget):
         # tooltip.
         for i, s in enumerate(stations):
             name = s.get("station_name") or "—"
-            type_line = f"{s.get('station_type') or '—'} · Pad {s.get('pad_size') or '?'}"
+            station_type = (s.get("station_type") or "—").replace("Odyssey Settlement", "Settlement")
+            type_line = f"{station_type} · Pad {s.get('pad_size') or '?'}"
             fm = QFontMetrics(QPushButton().font())
             avail = _STATION_CHIP_WIDTH - 20
             elided_name = fm.elidedText(name, Qt.TextElideMode.ElideRight, avail)
@@ -1315,19 +1323,33 @@ class PlayerFactionPanel(QWidget):
         target = self._faction_name.strip().lower() if self._faction_name else ""
         matched = [s for s in stations if (s.get("controlling_faction") or "").strip().lower() == target]
 
-        if not matched:
+        # Merge with the local-DB pass rather than replacing it — EDSM's
+        # static catalog can be stale/incomplete (e.g. a just-expanded
+        # system) and would otherwise silently drop settlements our own
+        # visits/EDDN feed already confirmed are actually controlled by
+        # this faction.
+        merged: Dict[str, dict] = {
+            (s.get("station_name") or "").strip().lower(): s for s in self._last_local_stations
+        }
+        for s in matched:
+            key = (s.get("station_name") or "").strip().lower()
+            if key:
+                merged[key] = s
+        combined = sorted(merged.values(), key=lambda s: s.get("station_name") or "")
+
+        if not combined:
             self._stations_status_label.setText(
-                f"EDSM: no stations/settlements controlled by {self._faction_name} in {system_name}."
+                f"No stations/settlements controlled by {self._faction_name} in {system_name} "
+                "(checked both our own visits and EDSM's catalog)."
             )
             self._clear_stations_grid()
             return
 
-        matched.sort(key=lambda s: s.get("station_name") or "")
         self._stations_status_label.setText(
-            f"{len(matched)} station{'s' if len(matched) != 1 else ''} controlled by "
-            f"{self._faction_name} in {system_name} (EDSM's full system catalog)."
+            f"{len(combined)} station{'s' if len(combined) != 1 else ''} controlled by "
+            f"{self._faction_name} in {system_name} (our own visits + EDSM's catalog)."
         )
-        self._populate_stations_grid(matched)
+        self._populate_stations_grid(combined)
 
     # ── Manual add / remove ─────────────────────────────────────────────
 
