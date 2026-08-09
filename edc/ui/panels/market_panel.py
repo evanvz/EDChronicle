@@ -198,6 +198,46 @@ class _MarketSearchWorker(QObject):
         self.finished.emit(results, self._raw_query_text, self._radius, self._buy_mode)
 
 
+class _NearSystemCoordsWorker(QObject):
+    """
+    Resolves a "Near" system name typed for a Market search. Our own
+    system_coords cache is only ever populated passively from EDDN traffic
+    (someone, somewhere, has to have jumped into/reported that exact system
+    while our listener happened to be connected) — for a system nobody's
+    reported recently, that lookup comes up empty even though the system is
+    perfectly real. Falls back to EDSM's system endpoint (a real network
+    call, hence its own thread) and saves any hit back into system_coords
+    so the next lookup for the same system is instant.
+    """
+    finished = pyqtSignal(object, str)  # ((x, y, z) or None, system_name)
+
+    def __init__(self, db_path, system_name: str):
+        super().__init__()
+        self._db_path = db_path
+        self._system_name = system_name
+
+    def run(self):
+        from persistence.database import Database
+        from persistence.repository import Repository
+        from edc.core.edsm_faction_lookup import fetch_system_coords
+
+        coords = fetch_system_coords(self._system_name)
+        if coords:
+            from datetime import datetime, timezone
+
+            db = Database(self._db_path)
+            try:
+                repo = Repository(db)
+                repo.save_system_coords_batch([
+                    (self._system_name, coords[0], coords[1], coords[2], datetime.now(timezone.utc).isoformat())
+                ])
+            except Exception:
+                log.exception("Failed to save EDSM-resolved coords for %r", self._system_name)
+            finally:
+                db.close()
+        self.finished.emit(coords, self._system_name)
+
+
 class MarketPanel(QWidget):
     """
     Owns all widgets and refresh logic for the Market tab.
@@ -229,6 +269,8 @@ class MarketPanel(QWidget):
         self._trade_worker: Optional[_TradeOpportunityWorker] = None
         self._search_thread: Optional[QThread] = None
         self._search_worker: Optional[_MarketSearchWorker] = None
+        self._coords_thread: Optional[QThread] = None
+        self._coords_worker: Optional[_NearSystemCoordsWorker] = None
         self._last_market_id_computed: Optional[int] = None
         self._last_results: Optional[list] = None
         self._last_search_desc = ("", 0, False)
@@ -801,25 +843,46 @@ class MarketPanel(QWidget):
             self._status_label.setText("No system location data yet — jump to a system first.")
             return
 
+        near_name = self._near_edit.text().strip()
+        if not near_name:
+            self._run_market_search(raw, self._ref_x, self._ref_y, self._ref_z, self._system)
+            return
+
+        # Our own system_coords cache only has systems someone happened to
+        # report via EDDN while we were listening — a perfectly real system
+        # nobody's passed through recently comes up empty there even though
+        # it exists. Try that first (instant, local), then fall back to a
+        # background EDSM lookup rather than rejecting it outright.
+        coords = self._repo.get_system_coords_for_names([near_name])
+        found = coords.get(near_name)
+        if found:
+            self._run_market_search(raw, found[0], found[1], found[2], near_name)
+            return
+
+        self._search_btn.setEnabled(False)
+        self._status_label.setText(f"Looking up \"{near_name}\" via EDSM…")
+        self._coords_worker = _NearSystemCoordsWorker(self._repo.db.db_path, near_name)
+        self._coords_thread = QThread()
+        self._coords_worker.moveToThread(self._coords_thread)
+        self._coords_thread.started.connect(self._coords_worker.run)
+        self._coords_worker.finished.connect(lambda c, n: self._on_near_coords_resolved(c, n, raw))
+        self._coords_worker.finished.connect(self._coords_thread.quit)
+        self._coords_thread.start()
+
+    def _on_near_coords_resolved(self, coords, system_name: str, raw: str) -> None:
+        if not coords:
+            self._search_btn.setEnabled(True)
+            self._status_label.setText(
+                f"Unknown system \"{system_name}\" — not found locally or via EDSM. Check "
+                "spelling/capitalization, or leave \"Near\" blank to search near your current location."
+            )
+            return
+        self._run_market_search(raw, coords[0], coords[1], coords[2], system_name)
+
+    def _run_market_search(self, raw: str, ref_x: float, ref_y: float, ref_z: float, near_label: str) -> None:
         commodity = normalize_commodity_name(raw)
         radius = self._range_spin.value()
         buy_mode = self._mode() == "buy"
-
-        ref_x, ref_y, ref_z = self._ref_x, self._ref_y, self._ref_z
-        near_name = self._near_edit.text().strip()
-        near_label = self._system
-        if near_name:
-            coords = self._repo.get_system_coords_for_names([near_name])
-            found = coords.get(near_name)
-            if not found:
-                self._status_label.setText(
-                    f"Unknown system \"{near_name}\" — no coordinates on file yet "
-                    "(needs to have been reported via EDDN by someone). Check spelling/"
-                    "capitalization, or leave blank to search near your current location."
-                )
-                return
-            ref_x, ref_y, ref_z = found
-            near_label = near_name
 
         self._last_near_label = near_label
         self._search_btn.setEnabled(False)
