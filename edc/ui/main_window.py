@@ -146,12 +146,21 @@ class _EdsmPowerPlayRefreshWorker(QObject):
 
 class _MarketPruneWorker(QObject):
     """
-    Deletes stale (>30d) market_prices rows and reclaims the freed disk
-    space — both potentially slow at galaxy-wide scale (millions of rows,
-    multi-GB file), so this must never run on the UI thread. Opens its own
-    connection per the project's cross-thread SQLite rule.
+    Deletes stale (>30d) market_prices rows — potentially slow at
+    galaxy-wide scale (millions of rows), so this must never run on the UI
+    thread. Opens its own connection per the project's cross-thread SQLite
+    rule.
+
+    Deliberately does NOT also VACUUM/reclaim disk space here. VACUUM
+    needs an EXCLUSIVE lock on the whole file — running it automatically
+    on every startup blocked the main thread's own routine journal writes
+    (a different connection to the same file) while it held that lock,
+    confirmed live as an app freeze for as long as VACUUM took to rewrite
+    a multi-GB database. Reclaiming space is now Settings' explicit
+    "Compact Database Now" button (_MarketVacuumWorker) instead, so it
+    only ever runs when the user has chosen to eat that cost right now.
     """
-    finished = pyqtSignal(int, bool)  # (deleted_count, ran_full_vacuum)
+    finished = pyqtSignal(int)  # deleted_count
 
     def __init__(self, db_path):
         super().__init__()
@@ -163,20 +172,45 @@ class _MarketPruneWorker(QObject):
 
         db = Database(self._db_path)
         deleted = 0
-        ran_vacuum = False
         try:
             repo = Repository(db)
             deleted = repo.prune_stale_market_prices()
-            # Only the very first run ever pays for a full VACUUM (to switch
-            # the file into incremental auto_vacuum mode) — after that,
-            # incremental_vacuum() alone reclaims whatever DELETE just freed.
-            ran_vacuum = db.enable_incremental_auto_vacuum()
-            db.incremental_vacuum()
         except Exception:
             log.exception("Market prices prune failed")
         finally:
             db.close()
-        self.finished.emit(deleted, ran_vacuum)
+        self.finished.emit(deleted)
+
+
+class _MarketVacuumWorker(QObject):
+    """
+    User-triggered only (Settings' "Compact Database Now") — reclaims disk
+    space freed by pruning. See _MarketPruneWorker's docstring for why this
+    is never run automatically: VACUUM holds an exclusive lock on the
+    whole file for as long as it takes to rewrite it, which blocks any
+    other connection's writes (including the main thread's routine
+    journal-driven saves) for that entire duration.
+    """
+    finished = pyqtSignal(bool, str)  # (ok, message)
+
+    def __init__(self, db_path):
+        super().__init__()
+        self._db_path = db_path
+
+    def run(self):
+        from persistence.database import Database
+
+        db = Database(self._db_path)
+        try:
+            ran_full_vacuum = db.enable_incremental_auto_vacuum()
+            db.incremental_vacuum()
+            note = " (first run — also switched to incremental auto-vacuum)" if ran_full_vacuum else ""
+            self.finished.emit(True, f"Database compacted{note}.")
+        except Exception as exc:
+            log.exception("Database compaction failed")
+            self.finished.emit(False, f"Compaction failed: {exc}")
+        finally:
+            db.close()
 
 
 class _CanonnRefreshWorker(QObject):
@@ -753,6 +787,8 @@ class MainWindow(QMainWindow):
         self._edsm_powerplay_worker: _EdsmPowerPlayRefreshWorker | None = None
         self._market_prune_thread: QThread | None = None
         self._market_prune_worker: _MarketPruneWorker | None = None
+        self._market_vacuum_thread: QThread | None = None
+        self._market_vacuum_worker: _MarketVacuumWorker | None = None
 
         self.eddn_publisher = EddnPublisher()
         self.eddn_publisher.start()
@@ -1110,6 +1146,22 @@ class MainWindow(QMainWindow):
         market_row.addStretch(1)
         st.addLayout(market_row)
 
+        # --- Database compaction (manual — see _on_compact_db_clicked) ---
+        st.addWidget(QLabel("Database maintenance"))
+        self.compact_db_status_label = QLabel(
+            "Stale market data is pruned automatically each day. Reclaiming the freed disk "
+            "space is a one-time, several-minutes operation that locks the database — run it "
+            "only when you're not actively playing, not automatically on every startup."
+        )
+        self.compact_db_status_label.setWordWrap(True)
+        st.addWidget(self.compact_db_status_label)
+        compact_row = QHBoxLayout()
+        self.compact_db_btn = QPushButton("Compact Database Now")
+        self.compact_db_btn.clicked.connect(self._on_compact_db_clicked)
+        compact_row.addWidget(self.compact_db_btn)
+        compact_row.addStretch(1)
+        st.addLayout(compact_row)
+
         st.addStretch(1)
 
         # Log tab
@@ -1324,11 +1376,30 @@ class MainWindow(QMainWindow):
         self._market_prune_worker.finished.connect(self._market_prune_thread.quit)
         self._market_prune_thread.start()
 
-    def _on_market_prune_finished(self, deleted: int, ran_vacuum: bool) -> None:
-        vacuum_note = " (first run — also switched the database to incremental auto-vacuum)" if ran_vacuum else ""
-        log.info("Market prices prune complete: %d stale rows removed%s", deleted, vacuum_note)
+    def _on_market_prune_finished(self, deleted: int) -> None:
+        log.info("Market prices prune complete: %d stale rows removed", deleted)
         self.cfg.last_market_prune_date = date.today().isoformat()
         self.cfg_store.save(self.cfg)
+
+    def _on_compact_db_clicked(self) -> None:
+        if self._market_vacuum_thread and self._market_vacuum_thread.isRunning():
+            return
+        self.compact_db_btn.setEnabled(False)
+        self.compact_db_status_label.setText(
+            "Compacting — this can take several minutes on a large database and will pause "
+            "other database activity while it runs. Don't close the app."
+        )
+        self._market_vacuum_worker = _MarketVacuumWorker(self.repo.db.db_path)
+        self._market_vacuum_thread = QThread()
+        self._market_vacuum_worker.moveToThread(self._market_vacuum_thread)
+        self._market_vacuum_thread.started.connect(self._market_vacuum_worker.run)
+        self._market_vacuum_worker.finished.connect(self._on_compact_db_finished)
+        self._market_vacuum_worker.finished.connect(self._market_vacuum_thread.quit)
+        self._market_vacuum_thread.start()
+
+    def _on_compact_db_finished(self, ok: bool, message: str) -> None:
+        self.compact_db_btn.setEnabled(True)
+        self.compact_db_status_label.setText(message)
 
     def _maybe_alert_engineering_materials(self):
         """
