@@ -1242,11 +1242,19 @@ class PlayerFactionPanel(QWidget):
         self._populate_stations_grid(stations)
 
     def _clear_stations_grid(self) -> None:
-        while self._stations_grid_layout.count():
-            item = self._stations_grid_layout.takeAt(0)
-            w = item.widget()
-            if w:
-                w.deleteLater()
+        # QGridLayout remembers the max row/column index it has EVER held —
+        # removing widgets via takeAt() doesn't shrink that back down, so a
+        # later repopulate with fewer stations than an earlier one used to
+        # inherit stale column bookkeeping and spread leftover width oddly
+        # (confirmed live: 2 chips rendered far apart after a prior 14-chip
+        # populate). Detaching the old layout onto a throwaway widget (a
+        # standard Qt trick — setLayout() reparents and drops the old
+        # bookkeeping) and creating a fresh one resets it cleanly.
+        old_layout = self._stations_grid_widget.layout()
+        if old_layout is not None:
+            QWidget().setLayout(old_layout)
+        self._stations_grid_layout = QGridLayout(self._stations_grid_widget)
+        self._stations_grid_layout.setSpacing(4)
 
     def _populate_stations_grid(self, stations: List[dict]) -> None:
         self._clear_stations_grid()
@@ -1256,6 +1264,7 @@ class PlayerFactionPanel(QWidget):
         # panel. Fixed chip width + elided text keeps every column the same
         # size regardless of name length; full name/type/pad still in the
         # tooltip.
+        last_col = 0
         for i, s in enumerate(stations):
             name = s.get("station_name") or "—"
             station_type = (s.get("station_type") or "—").replace("Odyssey Settlement", "Settlement")
@@ -1269,7 +1278,14 @@ class PlayerFactionPanel(QWidget):
             chip.setStyleSheet(_STATION_CHIP_STYLE)
             chip.setToolTip(f"{name}\n{type_line}\n\nClick to copy \"{name}\" to the clipboard.")
             chip.clicked.connect(lambda _checked=False, n=name: QApplication.clipboard().setText(n))
-            self._stations_grid_layout.addWidget(chip, i // _STATION_CHIP_COLS, i % _STATION_CHIP_COLS)
+            col = i % _STATION_CHIP_COLS
+            self._stations_grid_layout.addWidget(chip, i // _STATION_CHIP_COLS, col)
+            last_col = max(last_col, col)
+        if stations:
+            # Sink all leftover horizontal space into one trailing empty
+            # column instead of Qt spreading it evenly between the real
+            # (Fixed-width) chip columns, which otherwise pushes them apart.
+            self._stations_grid_layout.setColumnStretch(last_col + 1, 1)
 
     def _start_station_lookup(self, system_name: Optional[str]) -> None:
         """EDSM's static station catalog knows about every station in a
