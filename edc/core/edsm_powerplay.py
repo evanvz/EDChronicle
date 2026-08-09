@@ -53,6 +53,7 @@ class EdsmPowerPlayCache:
         self.path = Path(settings_dir) / filename
         self.fetched_date: Optional[str] = None
         self._systems: Dict[str, List[Dict[str, Any]]] = {}
+        self._by_name: Dict[str, List[Dict[str, Any]]] = {}
         self._load()
 
     def _load(self) -> None:
@@ -69,6 +70,19 @@ class EdsmPowerPlayCache:
             log.exception("Failed to load edsm_powerplay_cache.json")
             self.fetched_date = None
             self._systems = {}
+        self._rebuild_name_index()
+
+    def _rebuild_name_index(self) -> None:
+        # "name" is only present in rows fetched after this index was added
+        # — a cache file from before that just yields no name-index entries
+        # for those rows until the next daily refresh() re-downloads them.
+        by_name: Dict[str, List[Dict[str, Any]]] = {}
+        for rows in self._systems.values():
+            for row in rows:
+                name = (row.get("name") or "").strip().lower()
+                if name:
+                    by_name.setdefault(name, []).append(row)
+        self._by_name = by_name
 
     def is_stale(self) -> bool:
         return self.fetched_date != date.today().isoformat()
@@ -82,6 +96,12 @@ class EdsmPowerPlayCache:
             return None
         return self._systems.get(str(id64))
 
+    @staticmethod
+    def _best_row(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+        controlling = [r for r in rows if r.get("power_state") != "Unoccupied"]
+        pool = controlling or rows
+        return max(pool, key=lambda r: r.get("date") or "")
+
     def get_controller(self, id64: Optional[int]) -> Optional[Dict[str, Any]]:
         """
         Best-guess current controller for a system: the most recent row
@@ -93,9 +113,19 @@ class EdsmPowerPlayCache:
         rows = self.lookup(id64)
         if not rows:
             return None
-        controlling = [r for r in rows if r.get("power_state") != "Unoccupied"]
-        pool = controlling or rows
-        return max(pool, key=lambda r: r.get("date") or "")
+        return self._best_row(rows)
+
+    def get_controller_by_name(self, system_name: Optional[str]) -> Optional[Dict[str, Any]]:
+        """Same as get_controller(), keyed by system name instead of id64 —
+        for cross-referencing data that only carries a name (e.g. Market
+        search results sourced from the EDDN commodity feed, which has no
+        SystemAddress at all)."""
+        if not isinstance(system_name, str) or not system_name.strip():
+            return None
+        rows = self._by_name.get(system_name.strip().lower())
+        if not rows:
+            return None
+        return self._best_row(rows)
 
     def refresh(self) -> bool:
         """
@@ -137,13 +167,21 @@ class EdsmPowerPlayCache:
             id64 = rec.get("id64")
             if not isinstance(id64, int):
                 continue
+            # EDSM's other system dumps consistently use "name" — not
+            # independently confirmed for this specific dump, so "system"/
+            # "systemName" are checked too; if none match, the name-index
+            # just stays empty for these rows (get_controller_by_name()
+            # silently finds nothing) rather than crashing.
+            name = rec.get("name") or rec.get("system") or rec.get("systemName") or ""
             systems.setdefault(str(id64), []).append({
                 "power": rec.get("power") or "",
                 "power_state": rec.get("powerState") or "",
                 "date": rec.get("date") or "",
+                "name": name,
             })
 
         self._systems = systems
+        self._rebuild_name_index()
         self.fetched_date = date.today().isoformat()
 
         try:

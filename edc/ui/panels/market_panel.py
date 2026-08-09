@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
     QApplication,
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QSpinBox, QComboBox, QCompleter, QTableWidget, QTableWidgetItem,
-    QHeaderView, QFrame, QDialog, QSizePolicy,
+    QHeaderView, QFrame, QDialog, QSizePolicy, QCheckBox,
 )
 
 from edc.core.station_pads import pad_size_hint
@@ -256,10 +256,12 @@ class MarketPanel(QWidget):
     # until they actually reach it.
     destination_selected = pyqtSignal(str, str, str, str)
 
-    def __init__(self, repo, rare_table=None, parent=None):
+    def __init__(self, repo, rare_table=None, edsm_powerplay=None, parent=None):
         super().__init__(parent)
         self._repo = repo
         self._rare_table = rare_table
+        self._edsm_powerplay = edsm_powerplay
+        self._my_power: Optional[str] = None
         self._rare_dialog: Optional["_RareGoodsDialog"] = None
         self._system: str = ""
         self._ref_x: float = 0.0
@@ -380,6 +382,15 @@ class MarketPanel(QWidget):
         self._near_edit.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
         self._near_edit.returnPressed.connect(self._start_search)
 
+        self._exclude_enemy_pp_check = QCheckBox("Exclude enemy PowerPlay systems")
+        self._exclude_enemy_pp_check.setStyleSheet(_LABEL_STYLE)
+        self._exclude_enemy_pp_check.setToolTip(
+            "Drops results in systems currently controlled by a Power other than "
+            "yours (from EDSM's daily PowerPlay dump — systems with no known "
+            "PowerPlay presence are left in, not treated as enemy)."
+        )
+        self._exclude_enemy_pp_check.toggled.connect(self._apply_pad_filter)
+
         range_label = QLabel("Range:")
         range_label.setStyleSheet(_LABEL_STYLE)
         self._range_spin = QSpinBox()
@@ -419,6 +430,7 @@ class MarketPanel(QWidget):
         near_row.setSpacing(8)
         near_row.addWidget(near_label)
         near_row.addWidget(self._near_edit, 1)
+        near_row.addWidget(self._exclude_enemy_pp_check)
         search_layout.addLayout(near_row)
 
         service_row = QHBoxLayout()
@@ -613,6 +625,7 @@ class MarketPanel(QWidget):
         explicitly when a new Market event actually arrives."""
         self._last_state = state
         self._last_radius_ly = radius_ly
+        self._my_power = getattr(state, "pp_power", None) or None
         self._system = (getattr(state, "system", None) or "").strip()
         self._ref_x = float(getattr(state, "system_x", 0.0) or 0.0)
         self._ref_y = float(getattr(state, "system_y", 0.0) or 0.0)
@@ -922,11 +935,24 @@ class MarketPanel(QWidget):
                 or rank[r.get("pad_size") or pad_size_hint(r.get("station_type"))] >= min_rank
             ]
 
+        enemy_excluded = 0
+        if self._exclude_enemy_pp_check.isChecked() and self._my_power and self._edsm_powerplay:
+            kept = []
+            for r in results:
+                controller = self._edsm_powerplay.get_controller_by_name(r.get("system_name"))
+                controlling_power = (controller or {}).get("power") or ""
+                if controlling_power and controlling_power != self._my_power:
+                    enemy_excluded += 1
+                else:
+                    kept.append(r)
+            results = kept
+
         verb = "buying" if buy_mode else "selling"
         near_label = self._last_near_label or self._system
+        excluded_note = f" ({enemy_excluded} enemy-PowerPlay system{'s' if enemy_excluded != 1 else ''} excluded)" if enemy_excluded else ""
         self._status_label.setText(
             f"Found {len(results)} station{'s' if len(results) != 1 else ''} "
-            f"{verb} {raw} within {radius} ly of {near_label}."
+            f"{verb} {raw} within {radius} ly of {near_label}.{excluded_note}"
         )
         self._table.setSortingEnabled(False)
         self._table.setRowCount(len(results))

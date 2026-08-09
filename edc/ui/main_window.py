@@ -934,7 +934,7 @@ class MainWindow(QMainWindow):
         self.mining_panel = MiningPanel(self.repo)
 
         # Market tab
-        self.market_panel = MarketPanel(self.repo, self.rare_commodities)
+        self.market_panel = MarketPanel(self.repo, self.rare_commodities, edsm_powerplay=self.edsm_powerplay)
         self.mining_panel.sell_search_requested.connect(self._on_mining_sell_search_requested)
         self.market_panel.destination_selected.connect(self._on_market_destination_selected)
 
