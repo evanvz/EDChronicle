@@ -19,7 +19,7 @@ from edc.engine.handlers.fleet_carrier import handle as _carrier_handle
 _CARRIER_EVENT_NAMES = {
     "CarrierJump", "CarrierBuy", "CarrierStats", "CarrierJumpRequest",
     "CarrierJumpCancelled", "CarrierBankTransfer", "CarrierDepositFuel",
-    "CarrierFinance", "CarrierTradeOrder",
+    "CarrierFinance", "CarrierTradeOrder", "CarrierLocation",
 }
 
 
