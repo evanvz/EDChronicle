@@ -44,6 +44,7 @@ class AppConfig:
     always_on_top: bool = False
     eddn_contribute_enabled: bool = True
     market_search_radius_ly: int = 100
+    last_market_prune_date: Optional[str] = None
 
     def __post_init__(self):
         if self.tts_events is None:
@@ -180,6 +181,7 @@ class ConfigStore:
                 always_on_top=bool(data.get("always_on_top", False)),
                 eddn_contribute_enabled=bool(data.get("eddn_contribute_enabled", True)),
                 market_search_radius_ly=int(data.get("market_search_radius_ly", 100) or 100),
+                last_market_prune_date=data.get("last_market_prune_date"),
             )
             if isinstance(data.get("tts_events"), dict):
                 cfg.tts_events.update(data["tts_events"])
@@ -212,6 +214,7 @@ class ConfigStore:
                         "always_on_top": bool(getattr(cfg, "always_on_top", False)),
                         "eddn_contribute_enabled": bool(getattr(cfg, "eddn_contribute_enabled", True)),
                         "market_search_radius_ly": int(getattr(cfg, "market_search_radius_ly", 100) or 100),
+                        "last_market_prune_date": getattr(cfg, "last_market_prune_date", None),
                     },
                     indent=2,
                 ),

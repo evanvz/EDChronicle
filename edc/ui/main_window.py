@@ -144,6 +144,41 @@ class _EdsmPowerPlayRefreshWorker(QObject):
         self.finished.emit(ok)
 
 
+class _MarketPruneWorker(QObject):
+    """
+    Deletes stale (>30d) market_prices rows and reclaims the freed disk
+    space — both potentially slow at galaxy-wide scale (millions of rows,
+    multi-GB file), so this must never run on the UI thread. Opens its own
+    connection per the project's cross-thread SQLite rule.
+    """
+    finished = pyqtSignal(int, bool)  # (deleted_count, ran_full_vacuum)
+
+    def __init__(self, db_path):
+        super().__init__()
+        self._db_path = db_path
+
+    def run(self):
+        from persistence.database import Database
+        from persistence.repository import Repository
+
+        db = Database(self._db_path)
+        deleted = 0
+        ran_vacuum = False
+        try:
+            repo = Repository(db)
+            deleted = repo.prune_stale_market_prices()
+            # Only the very first run ever pays for a full VACUUM (to switch
+            # the file into incremental auto_vacuum mode) — after that,
+            # incremental_vacuum() alone reclaims whatever DELETE just freed.
+            ran_vacuum = db.enable_incremental_auto_vacuum()
+            db.incremental_vacuum()
+        except Exception:
+            log.exception("Market prices prune failed")
+        finally:
+            db.close()
+        self.finished.emit(deleted, ran_vacuum)
+
+
 class _CanonnRefreshWorker(QObject):
     finished = pyqtSignal(object, str, object, str)  # poi, poi_error, challenge, challenge_error
 
@@ -716,6 +751,8 @@ class MainWindow(QMainWindow):
         self.edsm_powerplay = EdsmPowerPlayCache(settings_base)
         self._edsm_powerplay_thread: QThread | None = None
         self._edsm_powerplay_worker: _EdsmPowerPlayRefreshWorker | None = None
+        self._market_prune_thread: QThread | None = None
+        self._market_prune_worker: _MarketPruneWorker | None = None
 
         self.eddn_publisher = EddnPublisher()
         self.eddn_publisher.start()
@@ -1140,6 +1177,7 @@ class MainWindow(QMainWindow):
         # for up to 20 minutes after every app start.
         self._refresh_player_faction()
         self._maybe_start_edsm_powerplay_refresh()
+        self._maybe_start_market_prune()
         self._start_eddn_listener()
         if self.edsm_powerplay.is_stale():
             self._edsm_powerplay_retry_timer.start()
@@ -1267,6 +1305,30 @@ class MainWindow(QMainWindow):
             log.warning("EDSM PowerPlay cache refresh failed — will retry later")
             if not self._edsm_powerplay_retry_timer.isActive():
                 self._edsm_powerplay_retry_timer.start()
+
+    def _maybe_start_market_prune(self):
+        """Once/day is plenty — the prune threshold itself is 30 days, so
+        pruning more often would never find anything new to delete."""
+        today = date.today().isoformat()
+        if getattr(self.cfg, "last_market_prune_date", None) == today:
+            return
+        if self._market_prune_thread and self._market_prune_thread.isRunning():
+            return
+
+        log.info("Pruning stale (>30d) market_prices rows in background")
+        self._market_prune_worker = _MarketPruneWorker(self.repo.db.db_path)
+        self._market_prune_thread = QThread()
+        self._market_prune_worker.moveToThread(self._market_prune_thread)
+        self._market_prune_thread.started.connect(self._market_prune_worker.run)
+        self._market_prune_worker.finished.connect(self._on_market_prune_finished)
+        self._market_prune_worker.finished.connect(self._market_prune_thread.quit)
+        self._market_prune_thread.start()
+
+    def _on_market_prune_finished(self, deleted: int, ran_vacuum: bool) -> None:
+        vacuum_note = " (first run — also switched the database to incremental auto-vacuum)" if ran_vacuum else ""
+        log.info("Market prices prune complete: %d stale rows removed%s", deleted, vacuum_note)
+        self.cfg.last_market_prune_date = date.today().isoformat()
+        self.cfg_store.save(self.cfg)
 
     def _maybe_alert_engineering_materials(self):
         """

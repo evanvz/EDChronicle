@@ -741,6 +741,22 @@ class Repository:
         )
         self.db.conn.commit()
 
+    def prune_stale_market_prices(self) -> int:
+        """
+        Deletes rows already excluded from search results by
+        _market_data_cutoff() — a stale row is dead weight once nothing
+        can ever surface it, not just hidden. Same 30-day threshold as the
+        search filter, so this doesn't change what search can find, only
+        what's still sitting on disk. Call from a worker thread only — a
+        DELETE across the whole market_prices table is not instant at
+        galaxy-wide scale (millions of rows)."""
+        cur = self.db.conn.execute(
+            "DELETE FROM market_prices WHERE last_updated < ?",
+            (_market_data_cutoff(),),
+        )
+        self.db.conn.commit()
+        return cur.rowcount
+
     def save_commodity_names_batch(self, pairs: list[tuple[str, str]]):
         """
         pairs: [(internal_name, display_name), ...] — captured from the

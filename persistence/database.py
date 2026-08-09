@@ -29,6 +29,26 @@ class Database:
         self.conn.executescript(sql)
         self.conn.commit()
 
+    def enable_incremental_auto_vacuum(self) -> bool:
+        """SQLite only applies an auto_vacuum mode CHANGE on the next
+        VACUUM — the file was created with the default (NONE), so this is
+        a one-time cost. Returns True if a VACUUM actually ran (only ever
+        happens once per database file, from then on incremental_vacuum()
+        alone reclaims freed space cheaply). Call from a worker thread only
+        — VACUUM rewrites the entire file, slow on a multi-GB database."""
+        mode = self.conn.execute("PRAGMA auto_vacuum").fetchone()[0]
+        if mode == 2:  # already INCREMENTAL
+            return False
+        self.conn.execute("PRAGMA auto_vacuum = INCREMENTAL")
+        self.conn.execute("VACUUM")
+        return True
+
+    def incremental_vacuum(self, pages: int = 2000) -> None:
+        """Reclaims already-freed pages (e.g. from a prior DELETE) a chunk
+        at a time — cheap compared to a full VACUUM. Call from a worker
+        thread only, same reasoning as enable_incremental_auto_vacuum()."""
+        self.conn.execute(f"PRAGMA incremental_vacuum({pages})")
+
     def run_migrations(self):
         """Add new columns to existing tables without breaking older DBs."""
         migrations = [
