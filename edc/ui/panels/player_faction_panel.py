@@ -96,8 +96,13 @@ def _parse_states(raw) -> List[str]:
     ]
 
 
-def derive_bgs_action(sys_rec: Dict[str, Any]) -> Tuple[str, str]:
-    """Returns (action_text, color_hex) advising what this system needs, if anything."""
+# Always true regardless of a system's current state — a crisis-specific
+# remedy (e.g. Outbreak's medicine delivery) resolves that crisis mechanic,
+# it doesn't replace these as the actual Influence-moving activities.
+_GENERAL_BGS_HINT = "Also always helps: trade, missions & bounty vouchers at their stations."
+
+
+def _bgs_action_core(sys_rec: Dict[str, Any]) -> Tuple[str, str]:
     active = {s.lower() for s in _parse_states(sys_rec.get("active_states"))}
     pending = {s.lower() for s in _parse_states(sys_rec.get("pending_states"))}
     recovering = {s.lower() for s in _parse_states(sys_rec.get("recovering_states"))}
@@ -129,6 +134,31 @@ def derive_bgs_action(sys_rec: Dict[str, Any]) -> Tuple[str, str]:
     if "bust" in active:
         return ("📉 Bust — economic decline; less profitable to trade here for now.", "#888888")
 
+    if "colonisation" in active:
+        return ("🏗 Colonisation underway — contributing construction materials helps (see Squadron tab).", "#6BCB77")
+    if "incursion" in active:
+        return ("⚡ Incursion — Thargoid activity; no standard delivery fix.", "#FF6B6B")
+    if "infested" in active:
+        return ("🛸 Infested — Thargoid presence nearby; no standard delivery fix.", "#FF6B6B")
+    if "infrastructurefailure" in active:
+        return ("🔧 Infrastructure Failure — reduced station services; no standard delivery fix known.", "#FF8C00")
+    if "naturaldisaster" in active:
+        return ("🌪 Natural Disaster — no confirmed standard delivery fix.", "#FF6B6B")
+    if "revolution" in active:
+        return ("☭ Revolution — political tension state; no standard delivery fix.", "#FFB347")
+    if "coldwar" in active:
+        return ("❄ Cold War — rising tension with a rival faction; no standard delivery fix.", "#FFB347")
+    if "tradewar" in active:
+        return ("💱 Trade War — economic tension with a rival faction; no standard delivery fix.", "#FFB347")
+    if "terroristattack" in active:
+        return ("💣 Terrorist Attack — security tension; no standard delivery fix.", "#FF6B6B")
+    if "publicholiday" in active:
+        return ("🎉 Public Holiday — temporary flavor state, not a crisis.", "#6BCB77")
+    if "technologicalleap" in active:
+        return ("🔬 Technological Leap — positive tech event, not a crisis.", "#6BCB77")
+    if "historicevent" in active:
+        return ("📜 Historic Event — commemorative flavor state, not a crisis.", "#4D96FF")
+
     if "expansion" in pending:
         return ("🚀 Expansion pending — keep up trade/missions/bounties here to complete it.", "#6BCB77")
     if "retreat" in pending:
@@ -142,6 +172,14 @@ def derive_bgs_action(sys_rec: Dict[str, Any]) -> Tuple[str, str]:
     if is_controlling:
         return ("Stable control — no immediate action needed.", "#4D96FF")
     return ("Present, not controlling — monitor influence trend.", "#888888")
+
+
+def derive_bgs_action(sys_rec: Dict[str, Any]) -> Tuple[str, str]:
+    """Returns (action_text, color_hex) advising what this system needs, if
+    anything. Always ends with the general BGS activities that apply
+    regardless of state — a state-specific headline isn't the only lever."""
+    text, color = _bgs_action_core(sys_rec)
+    return (f"{text} {_GENERAL_BGS_HINT}", color)
 
 
 def _format_forecast(prediction: Optional[Dict[str, Any]]) -> Tuple[str, str]:
