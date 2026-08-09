@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
     QSpinBox, QCheckBox, QTableWidget, QTableWidgetItem, QHeaderView, QFrame,
 )
 
+from edc.core.station_pads import ship_pad_size
 from edc.core.trade_routes import find_trade_loops
 from edc.ui.busy_spinner import BusySpinner
 from edc.ui.panels.market_panel import _NumericTableWidgetItem
@@ -22,6 +23,7 @@ log = logging.getLogger(__name__)
 
 _CARD_STYLE = "QFrame { background:#0d1a2a; border:1px solid #1e3a5a; border-radius:5px; }"
 _LABEL_STYLE = "background:transparent; border:none; color:#c8c8c8;"
+_PAD_RANK = {"S": 1, "M": 2, "L": 3}
 
 
 class _TradeRouteWorker(QObject):
@@ -37,7 +39,7 @@ class _TradeRouteWorker(QObject):
 
     def __init__(self, db_path, x, y, z, radius_ly, cargo_capacity,
                  exclude_enemy_pp, my_power, edsm_powerplay,
-                 faction_only, squadron_faction_name):
+                 faction_only, squadron_faction_name, required_pad):
         super().__init__()
         self._db_path = db_path
         self._x, self._y, self._z = x, y, z
@@ -48,6 +50,7 @@ class _TradeRouteWorker(QObject):
         self._edsm_powerplay = edsm_powerplay
         self._faction_only = faction_only
         self._squadron_faction_name = squadron_faction_name
+        self._required_pad = required_pad
 
     def run(self):
         from persistence.database import Database
@@ -71,7 +74,21 @@ class _TradeRouteWorker(QObject):
                     == self._squadron_faction_name.strip().lower()
                 }
 
+            if self._required_pad in _PAD_RANK:
+                # Only drop a station whose pad is CONFIRMED too small —
+                # "?" (unknown) stays in rather than being wrongly excluded.
+                min_rank = _PAD_RANK[self._required_pad]
+                stations = {
+                    mid: s for mid, s in stations.items()
+                    if s["pad_size"] not in _PAD_RANK or _PAD_RANK[s["pad_size"]] >= min_rank
+                }
+
             loops = find_trade_loops(stations, self._cargo_capacity)
+
+            display_names = repo.get_commodity_display_name_map()
+            for loop in loops:
+                for leg in (loop["leg_a_to_b"], loop["leg_b_to_a"]):
+                    leg["commodity_display"] = display_names.get(leg["commodity"], leg["commodity"].title())
         except Exception as exc:
             log.exception("Trade route search failed")
             self.finished.emit([], str(exc))
@@ -98,6 +115,7 @@ class TradeRoutePanel(QWidget):
         self._system: str = ""
         self._ref_x = self._ref_y = self._ref_z = 0.0
         self._cargo_capacity: Optional[int] = None
+        self._required_pad: Optional[str] = None
         self._my_power: Optional[str] = None
         self._thread: Optional[QThread] = None
         self._worker: Optional[_TradeRouteWorker] = None
@@ -131,6 +149,14 @@ class TradeRoutePanel(QWidget):
         self._cargo_label = QLabel("Cargo capacity: unknown (fly at least once this session)")
         self._cargo_label.setStyleSheet(_LABEL_STYLE)
         fl.addWidget(self._cargo_label)
+
+        self._pad_label = QLabel("Required pad: unknown")
+        self._pad_label.setStyleSheet(_LABEL_STYLE)
+        self._pad_label.setToolTip(
+            "Stations with a confirmed pad too small for your current ship are excluded — "
+            "stations with unknown pad size are left in rather than guessed against."
+        )
+        fl.addWidget(self._pad_label)
 
         row = QHBoxLayout()
         row.setSpacing(8)
@@ -181,10 +207,10 @@ class TradeRoutePanel(QWidget):
         fl.addWidget(self._status_label)
 
         self._table = QTableWidget()
-        self._table.setColumnCount(8)
+        self._table.setColumnCount(10)
         self._table.setHorizontalHeaderLabels(
-            ["Station A", "Station B", "Dist (ly)", "A→B: Buy", "A→B: Profit/u",
-             "B→A: Buy", "B→A: Profit/u", "Total Profit"]
+            ["System A", "Station A", "System B", "Station B", "Dist (ly)",
+             "A→B: Buy", "A→B: Profit/u", "B→A: Buy", "B→A: Profit/u", "Total Profit"]
         )
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -200,11 +226,11 @@ class TradeRoutePanel(QWidget):
             "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
         )
         h = self._table.horizontalHeader()
-        h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        h.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        for c in range(2, 8):
+        for c in (0, 1, 2, 3):
+            h.setSectionResizeMode(c, QHeaderView.ResizeMode.Stretch)
+        for c in range(4, 10):
             h.setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
-        self._table.setToolTip("Click a Station A or Station B cell to copy its name to the clipboard.")
+        self._table.setToolTip("Click a System or Station cell to copy its name to the clipboard.")
         self._table.cellClicked.connect(self._on_cell_clicked)
         fl.addWidget(self._table, 1)
 
@@ -221,11 +247,17 @@ class TradeRoutePanel(QWidget):
         self._ref_z = float(getattr(state, "system_z", 0.0) or 0.0)
         self._cargo_capacity = getattr(state, "cargo_capacity", None)
         self._my_power = getattr(state, "pp_power", None) or None
+        self._required_pad = ship_pad_size(getattr(state, "ship_type", None))
         self._location_label.setText(f"Location: {self._system or '—'}")
         if isinstance(self._cargo_capacity, int) and self._cargo_capacity > 0:
             self._cargo_label.setText(f"Cargo capacity: {self._cargo_capacity}t (from current ship)")
         else:
             self._cargo_label.setText("Cargo capacity: unknown (fly at least once this session)")
+        pad_name = {"S": "Small", "M": "Medium", "L": "Large"}.get(self._required_pad)
+        if pad_name:
+            self._pad_label.setText(f"Required pad: {pad_name} (from current ship) — smaller-pad stations excluded")
+        else:
+            self._pad_label.setText("Required pad: unknown for this ship — pad size not filtered")
         self._search_btn.setEnabled(bool(self._system) and bool(self._cargo_capacity))
 
     def _start_search(self) -> None:
@@ -261,6 +293,7 @@ class TradeRoutePanel(QWidget):
             self._repo.db.db_path, self._ref_x, self._ref_y, self._ref_z, radius,
             self._cargo_capacity, self._exclude_enemy_pp_check.isChecked(), self._my_power,
             self._edsm_powerplay, self._faction_only_check.isChecked(), squadron_faction_name,
+            self._required_pad,
         )
         self._thread = QThread()
         self._worker.moveToThread(self._thread)
@@ -283,36 +316,37 @@ class TradeRoutePanel(QWidget):
         self._table.setSortingEnabled(False)
         self._table.setRowCount(len(loops))
         for row, loop in enumerate(loops):
-            a_item = QTableWidgetItem(f"{loop['station_a']} ({loop['system_a']})")
-            b_item = QTableWidgetItem(f"{loop['station_b']} ({loop['system_b']})")
+            sys_a_item = QTableWidgetItem(loop["system_a"])
+            station_a_item = QTableWidgetItem(loop["station_a"])
+            sys_b_item = QTableWidgetItem(loop["system_b"])
+            station_b_item = QTableWidgetItem(loop["station_b"])
             dist_item = _NumericTableWidgetItem(f"{loop['distance_ly']:.1f}", loop["distance_ly"])
             leg_ab, leg_ba = loop["leg_a_to_b"], loop["leg_b_to_a"]
-            ab_commodity_item = QTableWidgetItem(leg_ab["commodity"])
+            ab_commodity_item = QTableWidgetItem(leg_ab["commodity_display"])
             ab_profit_item = _NumericTableWidgetItem(f"{leg_ab['profit_per_unit']:,}", float(leg_ab["profit_per_unit"]))
-            ba_commodity_item = QTableWidgetItem(leg_ba["commodity"])
+            ba_commodity_item = QTableWidgetItem(leg_ba["commodity_display"])
             ba_profit_item = _NumericTableWidgetItem(f"{leg_ba['profit_per_unit']:,}", float(leg_ba["profit_per_unit"]))
             total_item = _NumericTableWidgetItem(f"{loop['total_profit']:,}", float(loop["total_profit"]))
             total_item.setForeground(QColor("#6BCB77"))
             for it in (dist_item, ab_profit_item, ba_profit_item, total_item):
                 it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
-            self._table.setItem(row, 0, a_item)
-            self._table.setItem(row, 1, b_item)
-            self._table.setItem(row, 2, dist_item)
-            self._table.setItem(row, 3, ab_commodity_item)
-            self._table.setItem(row, 4, ab_profit_item)
-            self._table.setItem(row, 5, ba_commodity_item)
-            self._table.setItem(row, 6, ba_profit_item)
-            self._table.setItem(row, 7, total_item)
+            self._table.setItem(row, 0, sys_a_item)
+            self._table.setItem(row, 1, station_a_item)
+            self._table.setItem(row, 2, sys_b_item)
+            self._table.setItem(row, 3, station_b_item)
+            self._table.setItem(row, 4, dist_item)
+            self._table.setItem(row, 5, ab_commodity_item)
+            self._table.setItem(row, 6, ab_profit_item)
+            self._table.setItem(row, 7, ba_commodity_item)
+            self._table.setItem(row, 8, ba_profit_item)
+            self._table.setItem(row, 9, total_item)
         self._table.setSortingEnabled(True)
-        self._table.sortItems(7, Qt.SortOrder.DescendingOrder)
+        self._table.sortItems(9, Qt.SortOrder.DescendingOrder)
 
     def _on_cell_clicked(self, row: int, column: int) -> None:
-        if column not in (0, 1):
+        if column not in (0, 1, 2, 3):
             return
         item = self._table.item(row, column)
-        if not item or not item.text():
-            return
-        # Strip the " (System)" suffix — copy just the station name.
-        name = item.text().rsplit(" (", 1)[0]
-        QApplication.clipboard().setText(name)
+        if item and item.text():
+            QApplication.clipboard().setText(item.text())
