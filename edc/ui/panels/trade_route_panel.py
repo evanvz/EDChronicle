@@ -211,9 +211,9 @@ class TradeRoutePanel(QWidget):
         fl.addWidget(self._status_label)
 
         self._table = QTableWidget()
-        self._table.setColumnCount(10)
+        self._table.setColumnCount(11)
         self._table.setHorizontalHeaderLabels(
-            ["System A", "Station A", "System B", "Station B", "Dist (ly)",
+            ["System A", "Station A", "Dist from You (ly)", "System B", "Station B", "A↔B Dist (ly)",
              "A→B: Buy", "A→B: Profit/u", "B→A: Buy", "B→A: Profit/u", "Total Profit"]
         )
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -230,11 +230,14 @@ class TradeRoutePanel(QWidget):
             "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
         )
         h = self._table.horizontalHeader()
-        for c in (0, 1, 2, 3):
+        for c in (0, 1, 3, 4):
             h.setSectionResizeMode(c, QHeaderView.ResizeMode.Stretch)
-        for c in range(4, 10):
+        for c in (2, 5, 6, 7, 8, 9, 10):
             h.setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
-        self._table.setToolTip("Click a System or Station cell to copy its name to the clipboard.")
+        self._table.setToolTip(
+            "Click a System or Station cell to copy its name to the clipboard. "
+            "Station A is always the closer of the two to your current location."
+        )
         self._table.cellClicked.connect(self._on_cell_clicked)
         fl.addWidget(self._table, 1)
 
@@ -316,6 +319,7 @@ class TradeRoutePanel(QWidget):
         for row, loop in enumerate(loops):
             sys_a_item = QTableWidgetItem(loop["system_a"])
             station_a_item = QTableWidgetItem(loop["station_a"])
+            dist_you_item = _NumericTableWidgetItem(f"{loop['dist_from_you']:.1f}", loop["dist_from_you"])
             sys_b_item = QTableWidgetItem(loop["system_b"])
             station_b_item = QTableWidgetItem(loop["station_b"])
             dist_item = _NumericTableWidgetItem(f"{loop['distance_ly']:.1f}", loop["distance_ly"])
@@ -326,24 +330,25 @@ class TradeRoutePanel(QWidget):
             ba_profit_item = _NumericTableWidgetItem(f"{leg_ba['profit_per_unit']:,}", float(leg_ba["profit_per_unit"]))
             total_item = _NumericTableWidgetItem(f"{loop['total_profit']:,}", float(loop["total_profit"]))
             total_item.setForeground(QColor("#6BCB77"))
-            for it in (dist_item, ab_profit_item, ba_profit_item, total_item):
+            for it in (dist_you_item, dist_item, ab_profit_item, ba_profit_item, total_item):
                 it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
             self._table.setItem(row, 0, sys_a_item)
             self._table.setItem(row, 1, station_a_item)
-            self._table.setItem(row, 2, sys_b_item)
-            self._table.setItem(row, 3, station_b_item)
-            self._table.setItem(row, 4, dist_item)
-            self._table.setItem(row, 5, ab_commodity_item)
-            self._table.setItem(row, 6, ab_profit_item)
-            self._table.setItem(row, 7, ba_commodity_item)
-            self._table.setItem(row, 8, ba_profit_item)
-            self._table.setItem(row, 9, total_item)
+            self._table.setItem(row, 2, dist_you_item)
+            self._table.setItem(row, 3, sys_b_item)
+            self._table.setItem(row, 4, station_b_item)
+            self._table.setItem(row, 5, dist_item)
+            self._table.setItem(row, 6, ab_commodity_item)
+            self._table.setItem(row, 7, ab_profit_item)
+            self._table.setItem(row, 8, ba_commodity_item)
+            self._table.setItem(row, 9, ba_profit_item)
+            self._table.setItem(row, 10, total_item)
         self._table.setSortingEnabled(True)
-        self._table.sortItems(9, Qt.SortOrder.DescendingOrder)
+        self._table.sortItems(10, Qt.SortOrder.DescendingOrder)
 
     def _on_cell_clicked(self, row: int, column: int) -> None:
-        if column not in (0, 1, 2, 3):
+        if column not in (0, 1, 3, 4):
             return
         item = self._table.item(row, column)
         if item and item.text():

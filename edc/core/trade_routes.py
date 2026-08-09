@@ -25,7 +25,12 @@ def find_trade_loops(
     Returns loops sorted by total round-trip profit (both legs, each
     capped by cargo_capacity and that leg's own stock/demand — you can't
     buy more than a station has in stock or sell more than it demands),
-    descending, capped at max_results.
+    descending, capped at max_results. "Station A" is always whichever
+    end of the loop is closer to the reference point passed into
+    get_market_snapshot_in_radius (i.e. wherever you actually are) —
+    each station dict's own "distance_ly" field, carried through as
+    "dist_from_you" on the loop — so results always read as "fly here
+    first," not an arbitrary pairing order.
     """
     market_ids = list(stations.keys())
     loops: List[dict] = []
@@ -46,10 +51,20 @@ def find_trade_loops(
                 (a["x"] - b["x"]) ** 2 + (a["y"] - b["y"]) ** 2 + (a["z"] - b["z"]) ** 2
             ) ** 0.5
 
+            # "Station A" always means "whichever end of the loop is
+            # closer to you right now" — the pairing above is symmetric
+            # (A->B->A and B->A->B are the same loop), so without this the
+            # dict-iteration order decided which one got called "A", with
+            # no relation to which one you'd actually want to fly to first.
+            if b["distance_ly"] < a["distance_ly"]:
+                a, b = b, a
+                leg_ab, leg_ba = leg_ba, leg_ab
+
             loops.append({
                 "station_a": a["station_name"], "system_a": a["system_name"], "pad_a": a["pad_size"],
                 "station_b": b["station_name"], "system_b": b["system_name"], "pad_b": b["pad_size"],
                 "distance_ly": distance_ly,
+                "dist_from_you": a["distance_ly"],
                 "leg_a_to_b": leg_ab,
                 "leg_b_to_a": leg_ba,
                 "total_profit": leg_ab["profit"] + leg_ba["profit"],
