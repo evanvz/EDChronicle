@@ -1036,10 +1036,21 @@ class EventEngine:
                     })
                     self.state.rings[ring_name] = rec
 
+                body_id = event.get("BodyID")
+                if isinstance(body_id, int) and not ring_match and "Belt Cluster" not in body:
+                    # Stars scan with no PlanetClass and used to hit the
+                    # early-return below before ever reaching this, so a
+                    # system's own star(s) never counted as "resolved" —
+                    # confirmed live: 25/26 resolved, 1 unknown, on a
+                    # fully-discovered single-star system. Rings and belt
+                    # clusters get their own BodyID too but aren't counted
+                    # in system_body_count (FSSDiscoveryScan.BodyCount), so
+                    # both are excluded here the same way.
+                    self.state.resolved_body_ids.add(body_id)
+
                 planet_class = event.get("PlanetClass") or ""
                 if not planet_class:
                     return self.state, msgs
-                body_id = event.get("BodyID")
                 if isinstance(body_id, int):
                     self.state.body_id_to_name[body_id] = body
                 terraform_state = event.get("TerraformState") or ""
@@ -1111,8 +1122,6 @@ class EventEngine:
                 if body in self.state.geo_signals:
                     rec["GeoSignals"] = self.state.geo_signals.get(body, 0)
                 self.state.bodies[body] = rec
-                if isinstance(body_id, int):
-                    self.state.resolved_body_ids.add(body_id)
 
                 if isinstance(est, int) and est > 0:
                     body_key = f"{self.state.system_address}|{body}"

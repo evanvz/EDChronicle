@@ -519,6 +519,26 @@ class TTSEngine:
         except Exception:
             pass
 
+    # Fixed (not randomized) voice — squadron chat is real people, not
+    # simulated NPC background chatter, so it should sound like the same
+    # "operator" every time rather than a different random voice per line.
+    _SQUADRON_VOICE = "en-US-SteffanNeural"
+
+    def speak_squadron(self, text: str):
+        """Queue a squadron-chat phrase using a fixed voice distinct from
+        both the main alert voice and the randomized NPC comms pool."""
+        if not self._comms_enabled:
+            return
+        if not isinstance(text, str) or not text.strip():
+            return
+        if self._comms_queue.qsize() >= 3:
+            return
+        self._comms_counter += 1
+        try:
+            self._comms_queue.put_nowait((5, self._comms_counter, text, self._SQUADRON_VOICE))
+        except Exception:
+            pass
+
     def load_from_config(self, cfg):
         """Apply settings from AppConfig."""
         try:
