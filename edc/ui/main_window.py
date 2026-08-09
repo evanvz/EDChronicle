@@ -1467,12 +1467,45 @@ class MainWindow(QMainWindow):
     def stop_watching(self):
         self.watcher_controller.stop_watching()
 
+    def _stop_background_threads(self, obj, depth: int = 2, seen: set | None = None) -> None:
+        """
+        Quits and waits for every still-running QThread reachable from obj
+        (its own attributes, dict values like _bucket_dialogs, and nested
+        QWidget panels like PowerplayPanel.finder_panel) — confirmed from
+        real crash logs this session that a background worker (EDSM/Canonn/
+        market/etc. lookup) mid-flight when the app closes gets destroyed
+        while still running, a hard Qt fatal. Reflection-based rather than
+        a hardcoded thread-attribute list, since this app has ~15 QThread
+        workers spread across main_window.py and several panels and new
+        ones keep getting added — a fixed list would silently rot.
+        """
+        if seen is None:
+            seen = set()
+        if id(obj) in seen or depth < 0 or not hasattr(obj, "__dict__"):
+            return
+        seen.add(id(obj))
+        for attr_name in list(vars(obj)):
+            try:
+                val = getattr(obj, attr_name, None)
+            except Exception:
+                continue
+            if isinstance(val, QThread):
+                if val.isRunning():
+                    val.quit()
+                    val.wait(3000)
+            elif isinstance(val, dict):
+                for v in list(val.values()):
+                    self._stop_background_threads(v, depth - 1, seen)
+            elif isinstance(val, QWidget) and depth > 0:
+                self._stop_background_threads(val, depth - 1, seen)
+
     def closeEvent(self, event):
         import traceback
         log.info("closeEvent triggered:\n%s", "".join(traceback.format_stack()))
         self.stop_watching()
         self._stop_voice_commands()
         self._stop_eddn_listener()
+        self._stop_background_threads(self)
         super().closeEvent(event)
 
     def _on_status(self, msg: str):

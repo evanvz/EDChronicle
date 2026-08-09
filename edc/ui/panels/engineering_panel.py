@@ -327,9 +327,14 @@ class _ShipEngineeringTab(QWidget):
         entry = self._wishlist[row]
         engineers = self._blueprints.engineers_for(entry["fdname"], entry["grade"])
 
-        ref_x = getattr(self._state, "system_x", 0.0) if self._state else 0.0
-        ref_y = getattr(self._state, "system_y", 0.0) if self._state else 0.0
-        ref_z = getattr(self._state, "system_z", 0.0) if self._state else 0.0
+        # getattr's default only covers a missing attribute — state.system_x
+        # can exist but be None (e.g. before any position data has arrived
+        # yet), which getattr would pass through unchanged and crash the
+        # distance calc below.
+        ref_x = getattr(self._state, "system_x", None) if self._state else None
+        ref_y = getattr(self._state, "system_y", None) if self._state else None
+        ref_z = getattr(self._state, "system_z", None) if self._state else None
+        ref_x, ref_y, ref_z = ref_x or 0.0, ref_y or 0.0, ref_z or 0.0
         progress = getattr(self._state, "engineer_progress", {}) or {} if self._state else {}
 
         rows = []
@@ -675,9 +680,14 @@ class _OdysseyEngineeringTab(QWidget):
             "to try a different mod."
         )
 
-        ref_x = getattr(self._state, "system_x", 0.0) if self._state else 0.0
-        ref_y = getattr(self._state, "system_y", 0.0) if self._state else 0.0
-        ref_z = getattr(self._state, "system_z", 0.0) if self._state else 0.0
+        # getattr's default only covers a missing attribute — state.system_x
+        # can exist but be None (e.g. before any position data has arrived
+        # yet), which getattr would pass through unchanged and crash the
+        # distance calc below.
+        ref_x = getattr(self._state, "system_x", None) if self._state else None
+        ref_y = getattr(self._state, "system_y", None) if self._state else None
+        ref_z = getattr(self._state, "system_z", None) if self._state else None
+        ref_x, ref_y, ref_z = ref_x or 0.0, ref_y or 0.0, ref_z or 0.0
 
         rows = []
         for eng_name in engineers:
