@@ -11,10 +11,9 @@ from PyQt6.QtCore import Qt, QObject, QThread, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QSpinBox, QCheckBox, QTableWidget, QTableWidgetItem, QHeaderView, QFrame,
+    QSpinBox, QComboBox, QCheckBox, QTableWidget, QTableWidgetItem, QHeaderView, QFrame,
 )
 
-from edc.core.station_pads import ship_pad_size
 from edc.core.trade_routes import find_trade_loops
 from edc.ui.busy_spinner import BusySpinner
 from edc.ui.panels.market_panel import _NumericTableWidgetItem
@@ -115,7 +114,6 @@ class TradeRoutePanel(QWidget):
         self._system: str = ""
         self._ref_x = self._ref_y = self._ref_z = 0.0
         self._cargo_capacity: Optional[int] = None
-        self._required_pad: Optional[str] = None
         self._my_power: Optional[str] = None
         self._thread: Optional[QThread] = None
         self._worker: Optional[_TradeRouteWorker] = None
@@ -150,14 +148,6 @@ class TradeRoutePanel(QWidget):
         self._cargo_label.setStyleSheet(_LABEL_STYLE)
         fl.addWidget(self._cargo_label)
 
-        self._pad_label = QLabel("Required pad: unknown")
-        self._pad_label.setStyleSheet(_LABEL_STYLE)
-        self._pad_label.setToolTip(
-            "Stations with a confirmed pad too small for your current ship are excluded — "
-            "stations with unknown pad size are left in rather than guessed against."
-        )
-        fl.addWidget(self._pad_label)
-
         row = QHBoxLayout()
         row.setSpacing(8)
         range_label = QLabel("Range:")
@@ -172,6 +162,18 @@ class TradeRoutePanel(QWidget):
             "Kept tighter than Market's search range — pairing every station up is much more "
             "expensive than a single-commodity lookup, so a smaller radius keeps it fast."
         )
+        pad_label = QLabel("Min pad:")
+        pad_label.setStyleSheet(_LABEL_STYLE)
+        self._pad_filter_combo = QComboBox()
+        self._pad_filter_combo.addItem("Any", None)
+        self._pad_filter_combo.addItem("Medium+", "M")
+        self._pad_filter_combo.addItem("Large only", "L")
+        self._pad_filter_combo.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
+        self._pad_filter_combo.setToolTip(
+            "Manual, like Market's equivalent filter — set to whatever your current ship needs. "
+            "Kept manual (not auto-detected from your ship) so a future ship the app doesn't "
+            "recognize can't silently misfilter results."
+        )
         self._search_btn = QPushButton("Search")
         self._search_btn.setStyleSheet(
             "QPushButton { background:#1a3a5a; color:#FFB347; border:1px solid #2a5a8a;"
@@ -182,6 +184,8 @@ class TradeRoutePanel(QWidget):
         self._search_btn.clicked.connect(self._start_search)
         row.addWidget(range_label)
         row.addWidget(self._range_spin)
+        row.addWidget(pad_label)
+        row.addWidget(self._pad_filter_combo)
         row.addWidget(self._search_btn)
         row.addStretch(1)
         fl.addLayout(row)
@@ -247,17 +251,11 @@ class TradeRoutePanel(QWidget):
         self._ref_z = float(getattr(state, "system_z", 0.0) or 0.0)
         self._cargo_capacity = getattr(state, "cargo_capacity", None)
         self._my_power = getattr(state, "pp_power", None) or None
-        self._required_pad = ship_pad_size(getattr(state, "ship_type", None))
         self._location_label.setText(f"Location: {self._system or '—'}")
         if isinstance(self._cargo_capacity, int) and self._cargo_capacity > 0:
             self._cargo_label.setText(f"Cargo capacity: {self._cargo_capacity}t (from current ship)")
         else:
             self._cargo_label.setText("Cargo capacity: unknown (fly at least once this session)")
-        pad_name = {"S": "Small", "M": "Medium", "L": "Large"}.get(self._required_pad)
-        if pad_name:
-            self._pad_label.setText(f"Required pad: {pad_name} (from current ship) — smaller-pad stations excluded")
-        else:
-            self._pad_label.setText("Required pad: unknown for this ship — pad size not filtered")
         self._search_btn.setEnabled(bool(self._system) and bool(self._cargo_capacity))
 
     def _start_search(self) -> None:
@@ -293,7 +291,7 @@ class TradeRoutePanel(QWidget):
             self._repo.db.db_path, self._ref_x, self._ref_y, self._ref_z, radius,
             self._cargo_capacity, self._exclude_enemy_pp_check.isChecked(), self._my_power,
             self._edsm_powerplay, self._faction_only_check.isChecked(), squadron_faction_name,
-            self._required_pad,
+            self._pad_filter_combo.currentData(),
         )
         self._thread = QThread()
         self._worker.moveToThread(self._thread)

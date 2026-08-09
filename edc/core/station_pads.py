@@ -65,42 +65,6 @@ def effective_pad_size(
     return pad_size_hint(station_type)
 
 
-# Ship internal name -> pad size it requires to dock. From FDev's own
-# internal ship identifiers (as seen in the Loadout event's "Ship" field —
-# krait_mkii, diamondbackxl, cutter, and python confirmed directly against
-# this project's own journal data; the rest are well-established community
-# knowledge, not individually re-verified here). Ships not yet confirmed
-# (e.g. very recently released ones) are deliberately left out rather than
-# guessed — ship_pad_size() returns None for anything not in this table,
-# and callers should treat that as "unknown," not "small."
-SHIP_PAD_SIZE: Dict[str, str] = {
-    # Small
-    "sidewinder": "S", "eagle": "S", "empire_eagle": "S", "hauler": "S",
-    "adder": "S", "viper": "S", "viper_mkiv": "S", "cobramkiii": "S",
-    "cobramkiv": "S", "diamondback": "S", "diamondbackxl": "S",
-    "empire_courier": "S",
-    # Medium
-    "vulture": "M", "asp": "M", "asp_scout": "M",
-    "federation_dropship": "M", "federation_dropship_mkii": "M",
-    "federation_gunship": "M", "independant_trader": "M", "type6": "M",
-    "typex": "M", "typex_2": "M", "typex_3": "M", "krait_light": "M",
-    "krait_mkii": "M", "mamba": "M", "python": "M", "python_nx": "M",
-    "ferdelance": "M", "dolphin": "M",
-    # Large
-    "type7": "L", "type9": "L", "type9_military": "L", "type10": "L",
-    "anaconda": "L", "federation_corvette": "L", "cutter": "L",
-    "empire_trader": "L", "imperial_clipper": "L", "orca": "L",
-    "belugaliner": "L",
-}
-
-
-def ship_pad_size(ship_internal_name: Optional[str]) -> Optional[str]:
-    """'S'/'M'/'L' for a known ship, or None if not in SHIP_PAD_SIZE —
-    callers must treat None as genuinely unknown, not as any particular
-    size."""
-    return SHIP_PAD_SIZE.get((ship_internal_name or "").strip().lower())
-
-
 def has_interstellar_factors(station_services: Any) -> bool:
     """StationServices (array of strings) includes "Facilitator" for
     stations offering Interstellar Factors (bounty/fine clearance)."""

@@ -713,9 +713,6 @@ class EventEngine:
             cargo_cap = event.get("CargoCapacity")
             if isinstance(cargo_cap, int):
                 self.state.cargo_capacity = cargo_cap
-            ship = event.get("Ship")
-            if isinstance(ship, str) and ship.strip():
-                self.state.ship_type = ship.strip()
 
         elif name == "Powerplay":
             self.state.pp_power = event.get("Power")
