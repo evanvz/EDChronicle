@@ -44,6 +44,51 @@ class _RingSearchWorker(QObject):
         self.finished.emit(results, error)
 
 
+class _CargoMarketSearchWorker(QObject):
+    """
+    Opens its own SQLite connection — search_market_prices() against the
+    galaxy-wide market_prices table (13M+ rows) takes several seconds even
+    with the bounding-box pre-filter (confirmed: 2-6s per commodity on a
+    real database). Looping that once per distinct cargo commodity used to
+    run directly on the UI thread, freezing the whole app for the sum of
+    all of them — confirmed live: a mixed cargo hold froze the app for
+    30-60 seconds. Same fix shape as _RingSearchWorker/_TradeOpportunityWorker.
+    """
+    finished = pyqtSignal(list, int)  # (rows, commodity_count)
+
+    def __init__(self, db_path, qty_by_commodity, display_by_commodity, ref_x, ref_y, ref_z, radius_ly, exclude_market_id):
+        super().__init__()
+        self._db_path = db_path
+        self._qty_by_commodity = qty_by_commodity
+        self._display_by_commodity = display_by_commodity
+        self._ref_x, self._ref_y, self._ref_z = ref_x, ref_y, ref_z
+        self._radius_ly = radius_ly
+        self._exclude_market_id = exclude_market_id
+
+    def run(self):
+        from persistence.database import Database
+        from persistence.repository import Repository
+
+        db = Database(self._db_path)
+        repo = Repository(db)
+        rows = []
+        try:
+            for key, qty in self._qty_by_commodity.items():
+                try:
+                    results = repo.search_market_prices(
+                        key, self._ref_x, self._ref_y, self._ref_z, float(self._radius_ly),
+                        exclude_market_id=self._exclude_market_id,
+                    )
+                except Exception:
+                    log.exception("Cargo market search failed for %s", key)
+                    continue
+                for r in results[:8]:
+                    rows.append((self._display_by_commodity[key], qty, r))
+        finally:
+            db.close()
+        self.finished.emit(rows, len(self._qty_by_commodity))
+
+
 class MiningPanel(QWidget):
     """
     Owns all widgets and refresh logic for the Mining tab.
@@ -71,6 +116,8 @@ class MiningPanel(QWidget):
         self._last_ring_results: List[MiningRingResult] = []
         self._cargo_rows_raw: list = []
         self._cargo_commodity_count: int = 0
+        self._cargo_thread: Optional[QThread] = None
+        self._cargo_worker: Optional[_CargoMarketSearchWorker] = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 8)
@@ -386,6 +433,8 @@ class MiningPanel(QWidget):
             self._cargo_status_label.setText("Cargo hold is empty — nothing to search for.")
             self._cargo_market_table.setRowCount(0)
             return
+        if self._cargo_thread and self._cargo_thread.isRunning():
+            return
 
         # Sum quantity per distinct commodity — the same item can appear as
         # multiple entries (e.g. a regular stack plus a mission-tagged stack).
@@ -401,25 +450,27 @@ class MiningPanel(QWidget):
             qty_by_commodity[key] = qty_by_commodity.get(key, 0) + int(c.get("Count") or 0)
             display_by_commodity.setdefault(key, c.get("Name_Localised") or raw_name.title())
 
-        # Fetch more than the top-3-per-commodity we'll actually show, since
-        # the pad filter is applied afterward at render time — otherwise
-        # filtering could leave fewer than 3 shown even when a valid 4th or
-        # 5th destination exists.
-        rows = []
-        for key, qty in qty_by_commodity.items():
-            try:
-                results = self._repo.search_market_prices(
-                    key, self._ref_x, self._ref_y, self._ref_z, float(self._market_radius_ly),
-                    exclude_market_id=self._current_market_id,
-                )
-            except Exception:
-                log.exception("Cargo market search failed for %s", key)
-                continue
-            for r in results[:8]:
-                rows.append((display_by_commodity[key], qty, r))
+        # One search_market_prices() call per distinct commodity, each
+        # several seconds against the galaxy-wide market_prices table —
+        # backgrounded so it can't freeze the app (confirmed live it did,
+        # for 30-60s with a mixed cargo hold, before this fix).
+        self._cargo_search_btn.setEnabled(False)
+        self._cargo_status_label.setText(f"Searching markets for {len(qty_by_commodity)} commodities…")
+        self._cargo_worker = _CargoMarketSearchWorker(
+            self._repo.db.db_path, qty_by_commodity, display_by_commodity,
+            self._ref_x, self._ref_y, self._ref_z, self._market_radius_ly, self._current_market_id,
+        )
+        self._cargo_thread = QThread()
+        self._cargo_worker.moveToThread(self._cargo_thread)
+        self._cargo_thread.started.connect(self._cargo_worker.run)
+        self._cargo_worker.finished.connect(self._on_cargo_search_finished)
+        self._cargo_worker.finished.connect(self._cargo_thread.quit)
+        self._cargo_thread.start()
 
+    def _on_cargo_search_finished(self, rows: list, commodity_count: int) -> None:
+        self._cargo_search_btn.setEnabled(bool(self._system) and bool(self._cargo_inventory))
         self._cargo_rows_raw = rows
-        self._cargo_commodity_count = len(qty_by_commodity)
+        self._cargo_commodity_count = commodity_count
         self._render_cargo_markets()
 
     def _render_cargo_markets(self) -> None:
