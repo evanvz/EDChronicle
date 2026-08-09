@@ -913,7 +913,6 @@ class MainWindow(QMainWindow):
         _vc_config_path = app_dir / "settings" / "voice_commands.json"
         self.voice_commands_panel = VoiceCommandsPanel(_vc_config_path, app_dir / "models")
         self.voice_commands_panel.commands_changed.connect(self._on_voice_commands_config_changed)
-        self.voice_commands_panel.feedback_test_requested.connect(self._on_feedback_volume_test)
 
         # Settings tab
         tab_settings = QWidget()
@@ -2189,11 +2188,6 @@ class MainWindow(QMainWindow):
         else:
             self._stop_voice_commands()
 
-    def _on_feedback_volume_test(self):
-        """Voice Cmds panel Test button — play the cue tone at the currently
-        configured feedback volume."""
-        self._play_radio_click()
-
     def _feedback_volume(self) -> float:
         """Voice-command feedback volume from the Voice Cmds panel slider —
         independent of the main voice and comms volumes."""
@@ -2360,8 +2354,12 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(6000, self.close)
 
     def _on_voice_trigger_heard(self):
-        """Trigger word heard — 'now listening for the command' cue."""
-        self._play_radio_click()
+        """Trigger word heard. No audio cue — removed per user request: the
+        click read as too sharp, and since trigger detection also fires on
+        Vosk *partial* results (accepted early for responsiveness, not just
+        the more reliable final result), it could play on a brief mis-hear
+        of background/game audio as the trigger word, not just a real one."""
+        pass
 
     def _on_voice_unrecognised(self):
         """Trigger word was heard but the phrase matched nothing — closing

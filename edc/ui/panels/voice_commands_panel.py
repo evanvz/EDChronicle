@@ -226,7 +226,6 @@ class VoiceCommandsPanel(QWidget):
     """Main voice commands configuration panel."""
 
     commands_changed = pyqtSignal()
-    feedback_test_requested = pyqtSignal()
 
     def __init__(self, config_path: Path, models_dir: Path | None = None):
         super().__init__()
@@ -313,11 +312,7 @@ class VoiceCommandsPanel(QWidget):
         self._volume_label = QLabel("50%")
         self._volume_label.setMinimumWidth(40)
         vol_layout.addWidget(self._volume_label)
-        btn_test_volume = QPushButton("Test")
-        btn_test_volume.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        btn_test_volume.clicked.connect(self._on_test_volume)
-        vol_layout.addWidget(btn_test_volume)
-        vol_layout.addWidget(QLabel("(beeps, startup and confirm phrases — other voices unaffected)"))
+        vol_layout.addWidget(QLabel("(unrecognised/not-focused click cues and confirm phrases — other voices unaffected)"))
         vol_layout.addStretch()
         root.addLayout(vol_layout)
 
@@ -384,10 +379,6 @@ class VoiceCommandsPanel(QWidget):
 
     def _on_volume_changed(self, value: int):
         self._volume_label.setText(f"{value}%")
-
-    def _on_test_volume(self):
-        self._save_config()
-        self.feedback_test_requested.emit()
 
     def feedback_volume(self) -> float:
         """Voice-command feedback volume (0.0-1.0) — beeps, startup and
