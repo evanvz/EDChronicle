@@ -158,6 +158,10 @@ def run():
         selection-color: #000000;
     }
 
+    QHeaderView {
+        background-color: #151515;
+    }
+
     QHeaderView::section {
         background-color: #151515;
         border: none;
