@@ -285,6 +285,8 @@ class MarketPanel(QWidget):
         # so a destination found at an earlier station isn't lost once you
         # undock and the current-market data clears.
         self._cargo_destinations: dict = {}
+        self._last_trade_opportunities_raw: list = []
+        self._last_trade_station: str = ""
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 8)
@@ -389,7 +391,7 @@ class MarketPanel(QWidget):
             "yours (from EDSM's daily PowerPlay dump — systems with no known "
             "PowerPlay presence are left in, not treated as enemy)."
         )
-        self._exclude_enemy_pp_check.toggled.connect(self._apply_pad_filter)
+        self._exclude_enemy_pp_check.toggled.connect(self._on_exclude_enemy_pp_toggled)
 
         range_label = QLabel("Range:")
         range_label.setStyleSheet(_LABEL_STYLE)
@@ -747,17 +749,31 @@ class MarketPanel(QWidget):
 
     def _on_trade_opportunities_result(self, opportunities: list, station: str):
         self._trade_refresh_btn.setEnabled(True)
+        self._last_trade_opportunities_raw = opportunities
+        self._last_trade_station = station
+        self._render_trade_opportunities()
+
+    def _render_trade_opportunities(self) -> None:
+        opportunities = self._last_trade_opportunities_raw or []
+        station = self._last_trade_station
+
         # Merge (don't replace) — a destination remembered from an earlier
         # station visit must survive later visits to other stations, since
         # whatever's still in cargo from that earlier stop still needs it.
+        # Enemy-PowerPlay systems are excluded before this merge too, so an
+        # excluded destination is never remembered/recommended later either.
+        # Re-applied (not just once) so toggling the checkbox off restores
+        # a previously-excluded destination instead of it staying dropped.
+        opportunities, enemy_excluded = self._filter_enemy_pp(opportunities)
         for o in opportunities:
             key = normalize_commodity_name(o.get("name") or "")
             if key:
                 self._cargo_destinations[key] = o
 
+        excluded_note = f" ({enemy_excluded} enemy-PowerPlay destination{'s' if enemy_excluded != 1 else ''} excluded)" if enemy_excluded else ""
         self._trade_status_label.setText(
             f"{station or 'Current station'}: {len(opportunities)} profitable "
-            f"destination{'s' if len(opportunities) != 1 else ''} found."
+            f"destination{'s' if len(opportunities) != 1 else ''} found.{excluded_note}"
         )
 
         self._trade_table.setSortingEnabled(False)
@@ -921,6 +937,30 @@ class MarketPanel(QWidget):
         if self._last_results is not None:
             self._render_results()
 
+    def _on_exclude_enemy_pp_toggled(self) -> None:
+        if self._last_results is not None:
+            self._render_results()
+        self._render_trade_opportunities()
+
+    def _filter_enemy_pp(self, results: list) -> tuple[list, int]:
+        """Drops entries in systems currently controlled by a Power other
+        than the player's own pledged one (from EDSM's daily PowerPlay
+        dump) — shared by the manual search and Trade Opportunities so one
+        checkbox governs both. A system with no known PowerPlay presence is
+        left in, not treated as enemy. Returns (kept, excluded_count)."""
+        if not self._exclude_enemy_pp_check.isChecked() or not self._my_power or not self._edsm_powerplay:
+            return results, 0
+        kept = []
+        excluded = 0
+        for r in results:
+            controller = self._edsm_powerplay.get_controller_by_name(r.get("system_name"))
+            controlling_power = (controller or {}).get("power") or ""
+            if controlling_power and controlling_power != self._my_power:
+                excluded += 1
+            else:
+                kept.append(r)
+        return kept, excluded
+
     def _render_results(self) -> None:
         results = self._last_results or []
         raw, radius, buy_mode = self._last_search_desc
@@ -935,17 +975,7 @@ class MarketPanel(QWidget):
                 or rank[r.get("pad_size") or pad_size_hint(r.get("station_type"))] >= min_rank
             ]
 
-        enemy_excluded = 0
-        if self._exclude_enemy_pp_check.isChecked() and self._my_power and self._edsm_powerplay:
-            kept = []
-            for r in results:
-                controller = self._edsm_powerplay.get_controller_by_name(r.get("system_name"))
-                controlling_power = (controller or {}).get("power") or ""
-                if controlling_power and controlling_power != self._my_power:
-                    enemy_excluded += 1
-                else:
-                    kept.append(r)
-            results = kept
+        results, enemy_excluded = self._filter_enemy_pp(results)
 
         verb = "buying" if buy_mode else "selling"
         near_label = self._last_near_label or self._system
