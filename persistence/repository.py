@@ -351,6 +351,16 @@ class Repository:
                 1 if is_squadron_faction else 0,
             ),
         )
+        # Rolling 30-day retention — one row/day already matches the real
+        # BGS tick rate, so this just bounds DB growth over time.
+        self.db.execute(
+            """
+            DELETE FROM faction_snapshots
+            WHERE system_address = ? AND faction_name = ?
+              AND snapshot_date < date('now', '-30 days')
+            """,
+            (system_address, name),
+        )
 
     def get_player_faction_overview(self) -> Optional[dict]:
         """
@@ -1386,18 +1396,20 @@ class Repository:
         self.db.conn.execute("DELETE FROM colonisation_depots WHERE id = ?", (depot_id,))
         self.db.conn.commit()
 
-    def get_faction_history(self, system_address: int) -> list[dict]:
-        rows = self.db.execute(
-            """
+    def get_faction_history(self, system_address: int, faction_name: Optional[str] = None) -> list[dict]:
+        query = """
             SELECT faction_name, snapshot_date, influence, government, allegiance,
                    faction_state, happiness, active_states, pending_states,
                    recovering_states, is_controlling
             FROM faction_snapshots
             WHERE system_address = ?
-            ORDER BY snapshot_date DESC, faction_name ASC
-            """,
-            (system_address,),
-        ).fetchall()
+        """
+        params: tuple = (system_address,)
+        if faction_name:
+            query += " AND faction_name = ?"
+            params += (faction_name,)
+        query += " ORDER BY snapshot_date DESC, faction_name ASC"
+        rows = self.db.execute(query, params).fetchall()
         return [dict(r) for r in rows]
 
     def get_codex_entries(self, system_address: int):

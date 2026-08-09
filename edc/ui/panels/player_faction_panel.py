@@ -1030,7 +1030,7 @@ class PlayerFactionPanel(QWidget):
         self._bucket_dialogs["search"].set_systems(systems)
 
     def _build_row_items(self, s: dict) -> List[QTableWidgetItem]:
-        """Builds the 9 QTableWidgetItems for one systems-table row from a
+        """Builds the 8 QTableWidgetItems for one systems-table row from a
         faction-status dict. Shared by the full rebuild in refresh() and by
         refresh_single_system()'s targeted single-row update."""
         name_item = QTableWidgetItem(s.get("system_name") or f"Unknown ({s.get('system_address')})")
@@ -1062,28 +1062,27 @@ class PlayerFactionPanel(QWidget):
         action_item.setForeground(QColor(color))
         action_item.setToolTip(action_text)
 
-        system_address = s.get("system_address")
-        prediction = self._last_predictions.get(system_address) if isinstance(system_address, int) else None
-        forecast_text, forecast_color = _format_forecast(prediction)
-        forecast_item = QTableWidgetItem(forecast_text)
-        forecast_item.setForeground(QColor(forecast_color))
-        forecast_item.setToolTip(forecast_text)
+        # Forecast moved into the per-system History dialog (click the
+        # Influence cell) — it used to be a Stretch column here competing
+        # with Action for the same leftover width, which is why both were
+        # getting visibly truncated.
+        infl_item.setToolTip("Click for BGS influence history")
 
         # Active/Pending states can list several comma-joined names too —
-        # same narrow-window truncation risk as Action/Forecast.
+        # same narrow-window truncation risk as Action.
         if active_names:
             active_item.setToolTip(", ".join(active_names))
         if pending_names:
             pending_item.setToolTip(", ".join(pending_names))
 
-        for it in (infl_item, ctrl_item, active_item, pending_item, rep_item, forecast_item):
+        for it in (infl_item, ctrl_item, active_item, pending_item, rep_item):
             it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         if s.get("is_controlling"):
             ctrl_item.setForeground(QColor("#6BCB77"))
         if pending_names:
             pending_item.setForeground(QColor("#FFD93D"))
 
-        row_items = [name_item, infl_item, ctrl_item, active_item, pending_item, rep_item, action_item, forecast_item]
+        row_items = [name_item, infl_item, ctrl_item, active_item, pending_item, rep_item, action_item]
         # War/Civil War/Election/Pirate Attack are the states that most
         # urgently need squadron attention — highlight the whole row, not
         # just a cell, so it's obvious scanning down the System column alone.
@@ -1700,6 +1699,82 @@ class PlayerFactionPanel(QWidget):
         self.refresh(self._last_state)
 
 
+class _FactionHistoryDialog(QDialog):
+    """
+    Non-modal per-system BGS history drill-down, opened by clicking a bucket
+    table row's Influence cell. Holds the Forecast text that used to live in
+    its own table column (moved here since it was one of three Stretch
+    columns fighting Action for width) plus the real day-by-day snapshots
+    already collected in faction_snapshots — nothing new is persisted here,
+    this only displays what save_faction_snapshot() already records daily.
+    """
+
+    def __init__(self, panel: "PlayerFactionPanel", system_address: int, system_name: str):
+        super().__init__(None)
+        self._panel = panel
+        self._system_address = system_address
+        self.setWindowTitle(f"BGS History — {system_name}")
+        self.setStyleSheet("QDialog { background:#080f18; color:#c8c8c8; }")
+        self.resize(520, 420)
+
+        layout = QVBoxLayout(self)
+        self._forecast_label = QLabel("")
+        self._forecast_label.setWordWrap(True)
+        self._forecast_label.setStyleSheet("background:transparent; border:none; font-weight:bold; padding:4px;")
+        layout.addWidget(self._forecast_label)
+
+        self._table = QTableWidget()
+        self._table.setColumnCount(3)
+        self._table.setHorizontalHeaderLabels(["Date", "Influence", "Active State"])
+        self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+        self._table.verticalHeader().setVisible(False)
+        self._table.setAlternatingRowColors(True)
+        self._table.setStyleSheet(
+            "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
+            " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
+            "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
+            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
+        )
+        h = self._table.horizontalHeader()
+        h.setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
+        h.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
+        h.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self._table.setColumnWidth(0, 100)
+        self._table.setColumnWidth(1, 90)
+        layout.addWidget(self._table, 1)
+
+    def refresh(self) -> None:
+        prediction = self._panel._last_predictions.get(self._system_address)
+        forecast_text, forecast_color = _format_forecast(prediction)
+        self._forecast_label.setText(f"Forecast: {forecast_text}")
+        self._forecast_label.setStyleSheet(
+            f"background:transparent; border:none; font-weight:bold; padding:4px; color:{forecast_color};"
+        )
+
+        try:
+            history = self._panel._repo.get_faction_history(self._system_address, self._panel._faction_name)
+        except Exception:
+            log.exception("Failed to load faction history for system %s", self._system_address)
+            history = []
+
+        self._table.setRowCount(len(history))
+        for row, h in enumerate(history):
+            date_item = QTableWidgetItem(h.get("snapshot_date") or "—")
+            infl = h.get("influence")
+            infl_item = _NumericTableWidgetItem(
+                f"{infl * 100:.1f}%" if isinstance(infl, (int, float)) else "—",
+                float(infl) if isinstance(infl, (int, float)) else -1.0,
+            )
+            infl_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            active_names = [h.get("faction_state")] if h.get("faction_state") and h.get("faction_state") != "None" else []
+            active_names += [st for st in _parse_states(h.get("active_states")) if st not in active_names]
+            state_item = QTableWidgetItem(", ".join(active_names) if active_names else "—")
+            self._table.setItem(row, 0, date_item)
+            self._table.setItem(row, 1, infl_item)
+            self._table.setItem(row, 2, state_item)
+
+
 class _FactionBucketDialog(QDialog):
     """
     Non-modal detail window for one status bucket — stays open, movable, and
@@ -1751,10 +1826,12 @@ class _FactionBucketDialog(QDialog):
         self._recheck_status.setStyleSheet("background:transparent; border:none; color:#888888; font-size:11px;")
         layout.addWidget(self._recheck_status)
 
+        self._history_dialogs: Dict[int, "_FactionHistoryDialog"] = {}
+
         self._table = QTableWidget()
-        self._table.setColumnCount(10)
+        self._table.setColumnCount(9)
         self._table.setHorizontalHeaderLabels(
-            ["System", "Influence", "Controlling", "Active", "Pending", "Reputation", "Action", "Forecast", "Distance (ly)", ""]
+            ["System", "Influence", "Controlling", "Active", "Pending", "Reputation", "Action", "Distance (ly)", ""]
         )
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -1769,18 +1846,20 @@ class _FactionBucketDialog(QDialog):
             "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
         )
         h = self._table.horizontalHeader()
-        h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        for c in (1, 2, 3, 4, 5, 8, 9):
+        # Action is the sole Stretch column now — System used to also be
+        # Stretch, fighting Action (and Forecast, now removed) for the same
+        # leftover width, which is why Action text was getting cut off.
+        for c in (0, 1, 2, 3, 4, 5, 7, 8):
             h.setSectionResizeMode(c, QHeaderView.ResizeMode.Interactive)
         h.setSectionResizeMode(6, QHeaderView.ResizeMode.Stretch)
-        h.setSectionResizeMode(7, QHeaderView.ResizeMode.Stretch)
+        self._table.setColumnWidth(0, 220)
         self._table.setColumnWidth(1, 70)
         self._table.setColumnWidth(2, 90)
         self._table.setColumnWidth(3, 160)
         self._table.setColumnWidth(4, 140)
         self._table.setColumnWidth(5, 80)
+        self._table.setColumnWidth(7, 90)
         self._table.setColumnWidth(8, 90)
-        self._table.setColumnWidth(9, 90)
         self._table.setSortingEnabled(True)
         self._table.cellClicked.connect(self._on_cell_clicked)
         layout.addWidget(self._table, 1)
@@ -1812,7 +1891,7 @@ class _FactionBucketDialog(QDialog):
         ) if ref else {}
 
         header_label = "Leg (ly)" if self._route_mode else "Distance (ly)"
-        self._table.setHorizontalHeaderItem(8, QTableWidgetItem(header_label))
+        self._table.setHorizontalHeaderItem(7, QTableWidgetItem(header_label))
 
         self._table.setSortingEnabled(False)
         self._table.setRowCount(len(rows))
@@ -1834,7 +1913,7 @@ class _FactionBucketDialog(QDialog):
                     dist_text = f"{dist_value:.1f} ly"
             dist_item = _NumericTableWidgetItem(dist_text, dist_value)
             dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            items.insert(8, dist_item)
+            items.insert(7, dist_item)
 
             for col, item in enumerate(items):
                 self._table.setItem(row, col, item)
@@ -1932,8 +2011,8 @@ class _FactionBucketDialog(QDialog):
         self._apply_filter()
 
     def _on_cell_clicked(self, row: int, column: int) -> None:
-        if column == 9:  # Remove
-            item = self._table.item(row, 9)
+        if column == 8:  # Remove
+            item = self._table.item(row, 8)
             if item is None:
                 return
             system_address = item.data(Qt.ItemDataRole.UserRole)
@@ -1945,3 +2024,21 @@ class _FactionBucketDialog(QDialog):
             item = self._table.item(row, 0)
             if item and item.text():
                 QApplication.clipboard().setText(item.text())
+            return
+        if column == 1:  # Influence — click for BGS history
+            remove_item = self._table.item(row, 8)
+            name_item = self._table.item(row, 0)
+            if remove_item is None or name_item is None:
+                return
+            system_address = remove_item.data(Qt.ItemDataRole.UserRole)
+            if not isinstance(system_address, int):
+                return
+            system_name = name_item.text()
+            dlg = self._history_dialogs.get(system_address)
+            if dlg is None:
+                dlg = _FactionHistoryDialog(self._panel, system_address, system_name)
+                self._history_dialogs[system_address] = dlg
+            dlg.refresh()
+            dlg.show()
+            dlg.raise_()
+            dlg.activateWindow()

@@ -2565,14 +2565,25 @@ class MainWindow(QMainWindow):
         if not getattr(self.cfg, "comms_enabled", False):
             return
         channel = evt.get("Channel") or ""
-        if channel == "squadron":
+        if channel in ("squadron", "wing", "squadronleader"):
             msg = (evt.get("Message_Localised") or evt.get("Message") or "").strip()
             if not msg or msg.startswith("$"):
                 return
             from_name = evt.get("From_Localised") or evt.get("From") or "Squadron"
-            self.tts.speak_squadron(f"Squadron, {from_name}: {msg}")
+            label = "Wing" if channel == "wing" else "Squadron"
+            self.tts.speak_squadron(f"{label}, {from_name}: {msg}")
             return
-        if channel in ("player", "wing", "friend", "direct", "voicechat", "squadronleader"):
+        if channel == "player":
+            # Direct/private tell — notify only, don't read the content out
+            # (unlike squadron/local chatter, a private message may not be
+            # meant for whoever's in earshot).
+            msg = (evt.get("Message_Localised") or evt.get("Message") or "").strip()
+            if not msg or msg.startswith("$"):
+                return
+            from_name = evt.get("From_Localised") or evt.get("From") or "a commander"
+            self.tts.speak(f"Commander, private message from {from_name}.", priority=6)
+            return
+        if channel in ("friend", "direct", "voicechat"):
             return
         msg = (evt.get("Message_Localised") or evt.get("Message") or "").strip()
         if not msg or msg.startswith("$"):
