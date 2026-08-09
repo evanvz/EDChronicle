@@ -43,6 +43,89 @@ class SystemDataLoader:
 
         self.load_current_system_data()
 
+    def merge_new_spansh_bodies(self, system_address: int) -> None:
+        """
+        Non-destructive counterpart to load_current_system_data() — call
+        this after Spansh enrichment finishes saving new bodies, instead
+        of the full reload. load_current_system_data() clears state.bodies
+        before rebuilding it from the DB, which is correct on arrival in a
+        new system but was also being called here — discarding live scan
+        data from events that hadn't been persisted yet (confirmed live:
+        visibly emptied and refilled the Exploration tab's body cards
+        while an FSS scan was still in progress, purely from Spansh
+        enrichment completing at the same time by coincidence).
+        """
+        if not isinstance(system_address, int):
+            return
+        self._merge_spansh_bodies_into_state(system_address)
+        self._refresh_exploration()
+
+    def _merge_spansh_bodies_into_state(self, system_address: int) -> None:
+        # New bodies (Spansh knows about ones nobody's personally scanned
+        # yet) are added; bodies already in state.bodies only get NULL
+        # physical stats filled in — never overwrites live scan data.
+        _SPANSH_PHYS = (
+            ("SurfaceGravity",    "surface_gravity"),
+            ("Radius",            "radius"),
+            ("MassEM",            "mass_em"),
+            ("SurfaceTemperature","surface_temperature"),
+            ("SurfacePressure",   "surface_pressure"),
+            ("AtmosphereType",    "atmosphere_type"),
+            ("Volcanism",         "volcanism"),
+            ("TidalLock",         "tidal_lock"),
+        )
+        try:
+            for row in self.repo.get_spansh_bodies(system_address):
+                body_name = row["body_name"]
+                if not body_name:
+                    continue
+
+                if body_name in self.state.bodies:
+                    # Body already loaded from journal scan — patch any NULL physical stats
+                    existing = self.state.bodies[body_name]
+                    for rec_key, col in _SPANSH_PHYS:
+                        if existing.get(rec_key) is None and col in row.keys() and row[col] is not None:
+                            val = row[col]
+                            if rec_key == "TidalLock":
+                                val = bool(val)
+                            existing[rec_key] = val
+                    continue
+                estimated_value = row["estimated_value"]
+                if not isinstance(estimated_value, int) and self.planet_values:
+                    try:
+                        estimated_value = self.planet_values.estimate(
+                            planet_class=self._planet_value_class_name(row["planet_class"] or ""),
+                            terraformable=False,
+                            mapped=False,
+                            first_discovered=False,
+                        )
+                    except Exception:
+                        estimated_value = None
+                self.state.bodies[body_name] = {
+                    "BodyID":        None,
+                    "BodyName":      body_name,
+                    "PlanetClass":   row["planet_class"] or "",
+                    "Terraformable": False,
+                    "DistanceLS":    row["distance_ls"],
+                    "Landable":      None if row["landable"] is None else bool(row["landable"]),
+                    "WasMapped":     False,
+                    "DSSMapped":     False,
+                    "EstimatedValue": estimated_value,
+                    "Volcanism":     row["volcanism"] if "volcanism" in row.keys() else "",
+                    "Materials":     {},
+                    "FirstFootfall": False,
+                    "HasFootfall":   False,
+                    "SurfaceGravity":     row["surface_gravity"]     if "surface_gravity"     in row.keys() else None,
+                    "Radius":             row["radius"]              if "radius"              in row.keys() else None,
+                    "MassEM":             row["mass_em"]             if "mass_em"             in row.keys() else None,
+                    "SurfaceTemperature": row["surface_temperature"] if "surface_temperature" in row.keys() else None,
+                    "SurfacePressure":    row["surface_pressure"]    if "surface_pressure"    in row.keys() else None,
+                    "AtmosphereType":     row["atmosphere_type"]     if "atmosphere_type"     in row.keys() else None,
+                    "TidalLock":          bool(row["tidal_lock"])    if row["tidal_lock"] is not None else None,
+                }
+        except Exception:
+            logger.exception("Failed loading Spansh fallback bodies for %d", system_address)
+
     def load_current_system_data(self):
         system_address = getattr(self.state, "system_address", None)
         if not isinstance(system_address, int):
@@ -145,68 +228,7 @@ class SystemDataLoader:
         if loaded_body_count == 0 and existing_resolved_ids:
             self.state.resolved_body_ids.update(existing_resolved_ids)
 
-        # Merge Spansh data: new bodies added, existing bodies get NULL physical stats filled in
-        _SPANSH_PHYS = (
-            ("SurfaceGravity",    "surface_gravity"),
-            ("Radius",            "radius"),
-            ("MassEM",            "mass_em"),
-            ("SurfaceTemperature","surface_temperature"),
-            ("SurfacePressure",   "surface_pressure"),
-            ("AtmosphereType",    "atmosphere_type"),
-            ("Volcanism",         "volcanism"),
-            ("TidalLock",         "tidal_lock"),
-        )
-        try:
-            for row in self.repo.get_spansh_bodies(system_address):
-                body_name = row["body_name"]
-                if not body_name:
-                    continue
-
-                if body_name in self.state.bodies:
-                    # Body already loaded from journal scan — patch any NULL physical stats
-                    existing = self.state.bodies[body_name]
-                    for rec_key, col in _SPANSH_PHYS:
-                        if existing.get(rec_key) is None and col in row.keys() and row[col] is not None:
-                            val = row[col]
-                            if rec_key == "TidalLock":
-                                val = bool(val)
-                            existing[rec_key] = val
-                    continue
-                estimated_value = row["estimated_value"]
-                if not isinstance(estimated_value, int) and self.planet_values:
-                    try:
-                        estimated_value = self.planet_values.estimate(
-                            planet_class=self._planet_value_class_name(row["planet_class"] or ""),
-                            terraformable=False,
-                            mapped=False,
-                            first_discovered=False,
-                        )
-                    except Exception:
-                        estimated_value = None
-                self.state.bodies[body_name] = {
-                    "BodyID":        None,
-                    "BodyName":      body_name,
-                    "PlanetClass":   row["planet_class"] or "",
-                    "Terraformable": False,
-                    "DistanceLS":    row["distance_ls"],
-                    "Landable":      None if row["landable"] is None else bool(row["landable"]),
-                    "WasMapped":     False,
-                    "DSSMapped":     False,
-                    "EstimatedValue": estimated_value,
-                    "Volcanism":     row["volcanism"] if "volcanism" in row.keys() else "",
-                    "Materials":     {},
-                    "FirstFootfall": False,
-                    "HasFootfall":   False,
-                    "SurfaceGravity":     row["surface_gravity"]     if "surface_gravity"     in row.keys() else None,
-                    "Radius":             row["radius"]              if "radius"              in row.keys() else None,
-                    "MassEM":             row["mass_em"]             if "mass_em"             in row.keys() else None,
-                    "SurfaceTemperature": row["surface_temperature"] if "surface_temperature" in row.keys() else None,
-                    "SurfacePressure":    row["surface_pressure"]    if "surface_pressure"    in row.keys() else None,
-                    "AtmosphereType":     row["atmosphere_type"]     if "atmosphere_type"     in row.keys() else None,
-                    "TidalLock":          bool(row["tidal_lock"])    if row["tidal_lock"] is not None else None,
-                }
-        except Exception:
-            logger.exception("Failed loading Spansh fallback bodies for %d", system_address)
+        self._merge_spansh_bodies_into_state(system_address)
 
         expected = getattr(self.state, "system_body_count", None)
         fully_scanned = isinstance(expected, int) and expected > 0 and loaded_body_count >= expected

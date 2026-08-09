@@ -1528,7 +1528,7 @@ class MainWindow(QMainWindow):
             )
             saved += 1
         log.info("Spansh enrichment saved %d/%d bodies for address %d", saved, len(bodies), system_address)
-        self.system_data_loader.load_current_system_data()
+        self.system_data_loader.merge_new_spansh_bodies(system_address)
 
     def _maybe_start_ring_hotspot_check(self):
         system_address = getattr(self.state, "system_address", None)
