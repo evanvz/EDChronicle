@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from PyQt6.QtCore import Qt, QObject, QThread, QStringListModel, QTimer, pyqtSignal
-from PyQt6.QtGui import QColor
+from PyQt6.QtGui import QColor, QFontMetrics
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QFrame, QFileDialog, QDialog,
@@ -61,6 +61,7 @@ _STATION_CHIP_STYLE = (
     "QPushButton:hover { background:#1a3a26; }"
 )
 _STATION_CHIP_COLS = 4
+_STATION_CHIP_WIDTH = 190
 # Distinct green accent, set apart from the standard blue _CARD_STYLE cards above/below it.
 _CARD_STYLE_ACCENT = "QFrame { background:#0d1a12; border:1px solid #2a5a3a; border-radius:5px; }"
 _HDR_STYLE_ACCENT = "color:#6BCB77; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
@@ -1242,11 +1243,23 @@ class PlayerFactionPanel(QWidget):
 
     def _populate_stations_grid(self, stations: List[dict]) -> None:
         self._clear_stations_grid()
+        # QGridLayout sizes each column to its widest occupant — a couple of
+        # long Odyssey settlement names used to blow a column out wide
+        # enough that only ~2 of the intended 4 columns actually fit in the
+        # panel. Fixed chip width + elided text keeps every column the same
+        # size regardless of name length; full name/type/pad still in the
+        # tooltip.
         for i, s in enumerate(stations):
             name = s.get("station_name") or "—"
-            chip = QPushButton(f"{name}\n{s.get('station_type') or '—'} · Pad {s.get('pad_size') or '?'}")
+            type_line = f"{s.get('station_type') or '—'} · Pad {s.get('pad_size') or '?'}"
+            fm = QFontMetrics(QPushButton().font())
+            avail = _STATION_CHIP_WIDTH - 20
+            elided_name = fm.elidedText(name, Qt.TextElideMode.ElideRight, avail)
+            elided_type = fm.elidedText(type_line, Qt.TextElideMode.ElideRight, avail)
+            chip = QPushButton(f"{elided_name}\n{elided_type}")
+            chip.setFixedWidth(_STATION_CHIP_WIDTH)
             chip.setStyleSheet(_STATION_CHIP_STYLE)
-            chip.setToolTip(f"Click to copy \"{name}\" to the clipboard.")
+            chip.setToolTip(f"{name}\n{type_line}\n\nClick to copy \"{name}\" to the clipboard.")
             chip.clicked.connect(lambda _checked=False, n=name: QApplication.clipboard().setText(n))
             self._stations_grid_layout.addWidget(chip, i // _STATION_CHIP_COLS, i % _STATION_CHIP_COLS)
 
