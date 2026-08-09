@@ -783,6 +783,16 @@ class Repository:
         ).fetchall()
         return [r["display_name"] for r in rows]
 
+    def get_commodity_display_name_map(self) -> dict[str, str]:
+        """{internal_name: display_name} — market_prices only ever stores
+        EDDN's internal commodity symbol (e.g. "lowtemperaturediamond"),
+        never the pretty name, so anything rendering a commodity_name
+        straight from that table needs this to show real names."""
+        rows = self.db.conn.execute(
+            "SELECT internal_name, display_name FROM commodity_names"
+        ).fetchall()
+        return {r["internal_name"]: r["display_name"] for r in rows}
+
     def save_station_info(
         self,
         market_id: int,
@@ -1363,7 +1373,8 @@ class Repository:
                    si.pads_small, si.pads_medium, si.pads_large, si.station_faction
             FROM market_prices m
             LEFT JOIN station_info si ON si.market_id = m.market_id
-            WHERE (m.sell_price IS NOT NULL OR (m.buy_price IS NOT NULL AND m.buy_price > 0))
+            WHERE (m.sell_price IS NOT NULL
+                     OR (m.buy_price IS NOT NULL AND m.buy_price > 0 AND m.stock IS NOT NULL AND m.stock > 0))
                   AND (m.station_type IS NULL OR m.station_type != 'FleetCarrier')
                   AND m.last_updated >= ?
                   AND m.system_name IN ({placeholders})
@@ -1398,7 +1409,12 @@ class Repository:
             commodity = r["commodity_name"]
             if r["sell_price"] is not None:
                 station["sells"][commodity] = (r["sell_price"], r["demand"])
-            if r["buy_price"] is not None and r["buy_price"] > 0:
+            # stock > 0 required — a listed buy_price with nothing in
+            # stock isn't actually purchasable (confirmed live: a
+            # recommended return-leg commodity wasn't actually available
+            # at the station, since this check was missing here, unlike
+            # the equivalent check already in search_market_buy_prices).
+            if r["buy_price"] is not None and r["buy_price"] > 0 and r["stock"] is not None and r["stock"] > 0:
                 station["buys"][commodity] = (r["buy_price"], r["stock"])
 
         return stations
