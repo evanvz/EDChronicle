@@ -20,11 +20,38 @@ class ExperimentalEffectsTable:
     use. Component keys use the same lowercase internal symbol convention
     as GameState.materials_raw/manufactured/encoded.
 
-    No compatibility data exists (which effects are valid for which module
-    type) — every effect is listed for every blueprint, same as the
-    existing engineer-coverage list elsewhere in this app: incomplete
-    coverage is shown as unknown, not hidden.
+    coriolis-data doesn't dedupe by name: the same effect concept (e.g.
+    "Stripped Down") has one entry per applicable module type, each with
+    its own edname and material cost. The edname itself encodes that
+    module type as a `special_<category>_...` prefix, which is matched
+    against each blueprint's fdname prefix (e.g. "FSD_LongRange" ->
+    "fsd") to filter the list down to what's actually valid for the
+    selected blueprint — real data, not a hand-maintained guess.
     """
+
+    # edname category token -> matching blueprint fdname prefix (lowercased).
+    # A blueprint prefix with no entry here (AFM, CargoRack, Scanner, Misc,
+    # utility mounts, etc.) genuinely has no Experimental Effects in-game.
+    _BLUEPRINT_PREFIX_TO_CATEGORY = {
+        "armour": "armour",
+        "engine": "engine",
+        "fsd": "fsd",
+        "hullreinforcement": "hullreinforcement",
+        "mc": "weapon",
+        "powerdistributor": "powerdistributor",
+        "powerplant": "powerplant",
+        "shieldbooster": "shieldbooster",
+        "shieldcellbank": "shieldcell",
+        "shieldgenerator": "shield",
+        "weapon": "weapon",
+    }
+    # Longest/most-specific category tokens must be checked before their
+    # prefixes (e.g. "shieldbooster_" before "shield_") to avoid a false
+    # match — order matters here.
+    _EFFECT_CATEGORY_TOKENS = [
+        "hullreinforcement", "powerdistributor", "powerplant",
+        "shieldbooster", "shieldcell", "shield", "armour", "engine", "fsd",
+    ]
 
     def __init__(self, settings_dir: Path, filename: str = "experimental_effects.json"):
         self.path = Path(settings_dir) / filename
@@ -62,3 +89,23 @@ class ExperimentalEffectsTable:
 
     def has_known_cost(self, edname: str) -> bool:
         return bool(self.requirements(edname))
+
+    def _category(self, edname: str) -> str:
+        rest = edname[len("special_"):] if edname.startswith("special_") else edname
+        for token in self._EFFECT_CATEGORY_TOKENS:
+            if rest.startswith(token + "_"):
+                return token
+        return "weapon"  # ammo/hardpoint effects (e.g. special_incendiary_rounds)
+
+    def effect_names_for_blueprint(self, fdname: str) -> List[Tuple[str, str]]:
+        """[(edname, display_name), ...] valid for this blueprint's module
+        type, sorted by display name — empty if that module type has no
+        Experimental Effects at all."""
+        prefix = (fdname or "").split("_", 1)[0].lower()
+        category = self._BLUEPRINT_PREFIX_TO_CATEGORY.get(prefix)
+        if category is None:
+            return []
+        return [
+            (edname, label) for edname, label in self.effect_names()
+            if self._category(edname) == category
+        ]

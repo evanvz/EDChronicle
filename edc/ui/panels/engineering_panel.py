@@ -164,9 +164,6 @@ class _ShipEngineeringTab(QWidget):
         effect_label.setStyleSheet(_LABEL_STYLE)
         self._effect_combo = QComboBox()
         self._effect_combo.setStyleSheet(_COMBO_STYLE)
-        self._effect_combo.addItem("— None —", None)
-        for edname, label in self._effects.effect_names():
-            self._effect_combo.addItem(label, edname)
         effect_row.addWidget(effect_label)
         effect_row.addWidget(self._effect_combo, 1)
         add_layout.addLayout(effect_row)
@@ -260,6 +257,15 @@ class _ShipEngineeringTab(QWidget):
         if fdname:
             max_g = self._blueprints.max_grade(fdname) or 5
             self._grade_spin.setMaximum(max_g)
+
+        self._effect_combo.blockSignals(True)
+        self._effect_combo.clear()
+        self._effect_combo.addItem("— None —", None)
+        for edname, label in self._effects.effect_names_for_blueprint(fdname or ""):
+            self._effect_combo.addItem(label, edname)
+        self._effect_combo.setCurrentIndex(0)
+        self._effect_combo.blockSignals(False)
+        self._on_effect_changed()
 
     def _on_effect_changed(self):
         edname = self._effect_combo.currentData()
