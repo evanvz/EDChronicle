@@ -217,6 +217,59 @@ class _MarketVacuumWorker(QObject):
             db.close()
 
 
+class _StartupHistoryScanWorker(QObject):
+    """
+    Runs the slow full-journal-history scanners (active bounties, unredeemed
+    combat bonds, squadron status, carrier status, active missions) off the
+    main thread — confirmed live these five alone took ~16s combined against
+    a long-lived commander's journal history (837 files), all running
+    synchronously before the window even appeared. Notoriety/rank/materials
+    scan a single periodic snapshot event and stay on the main thread (each
+    under 25ms); these five instead replay full event history with no
+    snapshot to jump to, which is what makes them slow at this journal size.
+    Pure file reads, no DB — safe to construct straight from the main thread
+    and just move to a QThread, unlike the DB workers elsewhere in this file.
+    """
+    finished = pyqtSignal(dict)
+
+    def __init__(self, journal_dir):
+        super().__init__()
+        self._journal_dir = journal_dir
+
+    def run(self):
+        result = {
+            "active_bounties": {}, "combat_unsold_total": None,
+            "squadron_rec": None, "carrier_rec": None, "active_missions": {},
+        }
+        if not self._journal_dir:
+            self.finished.emit(result)
+            return
+
+        path = Path(self._journal_dir)
+        try:
+            result["active_bounties"] = scan_active_bounties(path)
+        except Exception:
+            log.exception("Failed to scan journal history for active bounties")
+        try:
+            result["combat_unsold_total"] = scan_unredeemed_combat_total(path)
+        except Exception:
+            log.exception("Failed to scan journal history for unredeemed combat bonds")
+        try:
+            result["squadron_rec"] = scan_squadron_status(path)
+        except Exception:
+            log.exception("Failed to scan journal history for squadron status")
+        try:
+            result["carrier_rec"] = scan_carrier_status(path)
+        except Exception:
+            log.exception("Failed to scan journal history for carrier status")
+        try:
+            result["active_missions"] = scan_active_missions(path)
+        except Exception:
+            log.exception("Failed to scan journal history for active missions")
+
+        self.finished.emit(result)
+
+
 class _EddnFlushWorker(QObject):
     """
     Writes a snapshot of EddnMarketCache's buffered EDDN data (popped by
@@ -709,30 +762,21 @@ class MainWindow(QMainWindow):
         self.state.exploration_unsold_total_est = int(ledger.get("exploration_unsold_total_est", 0) or 0)
         self.state.exobiology_unsold_total_est = int(ledger.get("exobiology_unsold_total_est", 0) or 0)
 
-        # Active bounties must survive across app restarts and journal-file
-        # boundaries (a real in-game bounty doesn't clear just because the
-        # app restarted) — reconstructed by scanning full journal history
-        # rather than persisted ledger state, which only tracks live changes
-        # seen while the app happened to be running.
-        try:
-            self.state.active_bounties = scan_active_bounties(Path(self.cfg.journal_dir)) \
-                if getattr(self.cfg, "journal_dir", None) else {}
-        except Exception:
-            log.exception("Failed to scan journal history for active bounties")
-            self.state.active_bounties = {}
-
-        # Same reasoning as active_bounties: session_ledger.json only captures
-        # what got saved before the app's last exit — a gap that showed up
-        # for real (a run spanning 3 journal files under-counted unredeemed
-        # combat bonds by ~795k cr after an app restart mid-session). Full
-        # journal replay is authoritative and self-heals regardless of
-        # whether prior sessions saved cleanly.
-        try:
-            self.state.combat_unsold_total = scan_unredeemed_combat_total(Path(self.cfg.journal_dir)) \
-                if getattr(self.cfg, "journal_dir", None) else 0
-        except Exception:
-            log.exception("Failed to scan journal history for unredeemed combat bonds")
-            self.state.combat_unsold_total = int(ledger.get("combat_unsold_total", 0) or 0)
+        # Active bounties, unredeemed combat bonds, squadron status, carrier
+        # status, and active missions all need the same full-journal-history
+        # replay reasoning as materials below (state doesn't clear just
+        # because the app restarted, and the live bootstrap only re-reads
+        # the tail of the current journal) -- but unlike materials/notoriety/
+        # rank, these five have no single periodic snapshot event to jump
+        # to, so they replay full event history every time. Confirmed live:
+        # ~16s combined against a long-lived commander's journal (837
+        # files), all blocking the window from appearing. Set safe interim
+        # defaults here and let _StartupHistoryScanWorker fill in the real
+        # values on a background thread shortly after the window shows —
+        # see its kickoff further down for the same _refresh_hud() call
+        # that normally follows a state change.
+        self.state.active_bounties = {}
+        self.state.combat_unsold_total = int(ledger.get("combat_unsold_total", 0) or 0)
 
         # Same reasoning as active_bounties: the live bootstrap only re-reads
         # the tail of the current journal, which can miss the Materials
@@ -772,54 +816,10 @@ class MainWindow(QMainWindow):
         if progress_rec:
             self.state.rank_progress = progress_rec
 
-        try:
-            squadron_rec = scan_squadron_status(Path(self.cfg.journal_dir)) \
-                if getattr(self.cfg, "journal_dir", None) else None
-        except Exception:
-            log.exception("Failed to scan journal history for squadron status")
-            squadron_rec = None
-        if squadron_rec:
-            self.state.squadron_name = squadron_rec.get("name")
-            self.state.squadron_rank = squadron_rec.get("rank")
-            self.state.squadron_rank_history = squadron_rec.get("rank_history") or []
-            self.state.squadron_trophies = int(squadron_rec.get("trophies", 0) or 0)
-            self.state.squadron_status = squadron_rec.get("status")
-            self.state.squadron_status_timestamp = squadron_rec.get("status_timestamp")
-
-        # Same reasoning again: a carrier's last CarrierStats/CarrierJump may
-        # have happened in an earlier session, outside the live bootstrap's
-        # tail-replay window.
-        try:
-            carrier_rec = scan_carrier_status(Path(self.cfg.journal_dir)) \
-                if getattr(self.cfg, "journal_dir", None) else None
-        except Exception:
-            log.exception("Failed to scan journal history for carrier status")
-            carrier_rec = None
-        if carrier_rec:
-            self.state.carrier_owned_market_id = carrier_rec.carrier_owned_market_id
-            self.state.carrier_market_id = carrier_rec.carrier_market_id
-            self.state.carrier_callsign = carrier_rec.carrier_callsign
-            self.state.carrier_name = carrier_rec.carrier_name
-            self.state.carrier_docking_access = carrier_rec.carrier_docking_access
-            self.state.carrier_allow_notorious = carrier_rec.carrier_allow_notorious
-            self.state.carrier_fuel_level = carrier_rec.carrier_fuel_level
-            self.state.carrier_jump_range_curr = carrier_rec.carrier_jump_range_curr
-            self.state.carrier_jump_range_max = carrier_rec.carrier_jump_range_max
-            self.state.carrier_pending_decommission = carrier_rec.carrier_pending_decommission
-            self.state.carrier_space_usage = carrier_rec.carrier_space_usage
-            self.state.carrier_finance = carrier_rec.carrier_finance
-            self.state.carrier_current_system = carrier_rec.carrier_current_system
-            self.state.carrier_next_jump_system = carrier_rec.carrier_next_jump_system
-            self.state.carrier_next_jump_body = carrier_rec.carrier_next_jump_body
-            self.state.carrier_trade_orders = carrier_rec.carrier_trade_orders
-            self.state.squadron_carrier = carrier_rec.squadron_carrier
-
-        try:
-            self.state.active_missions = scan_active_missions(Path(self.cfg.journal_dir)) \
-                if getattr(self.cfg, "journal_dir", None) else {}
-        except Exception:
-            log.exception("Failed to scan journal history for active missions")
-            self.state.active_missions = {}
+        # Squadron status, carrier status, and active missions are filled
+        # in by _StartupHistoryScanWorker (see its kickoff below) — GameState's
+        # own field defaults (None/0/{}) serve as the safe interim values
+        # until that background scan completes.
 
         self._seed_commodity_names_from_market_json()
 
@@ -1338,6 +1338,63 @@ class MainWindow(QMainWindow):
 
         # Populate voice combo now that TTS engine is ready
         self._populate_voice_combo()
+
+        # Slow full-journal-history scanners (bounties, combat bonds,
+        # squadron, carrier, missions) run off the main thread so they
+        # don't block the window from appearing — see
+        # _StartupHistoryScanWorker's docstring. QThread kept as an
+        # instance attribute for the app's lifetime, same reasoning as
+        # every other background worker in this file.
+        self._startup_history_thread = QThread()
+        self._startup_history_worker = _StartupHistoryScanWorker(getattr(self.cfg, "journal_dir", None))
+        self._startup_history_worker.moveToThread(self._startup_history_thread)
+        self._startup_history_thread.started.connect(self._startup_history_worker.run)
+        self._startup_history_worker.finished.connect(self._on_startup_history_scan_finished)
+        self._startup_history_worker.finished.connect(self._startup_history_thread.quit)
+        self._startup_history_thread.start()
+
+    def _on_startup_history_scan_finished(self, result: dict) -> None:
+        """Mirrors the field assignments that used to run synchronously in
+        __init__ before active bounties/combat bonds/squadron/carrier/
+        missions moved to _StartupHistoryScanWorker."""
+        self.state.active_bounties = result["active_bounties"]
+
+        combat_unsold_total = result["combat_unsold_total"]
+        if combat_unsold_total is not None:
+            self.state.combat_unsold_total = combat_unsold_total
+
+        squadron_rec = result["squadron_rec"]
+        if squadron_rec:
+            self.state.squadron_name = squadron_rec.get("name")
+            self.state.squadron_rank = squadron_rec.get("rank")
+            self.state.squadron_rank_history = squadron_rec.get("rank_history") or []
+            self.state.squadron_trophies = int(squadron_rec.get("trophies", 0) or 0)
+            self.state.squadron_status = squadron_rec.get("status")
+            self.state.squadron_status_timestamp = squadron_rec.get("status_timestamp")
+
+        carrier_rec = result["carrier_rec"]
+        if carrier_rec:
+            self.state.carrier_owned_market_id = carrier_rec.carrier_owned_market_id
+            self.state.carrier_market_id = carrier_rec.carrier_market_id
+            self.state.carrier_callsign = carrier_rec.carrier_callsign
+            self.state.carrier_name = carrier_rec.carrier_name
+            self.state.carrier_docking_access = carrier_rec.carrier_docking_access
+            self.state.carrier_allow_notorious = carrier_rec.carrier_allow_notorious
+            self.state.carrier_fuel_level = carrier_rec.carrier_fuel_level
+            self.state.carrier_jump_range_curr = carrier_rec.carrier_jump_range_curr
+            self.state.carrier_jump_range_max = carrier_rec.carrier_jump_range_max
+            self.state.carrier_pending_decommission = carrier_rec.carrier_pending_decommission
+            self.state.carrier_space_usage = carrier_rec.carrier_space_usage
+            self.state.carrier_finance = carrier_rec.carrier_finance
+            self.state.carrier_current_system = carrier_rec.carrier_current_system
+            self.state.carrier_next_jump_system = carrier_rec.carrier_next_jump_system
+            self.state.carrier_next_jump_body = carrier_rec.carrier_next_jump_body
+            self.state.carrier_trade_orders = carrier_rec.carrier_trade_orders
+            self.state.squadron_carrier = carrier_rec.squadron_carrier
+
+        self.state.active_missions = result["active_missions"]
+
+        self._refresh_hud()
 
     def load_current_system_data(self):
         self.system_data_loader.load_current_system_data()
