@@ -213,8 +213,8 @@ class TradeRoutePanel(QWidget):
         self._table = QTableWidget()
         self._table.setColumnCount(11)
         self._table.setHorizontalHeaderLabels(
-            ["Dist from You (ly)", "System A", "Station A", "System B", "Station B", "A↔B Dist (ly)",
-             "A→B: Buy", "A→B: Profit/u", "B→A: Buy", "B→A: Profit/u", "Total Profit"]
+            ["Dist from You (ly)", "A↔B Dist (ly)", "System A", "Station A", "A→B: Buy", "A→B: Profit/u",
+             "System B", "Station B", "B→A: Buy", "B→A: Profit/u", "Total Profit"]
         )
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -230,9 +230,9 @@ class TradeRoutePanel(QWidget):
             "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
         )
         h = self._table.horizontalHeader()
-        for c in (1, 2, 3, 4):
+        for c in (2, 3, 6, 7):
             h.setSectionResizeMode(c, QHeaderView.ResizeMode.Stretch)
-        for c in (0, 5, 6, 7, 8, 9, 10):
+        for c in (0, 1, 4, 5, 8, 9, 10):
             h.setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
         self._table.setToolTip(
             "Click a System or Station cell to copy its name to the clipboard. "
@@ -334,13 +334,13 @@ class TradeRoutePanel(QWidget):
                 it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
             self._table.setItem(row, 0, dist_you_item)
-            self._table.setItem(row, 1, sys_a_item)
-            self._table.setItem(row, 2, station_a_item)
-            self._table.setItem(row, 3, sys_b_item)
-            self._table.setItem(row, 4, station_b_item)
-            self._table.setItem(row, 5, dist_item)
-            self._table.setItem(row, 6, ab_commodity_item)
-            self._table.setItem(row, 7, ab_profit_item)
+            self._table.setItem(row, 1, dist_item)
+            self._table.setItem(row, 2, sys_a_item)
+            self._table.setItem(row, 3, station_a_item)
+            self._table.setItem(row, 4, ab_commodity_item)
+            self._table.setItem(row, 5, ab_profit_item)
+            self._table.setItem(row, 6, sys_b_item)
+            self._table.setItem(row, 7, station_b_item)
             self._table.setItem(row, 8, ba_commodity_item)
             self._table.setItem(row, 9, ba_profit_item)
             self._table.setItem(row, 10, total_item)
@@ -348,7 +348,7 @@ class TradeRoutePanel(QWidget):
         self._table.sortItems(10, Qt.SortOrder.DescendingOrder)
 
     def _on_cell_clicked(self, row: int, column: int) -> None:
-        if column not in (1, 2, 3, 4):
+        if column not in (2, 3, 6, 7):
             return
         item = self._table.item(row, column)
         if item and item.text():
