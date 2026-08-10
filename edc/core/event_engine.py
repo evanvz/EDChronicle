@@ -388,6 +388,12 @@ class EventEngine:
             self.state.system = new_sys
             if isinstance(new_system_address, int):
                 self.state.system_address = new_system_address
+            # Unlike Location (which can fire without a system change, e.g.
+            # on login), FSDJump always means a genuine new system -- clear
+            # first so system_data_loader's "preserve if DB has 0 rows"
+            # fallback doesn't leak the previous system's resolved bodies
+            # into this one.
+            self.state.resolved_body_ids.clear()
             entry_body_id = event.get("BodyID")
             if isinstance(entry_body_id, int):
                 self.state.resolved_body_ids.add(entry_body_id)

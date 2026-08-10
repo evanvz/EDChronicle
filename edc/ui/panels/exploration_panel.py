@@ -456,7 +456,7 @@ class ExplorationPanel(QWidget):
         shown        = 0
         seen_bodies  = set()
 
-        for sort_val, body, rec in body_items[:50]:
+        for sort_val, body, rec in body_items:
             est        = rec.get("EstimatedValue")
             dist       = rec.get("DistanceLS")
             pc         = rec.get("PlanetClass") or ""
@@ -518,18 +518,18 @@ class ExplorationPanel(QWidget):
             f"{tf_unmapped} TF unmapped • {hv_unmapped} high-value unmapped"
         )
 
-        total    = getattr(state, "system_body_count", None)
-        resolved = len(getattr(state, "resolved_body_ids", set()) or set())
-        scanned  = len(state.bodies)
+        total       = getattr(state, "system_body_count", None)
+        personally_scanned = len(getattr(state, "resolved_body_ids", set()) or set())
+        scanned     = len(state.bodies)
         if isinstance(total, int) and total > 0:
-            remaining = max(0, total - resolved)
+            unknown = max(0, total - scanned)
             self.exploration_hint.setText(
-                f"Bodies: {resolved}/{total} resolved, "
-                f"{scanned} detailed — {remaining} unknown"
+                f"Bodies: {scanned}/{total} known "
+                f"({personally_scanned} scanned by you) — {unknown} unknown"
             )
         else:
             self.exploration_hint.setText(
-                f"Bodies: {scanned} detailed (honk for total count)"
+                f"Bodies: {scanned} known (honk for total count)"
             )
 
     def _build_body_card(

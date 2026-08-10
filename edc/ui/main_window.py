@@ -3268,14 +3268,20 @@ class MainWindow(QMainWindow):
         # Journal-derived system signals (NonBodyCount + discovered signal list)
         try:
             total = getattr(self.state, "system_body_count", None)
-            resolved = len(getattr(self.state, "resolved_body_ids", set()) or set())
+            # state.bodies includes both personally-scanned bodies and ones
+            # backfilled from Spansh/DB cache -- resolved_body_ids only
+            # counts personal Scan events, which under-counts (and can read
+            # 0-1) for an already-catalogued system nobody's individually
+            # scanned yet. "Unresolved" here means genuinely unknown (no
+            # data from any source), not "not personally scanned by you".
+            known = len(getattr(self.state, "bodies", {}) or {})
             # fss_complete tracks FSSDiscoveryScan's own Progress field (the
             # honk's scan-progress %, often 1.0 immediately) — not whether
             # every body has been individually resolved. Gating on it here
             # let it suppress this warning while bodies were still unresolved
             # (confirmed live: 8/10 resolved, fss_complete already True).
-            if isinstance(total, int) and total > resolved:
-                remaining = total - resolved
+            if isinstance(total, int) and total > known:
+                remaining = total - known
                 lines.append(f"🔎 Action: {remaining} bodies unresolved (FSS)")
         except Exception:
             pass
