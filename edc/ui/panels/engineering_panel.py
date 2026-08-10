@@ -4,6 +4,7 @@ split: wishlist on the left, materials + engineer info on the right."""
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any, Dict, List, Optional
 
 from PyQt6.QtCore import Qt
@@ -54,6 +55,24 @@ def _make_table(headers: List[str]) -> QTableWidget:
     t.setAlternatingRowColors(True)
     t.setStyleSheet(_TABLE_STYLE)
     return t
+
+
+def _humanized_fdname_suffix(fdname: str) -> str:
+    """"FSD_LongRange" -> "Long Range" — the internal/community name
+    players often search by, which doesn't always match Frontier's
+    in-game blueprint name (e.g. that one's actually "Increased range")."""
+    suffix = fdname.split("_", 1)[1] if "_" in fdname else fdname
+    return re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", suffix)
+
+
+def _blueprint_label(bp: Dict[str, Any], fdname: str) -> str:
+    display_name = bp.get("display_name", fdname)
+    short_name = bp.get("short_name", "")
+    community_name = _humanized_fdname_suffix(fdname)
+    label = f"{display_name} — {short_name}"
+    if community_name.strip().lower() != short_name.strip().lower():
+        label += f" ({community_name})"
+    return label
 
 
 class EngineeringPanel(QWidget):
@@ -136,8 +155,7 @@ class _ShipEngineeringTab(QWidget):
         self._bp_fdnames: List[str] = self._blueprints.blueprint_names()
         for fdname in self._bp_fdnames:
             bp = self._blueprints.get(fdname) or {}
-            label = f"{bp.get('display_name', fdname)} — {bp.get('short_name', '')}"
-            self._bp_combo.addItem(label, fdname)
+            self._bp_combo.addItem(_blueprint_label(bp, fdname), fdname)
         self._bp_combo.currentIndexChanged.connect(self._on_blueprint_changed)
         add_layout.addWidget(self._bp_combo)
 
@@ -337,7 +355,7 @@ class _ShipEngineeringTab(QWidget):
             fdname = entry["fdname"]
             grade = entry["grade"]
             bp = self._blueprints.get(fdname) or {}
-            label = f"{bp.get('display_name', fdname)} — {bp.get('short_name', '')}"
+            label = _blueprint_label(bp, fdname)
             experimental = entry.get("experimental")
             if experimental:
                 label += f" (+ {self._effects.display_name(experimental)})"
