@@ -378,6 +378,14 @@ class VoiceCommandListener(QObject):
                 # Tracks whether the current in-progress utterance already got a
                 # trigger beep from a partial result, so the final doesn't re-beep.
                 partial_trigger_beeped = False
+                # Background audio (music/game/TV bleeding into the mic) can get
+                # misheard as the trigger word — the grammar is deliberately a
+                # tiny vocabulary, so any sound gets forced into the closest
+                # match. Requiring the SAME trigger word to show up in two
+                # consecutive partial updates (not just one) filters out a
+                # single-chunk misfire while still firing well before Vosk
+                # would finalize the utterance.
+                consecutive_trigger_partials = 0
 
                 try:
                     while self._running:
@@ -399,18 +407,23 @@ class VoiceCommandListener(QObject):
                             presult = json.loads(rec.PartialResult())
                             pwords  = self._clean(presult.get("partial", ""))
                             if pwords in ([self._trigger_word], [self._nav_trigger_word]):
-                                partial_trigger_beeped = True
-                                # Saying the trigger starts a fresh attempt — drop any
-                                # stale unmatched words so a retry isn't polluted.
-                                fragments = [(now, pwords)]
-                                log.info("Trigger heard (partial): %s", pwords)
-                                self.trigger_heard.emit()
+                                consecutive_trigger_partials += 1
+                                if consecutive_trigger_partials >= 2:
+                                    partial_trigger_beeped = True
+                                    # Saying the trigger starts a fresh attempt — drop any
+                                    # stale unmatched words so a retry isn't polluted.
+                                    fragments = [(now, pwords)]
+                                    log.info("Trigger heard (partial): %s", pwords)
+                                    self.trigger_heard.emit()
+                            else:
+                                consecutive_trigger_partials = 0
                             continue
 
                         result = json.loads(rec.Result())
                         words  = self._clean(result.get("text", ""))
                         already_beeped = partial_trigger_beeped
                         partial_trigger_beeped = False
+                        consecutive_trigger_partials = 0
                         if not words:
                             continue
                         log.info("Voice final: %s", words)
