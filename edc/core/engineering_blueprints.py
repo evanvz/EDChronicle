@@ -5,6 +5,19 @@ from typing import Any, Dict, List, Optional
 
 log = logging.getLogger("edc.engineering_blueprints")
 
+# Rolls needed to fully complete each grade, assuming max Engineer access
+# level (rank 5) with the engineer doing the work. Elite Dangerous's 2018
+# engineering rebalance made progress-per-roll deterministic (not random),
+# but not flat 1-roll-per-grade: at access level 5 the progress-per-roll
+# is 100%/50%/34%/25%/20% for grades 1-5 respectively (each roll consumes
+# the grade's materials fresh), so grade 5 alone takes 5 applications, not
+# 1. Source: the official per-grade/access-level progress table (Elite
+# Dangerous Wiki, "Engineers" article). Lower access level needs more
+# rolls (and some grades are locked outright) -- this assumes best-case
+# max rank, not the player's actual current standing with any specific
+# engineer.
+_ROLLS_PER_GRADE = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5}
+
 
 class EngineeringBlueprintTable:
     """
@@ -121,12 +134,12 @@ class EngineeringBlueprintTable:
 
     def cumulative_requirements(self, fdname: str, grade: int) -> Dict[str, int]:
         """
-        Returns {material_symbol_lower: qty} summed across grades 1..grade.
-
-        Reaching a given grade means engineering at every grade below it
-        first (grade 1, then 2, ... up to `grade`), each consuming its own
-        materials — so building at grade 5 needs grades 1+2+3+4+5's
-        materials combined, not just grade 5's.
+        Returns {material_symbol_lower: qty} summed across grades 1..grade,
+        each grade's materials multiplied by _ROLLS_PER_GRADE since each
+        grade needs progressively more applications to fully complete (not
+        1) — building at grade 5 needs grade 1's materials x1, grade 2's
+        x2, ... grade 5's x5, combined, not just each grade's materials
+        once each.
         """
         bp = self.get(fdname)
         if not bp:
@@ -137,9 +150,10 @@ class EngineeringBlueprintTable:
             reqs = grades.get(str(g))
             if not isinstance(reqs, dict):
                 continue
+            rolls = _ROLLS_PER_GRADE.get(g, 1)
             for material, qty in reqs.items():
                 if isinstance(qty, int):
-                    total[material] = total.get(material, 0) + qty
+                    total[material] = total.get(material, 0) + qty * rolls
         return total
 
     def max_grade(self, fdname: str) -> int:
