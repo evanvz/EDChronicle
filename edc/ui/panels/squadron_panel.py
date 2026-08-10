@@ -7,6 +7,7 @@ separately on the Player Faction tab.
 from __future__ import annotations
 
 import logging
+from typing import Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor
@@ -67,6 +68,35 @@ class _ColonisationDetailDialog(QDialog):
         status_label.setStyleSheet("color:#888888; background:transparent; border:none;")
         layout.addWidget(status_label)
 
+        trailblazer = self._find_closest_trailblazer(panel, depot.get("system_name"))
+        trailblazer_row = QHBoxLayout()
+        if trailblazer:
+            text = (
+                f"Nearest Trailblazer supply ship: {trailblazer['station_name']} "
+                f"({trailblazer['system_name']}) — {trailblazer['distance_ly']:.1f} ly"
+            )
+            trailblazer_system = trailblazer["system_name"]
+        else:
+            text = "Nearest Trailblazer supply ship: none known yet."
+            trailblazer_system = ""
+        trailblazer_label = QLabel(text)
+        trailblazer_label.setWordWrap(True)
+        trailblazer_label.setToolTip(
+            "Brewer Corporation's colonisation-materials supply ships — best-effort only. "
+            "They reportedly relocate occasionally and EDDN coverage of them is patchy, "
+            "so this is whatever we happen to have on file, not guaranteed current."
+        )
+        trailblazer_label.setStyleSheet("color:#4D96FF; background:transparent; border:none;")
+        trailblazer_row.addWidget(trailblazer_label, 1)
+        copy_trailblazer_btn = QPushButton("Copy System")
+        copy_trailblazer_btn.setStyleSheet(_BTN_STYLE)
+        copy_trailblazer_btn.setEnabled(bool(trailblazer_system))
+        copy_trailblazer_btn.clicked.connect(
+            lambda: QApplication.clipboard().setText(trailblazer_system)
+        )
+        trailblazer_row.addWidget(copy_trailblazer_btn)
+        layout.addLayout(trailblazer_row)
+
         table = QTableWidget()
         table.setColumnCount(5)
         table.setHorizontalHeaderLabels(["Commodity", "Required", "Provided", "Still Needed", ""])
@@ -116,6 +146,20 @@ class _ColonisationDetailDialog(QDialog):
                 table.setCellWidget(row, 4, btn)
 
         layout.addWidget(table, 1)
+
+    @staticmethod
+    def _find_closest_trailblazer(panel: "SquadronPanel", system_name: Optional[str]) -> Optional[dict]:
+        if not system_name:
+            return None
+        try:
+            coords = panel._repo.get_system_coords_for_names([system_name])
+            here = coords.get(system_name)
+            if not here:
+                return None
+            return panel._repo.find_closest_trailblazer(here[0], here[1], here[2])
+        except Exception:
+            log.exception("Failed to look up closest Trailblazer for %s", system_name)
+            return None
 
 
 class SquadronPanel(QWidget):

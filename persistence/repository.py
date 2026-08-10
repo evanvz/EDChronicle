@@ -1477,6 +1477,38 @@ class Repository:
             )
         self.db.conn.commit()
 
+    def find_closest_trailblazer(self, x: float, y: float, z: float) -> Optional[dict]:
+        """
+        Closest known "Trailblazer" megaship (Brewer Corporation's fixed
+        colonisation-materials supply ships — confirmed real via GalNet,
+        not a guess) to (x, y, z). Best-effort only: these reportedly move
+        occasionally and EDDN coverage of them is patchy (not every
+        sighting gets reported), so this is whatever we happen to have on
+        file, not a guaranteed-current location. Filters on station_type
+        == 'MegaShip' too, since a player-named station can coincidentally
+        contain "Trailblazer" without being one (confirmed live: "Harbard's
+        Trailblazer Supplys", an ordinary Coriolis station).
+        """
+        rows = self.db.conn.execute(
+            """
+            SELECT DISTINCT si.station_name, si.system_name, sc.x, sc.y, sc.z
+            FROM station_info si
+            JOIN system_coords sc ON sc.system_name = si.system_name
+            WHERE si.station_name LIKE 'Trailblazer %' AND si.station_type = 'MegaShip'
+            """
+        ).fetchall()
+        if not rows:
+            return None
+
+        best = None
+        best_dist = None
+        for r in rows:
+            dist = ((r["x"] - x) ** 2 + (r["y"] - y) ** 2 + (r["z"] - z) ** 2) ** 0.5
+            if best_dist is None or dist < best_dist:
+                best_dist = dist
+                best = {"station_name": r["station_name"], "system_name": r["system_name"], "distance_ly": dist}
+        return best
+
     def get_colonisation_depots(self) -> list[dict]:
         rows = self.db.conn.execute(
             "SELECT * FROM colonisation_depots ORDER BY system_name, station_name"
