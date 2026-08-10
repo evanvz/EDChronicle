@@ -27,6 +27,18 @@ class ExperimentalEffectsTable:
     against each blueprint's fdname prefix (e.g. "FSD_LongRange" ->
     "fsd") to filter the list down to what's actually valid for the
     selected blueprint — real data, not a hand-maintained guess.
+
+    Weapons need a second, finer filter: the broad "weapon" category
+    covers every hardpoint type alike, but the real game restricts many
+    effects to specific weapon classes (e.g. Auto Loader only makes
+    sense on ammo weapons, not lasers). That per-weapon-type list is
+    also real coriolis-data — modifications/modules.json's `specials`
+    array per module-group code (e.g. "mc" for Multi Cannon), joined to
+    readable names via modules/hardpoints/*.json's `grp` field — stored
+    here as `weapon_type_effects`. Several hardpoint types (Missile
+    Racks, Guardian weapons, AX weapons, Mining Laser) genuinely have
+    zero Experimental Effects in-game; an empty list for those is
+    correct, not missing data.
     """
 
     # edname category token -> matching blueprint fdname prefix (lowercased).
@@ -57,20 +69,24 @@ class ExperimentalEffectsTable:
         self.path = Path(settings_dir) / filename
         self.last_updated: Optional[str] = None
         self._effects: Dict[str, Dict] = {}
+        self._weapon_type_effects: Dict[str, List[str]] = {}
         self._load()
 
     def _load(self) -> None:
         try:
             if not self.path.exists():
                 self._effects = {}
+                self._weapon_type_effects = {}
                 return
             with open(self.path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             self.last_updated = data.get("last_updated")
             self._effects = data.get("effects", {})
+            self._weapon_type_effects = data.get("weapon_type_effects", {})
         except Exception:
             log.exception("Failed to load experimental effects data from %s", self.path)
             self._effects = {}
+            self._weapon_type_effects = {}
 
     def effect_names(self) -> List[Tuple[str, str]]:
         """[(edname, display_name), ...] sorted by display name."""
@@ -97,14 +113,41 @@ class ExperimentalEffectsTable:
                 return token
         return "weapon"  # ammo/hardpoint effects (e.g. special_incendiary_rounds)
 
-    def effect_names_for_blueprint(self, fdname: str) -> List[Tuple[str, str]]:
+    def blueprint_category(self, fdname: str) -> Optional[str]:
+        prefix = (fdname or "").split("_", 1)[0].lower()
+        return self._BLUEPRINT_PREFIX_TO_CATEGORY.get(prefix)
+
+    def weapon_type_names(self) -> List[str]:
+        """All known hardpoint type names, sorted — including ones with
+        zero Experimental Effects (Missile Racks, Guardian weapons, etc.),
+        so picking one still correctly shows an empty effect list rather
+        than falling back to the broad, less accurate unfiltered set."""
+        return sorted(self._weapon_type_effects.keys())
+
+    def effect_names_for_blueprint(
+        self, fdname: str, weapon_type: Optional[str] = None,
+    ) -> List[Tuple[str, str]]:
         """[(edname, display_name), ...] valid for this blueprint's module
         type, sorted by display name — empty if that module type has no
-        Experimental Effects at all."""
-        prefix = (fdname or "").split("_", 1)[0].lower()
-        category = self._BLUEPRINT_PREFIX_TO_CATEGORY.get(prefix)
+        Experimental Effects at all.
+
+        For the "weapon" category, passing a specific weapon_type narrows
+        the broad ~44-effect weapon list down to what's actually valid for
+        that hardpoint (e.g. 11 for Multi Cannon, 0 for Missile Rack).
+        weapon_type=None keeps the broad list — same as before this
+        parameter existed, for backward compatibility with saved entries
+        that don't have a weapon type."""
+        category = self.blueprint_category(fdname)
         if category is None:
             return []
+
+        if category == "weapon" and weapon_type is not None:
+            valid_ednames = set(self._weapon_type_effects.get(weapon_type, []))
+            return [
+                (edname, label) for edname, label in self.effect_names()
+                if edname in valid_ednames
+            ]
+
         return [
             (edname, label) for edname, label in self.effect_names()
             if self._category(edname) == category

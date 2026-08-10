@@ -177,6 +177,19 @@ class _ShipEngineeringTab(QWidget):
         grade_row.addWidget(add_btn)
         add_layout.addLayout(grade_row)
 
+        self._weapon_type_row = QHBoxLayout()
+        self._weapon_type_label = QLabel("Weapon Type:")
+        self._weapon_type_label.setStyleSheet(_LABEL_STYLE)
+        self._weapon_type_combo = QComboBox()
+        self._weapon_type_combo.setStyleSheet(_COMBO_STYLE)
+        self._weapon_type_combo.addItem("— Any weapon —", None)
+        for name in self._effects.weapon_type_names():
+            self._weapon_type_combo.addItem(name, name)
+        self._weapon_type_row.addWidget(self._weapon_type_label)
+        self._weapon_type_row.addWidget(self._weapon_type_combo, 1)
+        add_layout.addLayout(self._weapon_type_row)
+        self._weapon_type_combo.currentIndexChanged.connect(self._on_weapon_type_changed)
+
         effect_row = QHBoxLayout()
         effect_label = QLabel("Experimental:")
         effect_label.setStyleSheet(_LABEL_STYLE)
@@ -276,14 +289,30 @@ class _ShipEngineeringTab(QWidget):
             max_g = self._blueprints.max_grade(fdname) or 5
             self._grade_spin.setMaximum(max_g)
 
+        is_weapon = self._effects.blueprint_category(fdname or "") == "weapon"
+        self._weapon_type_label.setVisible(is_weapon)
+        self._weapon_type_combo.setVisible(is_weapon)
+        if not is_weapon:
+            self._weapon_type_combo.blockSignals(True)
+            self._weapon_type_combo.setCurrentIndex(0)
+            self._weapon_type_combo.blockSignals(False)
+
+        self._repopulate_effect_combo()
+
+    def _repopulate_effect_combo(self):
+        fdname = self._bp_combo.currentData()
+        weapon_type = self._weapon_type_combo.currentData()
         self._effect_combo.blockSignals(True)
         self._effect_combo.clear()
         self._effect_combo.addItem("— None —", None)
-        for edname, label in self._effects.effect_names_for_blueprint(fdname or ""):
+        for edname, label in self._effects.effect_names_for_blueprint(fdname or "", weapon_type):
             self._effect_combo.addItem(label, edname)
         self._effect_combo.setCurrentIndex(0)
         self._effect_combo.blockSignals(False)
         self._on_effect_changed()
+
+    def _on_weapon_type_changed(self):
+        self._repopulate_effect_combo()
 
     def _on_effect_changed(self):
         edname = self._effect_combo.currentData()
@@ -332,12 +361,18 @@ class _ShipEngineeringTab(QWidget):
             return
         grade = self._grade_spin.value()
         experimental = self._effect_combo.currentData()
+        is_weapon = self._effects.blueprint_category(fdname) == "weapon"
+        weapon_type = self._weapon_type_combo.currentData() if is_weapon else None
         if any(
-            e["fdname"] == fdname and e["grade"] == grade and e.get("experimental") == experimental
+            e["fdname"] == fdname and e["grade"] == grade
+            and e.get("experimental") == experimental and e.get("weapon_type") == weapon_type
             for e in self._wishlist
         ):
             return
-        self._wishlist.append({"fdname": fdname, "grade": grade, "experimental": experimental})
+        self._wishlist.append({
+            "fdname": fdname, "grade": grade,
+            "experimental": experimental, "weapon_type": weapon_type,
+        })
         self._store.save(self._wishlist)
         self._refresh_wishlist_table()
 
@@ -356,6 +391,9 @@ class _ShipEngineeringTab(QWidget):
             grade = entry["grade"]
             bp = self._blueprints.get(fdname) or {}
             label = _blueprint_label(bp, fdname)
+            weapon_type = entry.get("weapon_type")
+            if weapon_type:
+                label += f" [{weapon_type}]"
             experimental = entry.get("experimental")
             if experimental:
                 label += f" (+ {self._effects.display_name(experimental)})"

@@ -14,10 +14,14 @@ class EngineeringWishlist:
       <data_dir>/engineering_wishlist.json
 
     Format:
-      {"items": [{"fdname": "FSD_LongRange", "grade": 5, "experimental": null}, ...]}
+      {"items": [{"fdname": "FSD_LongRange", "grade": 5, "experimental": null,
+                  "weapon_type": null}, ...]}
 
     "experimental" is the edname of an optional Experimental Effect
-    (see experimental_effects.py), or null/absent for none.
+    (see experimental_effects.py), or null/absent for none. "weapon_type"
+    is the hardpoint type name (e.g. "Multi Cannon") used to narrow the
+    Experimental Effect choices for weapon blueprints — irrelevant/null
+    for non-weapon blueprints.
     """
 
     def __init__(self, path: Path):
@@ -38,11 +42,13 @@ class EngineeringWishlist:
                 fdname = rec.get("fdname")
                 grade = rec.get("grade")
                 experimental = rec.get("experimental")
+                weapon_type = rec.get("weapon_type")
                 if isinstance(fdname, str) and fdname and isinstance(grade, int):
                     out.append({
                         "fdname": fdname,
                         "grade": grade,
                         "experimental": experimental if isinstance(experimental, str) else None,
+                        "weapon_type": weapon_type if isinstance(weapon_type, str) else None,
                     })
             return out
         except Exception:
@@ -58,6 +64,7 @@ class EngineeringWishlist:
                         "fdname": it["fdname"],
                         "grade": it["grade"],
                         "experimental": it.get("experimental"),
+                        "weapon_type": it.get("weapon_type"),
                     }
                     for it in items
                     if isinstance(it, dict) and isinstance(it.get("fdname"), str) and isinstance(it.get("grade"), int)
