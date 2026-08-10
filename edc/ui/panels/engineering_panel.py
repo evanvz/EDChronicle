@@ -18,6 +18,7 @@ from edc.core.engineering_blueprints import EngineeringBlueprintTable
 from edc.core.engineering_wishlist import EngineeringWishlist
 from edc.core.material_trading import find_material_trades
 from edc.core.odyssey_engineering import OdysseyEngineeringTable
+from edc.core.odyssey_material_source import is_bartender_tradeable
 from edc.core.odyssey_wishlist import OdysseyWishlist
 
 log = logging.getLogger(__name__)
@@ -534,11 +535,12 @@ class _OdysseyEngineeringTab(QWidget):
         detail_hdr.setStyleSheet(_HDR_STYLE)
         right.addWidget(detail_hdr)
 
-        self._detail_table = _make_table(["Material", "Held", "Required"])
+        self._detail_table = _make_table(["Material", "Held", "Required", "Source"])
         dh = self._detail_table.horizontalHeader()
         dh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         dh.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         dh.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        dh.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         right.addWidget(self._detail_table, 1)
 
         eng_hdr = QLabel("AVAILABLE FROM — CLOSEST FIRST")
@@ -683,9 +685,17 @@ class _OdysseyEngineeringTab(QWidget):
             name_item.setForeground(color)
             held_item.setForeground(color)
 
+            if is_bartender_tradeable(sym):
+                source_item = QTableWidgetItem("Bartender")
+                source_item.setForeground(QColor("#6BCB77"))
+            else:
+                source_item = QTableWidgetItem("Farm/loot only")
+                source_item.setForeground(QColor("#888888"))
+
             self._detail_table.setItem(r, 0, name_item)
             self._detail_table.setItem(r, 1, held_item)
             self._detail_table.setItem(r, 2, req_item)
+            self._detail_table.setItem(r, 3, source_item)
 
         self._refresh_engineer_table(entry)
 
