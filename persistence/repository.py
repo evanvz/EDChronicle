@@ -1357,9 +1357,11 @@ class Repository:
 
         Returns {market_id: {"station_name", "system_name", "pad_size",
         "controlling_faction", "x", "y", "z", "distance_ly",
-        "sells": {commodity: (sell_price, demand)},
-        "buys": {commodity: (buy_price, stock)}}} — station metadata
-        repeated per row collapses to one entry per market_id.
+        "sells": {commodity: (sell_price, demand, last_updated)},
+        "buys": {commodity: (buy_price, stock, last_updated)}}} — station
+        metadata repeated per row collapses to one entry per market_id.
+        last_updated (ISO timestamp string) lets callers judge/warn on
+        crowdsourced-data staleness per commodity, not just per station.
         """
         coords_by_system = self._nearby_system_coords(x, y, z, radius_ly)
         if not coords_by_system:
@@ -1370,6 +1372,7 @@ class Repository:
             f"""
             SELECT m.market_id, m.station_name, m.station_type, m.system_name,
                    m.commodity_name, m.sell_price, m.demand, m.buy_price, m.stock,
+                   m.last_updated,
                    si.pads_small, si.pads_medium, si.pads_large, si.station_faction
             FROM market_prices m
             LEFT JOIN station_info si ON si.market_id = m.market_id
@@ -1408,14 +1411,14 @@ class Repository:
 
             commodity = r["commodity_name"]
             if r["sell_price"] is not None:
-                station["sells"][commodity] = (r["sell_price"], r["demand"])
+                station["sells"][commodity] = (r["sell_price"], r["demand"], r["last_updated"])
             # stock > 0 required — a listed buy_price with nothing in
             # stock isn't actually purchasable (confirmed live: a
             # recommended return-leg commodity wasn't actually available
             # at the station, since this check was missing here, unlike
             # the equivalent check already in search_market_buy_prices).
             if r["buy_price"] is not None and r["buy_price"] > 0 and r["stock"] is not None and r["stock"] > 0:
-                station["buys"][commodity] = (r["buy_price"], r["stock"])
+                station["buys"][commodity] = (r["buy_price"], r["stock"], r["last_updated"])
 
         return stations
 

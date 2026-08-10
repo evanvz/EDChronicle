@@ -211,10 +211,10 @@ class TradeRoutePanel(QWidget):
         fl.addWidget(self._status_label)
 
         self._table = QTableWidget()
-        self._table.setColumnCount(11)
+        self._table.setColumnCount(12)
         self._table.setHorizontalHeaderLabels(
             ["Dist from You (ly)", "A↔B Dist (ly)", "System A", "Station A", "A→B: Buy", "A→B: Profit/u",
-             "System B", "Station B", "B→A: Buy", "B→A: Profit/u", "Total Profit"]
+             "System B", "Station B", "B→A: Buy", "B→A: Profit/u", "Total Profit", "Data Age"]
         )
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -232,11 +232,14 @@ class TradeRoutePanel(QWidget):
         h = self._table.horizontalHeader()
         for c in (2, 3, 6, 7):
             h.setSectionResizeMode(c, QHeaderView.ResizeMode.Stretch)
-        for c in (0, 1, 4, 5, 8, 9, 10):
+        for c in (0, 1, 4, 5, 8, 9, 10, 11):
             h.setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
         self._table.setToolTip(
             "Click a System or Station cell to copy its name to the clipboard. "
-            "Station A is always the closer of the two to your current location."
+            "Station A is always the closer of the two to your current location. "
+            "Data Age is how old the older of the two legs' crowdsourced prices "
+            "is — a stale figure (orange/red) means real prices/stock may have "
+            "drifted since it was last reported."
         )
         self._table.cellClicked.connect(self._on_cell_clicked)
         fl.addWidget(self._table, 1)
@@ -330,7 +333,26 @@ class TradeRoutePanel(QWidget):
             ba_profit_item = _NumericTableWidgetItem(f"{leg_ba['profit_per_unit']:,}", float(leg_ba["profit_per_unit"]))
             total_item = _NumericTableWidgetItem(f"{loop['total_profit']:,}", float(loop["total_profit"]))
             total_item.setForeground(QColor("#6BCB77"))
-            for it in (dist_you_item, dist_item, ab_profit_item, ba_profit_item, total_item):
+
+            # The route is only as trustworthy as its stalest leg — a fresh
+            # buy price paired with days-old demand data is still a stale
+            # route (confirmed live: a route's real profit came in well
+            # under what was shown, traced to one leg's data being over a
+            # day old with no indication of that in the UI).
+            ages = [a for a in (leg_ab.get("data_age_hours"), leg_ba.get("data_age_hours")) if a is not None]
+            age_hours = max(ages) if ages else None
+            if age_hours is None:
+                age_text, age_color = "—", "#888888"
+            elif age_hours < 24:
+                age_text, age_color = f"{age_hours:.0f}h", "#6BCB77"
+            elif age_hours < 24 * 7:
+                age_text, age_color = f"{age_hours / 24:.0f}d", "#FFB347"
+            else:
+                age_text, age_color = f"{age_hours / 24:.0f}d", "#FF6B6B"
+            age_item = _NumericTableWidgetItem(age_text, age_hours if age_hours is not None else -1.0)
+            age_item.setForeground(QColor(age_color))
+
+            for it in (dist_you_item, dist_item, ab_profit_item, ba_profit_item, total_item, age_item):
                 it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
             self._table.setItem(row, 0, dist_you_item)
@@ -344,6 +366,7 @@ class TradeRoutePanel(QWidget):
             self._table.setItem(row, 8, ba_commodity_item)
             self._table.setItem(row, 9, ba_profit_item)
             self._table.setItem(row, 10, total_item)
+            self._table.setItem(row, 11, age_item)
         self._table.setSortingEnabled(True)
         self._table.sortItems(10, Qt.SortOrder.DescendingOrder)
 

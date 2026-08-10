@@ -4,7 +4,17 @@ docs/superpowers/specs/2026-08-09-trade-route-loop-planner-design.md.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+
+
+def _parse_ts(ts: Optional[str]) -> Optional[datetime]:
+    if not isinstance(ts, str):
+        return None
+    try:
+        return datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
 
 
 def find_trade_loops(
@@ -80,11 +90,11 @@ def _best_leg(buy_station: dict, sell_station: dict, cargo_capacity: int) -> Opt
     a cheaper-margin commodity with far more available stock/demand can
     beat a thin-margin one that's capped to a handful of units)."""
     best: Optional[dict] = None
-    for commodity, (buy_price, stock) in buy_station["buys"].items():
+    for commodity, (buy_price, stock, buy_updated) in buy_station["buys"].items():
         sell_info = sell_station["sells"].get(commodity)
         if sell_info is None:
             continue
-        sell_price, demand = sell_info
+        sell_price, demand, sell_updated = sell_info
         profit_per_unit = sell_price - buy_price
         if profit_per_unit <= 0:
             continue
@@ -97,6 +107,15 @@ def _best_leg(buy_station: dict, sell_station: dict, cargo_capacity: int) -> Opt
         if qty <= 0:
             continue
 
+        # Whichever side's data is older is what a player would actually
+        # run into first — the buy price/stock could be fresh while the
+        # sell side's demand quietly drifted for days, or vice versa.
+        ages = [dt for dt in (_parse_ts(buy_updated), _parse_ts(sell_updated)) if dt is not None]
+        data_age_hours = (
+            (datetime.now(timezone.utc) - min(ages)).total_seconds() / 3600.0
+            if ages else None
+        )
+
         total = profit_per_unit * qty
         if best is None or total > best["profit"]:
             best = {
@@ -104,5 +123,6 @@ def _best_leg(buy_station: dict, sell_station: dict, cargo_capacity: int) -> Opt
                 "profit_per_unit": profit_per_unit,
                 "quantity": qty,
                 "profit": total,
+                "data_age_hours": data_age_hours,
             }
     return best
