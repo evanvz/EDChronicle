@@ -395,6 +395,15 @@ class MarketPanel(QWidget):
         self._exclude_enemy_pp_check.setChecked(True)
         self._exclude_enemy_pp_check.toggled.connect(self._on_exclude_enemy_pp_toggled)
 
+        self._faction_only_check = QCheckBox("Only my squadron faction's controlled stations")
+        self._faction_only_check.setStyleSheet(_LABEL_STYLE)
+        self._faction_only_check.setToolTip(
+            "Same filter as Trade Route Loop Planner's equivalent checkbox — "
+            "drops results at stations not controlled by your squadron's "
+            "aligned faction."
+        )
+        self._faction_only_check.toggled.connect(self._on_faction_only_toggled)
+
         range_label = QLabel("Range:")
         range_label.setStyleSheet(_LABEL_STYLE)
         self._range_spin = QSpinBox()
@@ -435,6 +444,7 @@ class MarketPanel(QWidget):
         near_row.addWidget(near_label)
         near_row.addWidget(self._near_edit, 1)
         near_row.addWidget(self._exclude_enemy_pp_check)
+        near_row.addWidget(self._faction_only_check)
         search_layout.addLayout(near_row)
 
         service_row = QHBoxLayout()
@@ -965,6 +975,28 @@ class MarketPanel(QWidget):
             self._render_results()
         self._render_trade_opportunities()
 
+    def _on_faction_only_toggled(self) -> None:
+        if self._last_results is not None:
+            self._render_results()
+
+    def _filter_faction_only(self, results: list) -> list:
+        """Same idea as Trade Route Loop Planner's equivalent checkbox —
+        drops results at stations not controlled by the squadron's aligned
+        faction. Resolved on demand rather than cached in refresh() since
+        it's only needed when this checkbox is actually on."""
+        if not self._faction_only_check.isChecked():
+            return results
+        squadron_faction_name = None
+        try:
+            overview = self._repo.get_player_faction_overview()
+            squadron_faction_name = overview["faction_name"] if overview else None
+        except Exception:
+            log.exception("Failed to load squadron faction name for market filter")
+        if not squadron_faction_name:
+            return results
+        target = squadron_faction_name.strip().lower()
+        return [r for r in results if (r.get("station_faction") or "").strip().lower() == target]
+
     def _filter_enemy_pp(self, results: list) -> tuple[list, int]:
         """Drops entries in systems currently controlled by a Power other
         than the player's own pledged one (from EDSM's daily PowerPlay
@@ -1012,6 +1044,7 @@ class MarketPanel(QWidget):
             ]
 
         results, enemy_excluded = self._filter_enemy_pp(results)
+        results = self._filter_faction_only(results)
 
         verb = "buying" if buy_mode else "selling"
         near_label = self._last_near_label or self._system

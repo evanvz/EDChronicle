@@ -1199,7 +1199,7 @@ class Repository:
             f"""
             SELECT m.market_id, m.station_name, m.station_type, m.system_name,
                    m.sell_price, m.demand, m.stock, m.last_updated,
-                   si.pads_small, si.pads_medium, si.pads_large
+                   si.pads_small, si.pads_medium, si.pads_large, si.station_faction
             FROM market_prices m
             LEFT JOIN station_info si ON si.market_id = m.market_id
             WHERE m.commodity_name = ? AND m.sell_price IS NOT NULL
@@ -1311,7 +1311,7 @@ class Repository:
             f"""
             SELECT m.market_id, m.station_name, m.station_type, m.system_name,
                    m.buy_price, m.stock, m.last_updated,
-                   si.pads_small, si.pads_medium, si.pads_large
+                   si.pads_small, si.pads_medium, si.pads_large, si.station_faction
             FROM market_prices m
             LEFT JOIN station_info si ON si.market_id = m.market_id
             WHERE m.commodity_name = ? AND m.buy_price IS NOT NULL AND m.buy_price > 0
