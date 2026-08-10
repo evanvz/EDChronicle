@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
     QSpinBox, QComboBox, QCheckBox, QTableWidget, QTableWidgetItem, QHeaderView, QFrame,
 )
 
-from edc.core.trade_routes import find_trade_loops, STALE_THRESHOLD_HOURS
+from edc.core.trade_routes import find_trade_loops
 from edc.ui.busy_spinner import BusySpinner
 from edc.ui.panels.market_panel import _NumericTableWidgetItem
 
@@ -342,16 +342,10 @@ class TradeRoutePanel(QWidget):
             # already computes this per-loop (and ranks fresh loops ahead of
             # stale ones); reuse it here rather than recomputing.
             age_hours = loop.get("data_age_hours")
-            if age_hours is None:
-                age_text, age_color = "—", "#888888"
-            elif age_hours < 24:
-                age_text, age_color = f"{age_hours:.0f}h", "#6BCB77"
-            elif age_hours < STALE_THRESHOLD_HOURS:
-                age_text, age_color = f"{age_hours / 24:.0f}d", "#FFB347"
-            else:
-                age_text, age_color = f"{age_hours / 24:.0f}d", "#FF6B6B"
+            age_text = "—" if age_hours is None else (
+                f"{age_hours:.0f}h" if age_hours < 24 else f"{age_hours / 24:.0f}d"
+            )
             age_item = _NumericTableWidgetItem(age_text, age_hours if age_hours is not None else -1.0)
-            age_item.setForeground(QColor(age_color))
 
             for it in (dist_you_item, dist_item, ab_profit_item, ba_profit_item, total_item, age_item):
                 it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
