@@ -62,8 +62,30 @@ when one's picked.
 
 ## Out of scope
 
-- Effect-to-module compatibility filtering (no data source exists).
+- ~~Effect-to-module compatibility filtering (no data source exists).~~
+  Revisited same day for weapons specifically — see addendum below.
 - Merc Coin / Operations update tracking — deferred; no journal event
   found in the official manual or the user's own journal history
   (they haven't run Operations content yet), and no community data
   source exists yet either. Revisit once real data is available.
+
+## Addendum: per-weapon-type effect filtering (2026-08-10)
+
+The broad "weapon" category effect list (44 entries) turned out to be
+real-but-inaccurate for a specific weapon — the real game restricts many
+effects to specific hardpoint types (e.g. Auto Loader only makes sense on
+ammo weapons, not lasers). Re-checked coriolis-data and found the actual
+compatibility data does exist, just not in `specials.json`:
+`modifications/modules.json` has a `specials` array per module-group code
+(e.g. `"mc"` for Multi Cannon), and `modules/hardpoints/*.json` filenames
+map cleanly to those codes via each file's `grp` field. Pulled all 30
+hardpoint types this way — 11 have real effects (9-12 each), the other 19
+(Missile Racks, Guardian weapons, AX weapons, Mining Laser, etc.)
+genuinely have zero in-game, matching known mechanics.
+
+Added `weapon_type_effects` to `experimental_effects.json` and a
+`weapon_type` field to wishlist entries. A new "Weapon Type:" dropdown
+appears only for weapon blueprints (default "— Any weapon —", preserving
+the original broad list for old entries); picking a specific type narrows
+the Experimental Effect dropdown to that hardpoint's real list, including
+correctly showing zero options where that's the truth.
