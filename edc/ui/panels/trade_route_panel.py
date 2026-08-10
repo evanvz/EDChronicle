@@ -223,7 +223,7 @@ class TradeRoutePanel(QWidget):
         self._table.setAlternatingRowColors(True)
         self._table.setStyleSheet(
             "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
-            " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; font-size:12px; }"
+            " gridline-color:#1e3a5a; border:1px solid #1e3a5a; font-size:12px; }"
             "QTableWidget::item { padding:1px 4px; }"
             "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
             " padding:2px; font-size:12px; font-weight:bold; letter-spacing:1px; }"

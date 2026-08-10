@@ -106,7 +106,7 @@ class _ColonisationDetailDialog(QDialog):
         table.setAlternatingRowColors(True)
         table.setStyleSheet(
             "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
-            " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
+            " gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
             "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
             " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
         )
@@ -259,7 +259,7 @@ class SquadronPanel(QWidget):
         self._depot_table.setAlternatingRowColors(True)
         self._depot_table.setStyleSheet(
             "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
-            " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
+            " gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
             "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
             " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
             "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
@@ -289,7 +289,7 @@ class SquadronPanel(QWidget):
         self._history_table.setAlternatingRowColors(True)
         self._history_table.setStyleSheet(
             "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
-            " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
+            " gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
             "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
             " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
         )

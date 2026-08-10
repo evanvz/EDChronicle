@@ -312,7 +312,7 @@ class MarketPanel(QWidget):
         self._cargo_table.setAlternatingRowColors(True)
         self._cargo_table.setStyleSheet(
             "QTableWidget { background:#0d1a0d; alternate-background-color:#0f1f0f;"
-            " color:#c8c8c8; gridline-color:#1e3a1e; border:1px solid #2a5a2a; font-size:12px; }"
+            " gridline-color:#1e3a1e; border:1px solid #2a5a2a; font-size:12px; }"
             "QTableWidget::item { padding:1px 4px; }"
             "QHeaderView::section { background:#0d1a0d; color:#6BCB77; border:none;"
             " padding:2px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
@@ -523,7 +523,7 @@ class MarketPanel(QWidget):
         self._trade_table.setAlternatingRowColors(True)
         self._trade_table.setStyleSheet(
             "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
-            " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; font-size:12px; }"
+            " gridline-color:#1e3a5a; border:1px solid #1e3a5a; font-size:12px; }"
             "QTableWidget::item { padding:1px 4px; }"
             "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
             " padding:2px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
@@ -570,7 +570,7 @@ class MarketPanel(QWidget):
         self._table.setAlternatingRowColors(True)
         self._table.setStyleSheet(
             "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
-            " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; font-size:12px; }"
+            " gridline-color:#1e3a5a; border:1px solid #1e3a5a; font-size:12px; }"
             "QTableWidget::item { padding:1px 4px; }"
             "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
             " padding:2px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
@@ -1109,7 +1109,7 @@ class _RareGoodsDialog(QDialog):
         self._table.setAlternatingRowColors(True)
         self._table.setStyleSheet(
             "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
-            " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
+            " gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
             "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
             " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
             "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
@@ -1223,7 +1223,7 @@ class _StationServiceDialog(QDialog):
         self._table.setAlternatingRowColors(True)
         self._table.setStyleSheet(
             "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
-            " color:#c8c8c8; gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
+            " gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
             "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
             " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
             "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
