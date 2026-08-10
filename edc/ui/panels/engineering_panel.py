@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
 
 from edc.core.engineering_blueprints import EngineeringBlueprintTable
 from edc.core.engineering_wishlist import EngineeringWishlist
+from edc.core.material_trading import find_material_trades
 from edc.core.odyssey_engineering import OdysseyEngineeringTable
 from edc.core.odyssey_wishlist import OdysseyWishlist
 
@@ -212,6 +213,16 @@ class _ShipEngineeringTab(QWidget):
         self._engineer_note.setStyleSheet("color:#555555; font-size:11px; background:transparent; border:none;")
         right.addWidget(self._engineer_note)
 
+        trade_hdr = QLabel("MATERIAL TRADER SUGGESTIONS")
+        trade_hdr.setStyleSheet(_HDR_STYLE)
+        right.addWidget(trade_hdr)
+
+        self._trade_table = _make_table(["Short On", "Suggested Trade"])
+        tth = self._trade_table.horizontalHeader()
+        tth.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        tth.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        right.addWidget(self._trade_table, 1)
+
         root.addLayout(right, 3)
 
     # ── Helpers ──────────────────────────────────────────────────────────
@@ -380,9 +391,32 @@ class _ShipEngineeringTab(QWidget):
             self._engineer_table.setItem(r, 2, dist_item)
             self._engineer_table.setItem(r, 3, status_item)
 
+    def _refresh_trade_suggestions(self) -> None:
+        owned: Dict[str, int] = {}
+        for attr in _CATEGORY_STATE_ATTR.values():
+            owned.update(getattr(self._state, attr, {}) or {})
+        shortfalls = self.missing_materials_for_wishlist()
+        suggestions = find_material_trades(shortfalls, owned)
+
+        rows = sorted(suggestions.items(), key=lambda kv: self._blueprints.material_name(kv[0]))
+        self._trade_table.setRowCount(len(rows))
+        for r, (sym, sugg) in enumerate(rows):
+            need_item = QTableWidgetItem(f"{self._blueprints.material_name(sym)} (short {shortfalls[sym]})")
+            cover = "" if sugg["full_cover"] else f" — covers {sugg['missing_covered']}/{shortfalls[sym]}"
+            trade_item = QTableWidgetItem(
+                f"Trade {sugg['source_qty_used']}x {self._blueprints.material_name(sugg['source'])}"
+                f" ({sugg['source_spare']} spare){cover}"
+            )
+            color = QColor("#6BCB77") if sugg["full_cover"] else QColor("#FFB347")
+            need_item.setForeground(color)
+            trade_item.setForeground(color)
+            self._trade_table.setItem(r, 0, need_item)
+            self._trade_table.setItem(r, 1, trade_item)
+
     def refresh(self, state) -> None:
         self._state = state
         self._refresh_wishlist_table()
+        self._refresh_trade_suggestions()
 
 
 _KIND_LABELS = {
