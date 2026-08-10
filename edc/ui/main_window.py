@@ -57,6 +57,7 @@ from edc.core.edsm_powerplay import EdsmPowerPlayCache
 from edc.core.eddn_publisher import EddnPublisher
 from edc.core.canonn_client import CanonnClient, SystemPoi
 from edc.core.engineering_blueprints import EngineeringBlueprintTable
+from edc.core.experimental_effects import ExperimentalEffectsTable
 from edc.core.engineering_wishlist import EngineeringWishlist
 from edc.core.odyssey_engineering import OdysseyEngineeringTable
 from edc.core.odyssey_wishlist import OdysseyWishlist
@@ -836,6 +837,7 @@ class MainWindow(QMainWindow):
         self._canonn_worker: _CanonnRefreshWorker | None = None
         self._spansh_rings_by_system: Dict[int, List[dict]] = {}
         self.engineering_blueprints = EngineeringBlueprintTable(settings_base)
+        self.experimental_effects = ExperimentalEffectsTable(settings_base)
         self.rare_commodities = RareCommodityTable(settings_base)
         self.engineering_wishlist_store = EngineeringWishlist(data_dir / "engineering_wishlist.json")
         self.odyssey_engineering = OdysseyEngineeringTable(settings_base)
@@ -1035,6 +1037,7 @@ class MainWindow(QMainWindow):
         self.engineering_panel = EngineeringPanel(
             self.engineering_blueprints, self.engineering_wishlist_store,
             self.odyssey_engineering, self.odyssey_wishlist_store,
+            self.experimental_effects,
         )
 
         # Fleet Carrier tab

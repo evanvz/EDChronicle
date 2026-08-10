@@ -14,7 +14,10 @@ class EngineeringWishlist:
       <data_dir>/engineering_wishlist.json
 
     Format:
-      {"items": [{"fdname": "FSD_LongRange", "grade": 5}, ...]}
+      {"items": [{"fdname": "FSD_LongRange", "grade": 5, "experimental": null}, ...]}
+
+    "experimental" is the edname of an optional Experimental Effect
+    (see experimental_effects.py), or null/absent for none.
     """
 
     def __init__(self, path: Path):
@@ -34,8 +37,13 @@ class EngineeringWishlist:
                     continue
                 fdname = rec.get("fdname")
                 grade = rec.get("grade")
+                experimental = rec.get("experimental")
                 if isinstance(fdname, str) and fdname and isinstance(grade, int):
-                    out.append({"fdname": fdname, "grade": grade})
+                    out.append({
+                        "fdname": fdname,
+                        "grade": grade,
+                        "experimental": experimental if isinstance(experimental, str) else None,
+                    })
             return out
         except Exception:
             log.exception("Failed to load engineering_wishlist.json")
@@ -46,7 +54,11 @@ class EngineeringWishlist:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             payload = {
                 "items": [
-                    {"fdname": it["fdname"], "grade": it["grade"]}
+                    {
+                        "fdname": it["fdname"],
+                        "grade": it["grade"],
+                        "experimental": it.get("experimental"),
+                    }
                     for it in items
                     if isinstance(it, dict) and isinstance(it.get("fdname"), str) and isinstance(it.get("grade"), int)
                 ]

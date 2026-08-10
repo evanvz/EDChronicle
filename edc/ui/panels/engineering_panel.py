@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
 
 from edc.core.engineering_blueprints import EngineeringBlueprintTable
 from edc.core.engineering_wishlist import EngineeringWishlist
+from edc.core.experimental_effects import ExperimentalEffectsTable
 from edc.core.material_trading import find_material_trades
 from edc.core.odyssey_engineering import OdysseyEngineeringTable
 from edc.core.odyssey_material_source import is_bartender_tradeable
@@ -65,6 +66,7 @@ class EngineeringPanel(QWidget):
         wishlist_store: EngineeringWishlist,
         odyssey_table: OdysseyEngineeringTable,
         odyssey_wishlist_store: OdysseyWishlist,
+        experimental_effects: ExperimentalEffectsTable,
         parent=None,
     ):
         super().__init__(parent)
@@ -81,7 +83,7 @@ class EngineeringPanel(QWidget):
         )
         root.addWidget(self._tabs)
 
-        self._ship_tab = _ShipEngineeringTab(blueprint_table, wishlist_store)
+        self._ship_tab = _ShipEngineeringTab(blueprint_table, wishlist_store, experimental_effects)
         self._odyssey_tab = _OdysseyEngineeringTab(odyssey_table, blueprint_table, odyssey_wishlist_store)
         self._tabs.addTab(self._ship_tab, "Ships")
         self._tabs.addTab(self._odyssey_tab, "Suits & Weapons")
@@ -96,11 +98,18 @@ class EngineeringPanel(QWidget):
 
 
 class _ShipEngineeringTab(QWidget):
-    def __init__(self, blueprint_table: EngineeringBlueprintTable, wishlist_store: EngineeringWishlist, parent=None):
+    def __init__(
+        self,
+        blueprint_table: EngineeringBlueprintTable,
+        wishlist_store: EngineeringWishlist,
+        experimental_effects: ExperimentalEffectsTable,
+        parent=None,
+    ):
         super().__init__(parent)
         self.setStyleSheet("background:#080f18;")
         self._blueprints = blueprint_table
         self._store = wishlist_store
+        self._effects = experimental_effects
         self._wishlist: List[Dict[str, Any]] = self._store.load()
         self._state = None
 
@@ -149,6 +158,24 @@ class _ShipEngineeringTab(QWidget):
         grade_row.addWidget(self._grade_spin, 1)
         grade_row.addWidget(add_btn)
         add_layout.addLayout(grade_row)
+
+        effect_row = QHBoxLayout()
+        effect_label = QLabel("Experimental:")
+        effect_label.setStyleSheet(_LABEL_STYLE)
+        self._effect_combo = QComboBox()
+        self._effect_combo.setStyleSheet(_COMBO_STYLE)
+        self._effect_combo.addItem("— None —", None)
+        for edname, label in self._effects.effect_names():
+            self._effect_combo.addItem(label, edname)
+        effect_row.addWidget(effect_label)
+        effect_row.addWidget(self._effect_combo, 1)
+        add_layout.addLayout(effect_row)
+
+        self._effect_note = QLabel("")
+        self._effect_note.setWordWrap(True)
+        self._effect_note.setStyleSheet("color:#FF8C00; font-size:11px; background:transparent; border:none;")
+        add_layout.addWidget(self._effect_note)
+        self._effect_combo.currentIndexChanged.connect(self._on_effect_changed)
 
         left.addWidget(add_frame)
         self._on_blueprint_changed()
@@ -234,6 +261,13 @@ class _ShipEngineeringTab(QWidget):
             max_g = self._blueprints.max_grade(fdname) or 5
             self._grade_spin.setMaximum(max_g)
 
+    def _on_effect_changed(self):
+        edname = self._effect_combo.currentData()
+        if edname and not self._effects.has_known_cost(edname):
+            self._effect_note.setText("No known material cost for this effect — coriolis-data gap.")
+        else:
+            self._effect_note.setText("")
+
     def _held_count(self, symbol: str) -> int:
         if self._state is None:
             return 0
@@ -244,14 +278,24 @@ class _ShipEngineeringTab(QWidget):
         src = getattr(self._state, attr, {}) or {}
         return int(src.get(symbol.lower(), 0))
 
-    def _missing_count(self, fdname: str, grade: int) -> int:
-        reqs = self._blueprints.cumulative_requirements(fdname, grade)
+    def _combined_requirements(self, entry: Dict[str, Any]) -> Dict[str, int]:
+        """Blueprint cumulative requirements plus the chosen Experimental
+        Effect's flat material cost (if any), summed per material."""
+        reqs = dict(self._blueprints.cumulative_requirements(entry["fdname"], entry["grade"]))
+        experimental = entry.get("experimental")
+        if experimental:
+            for sym, qty in self._effects.requirements(experimental).items():
+                reqs[sym] = reqs.get(sym, 0) + qty
+        return reqs
+
+    def _missing_count(self, entry: Dict[str, Any]) -> int:
+        reqs = self._combined_requirements(entry)
         return sum(1 for sym, qty in reqs.items() if self._held_count(sym) < qty)
 
     def missing_materials_for_wishlist(self) -> Dict[str, int]:
         shortfall: Dict[str, int] = {}
         for entry in self._wishlist:
-            reqs = self._blueprints.cumulative_requirements(entry["fdname"], entry["grade"])
+            reqs = self._combined_requirements(entry)
             for sym, qty in reqs.items():
                 need = qty - self._held_count(sym)
                 if need > 0:
@@ -263,9 +307,13 @@ class _ShipEngineeringTab(QWidget):
         if not fdname:
             return
         grade = self._grade_spin.value()
-        if any(e["fdname"] == fdname and e["grade"] == grade for e in self._wishlist):
+        experimental = self._effect_combo.currentData()
+        if any(
+            e["fdname"] == fdname and e["grade"] == grade and e.get("experimental") == experimental
+            for e in self._wishlist
+        ):
             return
-        self._wishlist.append({"fdname": fdname, "grade": grade})
+        self._wishlist.append({"fdname": fdname, "grade": grade, "experimental": experimental})
         self._store.save(self._wishlist)
         self._refresh_wishlist_table()
 
@@ -283,11 +331,15 @@ class _ShipEngineeringTab(QWidget):
             fdname = entry["fdname"]
             grade = entry["grade"]
             bp = self._blueprints.get(fdname) or {}
-            name_item = QTableWidgetItem(f"{bp.get('display_name', fdname)} — {bp.get('short_name', '')}")
+            label = f"{bp.get('display_name', fdname)} — {bp.get('short_name', '')}"
+            experimental = entry.get("experimental")
+            if experimental:
+                label += f" (+ {self._effects.display_name(experimental)})"
+            name_item = QTableWidgetItem(label)
             grade_item = QTableWidgetItem(str(grade))
             grade_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
-            missing = self._missing_count(fdname, grade)
+            missing = self._missing_count(entry)
             if missing == 0:
                 status_item = QTableWidgetItem("Ready")
                 status_item.setForeground(QColor("#6BCB77"))
@@ -307,7 +359,7 @@ class _ShipEngineeringTab(QWidget):
             self._refresh_engineer_table()
             return
         entry = self._wishlist[row]
-        reqs = self._blueprints.cumulative_requirements(entry["fdname"], entry["grade"])
+        reqs = self._combined_requirements(entry)
         rows = sorted(reqs.items(), key=lambda kv: self._blueprints.material_name(kv[0]))
 
         self._detail_table.setRowCount(len(rows))
