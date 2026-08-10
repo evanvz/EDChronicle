@@ -238,7 +238,7 @@ class TradeRoutePanel(QWidget):
             "Click a System or Station cell to copy its name to the clipboard. "
             "Station A is always the closer of the two to your current location. "
             "Data Age is how old the older of the two legs' crowdsourced prices "
-            "is — a stale figure (orange/red) means real prices/stock may have "
+            "is — the older it is, the more likely real prices/stock have "
             "drifted since it was last reported."
         )
         self._table.cellClicked.connect(self._on_cell_clicked)
