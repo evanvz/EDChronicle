@@ -7,12 +7,25 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+# A loop older than this (its stalest leg) is ranked below every fresher
+# loop regardless of profit, rather than excluded outright — a stale route
+# is still better than no route at all in a sparse area, but shouldn't
+# outrank a real, trustworthy one. Matches the UI's own red-flag threshold.
+STALE_THRESHOLD_HOURS = 24 * 7
+
 
 def _parse_ts(ts: Optional[str]) -> Optional[datetime]:
+    """last_updated isn't one consistent format: EDDN messages' own
+    timestamps are typically "...SS.mmmZ" (milliseconds + Z), while our
+    own generated fallback timestamps are Python's isoformat() with a
+    "+00:00" offset instead of "Z" — datetime.fromisoformat handles both
+    once "Z" is normalized to an explicit offset."""
     if not isinstance(ts, str):
         return None
     try:
-        return datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        normalized = ts[:-1] + "+00:00" if ts.endswith("Z") else ts
+        dt = datetime.fromisoformat(normalized)
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
     except ValueError:
         return None
 
@@ -70,6 +83,12 @@ def find_trade_loops(
                 a, b = b, a
                 leg_ab, leg_ba = leg_ba, leg_ab
 
+            ages = [
+                h for h in (leg_ab["data_age_hours"], leg_ba["data_age_hours"])
+                if h is not None
+            ]
+            data_age_hours = max(ages) if ages else None
+
             loops.append({
                 "station_a": a["station_name"], "system_a": a["system_name"], "pad_a": a["pad_size"],
                 "station_b": b["station_name"], "system_b": b["system_name"], "pad_b": b["pad_size"],
@@ -78,9 +97,21 @@ def find_trade_loops(
                 "leg_a_to_b": leg_ab,
                 "leg_b_to_a": leg_ba,
                 "total_profit": leg_ab["profit"] + leg_ba["profit"],
+                "data_age_hours": data_age_hours,
             })
 
-    loops.sort(key=lambda r: r["total_profit"], reverse=True)
+    # Fresh loops always rank ahead of stale ones regardless of profit —
+    # a bigger number backed by day-old demand data isn't actually the
+    # better route (confirmed live: a top-ranked route's real profit came
+    # in well under what was shown, traced to unflagged stale data).
+    # Within each freshness tier, still ranked by profit.
+    loops.sort(
+        key=lambda r: (
+            r["data_age_hours"] is None or r["data_age_hours"] < STALE_THRESHOLD_HOURS,
+            r["total_profit"],
+        ),
+        reverse=True,
+    )
     return loops[:max_results]
 
 
