@@ -207,6 +207,7 @@ class _MarketVacuumWorker(QObject):
         try:
             ran_full_vacuum = db.enable_incremental_auto_vacuum()
             db.incremental_vacuum()
+            db.ensure_market_prices_indexes()
             note = " (first run — also switched to incremental auto-vacuum)" if ran_full_vacuum else ""
             self.finished.emit(True, f"Database compacted{note}.")
         except Exception as exc:
@@ -1204,8 +1205,9 @@ class MainWindow(QMainWindow):
         st.addWidget(QLabel("Database maintenance"))
         self.compact_db_status_label = QLabel(
             "Stale market data is pruned automatically each day. Reclaiming the freed disk "
-            "space is a one-time, several-minutes operation that locks the database — run it "
-            "only when you're not actively playing, not automatically on every startup."
+            "space and building the Trade Route search index (a one-time speed-up) is a "
+            "several-minutes operation that locks the database — run it only when you're "
+            "not actively playing, not automatically on every startup."
         )
         self.compact_db_status_label.setWordWrap(True)
         st.addWidget(self.compact_db_status_label)

@@ -49,6 +49,20 @@ class Database:
         thread only, same reasoning as enable_incremental_auto_vacuum()."""
         self.conn.execute(f"PRAGMA incremental_vacuum({pages})")
 
+    def ensure_market_prices_indexes(self) -> None:
+        """market_prices' only index besides its PRIMARY KEY is on
+        commodity_name — every "which stations are near (x,y,z)" query
+        (Trade Route Loop Planner, and to a lesser extent Market search)
+        filters on system_name too, with nothing to narrow the row set
+        first when it wants every commodity for a station rather than one
+        specific one. Confirmed live: a full table scan taking 48.7s at
+        ~13.4M rows, 6.2s after this index (SEARCH instead of SCAN per
+        EXPLAIN QUERY PLAN). IF NOT EXISTS makes every run after the first
+        an instant no-op. Building it takes ~2+ minutes on a database this
+        size and needs a write lock like any schema change — call from a
+        worker thread only, same reasoning as enable_incremental_auto_vacuum()."""
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_market_prices_system_name ON market_prices(system_name)")
+
     def run_migrations(self):
         """Add new columns to existing tables without breaking older DBs."""
         migrations = [
