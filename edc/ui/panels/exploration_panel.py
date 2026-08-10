@@ -153,6 +153,15 @@ class ExplorationPanel(QWidget):
         self._cards_layout.setSpacing(5)
         self._cards_layout.setContentsMargins(0, 0, 0, 0)
         self._content_layout.addWidget(self._cards_widget)
+        # body_name -> (card widget, the exact _build_body_card args that
+        # produced it) — lets refresh reuse/reposition an unchanged card
+        # instead of destroying and recreating every card on every
+        # refresh. That full teardown-rebuild (previously: clear the whole
+        # layout, then rebuild from scratch) is what caused a visible
+        # empty-then-repopulated flicker during an active FSS scan,
+        # confirmed live: the card borders stayed but the text inside
+        # blanked out, repeatedly, once per newly-discovered body.
+        self._body_cards: dict = {}
 
         # ── Materials shortlist ───────────────────────────────────────────
         mat_frame = QFrame()
@@ -416,13 +425,10 @@ class ExplorationPanel(QWidget):
 
     # ── Body cards ────────────────────────────────────────────────────────────
     def _refresh_bodies(self, state, min_value, planet_values):
-        # Clear existing cards
-        while self._cards_layout.count():
-            item = self._cards_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-
         if not state.bodies:
+            for card, _sig in self._body_cards.values():
+                card.deleteLater()
+            self._body_cards.clear()
             self._bodies_label.setVisible(False)
             self.exploration_action.setText(
                 "🌍 Exploration: no bodies resolved yet — "
@@ -448,6 +454,7 @@ class ExplorationPanel(QWidget):
         tf_unmapped  = 0
         hv_unmapped  = 0
         shown        = 0
+        seen_bodies  = set()
 
         for sort_val, body, rec in body_items[:50]:
             est        = rec.get("EstimatedValue")
@@ -481,13 +488,29 @@ class ExplorationPanel(QWidget):
                 hv_unmapped += 1
 
             shown += 1
-            card = self._build_body_card(
+            signature = (
                 body, pc_disp, dist, est, tf, was_mapped, dss_mapped,
                 first, bio, geo, human, guardian, thargoid, other_sig,
                 genuses, landable, volcanism, materials, min_value,
-                first_footfall, has_footfall
+                first_footfall, has_footfall,
             )
+            existing = self._body_cards.get(body)
+            if existing is not None and existing[1] == signature:
+                card = existing[0]
+            else:
+                if existing is not None:
+                    existing[0].deleteLater()
+                card = self._build_body_card(*signature)
+                self._body_cards[body] = (card, signature)
+            # addWidget on a widget already in this layout just repositions
+            # it (no destroy/recreate) — this is what keeps an unchanged
+            # card from ever flickering, even as new cards get inserted
+            # around it and the sort order shifts.
             self._cards_layout.addWidget(card)
+            seen_bodies.add(body)
+
+        for stale_body in set(self._body_cards) - seen_bodies:
+            self._body_cards.pop(stale_body)[0].deleteLater()
 
         self.exploration_action.setText(
             f"🌍 Exploration: {shown} bodies • "
