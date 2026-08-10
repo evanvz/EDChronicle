@@ -79,24 +79,34 @@ def find_trade_loops(
             # (A->B->A and B->A->B are the same loop), so without this the
             # dict-iteration order decided which one got called "A", with
             # no relation to which one you'd actually want to fly to first.
+            # Uses fresh names rather than reassigning a/b/leg_ab/leg_ba in
+            # place — those are the outer/inner loop-carried variables, and
+            # mutating them here corrupted every later inner iteration once
+            # one swap fired (confirmed live: produced dozens of bogus
+            # duplicate-looking pairs, and separately caused real valid
+            # pairs to vanish since the wrong "a" station got compared
+            # against the next id_b instead of the true one).
             if b["distance_ly"] < a["distance_ly"]:
-                a, b = b, a
-                leg_ab, leg_ba = leg_ba, leg_ab
+                out_a, out_b = b, a
+                out_leg_ab, out_leg_ba = leg_ba, leg_ab
+            else:
+                out_a, out_b = a, b
+                out_leg_ab, out_leg_ba = leg_ab, leg_ba
 
             ages = [
-                h for h in (leg_ab["data_age_hours"], leg_ba["data_age_hours"])
+                h for h in (out_leg_ab["data_age_hours"], out_leg_ba["data_age_hours"])
                 if h is not None
             ]
             data_age_hours = max(ages) if ages else None
 
             loops.append({
-                "station_a": a["station_name"], "system_a": a["system_name"], "pad_a": a["pad_size"],
-                "station_b": b["station_name"], "system_b": b["system_name"], "pad_b": b["pad_size"],
+                "station_a": out_a["station_name"], "system_a": out_a["system_name"], "pad_a": out_a["pad_size"],
+                "station_b": out_b["station_name"], "system_b": out_b["system_name"], "pad_b": out_b["pad_size"],
                 "distance_ly": distance_ly,
-                "dist_from_you": a["distance_ly"],
-                "leg_a_to_b": leg_ab,
-                "leg_b_to_a": leg_ba,
-                "total_profit": leg_ab["profit"] + leg_ba["profit"],
+                "dist_from_you": out_a["distance_ly"],
+                "leg_a_to_b": out_leg_ab,
+                "leg_b_to_a": out_leg_ba,
+                "total_profit": out_leg_ab["profit"] + out_leg_ba["profit"],
                 "data_age_hours": data_age_hours,
             })
 
