@@ -9,7 +9,9 @@ log = logging.getLogger("edc.engineering_blueprints")
 class EngineeringBlueprintTable:
     """
     Offline, advisory-only engineering blueprint recipe reference.
-    Sourced from EDCD/coriolis-data + EDCD/FDevIDs (MIT licensed).
+    Sourced from EDCD/coriolis-data + EDCD/FDevIDs — Frontier game data,
+    not the coriolis.io site code (which is separately MIT); used here
+    non-commercially under Frontier's community/fan content terms.
 
     File location (portable-in-repo):
       <settings_dir>/engineering_blueprints.json

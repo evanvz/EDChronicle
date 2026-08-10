@@ -1,6 +1,6 @@
 {
   "last_updated": "2026-07-26",
-  "source": "EDCD/coriolis-data (modifications/blueprints.json) + EDCD/FDevIDs (material.csv) — MIT licensed",
+  "source": "EDCD/coriolis-data (modifications/blueprints.json) + EDCD/FDevIDs (material.csv) — Frontier game data, non-commercial fan use",
   "blueprints": {
     "AFM_Shielded": {
       "display_name": "Auto field mainentance unit",

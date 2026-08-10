@@ -1,6 +1,8 @@
 """Offline reference table of real rare goods and their one true canonical
 selling station (market_id) — sourced from EDCD/FDevIDs rare_commodity.csv
-(MIT licensed). Unlike regular commodities, a rare good only ever has one
+(Frontier game data, no separate license grant; used non-commercially
+under Frontier's community/fan content terms). Unlike regular
+commodities, a rare good only ever has one
 valid source station galaxy-wide, so cross-referencing by market_id (not
 just commodity name) avoids the noisy/stale duplicate-station results a
 plain name search over the EDDN commodity feed can produce.
