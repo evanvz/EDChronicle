@@ -77,6 +77,7 @@ from edc.core.rare_commodities import RareCommodityTable
 from edc.core.bounty_scanner import scan_active_bounties
 from edc.core.bgs_conflicts import squadron_faction_name
 from edc.core.combat_bond_scanner import scan_unredeemed_combat_total
+from edc.core.materials_scanner import scan_latest_materials
 from edc.core.notoriety_scanner import scan_latest_notoriety
 from edc.core.rank_scanner import scan_latest_rank_progress
 from edc.core.squadron_scanner import scan_squadron_status
@@ -731,6 +732,18 @@ class MainWindow(QMainWindow):
         except Exception:
             log.exception("Failed to scan journal history for unredeemed combat bonds")
             self.state.combat_unsold_total = int(ledger.get("combat_unsold_total", 0) or 0)
+
+        # Same reasoning as active_bounties: the live bootstrap only re-reads
+        # the tail of the current journal, which can miss the Materials
+        # event (fires at journal start / Materials panel open) on a long
+        # session, leaving held-material counts at 0 despite real stock.
+        try:
+            materials = scan_latest_materials(Path(self.cfg.journal_dir)) \
+                if getattr(self.cfg, "journal_dir", None) else ({}, {}, {})
+        except Exception:
+            log.exception("Failed to scan journal history for materials")
+            materials = ({}, {}, {})
+        self.state.materials_raw, self.state.materials_manufactured, self.state.materials_encoded = materials
 
         # Same reasoning as active_bounties: the live bootstrap only re-reads
         # the tail of the current journal, which can miss the Statistics
