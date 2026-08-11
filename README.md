@@ -67,11 +67,19 @@ Inspired by [EDCoPilot](https://www.razzafrag.com/) by CMDR RazzaFrag.
 - Manual search: best price to sell, or cheapest place to buy, a given commodity within a configurable radius — backed by a galaxy-wide EDDN commodity feed, not just your own visits
 - Sortable results (price, distance, demand/stock — numeric, not alphabetical) with "Updated" shown as relative time ("3h ago") instead of a raw timestamp
 - Minimum landing pad size filter (Any / Medium+ / Large only) alongside the existing range filter — stations with unconfirmed pad size are kept visible rather than hidden, since we can't rule them out
+- PowerPlay and "only my squadron faction's controlled stations" filters, both applied instantly against already-fetched results
 - Click a result to copy the station/system name, or pin it as your active destination — shown as a persistent banner on the Overview tab (surviving a crash/restart) until you dock there or dismiss it manually
 - Automatic Trade Opportunities: cross-references your current market's buy prices against known sell prices elsewhere within range
 - "In Cargo — Sell At" tracking that persists across jumps and undocking
 - **Rare Goods** finder: cross-references the real list of ~140 rare goods (EDCD/FDevIDs) against their one true canonical station each, grounded by market ID rather than a plain name search — avoids the stale/duplicate listings a normal commodity search can surface for these
 - **Concourse & broker service finder**: Pioneer Supplies (with Black Market confirmed too, for contraband like E-Breach), Black Market, Apex Interstellar, Frontline Solutions, Vista Genomics, Bartender, Material Trader, and Technology Broker — closest known station offering each, from a small color-coded button row, each opening its own detached window
+
+### Trade Route Loop Planner
+- Finds real A↔B↔A round trips within a configurable radius: buy commodity X cheap at Station A, sell it at Station B, buy a different commodity Y at B, sell it back at A — not a one-way flip
+- Cargo capacity read live from your ship's `Loadout` event, so results are capped to what you can actually carry, further capped by each leg's own stock/demand
+- Same landing pad, PowerPlay, and squadron-faction filters as Market search
+- "Station A" always means whichever end of the loop is closer to you right now, so results read as "fly here first"
+- Data Age column shows how old the crowdsourced price data behind each route actually is (color-coded by freshness), and fresher routes are ranked ahead of stale ones regardless of raw profit — a bigger number backed by day-old demand data isn't actually the better route
 
 ### Mining
 - Live session stats: asteroids prospected, cores cracked, tons refined per material
@@ -79,10 +87,13 @@ Inspired by [EDCoPilot](https://www.razzafrag.com/) by CMDR RazzaFrag.
 - "Where to sell" cross-references refined cargo against known market prices within range, sharing the Market tab's price/distance/pad-size filtering
 
 ### Materials & Engineering
-- Live material inventory (Raw/Manufactured/Encoded) tracked incrementally as you collect, discard, trade, or consume materials — no need to relog for counts to update
-- Engineering Blueprint Wishlist tab — pick a blueprint and target grade, and EDChronicle sums material requirements cumulatively across every grade from 1 up to the target (reaching grade 5 means engineering through grades 1-4 first, each with its own material cost)
+- Live material inventory (Raw/Manufactured/Encoded) tracked incrementally as you collect, discard, trade, or consume materials — no need to relog for counts to update, and reconstructed at startup from full journal history (the `Materials` snapshot event only fires at login or when you open the in-game panel, so a long session can otherwise leave counts stuck at 0)
+- Engineering Blueprint Wishlist tab — pick a blueprint and target grade, and EDChronicle sums material requirements across every grade from 1 up to the target using the real number of engineering rolls each grade actually takes (1/2/3/4/5 at max Engineer access, not a flat 1 roll per grade) — reaching grade 5 costs its materials ×5, not ×1
+- Optional Experimental Effect per wishlist entry, filtered to what's actually valid for the selected blueprint (and, for weapons, the specific hardpoint type — Multi Cannon vs Beam Laser vs Missile Rack, etc. — rather than one generic "weapon" list), with its material cost folded into the same shortfall totals
+- **Material Trader Advisor**: for each material you're short on, suggests the best real up/down-trade from a material you have plenty of, using the game's actual same-group/cross-group trade ratios
 - Shows exactly which materials you're short, and how many
 - Lists every known engineer who offers the selected blueprint/grade, sorted by distance from your current location, with your real unlock rank compared against what that specific grade requires
+- Suits & Weapons (Odyssey) tab flags each required material as Bartender-tradeable (Chemicals/Circuits/Tech asset groups) or farm/loot only (Data and one-off Item/Consumable materials, which can't be bartered at all)
 - Optional voice + Overview panel alert when you're near a farming location for a material on your wishlist
 
 ### Fleet Carrier
@@ -97,7 +108,7 @@ Inspired by [EDCoPilot](https://www.razzafrag.com/) by CMDR RazzaFrag.
 
 ### Voice commands
 - Say a trigger phrase to fire in-game ship actions (power distribution, cargo scoop, landing gear, etc.) via keybind dispatch — reads your actual bound keys from the game's `.binds` file
-- Separate tab-navigation trigger phrase to switch tabs by voice (e.g. "hud combat", "hud market") — 14 of 17 tabs are voice-navigable
+- Separate tab-navigation trigger phrase to switch tabs by voice (e.g. "hud combat", "hud market") — 14 of 18 tabs are voice-navigable
 - Offline speech recognition via Vosk, with a dedicated PTT-style radio-click cue tone (not a raw beep) for trigger-heard/unrecognized feedback, at an independently configurable feedback volume
 
 ### Voice / TTS alerts
@@ -125,6 +136,8 @@ EDChronicle draws on the same community data network the rest of the Elite Dange
 - **[Inara](https://inara.cz)** — optional bulk CSV export of a minor faction's full system presence list, for the Player Faction tab's bulk import
 
 EDChronicle can also contribute back: "Contribute data to EDDN" in Settings (on by default, matching EDMarketConnector's own default — turn it off if you'd rather not) publishes a subset of your journal events (jumps, docking, scans, surface signal scans, carrier jumps, codex entries) to EDDN in its standard schema, benefiting every tool that consumes it. No personal data beyond your commander name is included, and EDDN obfuscates that before distributing it further.
+
+Engineering blueprint costs, Experimental Effect data, Odyssey grade/module recipes, and the Material Trader's trade ratios are static offline reference data sourced from [EDCD/coriolis-data](https://github.com/EDCD/coriolis-data), [EDCD/FDevIDs](https://github.com/EDCD/FDevIDs), [msarilar/EDEngineer](https://github.com/msarilar/EDEngineer), and [jixxed/ed-odyssey-materials-helper](https://github.com/jixxed/ed-odyssey-materials-helper) — see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the MIT-licensed portions' full attribution.
 
 ## Screenshots
 
@@ -226,7 +239,11 @@ Notable files:
 - `faction_refresh_tracker.py` — persists the last full-EDSM-refresh timestamp for the Player Faction tab's 24h auto-refresh gate
 - `rank_names.py` — Rank/Progress category index → real rank name tables (Elite I-V aware), verified against the community Journal Manual
 - `rank_scanner.py` — full-journal-history scan for the most recent Rank/Progress values at startup (same reasoning as `notoriety_scanner.py`)
-- `bounty_scanner.py` / `notoriety_scanner.py` / `squadron_scanner.py` / `carrier_scanner.py` / `mission_scanner.py` — full-journal-history scanners that reconstruct current state at startup (bounties, notoriety, squadron, fleet carrier, active missions)
+- `bounty_scanner.py` / `notoriety_scanner.py` / `squadron_scanner.py` / `carrier_scanner.py` / `mission_scanner.py` / `combat_bond_scanner.py` / `materials_scanner.py` — full-journal-history scanners that reconstruct current state at startup (bounties, notoriety, squadron, fleet carrier, active missions, unredeemed combat bonds, held materials). The five that have no periodic snapshot event to jump to (bounties, combat bonds, squadron, carrier, missions) run on a background thread (`_StartupHistoryScanWorker` in `main_window.py`) so a long journal history doesn't block the window from appearing
+- `trade_routes.py` — pure A↔B↔A trade-loop-finding logic for the Trade Route Loop Planner
+- `material_trading.py` — Material Trader up/down-trade suggestion logic and material grouping/grade data
+- `experimental_effects.py` — Experimental Effect material costs and blueprint/weapon-type compatibility
+- `odyssey_material_source.py` — Bartender-tradeable vs farm/loot-only classification for Odyssey materials
 - `squadron_events.py` / `mission_events.py` — shared event-application logic used by both the live engine and the corresponding `_scanner.py`
 - `market_destination.py` — persists the currently pinned Market-tab destination
 - `ring_signals.py` — shared ring-name/hotspot parsing used by both the live event engine and the historical importer
@@ -293,6 +310,7 @@ Notable files:
 - `powerplay_finder_panel.py`
 - `mining_panel.py`
 - `market_panel.py`
+- `trade_route_panel.py`
 - `engineering_panel.py`
 - `fleet_carrier_panel.py`
 - `player_faction_panel.py`
@@ -343,8 +361,9 @@ Some newer features persist to plain JSON under `settings/` or `data/` rather th
 | File | Contents |
 |------|----------|
 | `settings/engineering_blueprints.json` | Blueprint material costs per grade + which engineer(s) offer each (reference data, not user-specific) |
+| `settings/experimental_effects.json` | Experimental Effect material costs, blueprint-category and weapon-type compatibility (reference data, not user-specific) |
 | `settings/voice_commands.json` | Ship command bindings, tab-navigation trigger word, input/output audio device, feedback volume |
-| `data/engineering_wishlist.json` | User-selected blueprint/grade build targets |
+| `data/engineering_wishlist.json` | User-selected blueprint/grade build targets, each with an optional Experimental Effect and (for weapons) hardpoint type |
 | `data/engineer_progress.json` | Per-engineer unlock rank/status, seeded at startup and updated on `EngineerProgress` events |
 | `data/session_ledger.json` | Unsold combat/exploration/exobiology value totals for the current session |
 | `data/market_destination.json` | The currently pinned Market-tab destination, if any — created on pin, deleted on arrival or manual dismiss |
