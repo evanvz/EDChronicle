@@ -1098,6 +1098,7 @@ class MainWindow(QMainWindow):
 
         # Player Faction tab
         self.player_faction_panel = PlayerFactionPanel(self.repo, self.faction_refresh_tracker)
+        self.player_faction_panel.tick_refresh_started.connect(self.overview_panel.show_tick_flash)
 
         # Squadron tab
         self.squadron_panel = SquadronPanel(self.repo)

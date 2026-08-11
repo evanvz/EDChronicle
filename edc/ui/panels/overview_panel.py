@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
     QFrame,
 )
 from PyQt6.QtCore import (
-    Qt, QPropertyAnimation, QEasingCurve, QSize, QRect, pyqtSignal
+    Qt, QPropertyAnimation, QEasingCurve, QSize, QRect, QTimer, pyqtSignal
 )
 from PyQt6.QtGui import QColor, QPainter, QPen, QFont, QFontMetrics
 
@@ -272,6 +272,17 @@ class OverviewPanel(QWidget):
         self._last_overview_lines = set()
         self._overview_anim       = None
         outer.addWidget(self.overview_actions)
+
+        self._tick_flash_label = QLabel("Tick detected — updating BGS data…")
+        self._tick_flash_label.setStyleSheet(
+            "background-color: #0a1a0f; color: #6BCB77; padding: 4px 8px; font-weight: bold;"
+        )
+        self._tick_flash_opacity = QGraphicsOpacityEffect(self._tick_flash_label)
+        self._tick_flash_label.setGraphicsEffect(self._tick_flash_opacity)
+        self._tick_flash_opacity.setOpacity(0.0)
+        self._tick_flash_label.setVisible(False)
+        self._tick_flash_anim = None
+        outer.addWidget(self._tick_flash_label)
 
         # ── Scroll area ───────────────────────────────────────────────────
         scroll = QScrollArea()
@@ -586,6 +597,34 @@ class OverviewPanel(QWidget):
             f'<span style="color:{label_color};font-size:12px;">{esc(label)}</span>'
             f'&nbsp;<span style="color:{value_color};font-size:12px;">{esc(value)}</span><br>'
         )
+
+    def show_tick_flash(self) -> None:
+        """Fades a brief notice in, holds it ~10s, fades it out -- same
+        QGraphicsOpacityEffect + QPropertyAnimation pattern already used
+        for overview_actions' own new-content fade, but a fully separate
+        widget/effect instance so the two never interfere with each
+        other's animation."""
+        self._tick_flash_label.setVisible(True)
+        self._tick_flash_opacity.setOpacity(0.0)
+
+        self._tick_flash_anim = QPropertyAnimation(self._tick_flash_opacity, b"opacity")
+        self._tick_flash_anim.setDuration(400)
+        self._tick_flash_anim.setStartValue(0.0)
+        self._tick_flash_anim.setEndValue(1.0)
+        self._tick_flash_anim.start()
+
+        QTimer.singleShot(10000, self._start_tick_flash_fadeout)
+
+    def _start_tick_flash_fadeout(self) -> None:
+        self._tick_flash_anim = QPropertyAnimation(self._tick_flash_opacity, b"opacity")
+        self._tick_flash_anim.setDuration(800)
+        self._tick_flash_anim.setStartValue(1.0)
+        self._tick_flash_anim.setEndValue(0.0)
+        self._tick_flash_anim.finished.connect(self._hide_tick_flash)
+        self._tick_flash_anim.start()
+
+    def _hide_tick_flash(self) -> None:
+        self._tick_flash_label.setVisible(False)
 
     # ── Main refresh ──────────────────────────────────────────────────────────
     def refresh(self, state):
