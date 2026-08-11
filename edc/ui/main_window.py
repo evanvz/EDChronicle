@@ -2330,9 +2330,10 @@ class MainWindow(QMainWindow):
                 guardian = (getattr(state, "guardian_signals", {}) or {}).get(body, 0)
                 if guardian > 0:
                     return ExplorationPhrases.guardian_signals(body, guardian)
-                bio = (getattr(state, "bio_signals", {}) or {}).get(body, 0)
-                if bio > 0:
-                    return ExplorationPhrases.bio_signals(body, bio)
+                # Bio signals deliberately don't get a voice callout during
+                # system discovery — the Exploration card already shows a
+                # persistent BIO count on the body, so the voice cue was
+                # redundant noise (per user request).
                 geo = (getattr(state, "geo_signals", {}) or {}).get(body, 0)
                 if geo > 0:
                     return ExplorationPhrases.geo_signals(body, geo)
