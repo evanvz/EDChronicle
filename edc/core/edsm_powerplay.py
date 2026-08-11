@@ -30,7 +30,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import cloudscraper
+import requests
 
 log = logging.getLogger(__name__)
 
@@ -38,6 +38,13 @@ _GZIP_MAGIC = b"\x1f\x8b"
 
 _DUMP_URL = "https://www.edsm.net/dump/powerPlay.json.gz"
 _TIMEOUT = 120
+
+# EDSM's Cloudflare front-end 403s the default python-requests/urllib
+# User-Agent specifically — confirmed live (20/20 clean requests, incl. a
+# previously-blocked one) that a plain, identifying UA passes every time,
+# with none of cloudscraper's ~40-60% JS-challenge-emulation flakiness.
+# Replaces the earlier cloudscraper-based bypass entirely.
+_USER_AGENT = "EDChronicle/1.0.0 (+https://github.com/evanvz/EDChronicle)"
 
 
 class EdsmPowerPlayCache:
@@ -138,12 +145,8 @@ class EdsmPowerPlayCache:
             # This dump is publicly published by EDSM specifically for
             # third-party tools to reuse (no login, no API key involved —
             # our EDSM API key elsewhere is only for uploading journal data,
-            # unrelated to this). It's just sitting behind Cloudflare's
-            # generic bot-challenge, which plain `requests` can't clear, so
-            # `cloudscraper` (browser TLS/JS-challenge emulation) is used to
-            # reach data EDSM already intends for tools like this to fetch.
-            scraper = cloudscraper.create_scraper()
-            resp = scraper.get(_DUMP_URL, timeout=_TIMEOUT)
+            # unrelated to this).
+            resp = requests.get(_DUMP_URL, headers={"User-Agent": _USER_AGENT}, timeout=_TIMEOUT)
             resp.raise_for_status()
             if resp.content[:2] != _GZIP_MAGIC:
                 # Cloudflare's JS challenge page returns HTTP 200 with an

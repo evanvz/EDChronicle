@@ -1600,18 +1600,19 @@ class PlayerFactionPanel(QWidget):
 
     def _maybe_auto_refresh_all(self) -> None:
         """Called once per session, the first time a squadron-aligned
-        faction is known — auto-starts the full refresh if it's been about
-        a day (or never) since the last one."""
+        faction is known — auto-starts the full refresh if it hasn't
+        completed yet today (local calendar day), matching the BGS's own
+        once-a-day tick rather than a rolling 24h window. A session that
+        closes before the refresh finishes never calls mark_refreshed(),
+        so the next launch that same day retries it."""
         if self._auto_refresh_checked or not self._refresh_tracker or not self._faction_name:
             return
         self._auto_refresh_checked = True
         self._check_csv_staleness()
         last = self._refresh_tracker.last_refresh()
         self._update_refresh_status_label(last)
-        if last is not None:
-            age_hours = (datetime.now(timezone.utc) - last).total_seconds() / 3600.0
-            if age_hours < 24.0:
-                return
+        if last is not None and last.astimezone().date() == datetime.now().astimezone().date():
+            return
         if _in_weekly_maintenance_window():
             # Frontier's weekly server maintenance (Thursdays ~09:00-11:00
             # local) — EDSM tends to be unreliable then too, no point

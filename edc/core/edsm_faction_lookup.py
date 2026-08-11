@@ -4,12 +4,10 @@ immediately instead of waiting on EDDN network traffic (EDDN only reports
 sightings as they happen live; there's no way to ask it about a specific
 system directly).
 
-Same EDSM data source as edsm_powerplay.py, same reason cloudscraper is
-needed (Cloudflare's generic bot challenge in front of data EDSM already
-publishes for third-party tools). This is a targeted per-system query
-(fast, small response) rather than the ~20MB PowerPlay dump, so it's fine
-to call synchronously from a worker thread per user action rather than
-caching to disk.
+Same EDSM data source as edsm_powerplay.py. This is a targeted per-system
+query (fast, small response) rather than the ~20MB PowerPlay dump, so it's
+fine to call synchronously from a worker thread per user action rather
+than caching to disk.
 """
 from __future__ import annotations
 
@@ -18,7 +16,7 @@ import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-import cloudscraper
+import requests
 
 log = logging.getLogger(__name__)
 
@@ -27,11 +25,17 @@ _SYSTEM_URL = "https://www.edsm.net/api-v1/system"
 _STATIONS_URL = "https://www.edsm.net/api-system-v1/stations"
 _TIMEOUT = 20
 
-# Confirmed via live testing (a 743-system bulk import): EDSM's Cloudflare
-# challenge blocks roughly 60% of requests seemingly at random — not a
-# sustained "you've been cut off" wall, since successes and failures were
-# interleaved from the very first request rather than clustered. A retry
-# with backoff recovers a meaningful share of these on the same call.
+# EDSM's Cloudflare front-end 403s the default python-requests/urllib
+# User-Agent specifically — confirmed live (20/20 clean requests, incl. a
+# previously-blocked one) that a plain, identifying UA passes every time,
+# with none of cloudscraper's ~40-60% JS-challenge-emulation flakiness.
+# Replaces the earlier cloudscraper-based bypass entirely.
+_USER_AGENT = "EDChronicle/1.0.0 (+https://github.com/evanvz/EDChronicle)"
+
+# Kept for genuine transient failures (network blips, EDSM-side 5xx, or a
+# single URL stuck behind a stale cached Cloudflare error — see EDSM
+# GitHub issue #563) now that a proper User-Agent has removed the ~60%
+# random-block rate cloudscraper used to produce on every request.
 _RETRY_DELAYS_S = (1.0, 3.0, 6.0)
 
 # EDSM publishes a 720 requests/hour limit (visible on its own response
@@ -115,8 +119,10 @@ def fetch_system_stations(system_name: str) -> Tuple[Optional[List[Dict[str, Any
 def _fetch_stations_once(system_name: str) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
     try:
         _throttle()
-        scraper = cloudscraper.create_scraper()
-        resp = scraper.get(_STATIONS_URL, params={"systemName": system_name}, timeout=_TIMEOUT)
+        resp = requests.get(
+            _STATIONS_URL, params={"systemName": system_name},
+            headers={"User-Agent": _USER_AGENT}, timeout=_TIMEOUT,
+        )
         resp.raise_for_status()
         data = resp.json()
     except Exception as exc:
@@ -164,9 +170,9 @@ def fetch_system_coords(system_name: str) -> Optional[Tuple[float, float, float]
     """
     try:
         _throttle()
-        scraper = cloudscraper.create_scraper()
-        resp = scraper.get(
-            _SYSTEM_URL, params={"systemName": system_name, "showCoordinates": 1}, timeout=_TIMEOUT,
+        resp = requests.get(
+            _SYSTEM_URL, params={"systemName": system_name, "showCoordinates": 1},
+            headers={"User-Agent": _USER_AGENT}, timeout=_TIMEOUT,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -185,9 +191,9 @@ def fetch_system_coords(system_name: str) -> Optional[Tuple[float, float, float]
 def _fetch_once(system_name: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     try:
         _throttle()
-        scraper = cloudscraper.create_scraper()
-        resp = scraper.get(
-            _FACTIONS_URL, params={"systemName": system_name, "showHistory": 0}, timeout=_TIMEOUT,
+        resp = requests.get(
+            _FACTIONS_URL, params={"systemName": system_name, "showHistory": 0},
+            headers={"User-Agent": _USER_AGENT}, timeout=_TIMEOUT,
         )
         resp.raise_for_status()
         data = resp.json()

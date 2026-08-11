@@ -185,7 +185,7 @@ Cross-checks PowerPlay data, tracks squadron faction presence and galaxy-wide co
 Flow:
 
 1. `edc/core/eddn_listener.py` subscribes to EDDN's live ZeroMQ relay in the background, feeding PowerPlay sightings into `edc/core/eddn_powerplay.py`, commodity/faction sightings into `edc/core/eddn_market.py`, and journal-schema messages more broadly
-2. `edc/core/edsm_powerplay.py` refreshes a daily-cached EDSM PowerPlay dump on startup (via `cloudscraper`, since the public dump sits behind a generic Cloudflare bot challenge)
+2. `edc/core/edsm_powerplay.py` refreshes a daily-cached EDSM PowerPlay dump on startup (a plain request with an identifying User-Agent — EDSM's Cloudflare front-end 403s the default python-requests UA, not the request itself)
 3. `edc/ui/panels/powerplay_finder_panel.py` cross-checks each Spansh search result's controlling power against both sources and flags disagreement
 4. `eddn_market.py` buffers commodity prices and squadron-faction sightings in memory and flushes to SQLite periodically in a batch, rather than writing per-message
 5. On every raw journal event, `MainWindow` calls `edc/core/eddn_publisher.py::observe()` to track session header fields (commander, game version, Horizons/Odyssey flags); if "Contribute data to EDDN" is enabled in Settings, `maybe_publish()` builds a schema-compliant `journal/1` message and queues it for background delivery to the EDDN gateway
