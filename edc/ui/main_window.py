@@ -917,9 +917,13 @@ class MainWindow(QMainWindow):
         # tick and our refresh starting small.
         self._bgs_tick_timer.setInterval(10 * 60 * 1000)
         self._bgs_tick_timer.timeout.connect(self._on_bgs_tick_check_tick)
-        self._bgs_tick_timer.start()
         self._bgs_tick_thread: QThread | None = None
         self._bgs_tick_worker: _BgsTickCheckWorker | None = None
+        self._bgs_tick_timer.start()
+        # QTimer.start() doesn't fire immediately -- without this, the
+        # Player Faction card's "Last BGS tick" status sits on "unknown"
+        # for up to the full 10-minute interval after every launch.
+        self._on_bgs_tick_check_tick()
 
         self.engine = EventEngine(
             self.state,
