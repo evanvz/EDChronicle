@@ -9,6 +9,7 @@ class PowerPlayPhrases:
         "{power} space. Reinforcement target.",
         "Friendly system. {power} — reinforcement available.",
         "{power} territory. We can reinforce here.",
+        "Friendly ground, Commander. Let's shore it up.",
     ]
 
     PP_REINFORCEMENT_FORTIFIED = [
@@ -23,6 +24,7 @@ class PowerPlayPhrases:
         "{power} territory. Undermining target.",
         "Enemy controlled. {power}. Undermining available.",
         "{power} system. Undermining possible.",
+        "Enemy dirt, Commander. Let's make them regret holding it.",
     ]
 
     PP_UNDERMINING_FORTIFIED = [
@@ -37,6 +39,7 @@ class PowerPlayPhrases:
         "Uncontrolled space. Acquisition available.",
         "No controlling power. Acquisition system.",
         "Acquisition target. System is open.",
+        "Nobody's claimed this one yet, Commander. Let's fix that.",
     ]
 
     PP_ACQUISITION_EXPANSION = [

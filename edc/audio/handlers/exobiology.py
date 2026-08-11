@@ -23,6 +23,7 @@ class ExobiologyPhrases:
         "Final sample taken. Ready for analysis.",
         "Three of three. Proceed to analyse.",
         "All samples gathered. Analysis ready.",
+        "That's the set, Commander. Run the analysis.",
     ]
 
     SCAN_COMPLETE = [
@@ -37,6 +38,7 @@ class ExobiologyPhrases:
         "Exobiology data uploaded. {value} million credits received.",
         "{count} species sold for {value} million credits.",
         "Data sold. {value} million from {count} organisms.",
+        "Not bad, Commander. {value} million for {count} species.",
     ]
 
     SCAN_CODEX = [

@@ -40,6 +40,7 @@ TAB_PHRASES: dict[str, str] = {
     "odyssey":      "Odyssey",
     "faction":      "Player Faction",
     "squadron":     "Squadron",
+    "trade":        "Trade Routes",
 }
 
 # Default nav trigger word, said together with a tab name in one utterance

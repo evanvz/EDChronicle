@@ -20,6 +20,8 @@ class ExplorationPhrases:
         "Arrived.",
         "FSD cooldown.",
         "System entry.",
+        "Well, here we are.",
+        "Made it in one piece, Commander.",
     ]
 
     VALUABLE_BODIES_SUMMARY = [
@@ -27,6 +29,7 @@ class ExplorationPhrases:
         "Cartographic alert. {count} high value bodies detected.",
         "{count} bodies worth mapping in this system.",
         "System contains {count} high value planets.",
+        "{count} bodies here are worth the detour, Commander.",
     ]
 
     FSS_COMPLETE = [
@@ -34,6 +37,7 @@ class ExplorationPhrases:
         "Honk complete. {bodies} bodies in this system.",
         "Discovery scan finished. {bodies} bodies detected.",
         "{bodies} bodies found. Full system scan complete.",
+        "Scan's done. {bodies} on the board.",
     ]
 
     FIRST_DISCOVERY = [
@@ -42,6 +46,7 @@ class ExplorationPhrases:
         "You are the first to discover {body}.",
         "{body} — no prior records. First discovery detected.",
         "New discovery. {body} is uncharted territory.",
+        "Nobody's been here before us. {body} — nice find, Commander.",
     ]
 
     FIRST_MAPPED = [
@@ -49,6 +54,7 @@ class ExplorationPhrases:
         "{body} — first surface scan complete. Bonus credits incoming.",
         "First cartographic record. {body} has never been mapped before.",
         "{body} — first mapping confirmed.",
+        "Mapped and logged, Commander. Not bad for a day's work.",
     ]
 
     FIRST_FOOTFALL = [
@@ -56,6 +62,7 @@ class ExplorationPhrases:
         "{body} — first footfall confirmed. Historic moment, Commander.",
         "No prior landings recorded. {body} — first footfall.",
         "{body} — you are the first person to stand here.",
+        "First boots on the ground, Commander. Try not to trip.",
     ]
 
     BIO_SIGNALS = [
@@ -118,6 +125,7 @@ class ExplorationPhrases:
         "{body} has been mapped. Bonus credits applied.",
         "DSS mapping complete on {body}.",
         "Probe mapping done. {body} charted.",
+        "{body}, mapped top to bottom. Good work.",
     ]
 
     MEGASHIP_PP_MERITS = [
@@ -156,6 +164,7 @@ class ExplorationPhrases:
         "Discovery logged. {name}.",
         "Codex updated. {name} recorded.",
         "New entry. {name}.",
+        "Something new for the logbook. {name}.",
     ]
 
     @staticmethod
