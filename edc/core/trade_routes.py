@@ -4,6 +4,7 @@ docs/superpowers/specs/2026-08-09-trade-route-loop-planner-design.md.
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -28,6 +29,89 @@ def _parse_ts(ts: Optional[str]) -> Optional[datetime]:
         return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
     except ValueError:
         return None
+
+
+def _normalize_commodity_name(name: str) -> str:
+    """Duplicated from edc/ui/panels/market_panel.py's identical function
+    rather than imported -- this module is deliberately Qt/DB-free (see
+    module docstring), and importing from a UI-layer module would run
+    the dependency the wrong direction for two lines of regex."""
+    return re.sub(r"[^a-z0-9]", "", (name or "").lower())
+
+
+def find_point_to_point_trades(
+    origin_items: List[Dict[str, Any]],
+    destination_stations: Dict[int, dict],
+    cargo_capacity: int,
+    max_results: int = 10,
+) -> List[Dict[str, Any]]:
+    """
+    For every commodity buyable at the origin (state.current_market_items
+    shape), finds the best-selling destination station for it -- if the
+    destination system has more than one station selling it -- and
+    computes a cargo-capacity-capped total profit, same formula as
+    _best_leg() uses for the Loop Planner. Commodities with no
+    positive-margin destination are excluded entirely, not returned as
+    zero/negative rows. Returns up to max_results, sorted by total
+    profit descending.
+    """
+    results: List[Dict[str, Any]] = []
+
+    for item in origin_items:
+        display_name = item.get("name")
+        buy_price = item.get("buy_price")
+        stock = item.get("stock")
+        if not isinstance(display_name, str) or not display_name:
+            continue
+        if not isinstance(buy_price, int) or buy_price <= 0:
+            continue
+        if not isinstance(stock, int) or stock <= 0:
+            continue
+
+        symbol = _normalize_commodity_name(display_name)
+        best: Optional[Dict[str, Any]] = None
+
+        for station in destination_stations.values():
+            sell_info = station["sells"].get(symbol)
+            if sell_info is None:
+                continue
+            sell_price, demand, last_updated = sell_info
+            profit_per_unit = sell_price - buy_price
+            if profit_per_unit <= 0:
+                continue
+
+            qty = cargo_capacity
+            if isinstance(stock, int) and stock > 0:
+                qty = min(qty, stock)
+            if isinstance(demand, int) and demand > 0:
+                qty = min(qty, demand)
+            if qty <= 0:
+                continue
+
+            total = profit_per_unit * qty
+            if best is None or total > best["total_profit"]:
+                dt = _parse_ts(last_updated)
+                age_hours = (
+                    (datetime.now(timezone.utc) - dt).total_seconds() / 3600.0
+                    if dt else None
+                )
+                best = {
+                    "commodity": display_name,
+                    "sell_station_name": station["station_name"],
+                    "sell_system_name": station["system_name"],
+                    "buy_price": buy_price,
+                    "sell_price": sell_price,
+                    "profit_per_unit": profit_per_unit,
+                    "quantity": qty,
+                    "total_profit": total,
+                    "data_age_hours": age_hours,
+                }
+
+        if best is not None:
+            results.append(best)
+
+    results.sort(key=lambda r: r["total_profit"], reverse=True)
+    return results[:max_results]
 
 
 def find_trade_loops(
