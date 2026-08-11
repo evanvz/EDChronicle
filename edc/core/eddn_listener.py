@@ -26,6 +26,17 @@ _RELEVANT_EVENTS = {"FSDJump", "Location", "CarrierJump", "Docked", "CodexEntry"
 _RECV_TIMEOUT_MS = 5000
 _RECONNECT_DELAY_S = 5
 
+# A ZMQ SUB socket has no built-in way to detect a peer that's silently
+# gone away (no TLS/TCP-level signal, recv() just keeps timing out with
+# Again forever) -- confirmed live: our own connection went quiet for
+# over an hour with zero errors logged, while a fresh connection to the
+# same relay pulled 442 messages in 30s. EliteBGS (elite-kode/elitebgs),
+# a real production EDDN consumer, uses this same "reconnect after N
+# seconds of total silence" watchdog against this exact relay, at the
+# same 300s threshold -- kept identical here rather than inventing a new
+# number, since it's already proven against EDDN's real traffic pattern.
+_STALE_CONNECTION_TIMEOUT_S = 300
+
 # EDDN is public/unmoderated at the transport level — zlib.decompress() has
 # no built-in size cap, so a corrupted or oversized message could decompress
 # to something huge ("zip bomb" pattern) and stall/crash the listener on a
@@ -104,11 +115,24 @@ class EddnPowerPlayWorker(QObject):
         self.finished.emit()
 
     def _pump(self, sub) -> None:
+        last_message_time = time.monotonic()
         while not self._stop:
             try:
                 raw = sub.recv()
             except zmq.error.Again:
-                continue  # recv timeout — just gives us a chance to check self._stop
+                # recv timeout -- normally just gives us a chance to check
+                # self._stop, but if it's been happening for too long the
+                # connection is likely stale (see _STALE_CONNECTION_TIMEOUT_S)
+                # rather than genuinely quiet -- force a reconnect.
+                if time.monotonic() - last_message_time > _STALE_CONNECTION_TIMEOUT_S:
+                    log.warning(
+                        "EDDN listener: no messages received in over %ds — "
+                        "connection likely stale, forcing reconnect",
+                        _STALE_CONNECTION_TIMEOUT_S,
+                    )
+                    return
+                continue
+            last_message_time = time.monotonic()
             decompressed = _safe_decompress(raw)
             if decompressed is None:
                 continue
