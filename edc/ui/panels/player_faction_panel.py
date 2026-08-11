@@ -568,7 +568,7 @@ class PlayerFactionPanel(QWidget):
         self._tick_status_label = QLabel("🕐 —")
         self._tick_status_label.setToolTip("Last detected BGS tick")
         self._tick_status_label.setStyleSheet(
-            "background:transparent; border:none; color:#888888; font-size:11px;"
+            "background:transparent; border:none; color:#888888; font-size:22px;"
         )
         hdr_row.addWidget(self._tick_status_label)
         frame_l.addLayout(hdr_row)
@@ -639,7 +639,7 @@ class PlayerFactionPanel(QWidget):
         refresh_row.setSpacing(6)
         self._refresh_status_label = QLabel("")
         self._refresh_status_label.setStyleSheet(
-            "background:transparent; border:none; color:#888888; font-size:11px;"
+            "background:transparent; border:none; color:#888888; font-size:22px;"
         )
         refresh_row.addWidget(self._refresh_status_label, 1)
         self._refresh_all_btn = QPushButton("Refresh All from EDSM")
