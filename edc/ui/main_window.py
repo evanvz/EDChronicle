@@ -3719,6 +3719,7 @@ class MainWindow(QMainWindow):
         self._bgs_tick_thread.start()
 
     def _on_bgs_tick_check_finished(self, tick_iso) -> None:
+        self.player_faction_panel.set_latest_known_tick(tick_iso)
         self.player_faction_panel.maybe_refresh_for_tick(tick_iso)
 
     def _refresh_squadron_station(self):

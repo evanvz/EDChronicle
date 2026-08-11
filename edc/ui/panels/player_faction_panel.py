@@ -26,6 +26,7 @@ from edc.core.edsm_faction_lookup import (
     fetch_system_factions, fetch_system_coords, fetch_system_stations, ERROR_BLOCKED, ERROR_NOT_FOUND,
 )
 from edc.core.inara_faction_csv import parse_inara_faction_csv
+from edc.ui import formatting as fmt
 
 log = logging.getLogger(__name__)
 
@@ -526,6 +527,7 @@ class PlayerFactionPanel(QWidget):
         self._refresh_all_worker: Optional["_FactionRefreshWorker"] = None
         self._auto_refresh_checked: bool = False
         self._pending_tick: Optional[str] = None
+        self._latest_known_tick: Optional[str] = None
         # Populated once per bulk rebuild (not on every single-system
         # arrival update — predictions only meaningfully change once a day,
         # matching the BGS tick, so recomputing them more often buys nothing
@@ -662,6 +664,12 @@ class PlayerFactionPanel(QWidget):
             "background:transparent; border:none; color:#888888; font-size:11px;"
         )
         root.addWidget(self._data_freshness_label)
+
+        self._tick_status_label = QLabel("Last BGS tick: unknown")
+        self._tick_status_label.setStyleSheet(
+            "background:transparent; border:none; color:#888888; font-size:11px;"
+        )
+        root.addWidget(self._tick_status_label)
 
         # ── Manually add a system (e.g. from Inara's faction page) ────────
         csv_note = QLabel(
@@ -1801,6 +1809,19 @@ class PlayerFactionPanel(QWidget):
             self._pending_tick = None
             return
         self.tick_refresh_started.emit()
+
+    def set_latest_known_tick(self, tick_iso: Optional[str]) -> None:
+        """Called from MainWindow on every tick.edcd.io poll (every 10 min,
+        regardless of whether that poll ends up starting a refresh) so the
+        displayed "last tick" time stays reasonably current without needing
+        a separate live-ticking timer -- the poll itself is frequent enough."""
+        if tick_iso:
+            self._latest_known_tick = tick_iso
+        if not self._latest_known_tick:
+            self._tick_status_label.setText("Last BGS tick: unknown")
+            return
+        age_txt, _ = fmt.relative_time(self._latest_known_tick)
+        self._tick_status_label.setText(f"Last BGS tick: {age_txt}")
 
     def _on_cancel_refresh_clicked(self):
         if self._refresh_all_worker:
