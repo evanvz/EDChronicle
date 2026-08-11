@@ -565,10 +565,10 @@ class PlayerFactionPanel(QWidget):
         hdr.setStyleSheet(_HDR_STYLE)
         hdr_row.addWidget(hdr)
         hdr_row.addStretch(1)
-        self._tick_status_label = QLabel("🕐 —")
+        self._tick_status_label = QLabel("🕐 Last BGS Update: —")
         self._tick_status_label.setToolTip("Last detected BGS tick")
         self._tick_status_label.setStyleSheet(
-            "background:transparent; border:none; color:#888888; font-size:22px;"
+            "background:transparent; border:none; color:#FFB347; font-size:18px;"
         )
         hdr_row.addWidget(self._tick_status_label)
         frame_l.addLayout(hdr_row)
@@ -639,7 +639,7 @@ class PlayerFactionPanel(QWidget):
         refresh_row.setSpacing(6)
         self._refresh_status_label = QLabel("")
         self._refresh_status_label.setStyleSheet(
-            "background:transparent; border:none; color:#888888; font-size:22px;"
+            "background:transparent; border:none; color:#FFB347; font-size:11px;"
         )
         refresh_row.addWidget(self._refresh_status_label, 1)
         self._refresh_all_btn = QPushButton("Refresh All from EDSM")
@@ -1821,10 +1821,10 @@ class PlayerFactionPanel(QWidget):
         if tick_iso:
             self._latest_known_tick = tick_iso
         if not self._latest_known_tick:
-            self._tick_status_label.setText("🕐 —")
+            self._tick_status_label.setText("🕐 Last BGS Update: —")
             return
         age_txt, _ = fmt.relative_time(self._latest_known_tick)
-        self._tick_status_label.setText(f"🕐 {age_txt}")
+        self._tick_status_label.setText(f"🕐 Last BGS Update: {age_txt}")
 
     def _on_cancel_refresh_clicked(self):
         if self._refresh_all_worker:
