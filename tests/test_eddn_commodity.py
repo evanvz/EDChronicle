@@ -2,7 +2,7 @@
 into an EDDN commodity/3-compliant message body. Elision/rename rules
 verified against EDDN's own commodity-README.md and a real Market.json
 sample (see docs/superpowers/specs/2026-08-11-eddn-commodity-publish-design.md)."""
-from edc.core.eddn_publisher import build_commodity_message
+from edc.core.eddn_publisher import build_commodity_message, EddnPublisher, _COMMODITY_SCHEMA_REF
 
 
 def _market(items):
@@ -113,3 +113,32 @@ def test_not_a_dict_returns_none():
 
 def test_empty_items_returns_none():
     assert build_commodity_message(_market([])) is None
+
+
+def test_maybe_publish_commodity_queues_compliant_envelope():
+    pub = EddnPublisher()
+    pub.observe({"event": "Commander", "Name": "CMDR Test"})
+    pub.observe({"event": "LoadGame", "Commander": "CMDR Test", "gameversion": "4.0", "build": "r300000"})
+
+    pub.maybe_publish_commodity(_market([_item()]))
+
+    payload = pub._queue.get_nowait()
+    assert payload["$schemaRef"] == _COMMODITY_SCHEMA_REF
+    assert payload["header"]["uploaderID"] == "CMDR Test"
+    assert payload["header"]["softwareName"] == "EDChronicle"
+    assert payload["header"]["gameversion"] == "4.0"
+    assert payload["message"]["systemName"] == "Shinrarta Dezhra"
+    assert payload["message"]["commodities"][0]["name"] == "platinum"
+
+
+def test_maybe_publish_commodity_skips_when_no_commander_known():
+    pub = EddnPublisher()
+    pub.maybe_publish_commodity(_market([_item()]))
+    assert pub._queue.empty()
+
+
+def test_maybe_publish_commodity_skips_invalid_market_data():
+    pub = EddnPublisher()
+    pub.observe({"event": "Commander", "Name": "CMDR Test"})
+    pub.maybe_publish_commodity({"not": "a valid market"})
+    assert pub._queue.empty()

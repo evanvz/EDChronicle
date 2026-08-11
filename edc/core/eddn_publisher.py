@@ -296,6 +296,32 @@ class EddnPublisher:
         except queue.Full:
             log.warning("EDDN publish queue full — dropping message")
 
+    def maybe_publish_commodity(self, data: Dict[str, Any]) -> None:
+        if self._is_beta:
+            return
+        if not self._commander:
+            return
+
+        msg = build_commodity_message(data)
+        if msg is None:
+            return
+
+        payload = {
+            "$schemaRef": _COMMODITY_SCHEMA_REF,
+            "header": {
+                "uploaderID": self._commander,
+                "softwareName": _SOFTWARE_NAME,
+                "softwareVersion": _SOFTWARE_VERSION,
+                "gameversion": self._gameversion,
+                "gamebuild": self._gamebuild,
+            },
+            "message": msg,
+        }
+        try:
+            self._queue.put_nowait(payload)
+        except queue.Full:
+            log.warning("EDDN publish queue full — dropping commodity message")
+
     def _worker_loop(self) -> None:
         while not self._stop.is_set():
             try:
