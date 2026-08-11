@@ -3351,6 +3351,7 @@ class MainWindow(QMainWindow):
             sigs = getattr(self.state, "system_signals", None) or []
             phen = 0
             mega = 0
+            gen_ships = []
             tour = 0
             for s in sigs:
                 if not isinstance(s, dict):
@@ -3358,15 +3359,24 @@ class MainWindow(QMainWindow):
                 if s.get("Category") == "Phenomena":
                     phen += 1
                 if s.get("Category") == "Megaship":
-                    mega_key = MegashipTracker.key(getattr(self.state, "system_address", None), s.get("SignalName") or "")
+                    name = s.get("SignalName") or ""
+                    mega_key = MegashipTracker.key(getattr(self.state, "system_address", None), name)
                     if not self.megaship_tracker.has_seen(mega_key):
-                        mega += 1
+                        # Generation Ships are lore-named Megaships, worth
+                        # calling out by name rather than folding into the
+                        # generic count (per user request).
+                        if "generation ship" in name.lower():
+                            gen_ships.append(name)
+                        else:
+                            mega += 1
                 if s.get("Category") == "TouristBeacon":
                     tour += 1
             if phen:
                 lines.append(f"✨ Action: Stellar phenomena discovered ({phen})")
             if mega:
                 lines.append(f"🚢 Action: Megaship signals discovered ({mega})")
+            if gen_ships:
+                lines.append(f"🚀 Action: Generation Ship discovered: {', '.join(gen_ships)}")
             if tour:
                 lines.append(f"✨ Action: Tourist Beacon discovered ({tour})")
         except Exception:
