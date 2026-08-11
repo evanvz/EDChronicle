@@ -560,9 +560,18 @@ class PlayerFactionPanel(QWidget):
         frame_l.setContentsMargins(8, 6, 8, 8)
         frame_l.setSpacing(4)
 
+        hdr_row = QHBoxLayout()
         hdr = QLabel("PLAYER FACTION — SQUADRON-ALIGNED MINOR FACTION")
         hdr.setStyleSheet(_HDR_STYLE)
-        frame_l.addWidget(hdr)
+        hdr_row.addWidget(hdr)
+        hdr_row.addStretch(1)
+        self._tick_status_label = QLabel("🕐 —")
+        self._tick_status_label.setToolTip("Last detected BGS tick")
+        self._tick_status_label.setStyleSheet(
+            "background:transparent; border:none; color:#888888; font-size:11px;"
+        )
+        hdr_row.addWidget(self._tick_status_label)
+        frame_l.addLayout(hdr_row)
 
         self._summary_label = QLabel("")
         self._summary_label.setWordWrap(True)
@@ -664,12 +673,6 @@ class PlayerFactionPanel(QWidget):
             "background:transparent; border:none; color:#888888; font-size:11px;"
         )
         root.addWidget(self._data_freshness_label)
-
-        self._tick_status_label = QLabel("Last BGS tick: unknown")
-        self._tick_status_label.setStyleSheet(
-            "background:transparent; border:none; color:#888888; font-size:11px;"
-        )
-        root.addWidget(self._tick_status_label)
 
         # ── Manually add a system (e.g. from Inara's faction page) ────────
         csv_note = QLabel(
@@ -1818,10 +1821,10 @@ class PlayerFactionPanel(QWidget):
         if tick_iso:
             self._latest_known_tick = tick_iso
         if not self._latest_known_tick:
-            self._tick_status_label.setText("Last BGS tick: unknown")
+            self._tick_status_label.setText("🕐 —")
             return
         age_txt, _ = fmt.relative_time(self._latest_known_tick)
-        self._tick_status_label.setText(f"Last BGS tick: {age_txt}")
+        self._tick_status_label.setText(f"🕐 {age_txt}")
 
     def _on_cancel_refresh_clicked(self):
         if self._refresh_all_worker:
