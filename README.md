@@ -135,7 +135,7 @@ EDChronicle draws on the same community data network the rest of the Elite Dange
 - **[Canonn](https://canonn.tech)** — community-sourced Codex/POI intel for the current system and nearest unclaimed Codex challenge
 - **[Inara](https://inara.cz)** — optional bulk CSV export of a minor faction's full system presence list, for the Player Faction tab's bulk import
 
-EDChronicle can also contribute back: "Contribute data to EDDN" in Settings (on by default, matching EDMarketConnector's own default — turn it off if you'd rather not) publishes a subset of your journal events (jumps, docking, scans, surface signal scans, carrier jumps, codex entries) to EDDN in its standard schema, benefiting every tool that consumes it. No personal data beyond your commander name is included, and EDDN obfuscates that before distributing it further.
+EDChronicle can also contribute back: "Contribute data to EDDN" in Settings (on by default, matching EDMarketConnector's own default — turn it off if you'd rather not) publishes a subset of your journal events (jumps, docking, scans, surface signal scans, carrier jumps, codex entries) to EDDN's `journal/1` schema, and your own market visits (commodity buy/sell prices, stock, demand) to EDDN's `commodity/3` schema whenever you open a station's Commodities screen — the same feed the Market tab's own search draws from. Both benefit every tool that consumes EDDN, not just EDChronicle. No personal data beyond your commander name is included, and EDDN obfuscates that before distributing it further.
 
 Engineering blueprint costs, Experimental Effect data, Odyssey grade/module recipes, and the Material Trader's trade ratios are static offline reference data sourced from [EDCD/coriolis-data](https://github.com/EDCD/coriolis-data), [EDCD/FDevIDs](https://github.com/EDCD/FDevIDs), [msarilar/EDEngineer](https://github.com/msarilar/EDEngineer), and [jixxed/ed-odyssey-materials-helper](https://github.com/jixxed/ed-odyssey-materials-helper) — see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the MIT-licensed portions' full attribution.
 
@@ -202,6 +202,7 @@ Flow:
 3. `edc/ui/panels/powerplay_finder_panel.py` cross-checks each Spansh search result's controlling power against both sources and flags disagreement
 4. `eddn_market.py` buffers commodity prices and squadron-faction sightings in memory and flushes to SQLite periodically in a batch, rather than writing per-message
 5. On every raw journal event, `MainWindow` calls `edc/core/eddn_publisher.py::observe()` to track session header fields (commander, game version, Horizons/Odyssey flags); if "Contribute data to EDDN" is enabled in Settings, `maybe_publish()` builds a schema-compliant `journal/1` message and queues it for background delivery to the EDDN gateway
+6. On the `Market` event, `_load_current_market()`'s already-parsed `Market.json` dict is also handed to `maybe_publish_commodity()`, which builds a `commodity/3` message (applying EDDN's required elisions/renames) and queues it on the same gateway worker — same opt-in setting, no separate toggle
 
 ### 5. Player Faction (BGS) tracking path
 
@@ -212,7 +213,7 @@ Flow:
 1. `edc/core/squadron_scanner.py` scans full journal history at startup to detect the squadron-aligned faction and any already-known presence
 2. Live `Docked`/`FSDJump`/`Location` events save a faction snapshot for the current system (`faction_snapshots` table) via `MainWindow._save_faction_snapshots()`, and `MainWindow.update_reference_state()` pushes the current position to the panel on every event (cheap — just a reference update, not a rebuild) so distance calculations stay correct even without the tab open
 3. The EDDN network-wide listener (path 4) supplies presence data for systems never personally visited
-4. `edc/core/edsm_faction_lookup.py` + `edc/core/inara_faction_csv.py` support manual add and bulk CSV import, resolving each system live against EDSM with retry-on-block; a daily `_FactionRefreshWorker` re-queries every tracked system (skipping any refreshed within 24h) and backfills `system_coords` via `fetch_system_coords()`
+4. `edc/core/edsm_faction_lookup.py` + `edc/core/inara_faction_csv.py` support manual add and bulk CSV import, resolving each system live against EDSM with retry-on-block; a `_FactionRefreshWorker` re-queries every tracked system once per local calendar day (so a fresh day's first session always gets one, matching the BGS's own daily tick — not a rolling 24h window) and backfills `system_coords` via `fetch_system_coords()`
 5. `edc/ui/panels/player_faction_panel.py` classifies every system into 0+ status buckets (`_compute_buckets()`, pure in-memory, no extra queries) and renders them as tiles; clicking one opens a `_FactionBucketDialog` (non-modal `QDialog`, kept alive in a dict so it survives tab switches) which re-renders live as buckets are recomputed on arrival or after a manual recheck
 
 ## Current top-level module ownership
@@ -228,10 +229,10 @@ Notable files:
 - `state.py`
 - `spansh_client.py`
 - `edsm_powerplay.py` — daily-cached EDSM PowerPlay dump cross-check
-- `edsm_faction_lookup.py` — per-system faction lookup (with Cloudflare-block retry) for Player Faction add/import
+- `edsm_faction_lookup.py` — per-system faction lookup (with retry on transient failures) for Player Faction add/import
 - `eddn_listener.py` / `eddn_powerplay.py` — live EDDN PowerPlay subscription
 - `eddn_market.py` — buffered EDDN commodity price + squadron faction sighting ingestion
-- `eddn_publisher.py` — opt-in journal/1 schema publishing back to EDDN
+- `eddn_publisher.py` — opt-in `journal/1` (jumps, docking, scans...) and `commodity/3` (market visits) publishing back to EDDN
 - `canonn_client.py` — Canonn Codex/POI community intel
 - `inara_faction_csv.py` — parses Inara's faction-presence CSV export format
 - `bgs_conflicts.py` — squadron-aligned faction lookup, finds who it's at active war with in the current system, and backs BGS activity attribution (bounty/trade crediting)
