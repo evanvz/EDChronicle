@@ -66,6 +66,7 @@ from edc.core.megaship_tracker import MegashipTracker
 from edc.core.mission_events import MISSION_EVENT_NAMES
 from edc.core.megaship_scanner import scan_visited_megaships
 from edc.core.faction_refresh_tracker import FactionRefreshTracker
+from edc.core.bgs_tick import fetch_latest_tick
 from edc.ui.panels.engineering_panel import EngineeringPanel
 from edc.audio.handlers.engineering import EngineeringPhrases
 from edc.ui.panels.fleet_carrier_panel import FleetCarrierPanel
@@ -303,6 +304,17 @@ class _EddnFlushWorker(QObject):
         finally:
             db.close()
         self.finished.emit()
+
+
+class _BgsTickCheckWorker(QObject):
+    """One-shot background check against tick.edcd.io -- a fresh instance
+    is created per QTimer firing (see _on_bgs_tick_check_tick), same
+    pattern as _EddnFlushWorker / _on_market_flush_tick."""
+    finished = pyqtSignal(object)  # Optional[str]
+
+    def run(self):
+        result = fetch_latest_tick()
+        self.finished.emit(result)
 
 
 class _CanonnRefreshWorker(QObject):
@@ -897,6 +909,17 @@ class MainWindow(QMainWindow):
         self._player_faction_refresh_timer.setInterval(20 * 60 * 1000)
         self._player_faction_refresh_timer.timeout.connect(self._refresh_player_faction)
         self._player_faction_refresh_timer.start()
+
+        self._bgs_tick_timer = QTimer(self)
+        # tick.edcd.io detects real BGS ticks (once or twice a day, no
+        # fixed schedule) -- 10 minutes is far more frequent than needed
+        # for that cadence, but cheap and keeps the delay between a real
+        # tick and our refresh starting small.
+        self._bgs_tick_timer.setInterval(10 * 60 * 1000)
+        self._bgs_tick_timer.timeout.connect(self._on_bgs_tick_check_tick)
+        self._bgs_tick_timer.start()
+        self._bgs_tick_thread: QThread | None = None
+        self._bgs_tick_worker: _BgsTickCheckWorker | None = None
 
         self.engine = EventEngine(
             self.state,
@@ -3682,6 +3705,20 @@ class MainWindow(QMainWindow):
         self._flush_thread.started.connect(self._flush_worker.run)
         self._flush_worker.finished.connect(self._flush_thread.quit)
         self._flush_thread.start()
+
+    def _on_bgs_tick_check_tick(self) -> None:
+        if self._bgs_tick_thread and self._bgs_tick_thread.isRunning():
+            return  # previous check still running -- next timer firing will catch up
+        self._bgs_tick_worker = _BgsTickCheckWorker()
+        self._bgs_tick_thread = QThread()
+        self._bgs_tick_worker.moveToThread(self._bgs_tick_thread)
+        self._bgs_tick_thread.started.connect(self._bgs_tick_worker.run)
+        self._bgs_tick_worker.finished.connect(self._on_bgs_tick_check_finished)
+        self._bgs_tick_worker.finished.connect(self._bgs_tick_thread.quit)
+        self._bgs_tick_thread.start()
+
+    def _on_bgs_tick_check_finished(self, tick_iso) -> None:
+        self.player_faction_panel.maybe_refresh_for_tick(tick_iso)
 
     def _refresh_squadron_station(self):
         """
