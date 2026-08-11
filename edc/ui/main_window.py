@@ -54,7 +54,7 @@ from edc.core.farming_locations import FarmingLocations
 from edc.core.powerplay_activities import PowerPlayActivityTable
 from edc.core.spansh_client import SpanshClient as _SpanshClient
 from edc.core.edsm_powerplay import EdsmPowerPlayCache
-from edc.core.eddn_publisher import EddnPublisher
+from edc.core.eddn_publisher import EddnPublisher, _commodity_symbol
 from edc.core.canonn_client import CanonnClient, SystemPoi
 from edc.core.engineering_blueprints import EngineeringBlueprintTable
 from edc.core.experimental_effects import ExperimentalEffectsTable
@@ -641,8 +641,10 @@ class MainWindow(QMainWindow):
             name = it.get("Name_Localised") or it.get("Name") or ""
             if not name:
                 continue
+            raw_name = it.get("Name") or ""
             items.append({
                 "name": name,
+                "symbol": _commodity_symbol(raw_name) if raw_name else "",
                 "category": it.get("Category_Localised") or it.get("Category") or "",
                 "buy_price": it.get("BuyPrice") or 0,
                 "sell_price": it.get("SellPrice") or 0,
@@ -657,6 +659,37 @@ class MainWindow(QMainWindow):
             log.exception("Failed to save commodity display names")
 
         return data
+
+    def _load_nav_route(self) -> None:
+        """
+        Reads NavRoute.json (written alongside the journal whenever a
+        route is plotted via the galaxy map) into state.route_destination_system.
+        The file's Route[] is ordered from the route's start to its end --
+        the LAST entry is the true final destination, distinct from
+        state.route_target_system (the FSDTarget event's NEXT jump only).
+        """
+        journal_dir = getattr(self.cfg, "journal_dir", None)
+        if not journal_dir:
+            return
+        route_path = Path(journal_dir) / "NavRoute.json"
+        try:
+            if not route_path.exists():
+                return
+            data = json.loads(route_path.read_text(encoding="utf-8", errors="replace"))
+        except Exception:
+            log.exception("Failed to read NavRoute.json")
+            return
+
+        if not isinstance(data, dict):
+            return
+        route = data.get("Route")
+        if not isinstance(route, list) or not route:
+            self.state.route_destination_system = None
+            return
+        last_stop = route[-1]
+        if isinstance(last_stop, dict):
+            star_system = last_stop.get("StarSystem")
+            self.state.route_destination_system = star_system if isinstance(star_system, str) and star_system else None
 
     def _load_cargo_inventory(self):
         """
@@ -1907,6 +1940,9 @@ class MainWindow(QMainWindow):
             self.mining_panel.refresh_commodity_names()
             if market_data and getattr(self.cfg, "eddn_contribute_enabled", False) and not self._replaying:
                 self.eddn_publisher.maybe_publish_commodity(market_data)
+
+        if name == "NavRoute":
+            self._load_nav_route()
 
         if name == "Undocked":
             # Leaving the station — "what's for sale here" stops being true;

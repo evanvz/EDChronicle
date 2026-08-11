@@ -73,6 +73,7 @@ class GameState:
     route_target_system: Optional[str] = None
     route_target_star_class: Optional[str] = None
     route_remaining_jumps: Optional[int] = None
+    route_destination_system: Optional[str] = None  # from NavRoute.json's last waypoint -- the true final destination, distinct from route_target_system (the NEXT jump only)
     system_signals: List[Dict[str, Any]] = field(default_factory=list) # FSSSignalDiscovered entries
     external_pois: List[Dict[str, Any]] = field(default_factory=list)  # advisory (local file), per-system
     last_event: Optional[str] = None

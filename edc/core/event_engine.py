@@ -540,6 +540,7 @@ class EventEngine:
             self.state.route_target_system = None
             self.state.route_target_star_class = None
             self.state.route_remaining_jumps = None
+            self.state.route_destination_system = None
 
         elif name == "ShipTargeted":
             # Clear current contact info when target is dropped

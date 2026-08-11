@@ -121,9 +121,11 @@ class _PointToPointWorker(QObject):
         db = Database(self._db_path)
         try:
             repo = Repository(db)
-            stations = repo.get_market_snapshot_for_systems([self._destination_system])
+            resolved = repo.resolve_system_name_case_insensitive(self._destination_system)
+            destination = resolved or self._destination_system
+            stations = repo.get_market_snapshot_for_systems([destination])
             if not stations:
-                self.finished.emit([], f"No market data for {self._destination_system} yet.")
+                self.finished.emit([], f"No market data for {destination} yet.")
                 return
             results = find_point_to_point_trades(
                 self._origin_items, stations, self._cargo_capacity,
@@ -391,7 +393,7 @@ class TradeRoutePanel(QWidget):
         else:
             self._p2p_origin_label.setText("Origin: — (dock and open the Commodities screen first)")
 
-        route_target = (getattr(state, "route_target_system", None) or "").strip()
+        route_target = (getattr(state, "route_destination_system", None) or "").strip()
         if route_target != self._route_target_system:
             self._route_target_system = route_target
             if route_target and not self._dest_user_edited:

@@ -9,7 +9,7 @@ loop entries that don't correspond to any real station pair.
 """
 from datetime import datetime, timezone
 
-from edc.core.trade_routes import find_trade_loops, find_point_to_point_trades
+from edc.core.trade_routes import find_trade_loops, find_point_to_point_trades, _normalize_commodity_name
 
 _NOW = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -51,8 +51,12 @@ def test_swap_does_not_corrupt_later_pairings():
             assert loop["station_b"] == "A"
 
 
-def _origin_item(name, buy_price, stock):
-    return {"name": name, "category": "", "buy_price": buy_price, "sell_price": 0, "demand": 0, "stock": stock}
+def _origin_item(name, buy_price, stock, symbol=None):
+    return {
+        "name": name,
+        "symbol": symbol if symbol is not None else _normalize_commodity_name(name),
+        "category": "", "buy_price": buy_price, "sell_price": 0, "demand": 0, "stock": stock,
+    }
 
 
 def _dest_station(name, system, sells=None):
@@ -137,13 +141,65 @@ def test_point_to_point_truncates_to_max_results():
 
 
 def test_point_to_point_normalizes_commodity_names_for_matching():
-    origin_items = [_origin_item("Low Temperature Diamonds", buy_price=1000, stock=100)]
+    origin_items = [_origin_item(
+        "Low Temperature Diamonds", buy_price=1000, stock=100, symbol="lowtemperaturediamond",
+    )]
     destination_stations = {
-        1: _dest_station("Station", "System", sells={"lowtemperaturediamonds": (1500, 100, _NOW)}),
+        1: _dest_station("Station", "System", sells={"lowtemperaturediamond": (1500, 100, _NOW)}),
     }
     results = find_point_to_point_trades(origin_items, destination_stations, cargo_capacity=100)
     assert len(results) == 1
     assert results[0]["commodity"] == "Low Temperature Diamonds"
+
+
+def test_point_to_point_prefers_real_symbol_over_guessed_normalization():
+    # _normalize_commodity_name("Low Temperature Diamonds") guesses
+    # "lowtemperaturediamonds" (plural) -- wrong against real EDDN data,
+    # where the true stored symbol is "lowtemperaturediamond" (singular).
+    # An origin item carrying the real symbol from Market.json must match
+    # even though the guessed normalization would not.
+    origin_items = [_origin_item(
+        "Low Temperature Diamonds", buy_price=1000, stock=100, symbol="lowtemperaturediamond",
+    )]
+    guessed = _normalize_commodity_name("Low Temperature Diamonds")
+    assert guessed != "lowtemperaturediamond"  # sanity check the guess really is wrong
+    destination_stations = {
+        1: _dest_station("Station", "System", sells={"lowtemperaturediamond": (1500, 100, _NOW)}),
+    }
+    results = find_point_to_point_trades(origin_items, destination_stations, cargo_capacity=100)
+    assert len(results) == 1
+    assert results[0]["commodity"] == "Low Temperature Diamonds"
+
+
+def test_point_to_point_matches_destination_case_insensitively():
+    # 1,563 real markets store commodity_name in CamelCase instead of
+    # lowercase -- an exact-case dict lookup misses those.
+    origin_items = [_origin_item("Platinum", buy_price=1000, stock=500)]
+    destination_stations = {
+        1: _dest_station("Jameson Memorial", "Shinrarta Dezhra", sells={"Platinum": (1500, 200, _NOW)}),
+    }
+    results = find_point_to_point_trades(origin_items, destination_stations, cargo_capacity=100)
+    assert len(results) == 1
+    assert results[0]["sell_price"] == 1500
+
+
+def test_point_to_point_ranks_fresh_results_above_stale_regardless_of_profit():
+    # Same two-tier ranking as find_trade_loops: a bigger profit backed by
+    # stale (>STALE_THRESHOLD_HOURS old) data must not outrank a smaller,
+    # fresher one.
+    stale_ts = "2000-01-01T00:00:00Z"  # far older than STALE_THRESHOLD_HOURS
+    origin_items = [
+        _origin_item("Gold", buy_price=100, stock=100),    # higher profit, stale destination data
+        _origin_item("Silver", buy_price=100, stock=100),  # lower profit, fresh destination data
+    ]
+    destination_stations = {
+        1: _dest_station("Station", "System", sells={
+            "gold": (1000, 100, stale_ts),
+            "silver": (200, 100, _NOW),
+        }),
+    }
+    results = find_point_to_point_trades(origin_items, destination_stations, cargo_capacity=100)
+    assert [r["commodity"] for r in results] == ["Silver", "Gold"]
 
 
 def test_point_to_point_ignores_items_with_no_buy_price_or_stock():

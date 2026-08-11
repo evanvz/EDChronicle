@@ -68,11 +68,16 @@ def find_point_to_point_trades(
         if not isinstance(stock, int) or stock <= 0:
             continue
 
-        symbol = _normalize_commodity_name(display_name)
+        symbol = item.get("symbol") or _normalize_commodity_name(display_name)
+        symbol_lower = symbol.lower()
         best: Optional[Dict[str, Any]] = None
 
         for station in destination_stations.values():
-            sell_info = station["sells"].get(symbol)
+            sell_info = None
+            for stored_commodity, info in station["sells"].items():
+                if stored_commodity.lower() == symbol_lower:
+                    sell_info = info
+                    break
             if sell_info is None:
                 continue
             sell_price, demand, last_updated = sell_info
@@ -110,7 +115,13 @@ def find_point_to_point_trades(
         if best is not None:
             results.append(best)
 
-    results.sort(key=lambda r: r["total_profit"], reverse=True)
+    results.sort(
+        key=lambda r: (
+            r["data_age_hours"] is None or r["data_age_hours"] < STALE_THRESHOLD_HOURS,
+            r["total_profit"],
+        ),
+        reverse=True,
+    )
     return results[:max_results]
 
 

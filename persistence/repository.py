@@ -1482,6 +1482,22 @@ class Repository:
 
         return stations
 
+    def resolve_system_name_case_insensitive(self, name: str) -> Optional[str]:
+        """Resolves a user-typed system name to its exact stored casing,
+        via the much smaller system_coords table rather than a
+        case-insensitive scan of market_prices' 13M+ rows (which would
+        bypass its system_name index). Returns None if no match --
+        callers should fall back to using the original input as-is in
+        that case, not treat it as a hard failure."""
+        name = (name or "").strip()
+        if not name:
+            return None
+        row = self.db.conn.execute(
+            "SELECT system_name FROM system_coords WHERE LOWER(system_name) = LOWER(?) LIMIT 1",
+            (name,),
+        ).fetchone()
+        return row["system_name"] if row else None
+
     def add_colonisation_depot_manual(self, system_name: str, station_name: str) -> None:
         """Adds a squadron construction site to track before ever visiting
         it — no market_id yet, since that's only known once you actually
