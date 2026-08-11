@@ -38,6 +38,22 @@ def _in_weekly_maintenance_window() -> bool:
     now = datetime.now()
     return now.weekday() == 3 and 9 <= now.hour < 11
 
+
+def _should_start_tick_refresh(
+    tick_iso: Optional[str],
+    last_refreshed_tick: Optional[str],
+    faction_name: Optional[str],
+    refresh_already_running: bool,
+) -> bool:
+    """Pure decision logic for whether a detected BGS tick warrants
+    starting a full refresh -- kept free of Qt/self so it's directly
+    unit-testable. tick_iso is None whenever fetch_latest_tick() failed
+    this round; the existing calendar-day path remains the fallback for
+    that case, so this simply does nothing rather than trying to guess."""
+    if tick_iso is None or not faction_name or refresh_already_running:
+        return False
+    return tick_iso != last_refreshed_tick
+
 _CARD_STYLE = "QFrame { background:#0d1a2a; border:1px solid #1e3a5a; border-radius:5px; }"
 _HDR_STYLE = "color:#7a7a7a; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
 
@@ -493,6 +509,8 @@ class PlayerFactionPanel(QWidget):
     cross-system query, not something derivable from live GameState alone.
     """
 
+    tick_refresh_started = pyqtSignal()
+
     def __init__(self, repo, refresh_tracker=None, parent=None):
         super().__init__(parent)
         self._repo = repo
@@ -507,6 +525,7 @@ class PlayerFactionPanel(QWidget):
         self._refresh_all_thread: Optional[QThread] = None
         self._refresh_all_worker: Optional["_FactionRefreshWorker"] = None
         self._auto_refresh_checked: bool = False
+        self._pending_tick: Optional[str] = None
         # Populated once per bulk rebuild (not on every single-system
         # arrival update — predictions only meaningfully change once a day,
         # matching the BGS tick, so recomputing them more often buys nothing
@@ -1754,6 +1773,19 @@ class PlayerFactionPanel(QWidget):
         self._refresh_all_worker.finished.connect(self._refresh_all_thread.quit)
         self._refresh_all_thread.start()
 
+    def maybe_refresh_for_tick(self, tick_iso: Optional[str]) -> None:
+        """Called periodically from MainWindow with the latest result of
+        fetch_latest_tick() (None if that fetch failed this round -- the
+        existing calendar-day startup check, _maybe_auto_refresh_all(),
+        remains the fallback for that case, unmodified)."""
+        refresh_running = bool(self._refresh_all_thread and self._refresh_all_thread.isRunning())
+        last_tick = self._refresh_tracker.last_refreshed_tick() if self._refresh_tracker else None
+        if not _should_start_tick_refresh(tick_iso, last_tick, self._faction_name, refresh_running):
+            return
+        self._pending_tick = tick_iso
+        self.tick_refresh_started.emit()
+        self._start_refresh_all()
+
     def _on_cancel_refresh_clicked(self):
         if self._refresh_all_worker:
             self._refresh_all_worker.cancel()
@@ -1769,6 +1801,9 @@ class PlayerFactionPanel(QWidget):
 
         if self._refresh_tracker:
             self._refresh_tracker.mark_refreshed()
+            if self._pending_tick:
+                self._refresh_tracker.mark_refreshed_tick(self._pending_tick)
+        self._pending_tick = None
 
         failed_txt = f", {failed} failed (blocked/not found)" if failed else ""
         retreated_txt = f", {retreated} dropped (faction no longer present)" if retreated else ""
