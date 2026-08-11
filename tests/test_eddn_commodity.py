@@ -2,6 +2,8 @@
 into an EDDN commodity/3-compliant message body. Elision/rename rules
 verified against EDDN's own commodity-README.md and a real Market.json
 sample (see docs/superpowers/specs/2026-08-11-eddn-commodity-publish-design.md)."""
+from unittest.mock import Mock, patch
+
 from edc.core.eddn_publisher import build_commodity_message, EddnPublisher, _COMMODITY_SCHEMA_REF
 
 
@@ -118,7 +120,10 @@ def test_empty_items_returns_none():
 def test_maybe_publish_commodity_queues_compliant_envelope():
     pub = EddnPublisher()
     pub.observe({"event": "Commander", "Name": "CMDR Test"})
-    pub.observe({"event": "LoadGame", "Commander": "CMDR Test", "gameversion": "4.0", "build": "r300000"})
+    pub.observe({
+        "event": "LoadGame", "Commander": "CMDR Test", "gameversion": "4.0", "build": "r300000",
+        "Horizons": False, "Odyssey": True,
+    })
 
     pub.maybe_publish_commodity(_market([_item()]))
 
@@ -129,6 +134,8 @@ def test_maybe_publish_commodity_queues_compliant_envelope():
     assert payload["header"]["gameversion"] == "4.0"
     assert payload["message"]["systemName"] == "Shinrarta Dezhra"
     assert payload["message"]["commodities"][0]["name"] == "platinum"
+    assert payload["message"]["horizons"] is False
+    assert payload["message"]["odyssey"] is True
 
 
 def test_maybe_publish_commodity_skips_when_no_commander_known():
@@ -142,3 +149,27 @@ def test_maybe_publish_commodity_skips_invalid_market_data():
     pub.observe({"event": "Commander", "Name": "CMDR Test"})
     pub.maybe_publish_commodity({"not": "a valid market"})
     assert pub._queue.empty()
+
+
+def _fake_response(status_code):
+    resp = Mock()
+    resp.status_code = status_code
+    resp.text = "response body"
+    return resp
+
+
+def test_send_with_retry_retries_on_429_and_5xx():
+    pub = EddnPublisher()
+    for status in (429, 500, 503):
+        with patch("edc.core.eddn_publisher.requests.post", return_value=_fake_response(status)), \
+             patch("edc.core.eddn_publisher.threading.Timer") as mock_timer:
+            pub._send_with_retry({"payload": "x"})
+            assert mock_timer.called, f"expected retry timer for status {status}"
+
+
+def test_send_with_retry_drops_permanent_4xx_rejection():
+    pub = EddnPublisher()
+    with patch("edc.core.eddn_publisher.requests.post", return_value=_fake_response(400)), \
+         patch("edc.core.eddn_publisher.threading.Timer") as mock_timer:
+        pub._send_with_retry({"payload": "x"})
+        assert not mock_timer.called

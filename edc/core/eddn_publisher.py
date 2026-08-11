@@ -306,6 +306,9 @@ class EddnPublisher:
         if msg is None:
             return
 
+        msg["horizons"] = self._horizons
+        msg["odyssey"] = self._odyssey
+
         payload = {
             "$schemaRef": _COMMODITY_SCHEMA_REF,
             "header": {
@@ -333,11 +336,16 @@ class EddnPublisher:
     def _send_with_retry(self, payload: Dict[str, Any]) -> None:
         try:
             resp = requests.post(_GATEWAY_URL, json=payload, timeout=_POST_TIMEOUT)
+        except requests.RequestException as exc:
+            log.warning("EDDN publish failed: %s", exc)
+        else:
             if resp.status_code == 200:
                 return
             log.warning("EDDN gateway rejected message (status %s): %s", resp.status_code, resp.text[:300])
-        except requests.RequestException as exc:
-            log.warning("EDDN publish failed: %s", exc)
+            if not (resp.status_code == 429 or resp.status_code >= 500):
+                # Permanent rejection (e.g. schema validation failure) --
+                # retrying won't help, so drop it instead of looping forever.
+                return
 
         # Per EDDN dev docs: wait >= 60s before retrying a failed message,
         # and don't block other queued messages meanwhile.
