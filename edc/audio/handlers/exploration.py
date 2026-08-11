@@ -115,9 +115,10 @@ class ExplorationPhrases:
     ]
 
     HUMAN_SIGNALS = [
-        "Human signals detected.",
-        "Human presence on this planet.",
-        "Human activity detected.",
+        "Human signal detected. Unidentified point of interest.",
+        "Human-origin signal, unidentified. Could be a wreck, could be a settlement.",
+        "Unidentified human site on this body.",
+        "POI detected, human origin. Type unknown until we're closer.",
     ]
 
     SAA_COMPLETE = [
