@@ -639,6 +639,27 @@ class MainWindow(QMainWindow):
         except Exception:
             log.exception("Failed to save commodity display names")
 
+    def _publish_market_to_eddn(self) -> None:
+        """
+        Independent Market.json read for EDDN publishing, same pattern as
+        _load_current_market() and _seed_commodity_names_from_market_json()
+        each doing their own read -- keeps this decoupled from the
+        UI-shaped state.current_market_items (which drops fields EDDN
+        requires, like MeanPrice/StockBracket/DemandBracket).
+        """
+        journal_dir = getattr(self.cfg, "journal_dir", None)
+        if not journal_dir:
+            return
+        market_path = Path(journal_dir) / "Market.json"
+        try:
+            if not market_path.exists():
+                return
+            data = json.loads(market_path.read_text(encoding="utf-8", errors="replace"))
+        except Exception:
+            log.exception("Failed to read Market.json for EDDN publish")
+            return
+        self.eddn_publisher.maybe_publish_commodity(data)
+
     def _load_cargo_inventory(self):
         """
         Reads Cargo.json — per the journal manual, only the FIRST "Cargo"
@@ -1870,6 +1891,8 @@ class MainWindow(QMainWindow):
             self.market_panel.refresh_trade_opportunities(self.state, radius)
             self.market_panel.refresh_commodity_names()
             self.mining_panel.refresh_commodity_names()
+            if getattr(self.cfg, "eddn_contribute_enabled", False) and not self._replaying:
+                self._publish_market_to_eddn()
 
         if name == "Undocked":
             # Leaving the station — "what's for sale here" stops being true;
