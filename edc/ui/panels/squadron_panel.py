@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
 log = logging.getLogger(__name__)
 
 _CARD_STYLE = "QFrame { background:#0d1a2a; border:1px solid #1e3a5a; border-radius:5px; }"
-_HDR_STYLE = "color:#555555; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
+_HDR_STYLE = "color:#7a7a7a; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
 _BTN_STYLE = (
     "QPushButton { background:#1a3a5a; color:#FFB347; border:1px solid #2a5a8a;"
     " border-radius:3px; padding:3px 12px; font-weight:bold; }"
@@ -231,7 +231,7 @@ class SquadronPanel(QWidget):
             "visiting to keep a checklist, or it appears automatically once you dock there."
         )
         colon_note.setWordWrap(True)
-        colon_note.setStyleSheet("color:#555555; font-size:11px; background:transparent; border:none;")
+        colon_note.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
         colon_l.addWidget(colon_note)
 
         add_row = QHBoxLayout()

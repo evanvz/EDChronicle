@@ -129,7 +129,7 @@ class TradeRoutePanel(QWidget):
         fl.setSpacing(6)
 
         hdr = QLabel("TRADE ROUTE LOOP PLANNER")
-        hdr.setStyleSheet("color:#555555; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;")
+        hdr.setStyleSheet("color:#7a7a7a; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;")
         fl.addWidget(hdr)
 
         note = QLabel(
@@ -137,7 +137,7 @@ class TradeRoutePanel(QWidget):
             "sell it at Station B, buy a different commodity at B, sell it back at A."
         )
         note.setWordWrap(True)
-        note.setStyleSheet("color:#555555; font-size:11px; background:transparent; border:none;")
+        note.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
         fl.addWidget(note)
 
         self._location_label = QLabel("Location: —")

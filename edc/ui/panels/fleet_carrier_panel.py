@@ -16,7 +16,7 @@ class FleetCarrierPanel(QWidget):
     """
 
     _CARD_STYLE = "QFrame { background:#0d1a2a; border:1px solid #1e3a5a; border-radius:5px; }"
-    _HDR_STYLE = "color:#555555; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
+    _HDR_STYLE = "color:#7a7a7a; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
     _LABEL_STYLE = "background:transparent; border:none; color:#c8c8c8;"
 
     # Squadron carrier gets its own accent (purple — matches the "PP Enemy"/

@@ -83,7 +83,7 @@ class PowerplayPanel(QWidget):
 
         pp_hdr = QLabel("POWERPLAY STATUS")
         pp_hdr.setStyleSheet(
-            "color: #555555; font-size:12px; font-weight: bold; "
+            "color: #7a7a7a; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         pp_frame_l.addWidget(pp_hdr)
@@ -115,7 +115,7 @@ class PowerplayPanel(QWidget):
 
         act_hdr = QLabel("RECOMMENDED ACTIONS")
         act_hdr.setStyleSheet(
-            "color: #555555; font-size:12px; font-weight: bold; "
+            "color: #7a7a7a; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         act_frame_l.addWidget(act_hdr)
@@ -144,7 +144,7 @@ class PowerplayPanel(QWidget):
 
         bgs_hdr = QLabel("LOCAL FACTION BGS")
         bgs_hdr.setStyleSheet(
-            "color: #555555; font-size:12px; font-weight: bold; "
+            "color: #7a7a7a; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         bgs_frame_l.addWidget(bgs_hdr)
@@ -169,7 +169,7 @@ class PowerplayPanel(QWidget):
 
         self.pp_progress_label = QLabel("CONFLICT PROGRESS")
         self.pp_progress_label.setStyleSheet(
-            "color: #555555; font-size:12px; font-weight: bold; "
+            "color: #7a7a7a; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         prog_frame_l.addWidget(self.pp_progress_label)
@@ -310,7 +310,7 @@ class PowerplayPanel(QWidget):
             # ── Center: Power state ────────────────────────────────────
             '<td width="34%" valign="top" align="center"'
             ' style="background-color:#080f18; padding:10px 12px;">'
-            '<div style="color:#555555;font-size:12px;font-weight:700;'
+            '<div style="color:#7a7a7a;font-size:12px;font-weight:700;'
             'letter-spacing:1px;">POWERPLAY</div>'
             f'<div style="color:{ctrl_color};font-size:12px;font-weight:700;'
             f'margin-top:4px;">{ctrl_txt} (Controlling)</div>'

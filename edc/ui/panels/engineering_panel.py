@@ -32,7 +32,7 @@ _CATEGORY_STATE_ATTR = {
 }
 
 _CARD_STYLE = "QFrame { background:#0d1a2a; border:1px solid #1e3a5a; border-radius:5px; }"
-_HDR_STYLE = "color:#555555; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
+_HDR_STYLE = "color:#7a7a7a; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
 _LABEL_STYLE = "background:transparent; border:none; color:#c8c8c8;"
 _COMBO_STYLE = "background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;"
 _TABLE_STYLE = (
@@ -266,7 +266,7 @@ class _ShipEngineeringTab(QWidget):
             "and not 100% complete — an empty list means unknown, not unavailable."
         )
         self._engineer_note.setWordWrap(True)
-        self._engineer_note.setStyleSheet("color:#555555; font-size:11px; background:transparent; border:none;")
+        self._engineer_note.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
         right.addWidget(self._engineer_note)
 
         trade_hdr = QLabel("MATERIAL TRADER SUGGESTIONS")
@@ -670,7 +670,7 @@ class _OdysseyEngineeringTab(QWidget):
 
         self._engineer_note = QLabel("")
         self._engineer_note.setWordWrap(True)
-        self._engineer_note.setStyleSheet("color:#555555; font-size:11px; background:transparent; border:none;")
+        self._engineer_note.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
         right.addWidget(self._engineer_note)
 
         root.addLayout(right, 3)

@@ -136,7 +136,7 @@ class PowerplayFinderPanel(QWidget):
     """
 
     _CARD_STYLE  = "QFrame { background:#0d1a2a; border:1px solid #1e3a5a; border-radius:5px; }"
-    _HDR_STYLE   = "color:#555555; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
+    _HDR_STYLE   = "color:#7a7a7a; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
     _LABEL_STYLE = "background:transparent; border:none; color:#c8c8c8;"
 
     def __init__(self, parent=None, edsm_powerplay=None, eddn_powerplay=None):
@@ -296,7 +296,7 @@ class PowerplayFinderPanel(QWidget):
         self._loading_spinner = BusySpinner(self)
 
         copy_hint = QLabel("Double-click a row to copy system name to clipboard.")
-        copy_hint.setStyleSheet("color:#555555; font-size:11px; background:transparent;")
+        copy_hint.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent;")
         root.addWidget(copy_hint)
 
     # ── Public API ────────────────────────────────────────────────────────
@@ -323,7 +323,7 @@ class PowerplayFinderPanel(QWidget):
         states, desc = _SCOPE_HINTS.get(mission, ([], ""))
         if not states:
             self._scope_label.setText(
-                f'<span style="color:#555555;font-size:12px;">{desc}</span>'
+                f'<span style="color:#7a7a7a;font-size:12px;">{desc}</span>'
             )
             return
         tags = []
@@ -333,7 +333,7 @@ class PowerplayFinderPanel(QWidget):
         joined = ' <span style="color:#444444;">·</span> '.join(tags)
         self._scope_label.setText(
             f'{joined}'
-            f'<span style="color:#555555;font-size:12px;"> — {desc}</span>'
+            f'<span style="color:#7a7a7a;font-size:12px;"> — {desc}</span>'
         )
 
     # ── Ethos hint ───────────────────────────────────────────────────────
@@ -504,7 +504,7 @@ class PowerplayFinderPanel(QWidget):
                 html    = ' <span style="color:#3a3a3a;">/</span> '.join(parts)
                 tooltip = "\n".join(tip_lines)
             else:
-                html    = '<span style="color:#555555;">—</span>'
+                html    = '<span style="color:#7a7a7a;">—</span>'
                 tooltip = ""
 
             power_label = QLabel()

@@ -21,7 +21,7 @@ from edc.ui.busy_spinner import BusySpinner
 log = logging.getLogger(__name__)
 
 _CARD_STYLE = "QFrame { background:#0d1a2a; border:1px solid #1e3a5a; border-radius:5px; }"
-_HDR_STYLE = "color:#555555; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
+_HDR_STYLE = "color:#7a7a7a; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
 _LABEL_STYLE = "background:transparent; border:none; color:#c8c8c8;"
 
 # (required StationServices tags, button label, (bg, text) accent) —
@@ -485,7 +485,7 @@ class MarketPanel(QWidget):
             "check \"Updated\" before flying somewhere."
         )
         note.setWordWrap(True)
-        note.setStyleSheet("color:#555555; font-size:11px; background:transparent; border:none;")
+        note.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
         search_layout.addWidget(note)
 
         root.addWidget(search_frame)
@@ -1164,7 +1164,7 @@ class _RareGoodsDialog(QDialog):
             "station are listed here — no data yet means no row, not a guess."
         )
         note.setWordWrap(True)
-        note.setStyleSheet("color:#555555; font-size:11px; background:transparent; border:none;")
+        note.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
         layout.addWidget(note)
 
     def refresh_results(self) -> None:
@@ -1277,7 +1277,7 @@ class _StationServiceDialog(QDialog):
             "over time (BGS/security/faction shifts) — check \"Last Visited\" before flying somewhere."
         )
         note.setWordWrap(True)
-        note.setStyleSheet("color:#555555; font-size:11px; background:transparent; border:none;")
+        note.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
         layout.addWidget(note)
 
     def refresh_results(self) -> None:

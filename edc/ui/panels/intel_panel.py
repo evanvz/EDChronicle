@@ -66,7 +66,7 @@ class IntelPanel(QWidget):
         poi_l.setSpacing(4)
         poi_hdr = QLabel("EXTERNAL POINTS OF INTEREST")
         poi_hdr.setStyleSheet(
-            "color: #555555; font-size:12px; font-weight: bold; "
+            "color: #7a7a7a; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         poi_l.addWidget(poi_hdr)
@@ -89,7 +89,7 @@ class IntelPanel(QWidget):
         farm_l.setSpacing(4)
         farm_hdr = QLabel("FARMING LOCATIONS — THIS SYSTEM")
         farm_hdr.setStyleSheet(
-            "color: #555555; font-size:12px; font-weight: bold; "
+            "color: #7a7a7a; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         farm_l.addWidget(farm_hdr)
@@ -112,7 +112,7 @@ class IntelPanel(QWidget):
         body_farm_l.setSpacing(4)
         body_farm_hdr = QLabel("SURFACE SCAN — FARMING MATCHES")
         body_farm_hdr.setStyleSheet(
-            "color: #555555; font-size:12px; font-weight: bold; "
+            "color: #7a7a7a; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         body_farm_l.addWidget(body_farm_hdr)
@@ -135,7 +135,7 @@ class IntelPanel(QWidget):
         guide_l.setSpacing(4)
         guide_hdr = QLabel("FARMING GUIDE — ALL CATEGORIES")
         guide_hdr.setStyleSheet(
-            "color: #555555; font-size:12px; font-weight: bold; "
+            "color: #7a7a7a; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         guide_l.addWidget(guide_hdr)
@@ -158,7 +158,7 @@ class IntelPanel(QWidget):
         bgs_l.setSpacing(4)
         bgs_hdr = QLabel("BGS HISTORY — THIS SYSTEM")
         bgs_hdr.setStyleSheet(
-            "color: #555555; font-size:12px; font-weight: bold; "
+            "color: #7a7a7a; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         bgs_l.addWidget(bgs_hdr)
@@ -258,7 +258,7 @@ class IntelPanel(QWidget):
         sites = loc.get("sites") or []
         if isinstance(sites, list) and sites:
             line += (
-                '<br><span style="color:#555555;font-size:12px;">'
+                '<br><span style="color:#7a7a7a;font-size:12px;">'
                 '&nbsp;&nbsp;Sites:</span>'
             )
             for site in sites[:8]:
@@ -282,7 +282,7 @@ class IntelPanel(QWidget):
                     )
                 if s_coords:
                     site_line += (
-                        f' <span style="color:#555555;font-size:12px;">'
+                        f' <span style="color:#7a7a7a;font-size:12px;">'
                         f'({self._esc(s_coords)})</span>'
                     )
                 if isinstance(s_mats, list) and s_mats:
@@ -451,7 +451,7 @@ class IntelPanel(QWidget):
                 )
             if source:
                 line += (
-                    f'<br><span style="color:#555555;font-size:12px;">'
+                    f'<br><span style="color:#7a7a7a;font-size:12px;">'
                     f'&nbsp;&nbsp;src: {self._esc(source)}</span>'
                 )
             line += '</div>'
@@ -659,7 +659,7 @@ class IntelPanel(QWidget):
                         f'<span style="color:{fg};font-weight:700;'
                         f'font-size:12px;letter-spacing:1px;">'
                         f'{self._esc(label)}</span>'
-                        f'<span style="color:#555555;font-size:12px;">'
+                        f'<span style="color:#7a7a7a;font-size:12px;">'
                         f' ({len(entries)} entries)</span>'
                         f'</div>'
                     )

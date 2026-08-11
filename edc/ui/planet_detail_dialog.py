@@ -25,7 +25,7 @@ def _divider():
 def _section_header(text):
     lbl = QLabel(text)
     lbl.setStyleSheet(
-        "color: #555555; font-size:12px; font-weight: bold; "
+        "color: #7a7a7a; font-size:12px; font-weight: bold; "
         "letter-spacing: 1px; background: transparent; border: none;"
     )
     return lbl
@@ -33,7 +33,7 @@ def _section_header(text):
 
 def _stat_label(text):
     lbl = QLabel(text)
-    lbl.setStyleSheet("color: #555555; font-size:12px; background: transparent; border: none;")
+    lbl.setStyleSheet("color: #7a7a7a; font-size:12px; background: transparent; border: none;")
     return lbl
 
 
@@ -230,7 +230,7 @@ class PlanetDetailDialog(QDialog):
         atmo_comp_str = _fmt_atmo_composition(rec.get("AtmosphereComposition") or [])
         if atmo_comp_str:
             ac_lbl = QLabel(
-                f'<span style="color:#555555;font-size:12px;">ATMOSPHERE COMPOSITION&nbsp;&nbsp;</span>'
+                f'<span style="color:#7a7a7a;font-size:12px;">ATMOSPHERE COMPOSITION&nbsp;&nbsp;</span>'
                 f'<span style="color:#AAAAAA;font-size:12px;">{_esc(atmo_comp_str)}</span>'
             )
             ac_lbl.setTextFormat(Qt.TextFormat.RichText)
@@ -318,7 +318,7 @@ class PlanetDetailDialog(QDialog):
             if other_sig:
                 sig_parts.append(
                     f'<span style="color:#888888;">◈ Other: {other_sig}</span>'
-                    f' <span style="color:#555555;font-size:12px;">'
+                    f' <span style="color:#7a7a7a;font-size:12px;">'
                     f'(crash sites / guarded installations)</span>'
                 )
 
@@ -356,7 +356,7 @@ class PlanetDetailDialog(QDialog):
 
         if est_i > 0:
             val_lbl = QLabel(
-                f'<span style="color:#555555;font-size:12px;">ESTIMATED VALUE&nbsp;&nbsp;</span>'
+                f'<span style="color:#7a7a7a;font-size:12px;">ESTIMATED VALUE&nbsp;&nbsp;</span>'
                 f'<span style="color:#FFD93D;font-size:12px;font-weight:700;">'
                 f'{est_i:,} Cr</span>'
             )

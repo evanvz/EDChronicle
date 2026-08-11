@@ -40,7 +40,7 @@ class ShiplockerPanel(QWidget):
 
         hdr = QLabel("ODYSSEY — SHIP LOCKER")
         hdr.setStyleSheet(
-            "color: #555555; font-size:12px; font-weight: bold;"
+            "color: #7a7a7a; font-size:12px; font-weight: bold;"
             "letter-spacing: 1px; padding: 4px 0px 2px 2px;"
             "background: transparent; border: none;"
         )
@@ -191,7 +191,7 @@ class MaterialsPanel(QWidget):
 
         hdr = QLabel("MATERIALS — COMMANDER INVENTORY")
         hdr.setStyleSheet(
-            "color: #555555; font-size:12px; font-weight: bold;"
+            "color: #7a7a7a; font-size:12px; font-weight: bold;"
             "letter-spacing: 1px; padding: 4px 0px 2px 2px;"
             "background: transparent; border: none;"
         )

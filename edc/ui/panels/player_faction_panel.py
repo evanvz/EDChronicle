@@ -39,7 +39,7 @@ def _in_weekly_maintenance_window() -> bool:
     return now.weekday() == 3 and 9 <= now.hour < 11
 
 _CARD_STYLE = "QFrame { background:#0d1a2a; border:1px solid #1e3a5a; border-radius:5px; }"
-_HDR_STYLE = "color:#555555; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
+_HDR_STYLE = "color:#7a7a7a; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
 
 # EDSM's per-system faction check can confirm a tracked system is still
 # present or has retreated, but has no bulk "every system for this faction"
@@ -190,7 +190,7 @@ def _format_forecast(prediction: Optional[Dict[str, Any]]) -> Tuple[str, str]:
     are "impending event" signals from the real BGS thresholds) > plain
     trend > "not enough history yet"."""
     if not prediction:
-        return ("—", "#555555")
+        return ("—", "#7a7a7a")
 
     conflict = prediction.get("conflict_risk")
     if conflict:
@@ -215,7 +215,7 @@ def _format_forecast(prediction: Optional[Dict[str, Any]]) -> Tuple[str, str]:
         return ("↓ Falling", "#FF8C00")
     if trend == "flat":
         return ("→ Stable", "#4D96FF")
-    return ("Not enough history yet", "#555555")
+    return ("Not enough history yet", "#7a7a7a")
 
 
 # (bucket key, tile label, tile bg color) — order is display order. A system
