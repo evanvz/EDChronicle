@@ -68,3 +68,16 @@ class FactionRefreshTracker:
 
     def mark_csv_imported(self) -> None:
         self._write_timestamp("last_csv_import")
+
+    def last_refreshed_tick(self) -> Optional[str]:
+        val = self._read().get("last_refreshed_tick")
+        return val if isinstance(val, str) and val else None
+
+    def mark_refreshed_tick(self, tick_iso: str) -> None:
+        try:
+            data = self._read()
+            data["last_refreshed_tick"] = tick_iso
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.path.write_text(json.dumps(data), encoding="utf-8")
+        except Exception:
+            log.exception("Failed to save last_refreshed_tick")
