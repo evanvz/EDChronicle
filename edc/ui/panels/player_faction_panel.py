@@ -1730,35 +1730,42 @@ class PlayerFactionPanel(QWidget):
             return
         self._start_refresh_all()
 
-    def _start_refresh_all(self):
+    def _start_refresh_all(self, ignore_fresh_today: bool = False) -> bool:
+        """Returns True iff a background refresh thread was actually
+        started. ignore_fresh_today=True skips the "already refreshed
+        today" filter entirely -- used by the tick-driven trigger, since a
+        real BGS tick can land after the calendar-day refresh already ran
+        today, and every system being "fresh today" would otherwise make
+        the tick trigger a permanent no-op."""
         if not self._faction_name:
-            return
+            return False
         if (self._lookup_thread and self._lookup_thread.isRunning()) or \
            (self._csv_thread and self._csv_thread.isRunning()) or \
            (self._refresh_all_thread and self._refresh_all_thread.isRunning()):
-            return
+            return False
         try:
             system_names = sorted(self._repo.get_known_system_names(self._faction_name))
         except Exception:
             log.exception("Failed to load known system names for full refresh")
-            return
+            return False
         if not system_names:
-            return
+            return False
 
-        # Snapshot dates are day-granularity, so "older than 24h" means
-        # "not already refreshed today" — skips systems a live arrival (or
-        # an earlier refresh today) already updated, cutting EDSM request
-        # volume instead of re-querying every tracked system every time.
-        today = date.today().isoformat()
-        fresh_today = {
-            s.get("system_name")
-            for s in (self._last_overview.get("systems") if self._last_overview else None) or []
-            if isinstance(s.get("snapshot_date"), str) and s["snapshot_date"][:10] == today
-        }
-        system_names = [n for n in system_names if n not in fresh_today]
-        if not system_names:
-            self._refresh_status_label.setText("Full EDSM refresh: all systems already current today.")
-            return
+        if not ignore_fresh_today:
+            # Snapshot dates are day-granularity, so "older than 24h" means
+            # "not already refreshed today" — skips systems a live arrival (or
+            # an earlier refresh today) already updated, cutting EDSM request
+            # volume instead of re-querying every tracked system every time.
+            today = date.today().isoformat()
+            fresh_today = {
+                s.get("system_name")
+                for s in (self._last_overview.get("systems") if self._last_overview else None) or []
+                if isinstance(s.get("snapshot_date"), str) and s["snapshot_date"][:10] == today
+            }
+            system_names = [n for n in system_names if n not in fresh_today]
+            if not system_names:
+                self._refresh_status_label.setText("Full EDSM refresh: all systems already current today.")
+                return False
 
         self._refresh_all_btn.setEnabled(False)
         self._cancel_refresh_btn.setVisible(True)
@@ -1772,6 +1779,7 @@ class PlayerFactionPanel(QWidget):
         self._refresh_all_worker.finished.connect(self._on_refresh_all_finished)
         self._refresh_all_worker.finished.connect(self._refresh_all_thread.quit)
         self._refresh_all_thread.start()
+        return True
 
     def maybe_refresh_for_tick(self, tick_iso: Optional[str]) -> None:
         """Called periodically from MainWindow with the latest result of
@@ -1782,9 +1790,17 @@ class PlayerFactionPanel(QWidget):
         last_tick = self._refresh_tracker.last_refreshed_tick() if self._refresh_tracker else None
         if not _should_start_tick_refresh(tick_iso, last_tick, self._faction_name, refresh_running):
             return
+        if _in_weekly_maintenance_window():
+            # Same guard as _maybe_auto_refresh_all() — skip the automatic
+            # tick-driven sweep during Frontier's weekly maintenance window,
+            # when EDSM tends to be unreliable too. Manual "Refresh All"
+            # clicks are never blocked.
+            return
         self._pending_tick = tick_iso
+        if not self._start_refresh_all(ignore_fresh_today=True):
+            self._pending_tick = None
+            return
         self.tick_refresh_started.emit()
-        self._start_refresh_all()
 
     def _on_cancel_refresh_clicked(self):
         if self._refresh_all_worker:
