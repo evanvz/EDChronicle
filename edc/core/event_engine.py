@@ -85,7 +85,7 @@ class EventEngine:
         """
         Journal-derived classification to keep UI low-noise.
         Categories: Megaship | FleetCarrier | Station | Installation
-                    | NavBeacon | USS | Phenomena | Other
+                    | NavBeacon | TouristBeacon | USS | Phenomena | Other
         """
         try:
             st = (signal_type or "").strip().lower()
@@ -97,6 +97,8 @@ class EventEngine:
                 return "Installation"
             if st == "navbeacon":
                 return "NavBeacon"
+            if st == "touristbeacon":
+                return "TouristBeacon"
             if isinstance(is_station, bool) and is_station:
                 return "Station"
             if uss_type == "$USS_Type_NonHuman;":

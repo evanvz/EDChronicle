@@ -331,7 +331,7 @@ class ExplorationPanel(QWidget):
             return
 
         cat_order  = ["Phenomena", "Megaship", "Station", "Installation",
-                      "NavBeacon", "USS", "Wreckage", "Other"]
+                      "NavBeacon", "TouristBeacon", "USS", "Wreckage", "Other"]
         hidden     = {"FleetCarrier"}
         cats       = {k: [] for k in cat_order}
         cat_counts = {k: 0 for k in cat_order}
