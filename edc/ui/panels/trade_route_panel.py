@@ -10,11 +10,11 @@ from typing import Optional
 from PyQt6.QtCore import Qt, QObject, QThread, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit,
     QSpinBox, QComboBox, QCheckBox, QTableWidget, QTableWidgetItem, QHeaderView, QFrame,
 )
 
-from edc.core.trade_routes import find_trade_loops
+from edc.core.trade_routes import find_trade_loops, find_point_to_point_trades
 from edc.ui.busy_spinner import BusySpinner
 from edc.ui.panels.market_panel import _NumericTableWidgetItem
 
@@ -102,6 +102,41 @@ class _TradeRouteWorker(QObject):
         return bool(controlling_power) and controlling_power != self._my_power
 
 
+class _PointToPointWorker(QObject):
+    """Mirrors _TradeRouteWorker's shape -- own SQLite connection per the
+    project's cross-thread rule, one-shot per search click."""
+    finished = pyqtSignal(list, str)  # (results, error)
+
+    def __init__(self, db_path, origin_items, destination_system, cargo_capacity):
+        super().__init__()
+        self._db_path = db_path
+        self._origin_items = origin_items
+        self._destination_system = destination_system
+        self._cargo_capacity = cargo_capacity
+
+    def run(self):
+        from persistence.database import Database
+        from persistence.repository import Repository
+
+        db = Database(self._db_path)
+        try:
+            repo = Repository(db)
+            stations = repo.get_market_snapshot_for_systems([self._destination_system])
+            if not stations:
+                self.finished.emit([], f"No market data for {self._destination_system} yet.")
+                return
+            results = find_point_to_point_trades(
+                self._origin_items, stations, self._cargo_capacity,
+            )
+        except Exception as exc:
+            log.exception("Point-to-point trade search failed")
+            self.finished.emit([], str(exc))
+            return
+        finally:
+            db.close()
+        self.finished.emit(results, "")
+
+
 class TradeRoutePanel(QWidget):
     """Owns all widgets and refresh logic for the Trade Routes tab.
     Receives state via refresh(state); manual search only (no
@@ -117,6 +152,13 @@ class TradeRoutePanel(QWidget):
         self._my_power: Optional[str] = None
         self._thread: Optional[QThread] = None
         self._worker: Optional[_TradeRouteWorker] = None
+        self._origin_items: list = []
+        self._origin_station: str = ""
+        self._origin_system: str = ""
+        self._route_target_system: str = ""
+        self._dest_user_edited: bool = False
+        self._p2p_thread: Optional[QThread] = None
+        self._p2p_worker: Optional[_PointToPointWorker] = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 8)
@@ -248,6 +290,83 @@ class TradeRoutePanel(QWidget):
 
         root.addWidget(frame, 1)
 
+        p2p_frame = QFrame()
+        p2p_frame.setStyleSheet(_CARD_STYLE)
+        p2p_l = QVBoxLayout(p2p_frame)
+        p2p_l.setContentsMargins(8, 6, 8, 8)
+        p2p_l.setSpacing(6)
+
+        p2p_hdr = QLabel("POINT-TO-POINT TRADE FINDER")
+        p2p_hdr.setStyleSheet("color:#7a7a7a; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;")
+        p2p_l.addWidget(p2p_hdr)
+
+        p2p_note = QLabel(
+            "What to buy here and sell at a specific destination -- the destination field "
+            "auto-fills from your plotted route if one exists, or type a system name."
+        )
+        p2p_note.setWordWrap(True)
+        p2p_note.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
+        p2p_l.addWidget(p2p_note)
+
+        self._p2p_origin_label = QLabel("Origin: —")
+        self._p2p_origin_label.setStyleSheet(_LABEL_STYLE)
+        p2p_l.addWidget(self._p2p_origin_label)
+
+        p2p_row = QHBoxLayout()
+        p2p_row.setSpacing(8)
+        dest_label = QLabel("Destination:")
+        dest_label.setStyleSheet(_LABEL_STYLE)
+        self._dest_edit = QLineEdit()
+        self._dest_edit.setPlaceholderText("System name")
+        self._dest_edit.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
+        self._dest_edit.textEdited.connect(self._on_dest_edited)
+        self._p2p_search_btn = QPushButton("Search")
+        self._p2p_search_btn.setStyleSheet(
+            "QPushButton { background:#1a3a5a; color:#FFB347; border:1px solid #2a5a8a;"
+            " border-radius:3px; padding:3px 12px; font-weight:bold; }"
+            "QPushButton:hover { background:#2a5a8a; }"
+            "QPushButton:disabled { background:#111; color:#555; border-color:#333; }"
+        )
+        self._p2p_search_btn.clicked.connect(self._start_p2p_search)
+        p2p_row.addWidget(dest_label)
+        p2p_row.addWidget(self._dest_edit, 1)
+        p2p_row.addWidget(self._p2p_search_btn)
+        p2p_l.addLayout(p2p_row)
+
+        self._p2p_status_label = QLabel("Dock at a station and enter a destination, then press Search.")
+        self._p2p_status_label.setStyleSheet("color:#888888; font-size:12px; background:transparent;")
+        p2p_l.addWidget(self._p2p_status_label)
+
+        self._p2p_table = QTableWidget()
+        self._p2p_table.setColumnCount(9)
+        self._p2p_table.setHorizontalHeaderLabels(
+            ["Commodity", "Sell Station", "System", "Buy", "Sell", "Profit/u", "Qty", "Total Profit", "Data Age"]
+        )
+        self._p2p_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._p2p_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._p2p_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self._p2p_table.verticalHeader().setVisible(False)
+        self._p2p_table.setAlternatingRowColors(True)
+        self._p2p_table.setStyleSheet(
+            "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
+            " gridline-color:#1e3a5a; border:1px solid #1e3a5a; font-size:12px; }"
+            "QTableWidget::item { padding:1px 4px; }"
+            "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
+            " padding:2px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
+            "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
+        )
+        p2p_h = self._p2p_table.horizontalHeader()
+        for c in (0, 1, 2):
+            p2p_h.setSectionResizeMode(c, QHeaderView.ResizeMode.Stretch)
+        for c in (3, 4, 5, 6, 7, 8):
+            p2p_h.setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
+        self._p2p_table.cellClicked.connect(self._on_p2p_cell_clicked)
+        p2p_l.addWidget(self._p2p_table, 1)
+
+        self._p2p_loading_spinner = BusySpinner(self)
+
+        root.addWidget(p2p_frame, 1)
+
     def refresh(self, state) -> None:
         """Cheap, safe to call on every general refresh — just updates the
         location/cargo-capacity display, no search triggered."""
@@ -263,6 +382,27 @@ class TradeRoutePanel(QWidget):
         else:
             self._cargo_label.setText("Cargo capacity: unknown (fly at least once this session)")
         self._search_btn.setEnabled(bool(self._system) and bool(self._cargo_capacity))
+
+        self._origin_items = list(getattr(state, "current_market_items", None) or [])
+        self._origin_station = (getattr(state, "current_market_station", None) or "").strip()
+        self._origin_system = (getattr(state, "current_market_system", None) or "").strip()
+        if self._origin_station and self._origin_system:
+            self._p2p_origin_label.setText(f"Origin: {self._origin_station} ({self._origin_system})")
+        else:
+            self._p2p_origin_label.setText("Origin: — (dock and open the Commodities screen first)")
+
+        route_target = (getattr(state, "route_target_system", None) or "").strip()
+        if route_target != self._route_target_system:
+            self._route_target_system = route_target
+            if route_target and not self._dest_user_edited:
+                self._dest_edit.setText(route_target)
+            elif not route_target and not self._dest_user_edited:
+                self._dest_edit.clear()
+
+        self._p2p_search_btn.setEnabled(
+            bool(self._origin_items) and bool(self._dest_edit.text().strip())
+            and isinstance(self._cargo_capacity, int) and self._cargo_capacity > 0
+        )
 
     def _start_search(self) -> None:
         if not self._system:
@@ -369,5 +509,98 @@ class TradeRoutePanel(QWidget):
         if column not in (2, 3, 6, 7):
             return
         item = self._table.item(row, column)
+        if item and item.text():
+            QApplication.clipboard().setText(item.text())
+
+    def _on_dest_edited(self, _text: str) -> None:
+        # textEdited only fires on user typing, never on programmatic
+        # setText() -- this is what lets the auto-fill know not to
+        # clobber something the user typed themselves.
+        self._dest_user_edited = True
+
+    def _start_p2p_search(self) -> None:
+        destination = self._dest_edit.text().strip()
+        if not destination:
+            self._p2p_status_label.setText("Enter a destination system first.")
+            return
+        if not self._origin_items:
+            self._p2p_status_label.setText("No origin market data yet — dock and open the Commodities screen.")
+            return
+        if not isinstance(self._cargo_capacity, int) or self._cargo_capacity <= 0:
+            self._p2p_status_label.setText("Cargo capacity unknown yet — undock or check the outfitting screen once.")
+            return
+        if self._p2p_thread and self._p2p_thread.isRunning():
+            return
+
+        self._p2p_search_btn.setEnabled(False)
+        self._p2p_status_label.setText(f"Searching for trades to {destination}…")
+        self._p2p_table.setRowCount(0)
+        self._p2p_loading_spinner.start_over(self)
+
+        self._p2p_worker = _PointToPointWorker(
+            self._repo.db.db_path, self._origin_items, destination, self._cargo_capacity,
+        )
+        self._p2p_thread = QThread()
+        self._p2p_worker.moveToThread(self._p2p_thread)
+        self._p2p_thread.started.connect(self._p2p_worker.run)
+        self._p2p_worker.finished.connect(self._on_p2p_results)
+        self._p2p_worker.finished.connect(self._p2p_thread.quit)
+        self._p2p_thread.start()
+
+    def _on_p2p_results(self, results: list, error: str) -> None:
+        self._p2p_search_btn.setEnabled(
+            bool(self._origin_items) and bool(self._dest_edit.text().strip())
+            and isinstance(self._cargo_capacity, int) and self._cargo_capacity > 0
+        )
+        self._p2p_loading_spinner.stop()
+        if error:
+            self._p2p_status_label.setText(error)
+            return
+        if not results:
+            self._p2p_status_label.setText("No profitable trades found for this destination.")
+            self._p2p_table.setRowCount(0)
+            return
+
+        self._p2p_status_label.setText(f"Found {len(results)} profitable commodit{'y' if len(results) == 1 else 'ies'}.")
+        self._p2p_table.setSortingEnabled(False)
+        self._p2p_table.setRowCount(len(results))
+        for row, r in enumerate(results):
+            commodity_item = QTableWidgetItem(r["commodity"])
+            station_item = QTableWidgetItem(r["sell_station_name"])
+            system_item = QTableWidgetItem(r["sell_system_name"])
+            buy_item = _NumericTableWidgetItem(f"{r['buy_price']:,}", float(r["buy_price"]))
+            sell_item = _NumericTableWidgetItem(f"{r['sell_price']:,}", float(r["sell_price"]))
+            profit_item = _NumericTableWidgetItem(f"{r['profit_per_unit']:,}", float(r["profit_per_unit"]))
+            qty_item = _NumericTableWidgetItem(f"{r['quantity']:,}", float(r["quantity"]))
+            total_item = _NumericTableWidgetItem(f"{r['total_profit']:,}", float(r["total_profit"]))
+            total_item.setForeground(QColor("#6BCB77"))
+
+            # Same age-bucketing convention as the Loop Planner's own
+            # Data Age column in this same file.
+            age_hours = r.get("data_age_hours")
+            age_text = "—" if age_hours is None else (
+                f"{age_hours:.0f}h" if age_hours < 24 else f"{age_hours / 24:.0f}d"
+            )
+            age_item = _NumericTableWidgetItem(age_text, age_hours if age_hours is not None else -1.0)
+
+            for it in (buy_item, sell_item, profit_item, qty_item, total_item, age_item):
+                it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            self._p2p_table.setItem(row, 0, commodity_item)
+            self._p2p_table.setItem(row, 1, station_item)
+            self._p2p_table.setItem(row, 2, system_item)
+            self._p2p_table.setItem(row, 3, buy_item)
+            self._p2p_table.setItem(row, 4, sell_item)
+            self._p2p_table.setItem(row, 5, profit_item)
+            self._p2p_table.setItem(row, 6, qty_item)
+            self._p2p_table.setItem(row, 7, total_item)
+            self._p2p_table.setItem(row, 8, age_item)
+        self._p2p_table.setSortingEnabled(True)
+        self._p2p_table.sortItems(7, Qt.SortOrder.DescendingOrder)
+
+    def _on_p2p_cell_clicked(self, row: int, column: int) -> None:
+        if column not in (1, 2):
+            return
+        item = self._p2p_table.item(row, column)
         if item and item.text():
             QApplication.clipboard().setText(item.text())
