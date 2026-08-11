@@ -568,7 +568,7 @@ class PlayerFactionPanel(QWidget):
         self._tick_status_label = QLabel("🕐 Last BGS Update: —")
         self._tick_status_label.setToolTip("Last detected BGS tick")
         self._tick_status_label.setStyleSheet(
-            "background:transparent; border:none; color:#FFB347; font-size:18px;"
+            "background:transparent; border:none; color:#FFB347; font-size:14px;"
         )
         hdr_row.addWidget(self._tick_status_label)
         frame_l.addLayout(hdr_row)
