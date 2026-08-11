@@ -14,6 +14,7 @@ caching to disk.
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -32,6 +33,31 @@ _TIMEOUT = 20
 # interleaved from the very first request rather than clustered. A retry
 # with backoff recovers a meaningful share of these on the same call.
 _RETRY_DELAYS_S = (1.0, 3.0, 6.0)
+
+# EDSM publishes a 720 requests/hour limit (visible on its own response
+# headers: x-rate-limit-limit). Confirmed live the hard way: a real
+# multi-hundred-system daily refresh blew past it well within an hour
+# (retries alone logged over 1100 failed requests in about an hour), and
+# once the quota's gone EDSM 403s *everything* until the window resets --
+# not just the over-limit requests, which is what turned the normal
+# ~60% random-block rate into a 100% outage for the rest of that session.
+# One shared gate here (rather than per-caller pacing) means every
+# caller in this module -- daily refresh, CSV import, on-demand lookups,
+# and each call's own retries -- draws from the same budget and can't
+# collectively exceed it. 5.5s (vs the 5.0s that 720/hour works out to)
+# leaves a small margin rather than riding the exact edge.
+_MIN_REQUEST_INTERVAL_S = 5.5
+_last_request_lock = threading.Lock()
+_last_request_time = 0.0
+
+
+def _throttle() -> None:
+    global _last_request_time
+    with _last_request_lock:
+        wait = _MIN_REQUEST_INTERVAL_S - (time.monotonic() - _last_request_time)
+        if wait > 0:
+            time.sleep(wait)
+        _last_request_time = time.monotonic()
 
 # Second element of the return tuple when the first is None — lets the UI
 # distinguish "genuinely not in EDSM's database" from "the request itself
@@ -88,6 +114,7 @@ def fetch_system_stations(system_name: str) -> Tuple[Optional[List[Dict[str, Any
 
 def _fetch_stations_once(system_name: str) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
     try:
+        _throttle()
         scraper = cloudscraper.create_scraper()
         resp = scraper.get(_STATIONS_URL, params={"systemName": system_name}, timeout=_TIMEOUT)
         resp.raise_for_status()
@@ -136,6 +163,7 @@ def fetch_system_coords(system_name: str) -> Optional[Tuple[float, float, float]
     coords are a nice-to-have here, not worth doubling request volume for.
     """
     try:
+        _throttle()
         scraper = cloudscraper.create_scraper()
         resp = scraper.get(
             _SYSTEM_URL, params={"systemName": system_name, "showCoordinates": 1}, timeout=_TIMEOUT,
@@ -156,6 +184,7 @@ def fetch_system_coords(system_name: str) -> Optional[Tuple[float, float, float]
 
 def _fetch_once(system_name: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     try:
+        _throttle()
         scraper = cloudscraper.create_scraper()
         resp = scraper.get(
             _FACTIONS_URL, params={"systemName": system_name, "showHistory": 0}, timeout=_TIMEOUT,
