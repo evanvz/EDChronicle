@@ -173,3 +173,51 @@ def test_send_with_retry_drops_permanent_4xx_rejection():
          patch("edc.core.eddn_publisher.threading.Timer") as mock_timer:
         pub._send_with_retry({"payload": "x"})
         assert not mock_timer.called
+
+
+def test_item_with_non_int_price_is_dropped_but_others_survive():
+    bad = _item(name="$aluminium_name;", BuyPrice="not a number")
+    msg = build_commodity_message(_market([_item(), bad]))
+    names = [c["name"] for c in msg["commodities"]]
+    assert names == ["platinum"]
+
+
+def test_item_with_out_of_range_bracket_is_dropped():
+    bad = _item(name="$aluminium_name;", StockBracket=7)
+    msg = build_commodity_message(_market([_item(), bad]))
+    names = [c["name"] for c in msg["commodities"]]
+    assert names == ["platinum"]
+
+
+def test_item_with_bool_price_is_dropped():
+    bad = _item(name="$aluminium_name;", BuyPrice=True)
+    msg = build_commodity_message(_market([_item(), bad]))
+    names = [c["name"] for c in msg["commodities"]]
+    assert names == ["platinum"]
+
+
+def test_item_with_bool_bracket_is_dropped():
+    bad = _item(name="$aluminium_name;", DemandBracket=True)
+    msg = build_commodity_message(_market([_item(), bad]))
+    names = [c["name"] for c in msg["commodities"]]
+    assert names == ["platinum"]
+
+
+def test_limpets_skipped_by_category_even_with_unexpected_symbol():
+    # Category-substring check should catch a NonMarketable item even if
+    # its symbol somehow didn't match the known "drones" case.
+    limpets = _item(name="$somefuturelimpet_name;", Category="$MARKET_category_NonMarketable;")
+    msg = build_commodity_message(_market([_item(), limpets]))
+    names = [c["name"] for c in msg["commodities"]]
+    assert "somefuturelimpet" not in names
+    assert names == ["platinum"]
+
+
+def test_maybe_publish_commodity_skips_beta_build():
+    pub = EddnPublisher()
+    pub.observe({"event": "Commander", "Name": "CMDR Test"})
+    pub.observe({"event": "LoadGame", "Commander": "CMDR Test", "gameversion": "4.0 beta 1", "build": "r300000"})
+
+    pub.maybe_publish_commodity(_market([_item()]))
+
+    assert pub._queue.empty()

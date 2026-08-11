@@ -596,21 +596,26 @@ class MainWindow(QMainWindow):
         """
         Reads Market.json (written by the game alongside the journal
         whenever the commodity screen is opened) into state.current_market_*.
+        Returns the raw parsed dict (or None) so callers needing more than
+        the UI-shaped state -- e.g. EDDN commodity publishing, which needs
+        fields like MeanPrice/StockBracket/DemandBracket this method
+        doesn't keep -- can reuse the same read instead of re-parsing the
+        file themselves.
         """
         journal_dir = getattr(self.cfg, "journal_dir", None)
         if not journal_dir:
-            return
+            return None
         market_path = Path(journal_dir) / "Market.json"
         try:
             if not market_path.exists():
-                return
+                return None
             data = json.loads(market_path.read_text(encoding="utf-8", errors="replace"))
         except Exception:
             log.exception("Failed to read Market.json")
-            return
+            return None
 
         if not isinstance(data, dict):
-            return
+            return None
 
         self.state.current_market_id = data.get("MarketID")
         self.state.current_market_station = data.get("StationName")
@@ -639,26 +644,7 @@ class MainWindow(QMainWindow):
         except Exception:
             log.exception("Failed to save commodity display names")
 
-    def _publish_market_to_eddn(self) -> None:
-        """
-        Independent Market.json read for EDDN publishing, same pattern as
-        _load_current_market() and _seed_commodity_names_from_market_json()
-        each doing their own read -- keeps this decoupled from the
-        UI-shaped state.current_market_items (which drops fields EDDN
-        requires, like MeanPrice/StockBracket/DemandBracket).
-        """
-        journal_dir = getattr(self.cfg, "journal_dir", None)
-        if not journal_dir:
-            return
-        market_path = Path(journal_dir) / "Market.json"
-        try:
-            if not market_path.exists():
-                return
-            data = json.loads(market_path.read_text(encoding="utf-8", errors="replace"))
-        except Exception:
-            log.exception("Failed to read Market.json for EDDN publish")
-            return
-        self.eddn_publisher.maybe_publish_commodity(data)
+        return data
 
     def _load_cargo_inventory(self):
         """
@@ -1886,13 +1872,13 @@ class MainWindow(QMainWindow):
             self._refresh_player_faction()
 
         if name == "Market":
-            self._load_current_market()
+            market_data = self._load_current_market()
             radius = int(getattr(self.cfg, "market_search_radius_ly", 100) or 100)
             self.market_panel.refresh_trade_opportunities(self.state, radius)
             self.market_panel.refresh_commodity_names()
             self.mining_panel.refresh_commodity_names()
-            if getattr(self.cfg, "eddn_contribute_enabled", False) and not self._replaying:
-                self._publish_market_to_eddn()
+            if market_data and getattr(self.cfg, "eddn_contribute_enabled", False) and not self._replaying:
+                self.eddn_publisher.maybe_publish_commodity(market_data)
 
         if name == "Undocked":
             # Leaving the station — "what's for sale here" stops being true;

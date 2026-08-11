@@ -1,15 +1,17 @@
-"""EDDN publisher — contributes journal/1-schema events back to the shared
-Elite Dangerous Data Network, the same feed Spansh/EDSM/Inara consume from.
+"""EDDN publisher — contributes data back to the shared Elite Dangerous
+Data Network, the same feed Spansh/EDSM/Inara consume from. Two schemas:
+
+- journal/1 — Docked, FSDJump, Scan, Location, SAASignalsFound,
+  CarrierJump, CodexEntry events. Everything else is silently skipped
+  (not an error — most journal events simply aren't part of this schema).
+  Reference: https://github.com/EDCD/EDDN/blob/live/schemas/journal-v1.0.json
+- commodity/3 — the player's own market visits (Market.json), built via
+  build_commodity_message(). Reference:
+  https://github.com/EDCD/EDDN/blob/live/schemas/commodity-v3.0.json
 
 Opt-in only (AppConfig.eddn_contribute_enabled). The actual HTTP POST runs
-on a background worker thread via a queue, so journal-event processing on
-the UI thread is never blocked by network I/O.
-
-Schema reference: https://github.com/EDCD/EDDN/blob/live/schemas/journal-v1.0.json
-Only 7 event types are accepted under this schema: Docked, FSDJump, Scan,
-Location, SAASignalsFound, CarrierJump, CodexEntry. Everything else is
-silently skipped (not an error — most journal events simply aren't part
-of this schema).
+on a background worker thread via a shared queue, so journal-event
+processing on the UI thread is never blocked by network I/O.
 """
 from __future__ import annotations
 
@@ -25,6 +27,7 @@ log = logging.getLogger(__name__)
 
 _GATEWAY_URL = "https://eddn.edcd.io:4430/upload/"
 _SCHEMA_REF = "https://eddn.edcd.io/schemas/journal/1"
+_COMMODITY_SCHEMA_REF = "https://eddn.edcd.io/schemas/commodity/3"
 
 _ALLOWED_EVENTS = {"Docked", "FSDJump", "Scan", "Location", "SAASignalsFound", "CarrierJump", "CodexEntry"}
 
@@ -35,96 +38,14 @@ _TOP_LEVEL_DISALLOWED = {
 }
 _FACTION_DISALLOWED = {"HappiestSystem", "HomeSystem", "MyReputation", "SquadronFaction"}
 
-_COMMODITY_SCHEMA_REF = "https://eddn.edcd.io/schemas/commodity/3"
-
 # The only commodity FDevIDs' commodity.csv lists under category
 # "NonMarketable" -- Limpets are always available at a fixed price
 # regardless of station economy, so EDDN's own commodity-README.md says
-# to skip them rather than report them as a normal traded good.
+# to skip them rather than report them as a normal traded good. Checked
+# both by symbol (the one confirmed real case) and by category substring
+# (in case FDev ever adds a second NonMarketable commodity) so neither
+# check alone has to be exactly right.
 _NONMARKETABLE_SYMBOL = "drones"
-
-
-def _commodity_symbol(raw_name: str) -> str:
-    """Strip the '$...name;' wrapper Market.json uses for internal
-    commodity names, e.g. '$platinum_name;' -> 'platinum'."""
-    s = raw_name
-    if s.startswith("$"):
-        s = s[1:]
-    if s.endswith("_name;"):
-        s = s[: -len("_name;")]
-    return s
-
-
-def build_commodity_message(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """
-    Returns a commodity/3-schema-compliant "message" body built from a
-    Market.json dict, or None if required fields are missing or no
-    tradeable commodities remain after the Limpets skip rule.
-    """
-    if not isinstance(data, dict):
-        return None
-
-    system_name = data.get("StarSystem")
-    station_name = data.get("StationName")
-    market_id = data.get("MarketID")
-    timestamp = data.get("timestamp")
-    items = data.get("Items")
-
-    if not (
-        isinstance(system_name, str) and system_name
-        and isinstance(station_name, str) and station_name
-        and isinstance(market_id, int)
-        and isinstance(timestamp, str) and timestamp
-        and isinstance(items, list)
-    ):
-        return None
-
-    commodities: list = []
-    for it in items:
-        if not isinstance(it, dict):
-            continue
-        raw_name = it.get("Name")
-        if not isinstance(raw_name, str) or not raw_name:
-            continue
-        symbol = _commodity_symbol(raw_name)
-        if not symbol or symbol == _NONMARKETABLE_SYMBOL:
-            continue
-
-        mean_price = it.get("MeanPrice")
-        buy_price = it.get("BuyPrice")
-        stock = it.get("Stock")
-        stock_bracket = it.get("StockBracket")
-        sell_price = it.get("SellPrice")
-        demand = it.get("Demand")
-        demand_bracket = it.get("DemandBracket")
-        if not all(isinstance(v, int) for v in (mean_price, buy_price, stock, sell_price, demand)):
-            continue
-        if stock_bracket not in (0, 1, 2, 3, ""):
-            continue
-        if demand_bracket not in (0, 1, 2, 3, ""):
-            continue
-
-        commodities.append({
-            "name": symbol,
-            "meanPrice": mean_price,
-            "buyPrice": buy_price,
-            "stock": stock,
-            "stockBracket": stock_bracket,
-            "sellPrice": sell_price,
-            "demand": demand,
-            "demandBracket": demand_bracket,
-        })
-
-    if not commodities:
-        return None
-
-    return {
-        "systemName": system_name,
-        "stationName": station_name,
-        "marketId": market_id,
-        "timestamp": timestamp,
-        "commodities": commodities,
-    }
 
 _SOFTWARE_NAME = "EDChronicle"
 _SOFTWARE_VERSION = "1.0.0"
@@ -145,6 +66,17 @@ def _strip_localised(obj: Any) -> Any:
     if isinstance(obj, list):
         return [_strip_localised(v) for v in obj]
     return obj
+
+
+def _commodity_symbol(raw_name: str) -> str:
+    """Strip the '$...name;' wrapper Market.json uses for internal
+    commodity names, e.g. '$platinum_name;' -> 'platinum'."""
+    s = raw_name
+    if s.startswith("$"):
+        s = s[1:]
+    if s.endswith("_name;"):
+        s = s[: -len("_name;")]
+    return s
 
 
 def build_message(
@@ -190,6 +122,100 @@ def build_message(
         msg["SystemAddress"] = system_address
 
     return msg
+
+
+def build_commodity_message(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Returns a commodity/3-schema-compliant "message" body built from a
+    Market.json dict, or None if required fields are missing or no
+    tradeable commodities remain after the Limpets skip rule.
+    """
+    if not isinstance(data, dict):
+        return None
+
+    system_name = data.get("StarSystem")
+    station_name = data.get("StationName")
+    market_id = data.get("MarketID")
+    timestamp = data.get("timestamp")
+    items = data.get("Items")
+
+    if not (
+        isinstance(system_name, str) and system_name
+        and isinstance(station_name, str) and station_name
+        and isinstance(market_id, int)
+        and isinstance(timestamp, str) and timestamp
+        and isinstance(items, list)
+    ):
+        return None
+
+    commodities: list = []
+    dropped_invalid = 0
+    for it in items:
+        if not isinstance(it, dict):
+            dropped_invalid += 1
+            continue
+        raw_name = it.get("Name")
+        if not isinstance(raw_name, str) or not raw_name:
+            dropped_invalid += 1
+            continue
+        symbol = _commodity_symbol(raw_name)
+        if not symbol:
+            dropped_invalid += 1
+            continue
+        category = it.get("Category")
+        is_nonmarketable = symbol == _NONMARKETABLE_SYMBOL or (
+            isinstance(category, str) and "nonmarketable" in category.lower()
+        )
+        if is_nonmarketable:
+            continue
+
+        mean_price = it.get("MeanPrice")
+        buy_price = it.get("BuyPrice")
+        stock = it.get("Stock")
+        stock_bracket = it.get("StockBracket")
+        sell_price = it.get("SellPrice")
+        demand = it.get("Demand")
+        demand_bracket = it.get("DemandBracket")
+        if not all(
+            isinstance(v, int) and not isinstance(v, bool)
+            for v in (mean_price, buy_price, stock, sell_price, demand)
+        ):
+            dropped_invalid += 1
+            continue
+        if isinstance(stock_bracket, bool) or stock_bracket not in (0, 1, 2, 3, ""):
+            dropped_invalid += 1
+            continue
+        if isinstance(demand_bracket, bool) or demand_bracket not in (0, 1, 2, 3, ""):
+            dropped_invalid += 1
+            continue
+
+        commodities.append({
+            "name": symbol,
+            "meanPrice": mean_price,
+            "buyPrice": buy_price,
+            "stock": stock,
+            "stockBracket": stock_bracket,
+            "sellPrice": sell_price,
+            "demand": demand,
+            "demandBracket": demand_bracket,
+        })
+
+    if dropped_invalid:
+        log.warning(
+            "EDDN commodity message for %r/%r dropped %d malformed item(s)",
+            station_name, market_id, dropped_invalid,
+        )
+
+    if not commodities:
+        return None
+
+    return {
+        "systemName": system_name,
+        "stationName": station_name,
+        "marketId": market_id,
+        "timestamp": timestamp,
+        "commodities": commodities,
+    }
 
 
 class EddnPublisher:
