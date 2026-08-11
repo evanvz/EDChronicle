@@ -118,5 +118,5 @@
   "input_device": "Microphone (TOZO H20)",
   "output_device": "Speakers (TOZO H20)",
   "nav_trigger_word": "menu",
-  "feedback_volume": 0.1
+  "feedback_volume": 0.3
 }
