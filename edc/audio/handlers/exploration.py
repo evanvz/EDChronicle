@@ -161,6 +161,13 @@ class ExplorationPhrases:
         "Something new for the logbook. {name}.",
     ]
 
+    PHENOMENA_DETECTED = [
+        "Stellar phenomena detected.",
+        "Notable phenomena on sensors.",
+        "Sensors picking up something unusual out there.",
+        "Worth a look, Commander — stellar phenomena detected.",
+    ]
+
     @staticmethod
     def fsd_announce() -> str:
         """Pre-jump base phrase (StartJump)."""
@@ -267,3 +274,7 @@ class ExplorationPhrases:
     @staticmethod
     def codex_entry(name: str) -> str:
         return pick(ExplorationPhrases.CODEX_ENTRY, name=name)
+
+    @staticmethod
+    def phenomena_detected() -> str:
+        return pick(ExplorationPhrases.PHENOMENA_DETECTED)
