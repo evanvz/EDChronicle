@@ -1422,6 +1422,66 @@ class Repository:
 
         return stations
 
+    def get_market_snapshot_for_systems(self, system_names: list[str]) -> dict[int, dict]:
+        """
+        Same per-station shape as get_market_snapshot_in_radius(), but
+        filtered to an exact list of system names instead of radius+
+        distance -- for the Point-to-Point trade finder, which already
+        knows exactly which system it wants (the destination), not "give
+        me everything nearby". No x/y/z/distance_ly in the output since
+        there's no reference point to measure distance from here.
+
+        Returns {market_id: {"station_name", "system_name", "pad_size",
+        "controlling_faction", "sells": {commodity: (sell_price, demand,
+        last_updated)}, "buys": {commodity: (buy_price, stock,
+        last_updated)}}}.
+        """
+        if not system_names:
+            return {}
+
+        placeholders = ",".join("?" for _ in system_names)
+        rows = self.db.conn.execute(
+            f"""
+            SELECT m.market_id, m.station_name, m.station_type, m.system_name,
+                   m.commodity_name, m.sell_price, m.demand, m.buy_price, m.stock,
+                   m.last_updated,
+                   si.pads_small, si.pads_medium, si.pads_large, si.station_faction
+            FROM market_prices m
+            LEFT JOIN station_info si ON si.market_id = m.market_id
+            WHERE (m.sell_price IS NOT NULL
+                     OR (m.buy_price IS NOT NULL AND m.buy_price > 0 AND m.stock IS NOT NULL AND m.stock > 0))
+                  AND (m.station_type IS NULL OR m.station_type != 'FleetCarrier')
+                  AND m.last_updated >= ?
+                  AND m.system_name IN ({placeholders})
+            """,
+            (_market_data_cutoff(), *system_names),
+        ).fetchall()
+
+        stations: dict[int, dict] = {}
+        for r in rows:
+            market_id = r["market_id"]
+            station = stations.get(market_id)
+            if station is None:
+                pad = effective_pad_size(
+                    r["station_type"], r["pads_small"], r["pads_medium"], r["pads_large"]
+                )
+                station = {
+                    "station_name": r["station_name"],
+                    "system_name": r["system_name"],
+                    "pad_size": pad,
+                    "controlling_faction": r["station_faction"],
+                    "sells": {}, "buys": {},
+                }
+                stations[market_id] = station
+
+            commodity = r["commodity_name"]
+            if r["sell_price"] is not None:
+                station["sells"][commodity] = (r["sell_price"], r["demand"], r["last_updated"])
+            if r["buy_price"] is not None and r["buy_price"] > 0 and r["stock"] is not None and r["stock"] > 0:
+                station["buys"][commodity] = (r["buy_price"], r["stock"], r["last_updated"])
+
+        return stations
+
     def add_colonisation_depot_manual(self, system_name: str, station_name: str) -> None:
         """Adds a squadron construction site to track before ever visiting
         it — no market_id yet, since that's only known once you actually
