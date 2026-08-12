@@ -86,6 +86,8 @@ class EngineeringPanel(QWidget):
         odyssey_table: OdysseyEngineeringTable,
         odyssey_wishlist_store: OdysseyWishlist,
         experimental_effects: ExperimentalEffectsTable,
+        repo,
+        cfg,
         parent=None,
     ):
         super().__init__(parent)
@@ -102,8 +104,8 @@ class EngineeringPanel(QWidget):
         )
         root.addWidget(self._tabs)
 
-        self._ship_tab = _ShipEngineeringTab(blueprint_table, wishlist_store, experimental_effects)
-        self._odyssey_tab = _OdysseyEngineeringTab(odyssey_table, blueprint_table, odyssey_wishlist_store)
+        self._ship_tab = _ShipEngineeringTab(blueprint_table, wishlist_store, experimental_effects, repo, cfg)
+        self._odyssey_tab = _OdysseyEngineeringTab(odyssey_table, blueprint_table, odyssey_wishlist_store, repo, cfg)
         self._tabs.addTab(self._ship_tab, "Ships")
         self._tabs.addTab(self._odyssey_tab, "Suits & Weapons")
 
@@ -122,6 +124,8 @@ class _ShipEngineeringTab(QWidget):
         blueprint_table: EngineeringBlueprintTable,
         wishlist_store: EngineeringWishlist,
         experimental_effects: ExperimentalEffectsTable,
+        repo,
+        cfg,
         parent=None,
     ):
         super().__init__(parent)
@@ -129,6 +133,8 @@ class _ShipEngineeringTab(QWidget):
         self._blueprints = blueprint_table
         self._store = wishlist_store
         self._effects = experimental_effects
+        self._repo = repo
+        self._cfg = cfg
         self._wishlist: List[Dict[str, Any]] = self._store.load()
         self._state = None
 
@@ -268,6 +274,24 @@ class _ShipEngineeringTab(QWidget):
         self._engineer_note.setWordWrap(True)
         self._engineer_note.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
         right.addWidget(self._engineer_note)
+
+        carrier_hdr = QLabel("SOLD BY CARRIERS — CLOSEST FIRST")
+        carrier_hdr.setStyleSheet(_HDR_STYLE)
+        right.addWidget(carrier_hdr)
+
+        self._carrier_table = _make_table(["Carrier", "System", "Dist (ly)", "Price", "Stock"])
+        ch = self._carrier_table.horizontalHeader()
+        ch.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        ch.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        ch.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        ch.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        ch.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        right.addWidget(self._carrier_table, 1)
+
+        self._carrier_note = QLabel("")
+        self._carrier_note.setWordWrap(True)
+        self._carrier_note.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
+        right.addWidget(self._carrier_note)
 
         trade_hdr = QLabel("MATERIAL TRADER SUGGESTIONS")
         trade_hdr.setStyleSheet(_HDR_STYLE)
@@ -419,6 +443,7 @@ class _ShipEngineeringTab(QWidget):
         if row < 0 or row >= len(self._wishlist):
             self._detail_table.setRowCount(0)
             self._refresh_engineer_table()
+            self._refresh_carrier_table()
             return
         entry = self._wishlist[row]
         reqs = self._combined_requirements(entry)
@@ -444,6 +469,7 @@ class _ShipEngineeringTab(QWidget):
             self._detail_table.setItem(r, 3, req_item)
 
         self._refresh_engineer_table()
+        self._refresh_carrier_table()
 
     def _refresh_engineer_table(self):
         row = self._wl_table.currentRow()
@@ -506,6 +532,72 @@ class _ShipEngineeringTab(QWidget):
             self._engineer_table.setItem(r, 2, dist_item)
             self._engineer_table.setItem(r, 3, status_item)
 
+    def _refresh_carrier_table(self):
+        row = self._wl_table.currentRow()
+        if row < 0 or row >= len(self._wishlist):
+            self._carrier_table.setRowCount(0)
+            self._carrier_note.setText("")
+            return
+        entry = self._wishlist[row]
+        reqs = self._combined_requirements(entry)
+        missing_symbols = [sym for sym, qty in reqs.items() if self._held_count(sym) < qty]
+        if not missing_symbols:
+            self._carrier_table.setRowCount(0)
+            self._carrier_note.setText("All required materials already held.")
+            return
+
+        ref_x = getattr(self._state, "system_x", None) if self._state else None
+        ref_y = getattr(self._state, "system_y", None) if self._state else None
+        ref_z = getattr(self._state, "system_z", None) if self._state else None
+        if ref_x is None or ref_y is None or ref_z is None:
+            self._carrier_table.setRowCount(0)
+            self._carrier_note.setText("Current position unknown.")
+            return
+
+        radius = float(getattr(self._cfg, "market_search_radius_ly", 100) or 100)
+        current_market_id = getattr(self._state, "current_market_id", None) if self._state else None
+        try:
+            by_symbol = self._repo.search_fleet_carrier_materials(
+                missing_symbols, ref_x, ref_y, ref_z, radius, exclude_market_id=current_market_id,
+            )
+        except Exception:
+            log.exception("Failed to search fleet carrier materials")
+            self._carrier_table.setRowCount(0)
+            self._carrier_note.setText("Carrier search failed — see log.")
+            return
+
+        rows = []
+        for sym, listings in by_symbol.items():
+            mat_name = self._blueprints.material_name(sym)
+            for listing in listings:
+                rows.append((mat_name, listing))
+        rows.sort(key=lambda r: r[1]["distance_ly"])
+
+        self._carrier_table.setRowCount(len(rows))
+        for r, (mat_name, listing) in enumerate(rows):
+            name_item = QTableWidgetItem(f"{listing['carrier_name']} ({mat_name})")
+            sys_item = QTableWidgetItem(listing["system_name"])
+            dist_item = QTableWidgetItem(f"{listing['distance_ly']:.1f}")
+            dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            price = listing.get("price")
+            price_item = QTableWidgetItem(f"{price:,}" if isinstance(price, int) else "—")
+            price_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            stock = listing.get("stock")
+            stock_item = QTableWidgetItem(str(stock) if isinstance(stock, int) else "—")
+            stock_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            self._carrier_table.setItem(r, 0, name_item)
+            self._carrier_table.setItem(r, 1, sys_item)
+            self._carrier_table.setItem(r, 2, dist_item)
+            self._carrier_table.setItem(r, 3, price_item)
+            self._carrier_table.setItem(r, 4, stock_item)
+
+        self._carrier_note.setText(
+            "" if rows else
+            f"No carriers found selling these materials within {radius:.0f} ly. "
+            "Carrier listings/locations are crowdsourced from EDDN and can be several days old."
+        )
+
     def _refresh_trade_suggestions(self) -> None:
         owned: Dict[str, int] = {}
         for attr in _CATEGORY_STATE_ATTR.values():
@@ -556,6 +648,8 @@ class _OdysseyEngineeringTab(QWidget):
         odyssey_table: OdysseyEngineeringTable,
         blueprint_table: EngineeringBlueprintTable,
         wishlist_store: OdysseyWishlist,
+        repo,
+        cfg,
         parent=None,
     ):
         super().__init__(parent)
@@ -563,6 +657,8 @@ class _OdysseyEngineeringTab(QWidget):
         self._table = odyssey_table
         self._blueprints = blueprint_table  # for engineer_home() lookups only
         self._store = wishlist_store
+        self._repo = repo
+        self._cfg = cfg
         self._wishlist: List[Dict[str, Any]] = self._store.load()
         self._state = None
 
@@ -672,6 +768,24 @@ class _OdysseyEngineeringTab(QWidget):
         self._engineer_note.setWordWrap(True)
         self._engineer_note.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
         right.addWidget(self._engineer_note)
+
+        carrier_hdr = QLabel("SOLD BY CARRIERS — CLOSEST FIRST")
+        carrier_hdr.setStyleSheet(_HDR_STYLE)
+        right.addWidget(carrier_hdr)
+
+        self._carrier_table = _make_table(["Carrier", "System", "Dist (ly)", "Price", "Stock"])
+        ch = self._carrier_table.horizontalHeader()
+        ch.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        ch.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        ch.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        ch.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        ch.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        right.addWidget(self._carrier_table, 1)
+
+        self._carrier_note = QLabel("")
+        self._carrier_note.setWordWrap(True)
+        self._carrier_note.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
+        right.addWidget(self._carrier_note)
 
         root.addLayout(right, 3)
 
@@ -784,6 +898,7 @@ class _OdysseyEngineeringTab(QWidget):
         if row < 0 or row >= len(self._wishlist):
             self._detail_table.setRowCount(0)
             self._refresh_engineer_table()
+            self._refresh_carrier_table()
             return
         entry = self._wishlist[row]
         reqs = self._requirements_for(entry)
@@ -815,6 +930,7 @@ class _OdysseyEngineeringTab(QWidget):
             self._detail_table.setItem(r, 3, source_item)
 
         self._refresh_engineer_table(entry)
+        self._refresh_carrier_table()
 
     def _refresh_engineer_table(self, entry: Optional[Dict[str, Any]] = None):
         if entry is None:
@@ -869,6 +985,72 @@ class _OdysseyEngineeringTab(QWidget):
             self._engineer_table.setItem(r, 0, QTableWidgetItem(eng_name))
             self._engineer_table.setItem(r, 1, QTableWidgetItem(system_name))
             self._engineer_table.setItem(r, 2, dist_item)
+
+    def _refresh_carrier_table(self):
+        row = self._wl_table.currentRow()
+        if row < 0 or row >= len(self._wishlist):
+            self._carrier_table.setRowCount(0)
+            self._carrier_note.setText("")
+            return
+        entry = self._wishlist[row]
+        reqs = self._requirements_for(entry)
+        missing_symbols = [sym for sym, qty in reqs.items() if self._held_count(sym) < qty]
+        if not missing_symbols:
+            self._carrier_table.setRowCount(0)
+            self._carrier_note.setText("All required materials already held.")
+            return
+
+        ref_x = getattr(self._state, "system_x", None) if self._state else None
+        ref_y = getattr(self._state, "system_y", None) if self._state else None
+        ref_z = getattr(self._state, "system_z", None) if self._state else None
+        if ref_x is None or ref_y is None or ref_z is None:
+            self._carrier_table.setRowCount(0)
+            self._carrier_note.setText("Current position unknown.")
+            return
+
+        radius = float(getattr(self._cfg, "market_search_radius_ly", 100) or 100)
+        current_market_id = getattr(self._state, "current_market_id", None) if self._state else None
+        try:
+            by_symbol = self._repo.search_fleet_carrier_materials(
+                missing_symbols, ref_x, ref_y, ref_z, radius, exclude_market_id=current_market_id,
+            )
+        except Exception:
+            log.exception("Failed to search fleet carrier materials")
+            self._carrier_table.setRowCount(0)
+            self._carrier_note.setText("Carrier search failed — see log.")
+            return
+
+        rows = []
+        for sym, listings in by_symbol.items():
+            mat_name = self._material_name(sym)
+            for listing in listings:
+                rows.append((mat_name, listing))
+        rows.sort(key=lambda r: r[1]["distance_ly"])
+
+        self._carrier_table.setRowCount(len(rows))
+        for r, (mat_name, listing) in enumerate(rows):
+            name_item = QTableWidgetItem(f"{listing['carrier_name']} ({mat_name})")
+            sys_item = QTableWidgetItem(listing["system_name"])
+            dist_item = QTableWidgetItem(f"{listing['distance_ly']:.1f}")
+            dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            price = listing.get("price")
+            price_item = QTableWidgetItem(f"{price:,}" if isinstance(price, int) else "—")
+            price_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            stock = listing.get("stock")
+            stock_item = QTableWidgetItem(str(stock) if isinstance(stock, int) else "—")
+            stock_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            self._carrier_table.setItem(r, 0, name_item)
+            self._carrier_table.setItem(r, 1, sys_item)
+            self._carrier_table.setItem(r, 2, dist_item)
+            self._carrier_table.setItem(r, 3, price_item)
+            self._carrier_table.setItem(r, 4, stock_item)
+
+        self._carrier_note.setText(
+            "" if rows else
+            f"No carriers found selling these materials within {radius:.0f} ly. "
+            "Carrier listings/locations are crowdsourced from EDDN and can be several days old."
+        )
 
     def refresh(self, state) -> None:
         self._state = state

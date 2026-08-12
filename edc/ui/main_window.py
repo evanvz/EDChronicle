@@ -1122,7 +1122,7 @@ class MainWindow(QMainWindow):
         self.engineering_panel = EngineeringPanel(
             self.engineering_blueprints, self.engineering_wishlist_store,
             self.odyssey_engineering, self.odyssey_wishlist_store,
-            self.experimental_effects,
+            self.experimental_effects, self.repo, self.cfg,
         )
 
         # Fleet Carrier tab
