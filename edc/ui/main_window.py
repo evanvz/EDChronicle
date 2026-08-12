@@ -1916,7 +1916,7 @@ class MainWindow(QMainWindow):
             self._save_session_ledger()
 
         if name in ("Docked", "FSDJump", "Location"):
-            self._save_faction_snapshots(evt.get("timestamp") or "")
+            self._save_faction_snapshots(self.state.factions_timestamp)
 
         if name == "Docked":
             self._save_station_info(evt)

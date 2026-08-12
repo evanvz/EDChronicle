@@ -49,6 +49,7 @@ class GameState:
     system_government: Optional[str] = None
     controlling_faction: Optional[str] = None
     factions: List[Dict[str, Any]] = field(default_factory=list)
+    factions_timestamp: str = ""
     bodies: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     system_body_count: Optional[int] = None
     body_id_to_name: Dict[int, str] = field(default_factory=dict)

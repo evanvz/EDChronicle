@@ -336,6 +336,7 @@ class EventEngine:
             cf = event.get("SystemFaction", {}) or {}
             self.state.controlling_faction = cf.get("Name")
             self.state.factions = event.get("Factions", []) or []
+            self.state.factions_timestamp = event.get("timestamp") or ""
             conflicts_raw = event.get("Conflicts")
             if conflicts_raw is not None:
                 self.state.system_conflicts = [c for c in conflicts_raw if isinstance(c, dict)]
@@ -439,6 +440,7 @@ class EventEngine:
             self.state.population = event.get("Population")
             factions = event.get("Factions") or []
             self.state.factions = [f for f in factions if isinstance(f, dict)]
+            self.state.factions_timestamp = event.get("timestamp") or ""
             conflicts_raw = event.get("Conflicts")
             if conflicts_raw is not None:
                 self.state.system_conflicts = [c for c in conflicts_raw if isinstance(c, dict)]

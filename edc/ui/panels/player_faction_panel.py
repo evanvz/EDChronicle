@@ -399,7 +399,7 @@ class _CsvImportWorker(QObject):
                         }
                         is_controlling = False
                         snapshot_date = row.get("updated_date") or date.today().isoformat()
-                        data_timestamp = row.get("updated_date")
+                        data_timestamp = row.get("updated_date") or "1970-01-01T00:00:00Z"
                         source = "csv"
                         fallback_used += 1
 
