@@ -1741,7 +1741,21 @@ class Repository:
                 "data_timestamp": r.get("data_timestamp"),
             })
 
-        candidates.sort(key=lambda c: c["data_timestamp"] or "", reverse=True)
+        # Drop anything we can't bound the age of, or that's aged past the
+        # 30-day advisory window (faction_snapshots' own retention delete
+        # only prunes on next write for that system+faction, so a system
+        # nobody's revisited can otherwise sit here indefinitely).
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        candidates = [c for c in candidates if c["data_timestamp"] and c["data_timestamp"] >= cutoff]
+
+        # BGS-state matches (War/Pirate Attack/Civil Unrest/Infrastructure
+        # Failure) are the rare, actionable signal this feature exists for;
+        # bare Anarchy is bulk/low-value noise by comparison. Rank state
+        # matches first, freshest-first within each tier.
+        candidates.sort(
+            key=lambda c: (bool(set(c["matched_signals"]) - {"Anarchy"}), c["data_timestamp"] or ""),
+            reverse=True,
+        )
         return candidates[:limit]
 
     def get_codex_entries(self, system_address: int):

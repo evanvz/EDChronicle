@@ -887,6 +887,8 @@ class MainWindow(QMainWindow):
         self.external_intel = ExternalIntel(settings_base)
         self.item_catalog = ItemCatalog(settings_base)
         self.farming_locations = FarmingLocations(settings_base)
+        self._odyssey_candidates_cache = []
+        self._odyssey_candidates_cache_time = 0.0
         self.edsm_powerplay = EdsmPowerPlayCache(settings_base)
         self._edsm_powerplay_thread: QThread | None = None
         self._edsm_powerplay_worker: _EdsmPowerPlayRefreshWorker | None = None
@@ -3701,11 +3703,14 @@ class MainWindow(QMainWindow):
                 faction_history = self.repo.get_faction_history(system_address)
             except Exception:
                 log.exception("Failed to load faction history")
-        try:
-            farming_candidates = self.repo.get_odyssey_farming_candidates()
-        except Exception:
-            log.exception("Failed to load Odyssey farming candidates")
-            farming_candidates = []
+        now = time.monotonic()
+        if now - self._odyssey_candidates_cache_time >= 30.0:
+            try:
+                self._odyssey_candidates_cache = self.repo.get_odyssey_farming_candidates()
+            except Exception:
+                log.exception("Failed to load Odyssey farming candidates")
+            self._odyssey_candidates_cache_time = now
+        farming_candidates = self._odyssey_candidates_cache
         self.intel_panel.refresh(
             self.state, self.farming_locations, faction_history, farming_candidates
         )

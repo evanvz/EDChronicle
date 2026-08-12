@@ -129,3 +129,34 @@ def test_returns_data_timestamp_field(repo):
           data_timestamp="2026-08-11T10:00:00Z")
     result = repo.get_odyssey_farming_candidates()
     assert result[0]["data_timestamp"] == "2026-08-11T10:00:00Z"
+
+
+def test_bgs_state_signal_ranks_above_anarchy_only(repo):
+    _save(repo, 20, "Anarchy Only", "Faction M", government="Anarchy",
+          data_timestamp="2026-08-12T00:00:00Z")
+    _save(repo, 21, "Unrest State", "Faction N", government="Democracy",
+          active_states=[{"State": "CivilUnrest", "Trend": 0}],
+          data_timestamp="2026-08-01T00:00:00Z")
+    result = repo.get_odyssey_farming_candidates()
+    assert [r["system_name"] for r in result] == ["Unrest State", "Anarchy Only"]
+
+
+def test_candidate_older_than_30_days_is_excluded(repo):
+    _save(repo, 12, "Stale System", "Faction O", government="Anarchy",
+          data_timestamp="2026-07-01T00:00:00Z")
+    result = repo.get_odyssey_farming_candidates()
+    assert result == []
+
+
+def test_null_data_timestamp_candidate_is_excluded(repo):
+    # Simulate a pre-data_timestamp-column legacy row, same pattern as
+    # test_faction_snapshot_freshness.py's legacy-row fixture.
+    repo.save_system_name_if_missing(13, "Legacy System")
+    repo.db.conn.execute(
+        """INSERT INTO faction_snapshots (system_address, faction_name, snapshot_date, government, is_controlling)
+           VALUES (?, ?, ?, ?, ?)""",
+        (13, "Faction P", "2026-08-12", "Anarchy", 1),
+    )
+    repo.db.conn.commit()
+    result = repo.get_odyssey_farming_candidates()
+    assert result == []
