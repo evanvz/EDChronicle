@@ -170,6 +170,29 @@ class IntelPanel(QWidget):
         bgs_l.addWidget(self.bgs_display)
         self._content_layout.addWidget(bgs_frame)
 
+        # ── Odyssey farming candidates card ─────────────────────────────────
+        odyssey_frame = QFrame()
+        odyssey_frame.setStyleSheet(
+            "QFrame { background: #1a0d1a; border: 1px solid #3a1e3a;"
+            "border-radius: 5px; }"
+        )
+        odyssey_l = QVBoxLayout(odyssey_frame)
+        odyssey_l.setContentsMargins(8, 6, 8, 6)
+        odyssey_l.setSpacing(4)
+        odyssey_hdr = QLabel("ODYSSEY FARMING CANDIDATES")
+        odyssey_hdr.setStyleSheet(
+            "color: #7a7a7a; font-size:12px; font-weight: bold; "
+            "letter-spacing: 1px; background: transparent; border: none;"
+        )
+        odyssey_l.addWidget(odyssey_hdr)
+        self.odyssey_display = QLabel("")
+        self.odyssey_display.setWordWrap(True)
+        self.odyssey_display.setTextFormat(Qt.TextFormat.RichText)
+        self.odyssey_display.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.odyssey_display.setStyleSheet("background: transparent; border: none;")
+        odyssey_l.addWidget(self.odyssey_display)
+        self._content_layout.addWidget(odyssey_frame)
+
     def _esc(self, t):
         return str(t or "").replace(
             "&", "&amp;"
@@ -300,6 +323,60 @@ class IntelPanel(QWidget):
         line += '</div>'
         return line
 
+    def _odyssey_candidates_html(self, candidates):
+        """Renders the Odyssey farming candidates list as rich-text rows."""
+        if not candidates:
+            return (
+                '<span style="color:#444444;font-size:12px;">'
+                'No tracked systems currently match — data comes from '
+                'systems you’ve visited or refreshed.</span>'
+            )
+
+        rows = []
+        for c in candidates:
+            system_name = str(c.get("system_name") or "")
+            signals = c.get("matched_signals") or []
+            age_txt = self._format_age(c.get("data_timestamp"))
+
+            badges = "".join(
+                f'<span style="background:#2a1a2a;color:#C77DFF;'
+                f'font-size:12px;font-weight:700;padding:1px 5px;'
+                f'border-radius:3px;margin-right:4px;">{self._esc(sig)}</span>'
+                for sig in signals
+            )
+            rows.append(
+                '<div style="margin-bottom:6px;">'
+                f'<span style="color:#CCCCCC;font-weight:700;">{self._esc(system_name)}</span> '
+                f'{badges}'
+                + (
+                    f'<br><span style="color:#7a7a7a;font-size:12px;">'
+                    f'&nbsp;&nbsp;{self._esc(age_txt)}</span>'
+                    if age_txt else ""
+                )
+                + '</div>'
+            )
+        return "".join(rows)
+
+    def _format_age(self, data_timestamp):
+        """Turns a normalized 'YYYY-MM-DDTHH:MM:SSZ' timestamp into a short
+        human-readable age string, e.g. 'today', '3 days ago'. Returns ''
+        for missing/unparseable input (legacy rows with no timestamp)."""
+        if not data_timestamp:
+            return ""
+        from datetime import datetime, timezone
+        try:
+            dt = datetime.strptime(data_timestamp, "%Y-%m-%dT%H:%M:%SZ").replace(
+                tzinfo=timezone.utc
+            )
+        except ValueError:
+            return ""
+        days = (datetime.now(timezone.utc) - dt).days
+        if days <= 0:
+            return "today"
+        if days == 1:
+            return "1 day ago"
+        return f"{days} days ago"
+
     def _get_system_opportunities(self, state):
         """
         Returns a set of tags describing what farming
@@ -383,7 +460,7 @@ class IntelPanel(QWidget):
             return True
         return False
 
-    def refresh(self, state, farming_locations, faction_history=None):
+    def refresh(self, state, farming_locations, faction_history=None, farming_candidates=None):
         sys_name = getattr(state, "system", None) or ""
 
         # ── BGS history ───────────────────────────────────────────────────
@@ -416,6 +493,11 @@ class IntelPanel(QWidget):
             'No BGS history recorded for this system yet — '
             'history accumulates one snapshot per faction per day as you visit.'
             '</span>'
+        )
+
+        # ── Odyssey farming candidates ───────────────────────────────────
+        self.odyssey_display.setText(
+            self._odyssey_candidates_html(farming_candidates or [])
         )
 
         # ── POIs ──────────────────────────────────────────────────────────

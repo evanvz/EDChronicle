@@ -3701,7 +3701,14 @@ class MainWindow(QMainWindow):
                 faction_history = self.repo.get_faction_history(system_address)
             except Exception:
                 log.exception("Failed to load faction history")
-        self.intel_panel.refresh(self.state, self.farming_locations, faction_history)
+        try:
+            farming_candidates = self.repo.get_odyssey_farming_candidates()
+        except Exception:
+            log.exception("Failed to load Odyssey farming candidates")
+            farming_candidates = []
+        self.intel_panel.refresh(
+            self.state, self.farming_locations, faction_history, farming_candidates
+        )
 
     def _refresh_combat(self):
         self.combat_panel.refresh(self.state)
