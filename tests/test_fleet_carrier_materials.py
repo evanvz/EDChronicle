@@ -1,5 +1,7 @@
 """Tests for Repository.save_fleet_carrier_materials_batch() and
 search_fleet_carrier_materials() -- real SQLite (temp file), not mocks."""
+import inspect
+
 import pytest
 
 from persistence.database import Database
@@ -67,6 +69,22 @@ def test_carrier_with_no_station_info_row_is_excluded(repo):
 
     result = repo.search_fleet_carrier_materials(["graphene"], 0.0, 0.0, 0.0, 50.0)
     assert result["graphene"] == []
+
+
+def test_uses_inner_join_against_station_info_not_left_join():
+    # search_fleet_carrier_materials()'s WHERE clause filters on
+    # si.system_name -- the only place a location lives, since
+    # fleet_carrier_materials has no system_name column of its own. That
+    # means, for this exact query, INNER JOIN and LEFT JOIN produce
+    # byte-identical results for ANY seeded data: a row unmatched in
+    # station_info gets si.system_name = NULL under a LEFT JOIN, and SQL's
+    # `NULL IN (...)` is falsy, so the WHERE clause excludes it exactly as
+    # an INNER JOIN would -- confirmed empirically, no data-seeding test
+    # can distinguish the two join types here. Pinning the SQL text itself
+    # is the only way to catch a future INNER -> LEFT edit.
+    source = inspect.getsource(Repository.search_fleet_carrier_materials)
+    assert "INNER JOIN station_info" in source
+    assert "LEFT JOIN station_info" not in source
 
 
 def test_stale_listing_excluded_past_7_day_cutoff(repo):
