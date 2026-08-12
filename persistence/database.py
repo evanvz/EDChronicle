@@ -171,6 +171,7 @@ class Database:
                 last_updated    TEXT    NOT NULL,
                 PRIMARY KEY (market_id, material_symbol)
             )""",
+            "CREATE INDEX IF NOT EXISTS idx_fcm_symbol ON fleet_carrier_materials(material_symbol)",
             """CREATE TABLE IF NOT EXISTS rings (
                 system_address INTEGER NOT NULL,
                 ring_name      TEXT    NOT NULL,

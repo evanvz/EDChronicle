@@ -145,3 +145,14 @@ def test_upsert_overwrites_previous_listing_for_same_carrier_and_material(repo):
 def test_empty_symbol_list_returns_empty_dict(repo):
     result = repo.search_fleet_carrier_materials([], 0.0, 0.0, 0.0, 50.0)
     assert result == {}
+
+
+def test_zero_stock_listing_excluded_even_if_symbol_and_location_match(repo):
+    # stock=0 means this is a purchase order (Demand > 0), not a sale --
+    # a carrier buying graphene must never show up as a place to buy it.
+    _seed_station(repo, 1001, "Sol")
+    _seed_coords(repo, "Sol", 0.0, 0.0, 0.0)
+    _seed_material(repo, 1001, "graphene", stock=0, demand=5)
+
+    result = repo.search_fleet_carrier_materials(["graphene"], 0.0, 0.0, 0.0, 50.0)
+    assert result["graphene"] == []

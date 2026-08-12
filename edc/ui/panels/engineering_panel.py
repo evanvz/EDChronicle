@@ -22,6 +22,7 @@ from edc.core.material_trading import find_material_trades
 from edc.core.odyssey_engineering import OdysseyEngineeringTable
 from edc.core.odyssey_material_source import is_bartender_tradeable
 from edc.core.odyssey_wishlist import OdysseyWishlist
+from edc.ui.formatting import relative_time
 
 log = logging.getLogger(__name__)
 
@@ -42,6 +43,16 @@ _TABLE_STYLE = (
     " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
     "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
 )
+
+
+def _format_age(last_updated: str, last_visited: str) -> str:
+    """Compact 'listing age / carrier-location age' for the carrier
+    table's Age column -- last_updated is when this material listing was
+    last seen on EDDN, last_visited is when we last had a Docked sighting
+    of the carrier itself (it may have moved since)."""
+    listed, _ = relative_time(last_updated)
+    visited, _ = relative_time(last_visited)
+    return f"{listed.replace(' ago', '')} / {visited.replace(' ago', '')}"
 
 
 def _make_table(headers: List[str]) -> QTableWidget:
@@ -279,13 +290,14 @@ class _ShipEngineeringTab(QWidget):
         carrier_hdr.setStyleSheet(_HDR_STYLE)
         right.addWidget(carrier_hdr)
 
-        self._carrier_table = _make_table(["Carrier", "System", "Dist (ly)", "Price", "Stock"])
+        self._carrier_table = _make_table(["Carrier", "System", "Dist (ly)", "Price", "Stock", "Age"])
         ch = self._carrier_table.horizontalHeader()
         ch.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         ch.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         ch.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         ch.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         ch.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        ch.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
         right.addWidget(self._carrier_table, 1)
 
         self._carrier_note = QLabel("")
@@ -585,17 +597,20 @@ class _ShipEngineeringTab(QWidget):
             stock = listing.get("stock")
             stock_item = QTableWidgetItem(str(stock) if isinstance(stock, int) else "—")
             stock_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            age_item = QTableWidgetItem(_format_age(listing.get("last_updated"), listing.get("last_visited")))
+            age_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
             self._carrier_table.setItem(r, 0, name_item)
             self._carrier_table.setItem(r, 1, sys_item)
             self._carrier_table.setItem(r, 2, dist_item)
             self._carrier_table.setItem(r, 3, price_item)
             self._carrier_table.setItem(r, 4, stock_item)
+            self._carrier_table.setItem(r, 5, age_item)
 
+        staleness_note = "Carrier listings/locations are crowdsourced from EDDN and can be several days old."
         self._carrier_note.setText(
-            "" if rows else
-            f"No carriers found selling these materials within {radius:.0f} ly. "
-            "Carrier listings/locations are crowdsourced from EDDN and can be several days old."
+            staleness_note if rows else
+            f"No carriers found selling these materials within {radius:.0f} ly. {staleness_note}"
         )
 
     def _refresh_trade_suggestions(self) -> None:
@@ -773,13 +788,14 @@ class _OdysseyEngineeringTab(QWidget):
         carrier_hdr.setStyleSheet(_HDR_STYLE)
         right.addWidget(carrier_hdr)
 
-        self._carrier_table = _make_table(["Carrier", "System", "Dist (ly)", "Price", "Stock"])
+        self._carrier_table = _make_table(["Carrier", "System", "Dist (ly)", "Price", "Stock", "Age"])
         ch = self._carrier_table.horizontalHeader()
         ch.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         ch.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         ch.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         ch.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         ch.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        ch.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
         right.addWidget(self._carrier_table, 1)
 
         self._carrier_note = QLabel("")
@@ -1039,17 +1055,20 @@ class _OdysseyEngineeringTab(QWidget):
             stock = listing.get("stock")
             stock_item = QTableWidgetItem(str(stock) if isinstance(stock, int) else "—")
             stock_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            age_item = QTableWidgetItem(_format_age(listing.get("last_updated"), listing.get("last_visited")))
+            age_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
             self._carrier_table.setItem(r, 0, name_item)
             self._carrier_table.setItem(r, 1, sys_item)
             self._carrier_table.setItem(r, 2, dist_item)
             self._carrier_table.setItem(r, 3, price_item)
             self._carrier_table.setItem(r, 4, stock_item)
+            self._carrier_table.setItem(r, 5, age_item)
 
+        staleness_note = "Carrier listings/locations are crowdsourced from EDDN and can be several days old."
         self._carrier_note.setText(
-            "" if rows else
-            f"No carriers found selling these materials within {radius:.0f} ly. "
-            "Carrier listings/locations are crowdsourced from EDDN and can be several days old."
+            staleness_note if rows else
+            f"No carriers found selling these materials within {radius:.0f} ly. {staleness_note}"
         )
 
     def refresh(self, state) -> None:

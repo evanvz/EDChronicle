@@ -19,6 +19,7 @@ import logging
 from datetime import date, datetime, timezone
 from typing import Any, Dict, Tuple
 
+from edc.core.eddn_publisher import _commodity_symbol
 from edc.core.station_pads import extract_station_info
 
 log = logging.getLogger(__name__)
@@ -108,8 +109,8 @@ class EddnMarketCache:
         for item in (msg.get("Items") or []):
             if not isinstance(item, dict):
                 continue
-            name = item.get("Name")
-            if not isinstance(name, str) or not name:
+            name = _commodity_symbol(item.get("Name") or "").lower()
+            if not name:
                 continue
             key = (market_id, name)
             self._fcmaterials_buffer[key] = (

@@ -1418,6 +1418,7 @@ class Repository:
             FROM fleet_carrier_materials fcm
             INNER JOIN station_info si ON si.market_id = fcm.market_id
             WHERE fcm.material_symbol IN ({sym_placeholders})
+                  AND fcm.stock > 0
                   AND fcm.last_updated >= ?
                   AND si.system_name IN ({sys_placeholders})
             """,
