@@ -121,6 +121,8 @@ class Database:
             )""",
             "ALTER TABLE faction_snapshots ADD COLUMN my_reputation REAL",
             "ALTER TABLE faction_snapshots ADD COLUMN is_squadron_faction INTEGER DEFAULT 0",
+            "ALTER TABLE faction_snapshots ADD COLUMN data_timestamp TEXT",
+            "ALTER TABLE faction_snapshots ADD COLUMN source TEXT",
             """CREATE TABLE IF NOT EXISTS station_info (
                 market_id     INTEGER PRIMARY KEY,
                 station_name  TEXT,
