@@ -279,8 +279,8 @@ _BUCKET_DEFS: List[Tuple[str, str, str]] = [
 # Always rendered regardless of count (0 shown as a disabled tile) — the
 # rest of _BUCKET_DEFS only gets a tile when at least one system matches.
 _ALWAYS_SHOW_BUCKETS = {
-    "war", "election", "expansion_pending", "retreat_pending", "conflict_pending",
-    "expansion_likely", "retreat_risk", "conflict_risk", "stale", "no_data", "no_action",
+    "war", "election", "civilunrest", "pirateattack", "expansion_pending", "retreat_pending",
+    "conflict_pending", "expansion_likely", "retreat_risk", "conflict_risk", "stale", "no_data", "no_action",
 }
 
 
