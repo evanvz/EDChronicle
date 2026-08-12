@@ -198,6 +198,32 @@
           "Broad Odyssey material coverage"
         ],
         "note": "Good category to keep, but the exact best system changes over time."
+      },
+      {
+        "name": "Abandoned settlements",
+        "method": "Land at any settlement showing no power/lights and no NPC activity; walk in and loot freely",
+        "key_materials": [
+          "Broad Odyssey material coverage"
+        ],
+        "note": "Zero resistance -- no active defenses, no alarms, no NPCs. The single safest category for material farming."
+      },
+      {
+        "name": "Anarchy-government systems",
+        "method": "Find a system where the controlling faction's Government is Anarchy; disable settlement alarms once inside, then loot without triggering a bounty or crime consequence",
+        "key_materials": [
+          "Broad Odyssey material coverage"
+        ],
+        "note": "No local law means no crime stat penalty for looting or trespassing."
+      },
+      {
+        "name": "Power Generator Reactivation missions",
+        "method": "Accept a Power Generator Reactivation mission in a war-state system; it grants level-3 clearance to loot the entire settlement without triggering hostility, even though the settlement is manned",
+        "key_materials": [
+          "Suit schematics",
+          "Power regulators",
+          "Chemical, circuit and tech materials"
+        ],
+        "note": "Needs a Maverick suit with Arc Cutter and Energy Link to get into powered-down buildings. Considered one of the best overall sources for these material categories."
       }
     ],
     "guardian": [
@@ -289,6 +315,11 @@
       "High Grade Emissions finder",
       "Elite Materials references"
     ],
-    "method": "Prioritize high-population systems and use material traders aggressively instead of trying to farm every exact material directly."
+    "method": "Prioritize high-population systems and use material traders aggressively instead of trying to farm every exact material directly.",
+    "odyssey_building_types": {
+      "EXT": "Extraction settlements -- skew toward Manufactured materials",
+      "IND": "Industrial settlements -- skew toward Manufactured materials",
+      "STO": "Storage settlements -- skew toward Goods (e.g. ionized gas for weapon upgrades)"
+    }
   }
 }
