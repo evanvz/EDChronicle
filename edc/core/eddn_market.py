@@ -41,6 +41,9 @@ class EddnMarketCache:
         # from any commander. Species are deterministic per body, so this
         # tells us exactly what's on a body before we personally DSS it.
         self._codex_buffer: Dict[Tuple[int, int], tuple] = {}
+        # Keyed by (market_id, material_symbol) -- Fleet Carrier material
+        # listings from fcmaterials_journal/1 sightings, any commander's.
+        self._fcmaterials_buffer: Dict[Tuple[int, str], tuple] = {}
 
     def on_coords_seen(self, system_name: str, x: float, y: float, z: float) -> None:
         if not system_name:
@@ -94,13 +97,37 @@ class EddnMarketCache:
             return
         self._faction_buffer[system_address] = (system_name, faction, is_controlling, timestamp)
 
-    def buffered_counts(self) -> Tuple[int, int, int, int]:
-        """Returns (coord_count, market_row_count, faction_count, station_count) currently buffered — for status/logging."""
-        return len(self._coord_buffer), len(self._market_buffer), len(self._faction_buffer), len(self._station_buffer)
+    def on_fcmaterials_message(self, msg: Dict[str, Any]) -> None:
+        market_id = msg.get("MarketID")
+        if not isinstance(market_id, int):
+            return
+        carrier_name = msg.get("CarrierName") or ""
+        carrier_id = msg.get("CarrierID") or ""
+        timestamp = msg.get("timestamp") or datetime.now(timezone.utc).isoformat()
+
+        for item in (msg.get("Items") or []):
+            if not isinstance(item, dict):
+                continue
+            name = item.get("Name")
+            if not isinstance(name, str) or not name:
+                continue
+            key = (market_id, name)
+            self._fcmaterials_buffer[key] = (
+                market_id, name, carrier_name, carrier_id,
+                item.get("Price"), item.get("Stock"), item.get("Demand"),
+                timestamp,
+            )
+
+    def buffered_counts(self) -> Tuple[int, int, int, int, int]:
+        """Returns (coord_count, market_row_count, faction_count, station_count, fcmaterials_count) currently buffered — for status/logging."""
+        return (
+            len(self._coord_buffer), len(self._market_buffer), len(self._faction_buffer),
+            len(self._station_buffer), len(self._fcmaterials_buffer),
+        )
 
     def pop_buffers(self):
         """
-        Snapshots and clears all five buffers, returning their contents as
+        Snapshots and clears all six buffers, returning their contents as
         plain lists/tuples — for handing off to a background worker with
         its own DB connection (see main_window.py's _EddnFlushWorker).
         Cheap, main-thread-only dict operations; the actual DB writes are
@@ -111,12 +138,14 @@ class EddnMarketCache:
         factions = list(self._faction_buffer.items())
         stations = list(self._station_buffer.values())
         codex = list(self._codex_buffer.values())
+        fcmaterials = list(self._fcmaterials_buffer.values())
         self._coord_buffer.clear()
         self._market_buffer.clear()
         self._faction_buffer.clear()
         self._station_buffer.clear()
         self._codex_buffer.clear()
-        return coords, market, factions, stations, codex
+        self._fcmaterials_buffer.clear()
+        return coords, market, factions, stations, codex, fcmaterials
 
     def flush(self) -> None:
         """Synchronous flush on the caller's own thread/connection — only
@@ -128,11 +157,11 @@ class EddnMarketCache:
         the main thread every 45s, which froze the UI for however long a
         big buffered batch took to write (confirmed live, worse right
         after docking at a busy station's market)."""
-        coords, market, factions, stations, codex = self.pop_buffers()
-        write_buffers(self._repo, coords, market, factions, stations, codex)
+        coords, market, factions, stations, codex, fcmaterials = self.pop_buffers()
+        write_buffers(self._repo, coords, market, factions, stations, codex, fcmaterials)
 
 
-def write_buffers(repo, coords, market, factions, stations, codex) -> None:
+def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials) -> None:
     """The actual writes — factored out so both the main-thread flush()
     (shutdown) and a background worker (periodic, see main_window.py) can
     use the identical logic against whichever Repository they're given."""
@@ -170,3 +199,9 @@ def write_buffers(repo, coords, market, factions, stations, codex) -> None:
             repo.save_codex_species_sightings_batch(codex)
         except Exception:
             log.exception("Failed to flush codex_species_sightings batch")
+
+    if fcmaterials:
+        try:
+            repo.save_fleet_carrier_materials_batch(fcmaterials)
+        except Exception:
+            log.exception("Failed to flush fleet_carrier_materials batch")
