@@ -160,6 +160,17 @@ class Database:
                 last_updated   TEXT NOT NULL,
                 PRIMARY KEY (market_id, commodity_name)
             )""",
+            """CREATE TABLE IF NOT EXISTS fleet_carrier_materials (
+                market_id       INTEGER NOT NULL,
+                material_symbol TEXT    NOT NULL,
+                carrier_name    TEXT,
+                carrier_id      TEXT,
+                price           INTEGER,
+                stock           INTEGER,
+                demand          INTEGER,
+                last_updated    TEXT    NOT NULL,
+                PRIMARY KEY (market_id, material_symbol)
+            )""",
             """CREATE TABLE IF NOT EXISTS rings (
                 system_address INTEGER NOT NULL,
                 ring_name      TEXT    NOT NULL,

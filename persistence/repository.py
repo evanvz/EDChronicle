@@ -17,6 +17,13 @@ def _market_data_cutoff() -> str:
     return (datetime.now(timezone.utc) - timedelta(days=_MARKET_DATA_MAX_AGE_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+_FLEET_CARRIER_MAX_AGE_DAYS = 7
+
+
+def _fleet_carrier_cutoff() -> str:
+    return (datetime.now(timezone.utc) - timedelta(days=_FLEET_CARRIER_MAX_AGE_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def _normalize_data_timestamp(value) -> str:
     """Normalizes an EDSM Unix epoch (int/float) or an ISO8601 string
     (with a 'Z' or '+00:00' suffix) into one consistent
@@ -803,6 +810,33 @@ class Repository:
         )
         self.db.conn.commit()
 
+    def save_fleet_carrier_materials_batch(self, records: list[tuple]):
+        """
+        records: [(market_id, material_symbol, carrier_name, carrier_id,
+                    price, stock, demand, last_updated), ...]
+        """
+        if not records:
+            return
+        cur = self.db.conn.cursor()
+        cur.executemany(
+            """
+            INSERT INTO fleet_carrier_materials (
+                market_id, material_symbol, carrier_name, carrier_id,
+                price, stock, demand, last_updated
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(market_id, material_symbol) DO UPDATE SET
+                carrier_name = excluded.carrier_name,
+                carrier_id   = excluded.carrier_id,
+                price        = excluded.price,
+                stock        = excluded.stock,
+                demand       = excluded.demand,
+                last_updated = excluded.last_updated
+            """,
+            records,
+        )
+        self.db.conn.commit()
+
     def prune_stale_market_prices(self) -> int:
         """
         Deletes rows already excluded from search results by
@@ -1353,6 +1387,58 @@ class Repository:
         for name, results in by_commodity.items():
             results.sort(key=lambda r: (not r["pad_known"], -r["sell_price"]))
         return by_commodity
+
+    def search_fleet_carrier_materials(
+        self, material_symbols: list[str], x: float, y: float, z: float, radius_ly: float,
+        exclude_market_id: Optional[int] = None,
+    ) -> dict[str, list[dict]]:
+        """
+        For each symbol in material_symbols, the nearby Fleet Carriers
+        currently selling it, closest first. A carrier only appears if we
+        have a station_info row for its market_id (from a Docked sighting,
+        ours or another commander's via EDDN) -- fcmaterials_journal itself
+        carries no location, so this INNER JOIN is the only way to place a
+        carrier at all; one with no such row is silently excluded, never
+        shown with an unknown location.
+        """
+        if not material_symbols:
+            return {}
+
+        coords_by_system = self._nearby_system_coords(x, y, z, radius_ly)
+        if not coords_by_system:
+            return {sym: [] for sym in material_symbols}
+
+        sys_placeholders = ",".join("?" for _ in coords_by_system)
+        sym_placeholders = ",".join("?" for _ in material_symbols)
+        rows = self.db.conn.execute(
+            f"""
+            SELECT fcm.material_symbol, fcm.carrier_name, fcm.carrier_id, fcm.price,
+                   fcm.stock, fcm.demand, fcm.last_updated,
+                   si.market_id, si.system_name, si.last_visited
+            FROM fleet_carrier_materials fcm
+            INNER JOIN station_info si ON si.market_id = fcm.market_id
+            WHERE fcm.material_symbol IN ({sym_placeholders})
+                  AND fcm.last_updated >= ?
+                  AND si.system_name IN ({sys_placeholders})
+            """,
+            (*material_symbols, _fleet_carrier_cutoff(), *coords_by_system.keys()),
+        ).fetchall()
+
+        by_symbol: dict[str, list[dict]] = {sym: [] for sym in material_symbols}
+        for r in rows:
+            if exclude_market_id is not None and r["market_id"] == exclude_market_id:
+                continue
+            rx, ry, rz = coords_by_system[r["system_name"]]
+            dist = ((rx - x) ** 2 + (ry - y) ** 2 + (rz - z) ** 2) ** 0.5
+            if dist > radius_ly:
+                continue
+            rec = dict(r)
+            rec["distance_ly"] = dist
+            by_symbol[r["material_symbol"]].append(rec)
+
+        for sym in by_symbol:
+            by_symbol[sym].sort(key=lambda r: r["distance_ly"])
+        return by_symbol
 
     def search_market_buy_prices(
         self, commodity_name: str, x: float, y: float, z: float, radius_ly: float,
