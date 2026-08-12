@@ -33,6 +33,16 @@ class OdysseyEngineeringTable:
         self._weapon_modules: Dict[str, Dict[str, Any]] = {}
         self._load(force=True)
 
+        # Odyssey microresource symbol -> English display name (EDCD/FDevIDs
+        # microresources.csv, see settings/odyssey_material_names.json for
+        # provenance) -- covers materials the player hasn't personally
+        # picked up yet, so the UI never has to fall back to a raw internal
+        # symbol like "geneticrepairmeds".
+        self._material_names_path = Path(settings_dir) / "odyssey_material_names.json"
+        self._material_names_mtime: Optional[float] = None
+        self._material_names: Dict[str, str] = {}
+        self._load_material_names(force=True)
+
     def _load(self, force: bool = False) -> None:
         try:
             if not self.path.exists():
@@ -68,6 +78,35 @@ class OdysseyEngineeringTable:
     def has_data(self) -> bool:
         self._load(force=False)
         return bool(self._suits or self._weapons)
+
+    def _load_material_names(self, force: bool = False) -> None:
+        try:
+            if not self._material_names_path.exists():
+                self._material_names = {}
+                self._material_names_mtime = None
+                return
+
+            m = self._material_names_path.stat().st_mtime
+            if (not force) and (self._material_names_mtime is not None) and (m == self._material_names_mtime):
+                return
+
+            data = json.loads(self._material_names_path.read_text(encoding="utf-8"))
+            self._material_names_mtime = m
+            names = (data.get("names") or {}) if isinstance(data, dict) else {}
+            self._material_names = names if isinstance(names, dict) else {}
+        except Exception:
+            log.exception("Failed to load odyssey_material_names.json")
+            self._material_names = {}
+            self._material_names_mtime = None
+
+    def material_display_name(self, symbol: str) -> Optional[str]:
+        """Static EDCD/FDevIDs-sourced display name for a microresource
+        symbol, or None if unknown -- callers should prefer a live
+        journal-derived localised name when one is available, and fall
+        back to this only when the player hasn't personally seen the
+        material yet."""
+        self._load_material_names(force=False)
+        return self._material_names.get((symbol or "").lower())
 
     # ── Suit / weapon grade upgrades ────────────────────────────────────────
 

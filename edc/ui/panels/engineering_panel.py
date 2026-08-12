@@ -705,7 +705,10 @@ class _OdysseyEngineeringTab(QWidget):
 
     def _material_name(self, symbol: str) -> str:
         loc = getattr(self._state, "shiplocker_localised", None) or {} if self._state else {}
-        return loc.get(symbol.lower(), symbol)
+        localised = loc.get(symbol.lower())
+        if localised:
+            return localised
+        return self._table.material_display_name(symbol) or symbol
 
     def _requirements_for(self, entry: Dict[str, Any]) -> Dict[str, int]:
         kind = entry["kind"]
