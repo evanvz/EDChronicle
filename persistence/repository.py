@@ -49,6 +49,27 @@ def _normalize_data_timestamp(value) -> str:
     return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _parse_states(raw) -> List[str]:
+    """Parses a faction_snapshots active_states/pending_states/recovering_states
+    JSON column (a list of {"State": ..., "Trend": ...} dicts) into a flat
+    list of State strings. Mirrors player_faction_panel.py's identical
+    helper -- duplicated here rather than imported, since persistence must
+    not depend on the UI layer."""
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw) if isinstance(raw, str) else raw
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(data, list):
+        return []
+    return [
+        str(s.get("State"))
+        for s in data
+        if isinstance(s, dict) and s.get("State")
+    ]
+
+
 class Repository:
     def __init__(self, db: Database):
         self.db = db
@@ -1662,6 +1683,66 @@ class Repository:
         query += " ORDER BY snapshot_date DESC, faction_name ASC"
         rows = self.db.execute(query, params).fetchall()
         return [dict(r) for r in rows]
+
+    def get_odyssey_farming_candidates(self, limit: int = 20) -> list[dict]:
+        """
+        Odyssey on-foot farming candidates: systems whose most recent
+        controlling-faction snapshot shows Anarchy government (no local
+        law -- safe to loot without a crime/bounty consequence) or a BGS
+        state associated with settlement farming opportunities (War/Civil
+        War, Pirate Attack, Civil Unrest, Infrastructure Failure).
+        Advisory only -- underlying data can be stale, so results are
+        ordered freshest data_timestamp first.
+        """
+        rows = self.db.execute(
+            """
+            SELECT fs.system_address, s.system_name, fs.government,
+                   fs.faction_state, fs.active_states, fs.data_timestamp
+            FROM faction_snapshots fs
+            LEFT JOIN systems s ON s.system_address = fs.system_address
+            WHERE fs.is_controlling = 1
+              AND fs.snapshot_date = (
+                  SELECT MAX(snapshot_date) FROM faction_snapshots fs2
+                  WHERE fs2.system_address = fs.system_address
+                    AND fs2.is_controlling = 1
+              )
+            """
+        ).fetchall()
+
+        candidates = []
+        for row in rows:
+            r = dict(row)
+            signals: List[str] = []
+
+            government = (r.get("government") or "").strip().lower()
+            if government == "anarchy":
+                signals.append("Anarchy")
+
+            active = {s.lower() for s in _parse_states(r.get("active_states"))}
+            faction_state = (r.get("faction_state") or "").strip().lower()
+            if faction_state:
+                active.add(faction_state)
+
+            if active & {"war", "civilwar"}:
+                signals.append("War")
+            if "pirateattack" in active:
+                signals.append("Pirate Attack")
+            if "civilunrest" in active:
+                signals.append("Civil Unrest")
+            if "infrastructurefailure" in active:
+                signals.append("Infrastructure Failure")
+
+            if not signals:
+                continue
+
+            candidates.append({
+                "system_name": r.get("system_name") or "(unknown system)",
+                "matched_signals": signals,
+                "data_timestamp": r.get("data_timestamp"),
+            })
+
+        candidates.sort(key=lambda c: c["data_timestamp"] or "", reverse=True)
+        return candidates[:limit]
 
     def get_codex_entries(self, system_address: int):
         return self.db.execute(
