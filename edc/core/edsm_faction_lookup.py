@@ -237,6 +237,7 @@ def _fetch_once(system_name: str) -> Tuple[Optional[Dict[str, Any]], Optional[st
             "PendingStates": _states_to_journal_shape(f.get("pendingStates")),
             "RecoveringStates": _states_to_journal_shape(f.get("recoveringStates")),
             "is_controlling": bool(controlling_name and name == controlling_name),
+            "LastUpdate": f.get("lastUpdate"),
         })
 
     return {"system_address": system_address, "system_name": resolved_name, "factions": factions}, None

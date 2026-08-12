@@ -381,6 +381,8 @@ class _CsvImportWorker(QObject):
                     match = next((f for f in result["factions"] if f.get("Name") == self._faction_name), None)
                     if match:
                         is_controlling = bool(match.pop("is_controlling", False))
+                        data_timestamp = match.pop("LastUpdate", None)
+                        source = "edsm"
                         faction_rec = match
                         snapshot_date = date.today().isoformat()
                         imported += 1
@@ -397,10 +399,15 @@ class _CsvImportWorker(QObject):
                         }
                         is_controlling = False
                         snapshot_date = row.get("updated_date") or date.today().isoformat()
+                        data_timestamp = row.get("updated_date")
+                        source = "csv"
                         fallback_used += 1
 
                     repo.save_system_name_if_missing(result["system_address"], result["system_name"])
-                    repo.save_faction_snapshot(result["system_address"], faction_rec, snapshot_date, is_controlling)
+                    repo.save_faction_snapshot(
+                        result["system_address"], faction_rec, snapshot_date, is_controlling,
+                        data_timestamp, source,
+                    )
                     repo.undismiss_faction_system(self._faction_name, result["system_address"])
                 elif error == ERROR_BLOCKED:
                     # Confirmed via live testing: most "failures" at this
@@ -478,8 +485,10 @@ class _FactionRefreshWorker(QObject):
                 present_names = set()
                 for faction in result["factions"]:
                     is_controlling = bool(faction.pop("is_controlling", False))
+                    data_timestamp = faction.pop("LastUpdate", None)
                     repo.save_faction_snapshot(
-                        result["system_address"], faction, snapshot_date, is_controlling
+                        result["system_address"], faction, snapshot_date, is_controlling,
+                        data_timestamp, "edsm",
                     )
                     name = (faction.get("Name") or "").strip().lower()
                     if name:
@@ -1452,8 +1461,10 @@ class PlayerFactionPanel(QWidget):
         try:
             self._repo.save_system_name_if_missing(result["system_address"], result["system_name"])
             is_controlling = bool(match.pop("is_controlling", False))
+            data_timestamp = match.pop("LastUpdate", None)
             self._repo.save_faction_snapshot(
                 result["system_address"], match, date.today().isoformat(), is_controlling,
+                data_timestamp, "edsm",
             )
             # A deliberate manual add should override an earlier "Remove" —
             # otherwise re-adding a previously-dismissed system would save

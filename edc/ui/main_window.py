@@ -398,7 +398,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-    def _save_faction_snapshots(self):
+    def _save_faction_snapshots(self, event_timestamp: str = ""):
         system_address = getattr(self.state, "system_address", None)
         factions = getattr(self.state, "factions", None) or []
         if not isinstance(system_address, int) or not factions:
@@ -411,7 +411,9 @@ class MainWindow(QMainWindow):
                 if not isinstance(f, dict):
                     continue
                 is_controlling = bool(controlling) and f.get("Name") == controlling
-                self.repo.save_faction_snapshot(system_address, f, today, is_controlling)
+                self.repo.save_faction_snapshot(
+                    system_address, f, today, is_controlling, event_timestamp, "journal",
+                )
         except Exception:
             log.exception("Failed to save faction snapshots")
 
@@ -1914,7 +1916,7 @@ class MainWindow(QMainWindow):
             self._save_session_ledger()
 
         if name in ("Docked", "FSDJump", "Location"):
-            self._save_faction_snapshots()
+            self._save_faction_snapshots(evt.get("timestamp") or "")
 
         if name == "Docked":
             self._save_station_info(evt)

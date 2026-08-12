@@ -153,7 +153,9 @@ def write_buffers(repo, coords, market, factions, stations, codex) -> None:
             try:
                 repo.save_system_name_if_missing(system_address, system_name)
                 snapshot_date = (timestamp or "")[:10] or date.today().isoformat()
-                repo.save_faction_snapshot(system_address, faction, snapshot_date, is_controlling)
+                repo.save_faction_snapshot(
+                    system_address, faction, snapshot_date, is_controlling, timestamp or "", "eddn",
+                )
             except Exception:
                 log.exception("Failed to flush faction sighting for system_address=%s", system_address)
 
