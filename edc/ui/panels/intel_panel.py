@@ -124,6 +124,29 @@ class IntelPanel(QWidget):
         body_farm_l.addWidget(self.body_farm_display)
         self._content_layout.addWidget(body_farm_frame)
 
+        # ── Odyssey farming candidates card ─────────────────────────────────
+        odyssey_frame = QFrame()
+        odyssey_frame.setStyleSheet(
+            "QFrame { background: #1a0d1a; border: 1px solid #3a1e3a;"
+            "border-radius: 5px; }"
+        )
+        odyssey_l = QVBoxLayout(odyssey_frame)
+        odyssey_l.setContentsMargins(8, 6, 8, 6)
+        odyssey_l.setSpacing(4)
+        odyssey_hdr = QLabel("ODYSSEY FARMING CANDIDATES")
+        odyssey_hdr.setStyleSheet(
+            "color: #7a7a7a; font-size:12px; font-weight: bold; "
+            "letter-spacing: 1px; background: transparent; border: none;"
+        )
+        odyssey_l.addWidget(odyssey_hdr)
+        self.odyssey_display = QLabel("")
+        self.odyssey_display.setWordWrap(True)
+        self.odyssey_display.setTextFormat(Qt.TextFormat.RichText)
+        self.odyssey_display.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.odyssey_display.setStyleSheet("background: transparent; border: none;")
+        odyssey_l.addWidget(self.odyssey_display)
+        self._content_layout.addWidget(odyssey_frame)
+
         # ── Full farming guide card ───────────────────────────────────────
         guide_frame = QFrame()
         guide_frame.setStyleSheet(
@@ -169,29 +192,6 @@ class IntelPanel(QWidget):
         self.bgs_display.setStyleSheet("background: transparent; border: none;")
         bgs_l.addWidget(self.bgs_display)
         self._content_layout.addWidget(bgs_frame)
-
-        # ── Odyssey farming candidates card ─────────────────────────────────
-        odyssey_frame = QFrame()
-        odyssey_frame.setStyleSheet(
-            "QFrame { background: #1a0d1a; border: 1px solid #3a1e3a;"
-            "border-radius: 5px; }"
-        )
-        odyssey_l = QVBoxLayout(odyssey_frame)
-        odyssey_l.setContentsMargins(8, 6, 8, 6)
-        odyssey_l.setSpacing(4)
-        odyssey_hdr = QLabel("ODYSSEY FARMING CANDIDATES")
-        odyssey_hdr.setStyleSheet(
-            "color: #7a7a7a; font-size:12px; font-weight: bold; "
-            "letter-spacing: 1px; background: transparent; border: none;"
-        )
-        odyssey_l.addWidget(odyssey_hdr)
-        self.odyssey_display = QLabel("")
-        self.odyssey_display.setWordWrap(True)
-        self.odyssey_display.setTextFormat(Qt.TextFormat.RichText)
-        self.odyssey_display.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.odyssey_display.setStyleSheet("background: transparent; border: none;")
-        odyssey_l.addWidget(self.odyssey_display)
-        self._content_layout.addWidget(odyssey_frame)
 
     def _esc(self, t):
         return str(t or "").replace(

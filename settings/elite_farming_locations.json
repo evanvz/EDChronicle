@@ -193,7 +193,7 @@
       },
       {
         "name": "Pirate Attack settlements",
-        "method": "Use the galaxy map or external tools to find factions in Pirate Attack state and farm settlements there",
+        "method": "Check the Intel tab's Odyssey Farming Candidates card for systems currently tracked in Pirate Attack, Civil Unrest, War, or Infrastructure Failure, then farm settlements there",
         "key_materials": [
           "Broad Odyssey material coverage"
         ],
@@ -205,7 +205,7 @@
         "key_materials": [
           "Broad Odyssey material coverage"
         ],
-        "note": "Zero resistance -- no active defenses, no alarms, no NPCs. The single safest category for material farming."
+        "note": "Zero resistance -- no active defenses, no alarms, no NPCs. The single safest category for material farming. Dav's Hope (see the manufactured category) is a well-known example of this kind of site."
       },
       {
         "name": "Anarchy-government systems",
@@ -224,6 +224,15 @@
           "Chemical, circuit and tech materials"
         ],
         "note": "Needs a Maverick suit with Arc Cutter and Energy Link to get into powered-down buildings. Considered one of the best overall sources for these material categories."
+      },
+      {
+        "name": "Building type hints (EXT/IND/STO)",
+        "method": "When choosing which settlement to loot, prioritize by building type",
+        "key_materials": [
+          "EXT (Extraction) -- skews toward Manufactured materials",
+          "IND (Industrial) -- skews toward Manufactured materials",
+          "STO (Storage) -- skews toward Goods (e.g. ionized gas for weapon upgrades)"
+        ]
       }
     ],
     "guardian": [
@@ -315,11 +324,6 @@
       "High Grade Emissions finder",
       "Elite Materials references"
     ],
-    "method": "Prioritize high-population systems and use material traders aggressively instead of trying to farm every exact material directly.",
-    "odyssey_building_types": {
-      "EXT": "Extraction settlements -- skew toward Manufactured materials",
-      "IND": "Industrial settlements -- skew toward Manufactured materials",
-      "STO": "Storage settlements -- skew toward Goods (e.g. ionized gas for weapon upgrades)"
-    }
+    "method": "Prioritize high-population systems and use material traders aggressively instead of trying to farm every exact material directly."
   }
 }
