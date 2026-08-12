@@ -17,6 +17,38 @@ def _market_data_cutoff() -> str:
     return (datetime.now(timezone.utc) - timedelta(days=_MARKET_DATA_MAX_AGE_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _normalize_data_timestamp(value) -> str:
+    """Normalizes an EDSM Unix epoch (int/float) or an ISO8601 string
+    (with a 'Z' or '+00:00' suffix) into one consistent
+    "YYYY-MM-DDTHH:MM:SSZ" string, so lexical string comparison in SQL
+    sorts chronologically correctly regardless of which pipeline
+    produced the value -- otherwise a 'Z' and a '+00:00' suffix on the
+    same real instant would compare unequal/out of order, since 'Z'
+    (ASCII 90) and '+' (ASCII 43) differ as characters. Falls back to
+    "now" (UTC) if the input is missing or unparseable, rather than
+    storing an unusable value that would always lose the freshness
+    comparison."""
+    from datetime import datetime, timezone
+
+    dt = None
+    try:
+        if isinstance(value, (int, float)):
+            dt = datetime.fromtimestamp(value, tz=timezone.utc)
+        elif isinstance(value, str) and value.strip():
+            ts = value.strip()
+            if ts.endswith("Z"):
+                ts = ts[:-1] + "+00:00"
+            dt = datetime.fromisoformat(ts)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError, OSError):
+        dt = None
+
+    if dt is None:
+        dt = datetime.now(timezone.utc)
+    return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 class Repository:
     def __init__(self, db: Database):
         self.db = db
@@ -304,6 +336,8 @@ class Repository:
         faction: dict,
         snapshot_date: str,
         is_controlling: bool,
+        data_timestamp: str,
+        source: str,
     ):
         name = faction.get("Name")
         if not isinstance(name, str) or not name:
@@ -312,15 +346,16 @@ class Repository:
         influence = faction.get("Influence")
         my_reputation = faction.get("MyReputation")
         is_squadron_faction = faction.get("SquadronFaction") is True
+        normalized_timestamp = _normalize_data_timestamp(data_timestamp)
         self.db.execute(
             """
             INSERT INTO faction_snapshots (
                 system_address, faction_name, snapshot_date,
                 influence, government, allegiance, faction_state, happiness,
                 active_states, pending_states, recovering_states, is_controlling,
-                my_reputation, is_squadron_faction
+                my_reputation, is_squadron_faction, data_timestamp, source
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(system_address, faction_name, snapshot_date) DO UPDATE SET
                 influence           = excluded.influence,
                 government          = excluded.government,
@@ -332,7 +367,11 @@ class Repository:
                 recovering_states   = excluded.recovering_states,
                 is_controlling      = excluded.is_controlling,
                 my_reputation       = excluded.my_reputation,
-                is_squadron_faction = excluded.is_squadron_faction
+                is_squadron_faction = excluded.is_squadron_faction,
+                data_timestamp      = excluded.data_timestamp,
+                source              = excluded.source
+            WHERE faction_snapshots.data_timestamp IS NULL
+               OR excluded.data_timestamp >= faction_snapshots.data_timestamp
             """,
             (
                 system_address,
@@ -349,6 +388,8 @@ class Repository:
                 1 if is_controlling else 0,
                 float(my_reputation) if isinstance(my_reputation, (int, float)) else None,
                 1 if is_squadron_faction else 0,
+                normalized_timestamp,
+                source,
             ),
         )
         # Rolling 30-day retention — one row/day already matches the real
