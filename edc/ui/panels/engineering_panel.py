@@ -12,7 +12,7 @@ from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QComboBox, QSpinBox, QTableWidget, QTableWidgetItem,
-    QHeaderView, QFrame, QTabWidget,
+    QHeaderView, QFrame, QTabWidget, QScrollArea,
 )
 
 from edc.core.engineering_blueprints import EngineeringBlueprintTable
@@ -136,8 +136,10 @@ class EngineeringPanel(QWidget):
 
         self._ship_tab = _ShipEngineeringTab(blueprint_table, wishlist_store, experimental_effects, repo, cfg)
         self._odyssey_tab = _OdysseyEngineeringTab(odyssey_table, blueprint_table, odyssey_wishlist_store, repo, cfg)
+        self._engineers_tab = _EngineersTab(blueprint_table)
         self._tabs.addTab(self._ship_tab, "Ships")
         self._tabs.addTab(self._odyssey_tab, "Suits & Weapons")
+        self._tabs.addTab(self._engineers_tab, "Engineers")
 
     def missing_materials_for_wishlist(self) -> Dict[str, int]:
         """Ship-only — used by main_window's farming-location alert hook."""
@@ -146,6 +148,7 @@ class EngineeringPanel(QWidget):
     def refresh(self, state) -> None:
         self._ship_tab.refresh(state)
         self._odyssey_tab.refresh(state)
+        self._engineers_tab.refresh(state)
 
 
 class _ShipEngineeringTab(QWidget):
@@ -1185,3 +1188,128 @@ class _OdysseyEngineeringTab(QWidget):
     def refresh(self, state) -> None:
         self._state = state
         self._refresh_wishlist_table()
+
+
+class _EngineersTab(QWidget):
+    """Reference list of every in-game engineer -- discovery/meeting/
+    unlock/referral requirements, grouped by the player's real current
+    status (state.engineer_progress, already tracked elsewhere in this
+    app). Advisory only; requirement text is static reference data, not
+    derived from live journal state beyond the overall unlock status."""
+
+    def __init__(self, blueprint_table: EngineeringBlueprintTable, parent=None):
+        super().__init__(parent)
+        self.setStyleSheet("background:#080f18;")
+        self._blueprints = blueprint_table
+        self._state = None
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        root.addWidget(scroll, 1)
+
+        content = QWidget()
+        content.setStyleSheet("background: transparent;")
+        content_layout = QVBoxLayout(content)
+        content_layout.setSpacing(6)
+        content_layout.setContentsMargins(8, 6, 8, 8)
+        content_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        scroll.setWidget(content)
+
+        self._sections: Dict[str, QLabel] = {}
+        for key, label_text in (
+            ("unlocked", "UNLOCKED"),
+            ("in_progress", "IN PROGRESS"),
+            ("not_encountered", "NOT ENCOUNTERED"),
+        ):
+            hdr = QLabel(label_text)
+            hdr.setStyleSheet(_HDR_STYLE)
+            content_layout.addWidget(hdr)
+            body = QLabel("")
+            body.setWordWrap(True)
+            body.setTextFormat(Qt.TextFormat.RichText)
+            body.setStyleSheet("background: transparent; border: none;")
+            content_layout.addWidget(body)
+            self._sections[key] = body
+
+    def _esc(self, t) -> str:
+        return str(t or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    def _status_for(self, name: str):
+        """Returns (group_key, status_text) for an engineer name, per this
+        plan's Global Constraints status-derivation rule."""
+        progress = getattr(self._state, "engineer_progress", None) or {} if self._state else {}
+        rec = progress.get(name)
+        if not rec:
+            return "not_encountered", "Not Encountered"
+        rank = rec.get("rank")
+        if isinstance(rank, int) and rank >= 1:
+            return "unlocked", f"Unlocked — Rank {rank}"
+        prog = rec.get("progress")
+        if prog:
+            return "in_progress", f"{prog} — not yet unlocked"
+        return "not_encountered", "Not Encountered"
+
+    def _engineer_html(self, name: str, status_text: str) -> str:
+        req = self._blueprints.engineer_requirements(name) or {}
+        home = self._blueprints.engineer_home(name)
+
+        ref_x = getattr(self._state, "system_x", None) if self._state else None
+        ref_y = getattr(self._state, "system_y", None) if self._state else None
+        ref_z = getattr(self._state, "system_z", None) if self._state else None
+        dist_text = ""
+        if home and all(isinstance(v, (int, float)) for v in (ref_x, ref_y, ref_z)):
+            dist = ((home["x"] - ref_x) ** 2 + (home["y"] - ref_y) ** 2 + (home["z"] - ref_z) ** 2) ** 0.5
+            dist_text = f" — {dist:.1f} ly"
+        system_text = home.get("system_name") if home else None
+
+        line = (
+            '<div style="margin-bottom:10px;padding:4px 8px;'
+            'background:#0d1a2a;border:1px solid #1e3a5a;border-radius:4px;">'
+            f'<span style="color:#CCCCCC;font-weight:700;">{self._esc(name)}</span>'
+        )
+        if system_text:
+            line += f' <span style="color:#4D96FF;font-size:12px;">— {self._esc(system_text)}{dist_text}</span>'
+        line += f'<br><span style="color:#FFB347;font-size:12px;">{self._esc(status_text)}</span>'
+
+        for field_key, field_label in (
+            ("discover", "Discover"),
+            ("meet", "Meet"),
+            ("unlock", "Unlock"),
+            ("referral", "Referral"),
+        ):
+            text = req.get(field_key)
+            if text:
+                line += (
+                    f'<br><span style="color:#888888;font-size:12px;">'
+                    f'&nbsp;&nbsp;{field_label}: {self._esc(text)}</span>'
+                )
+
+        line += '</div>'
+        return line
+
+    def refresh(self, state) -> None:
+        self._state = state
+        names = self._blueprints.all_engineer_names()
+
+        grouped: Dict[str, List[str]] = {"unlocked": [], "in_progress": [], "not_encountered": []}
+        statuses: Dict[str, str] = {}
+        for name in names:
+            group, status_text = self._status_for(name)
+            grouped[group].append(name)
+            statuses[name] = status_text
+
+        for key in ("unlocked", "in_progress", "not_encountered"):
+            entries = sorted(grouped[key])
+            html = "".join(self._engineer_html(name, statuses[name]) for name in entries)
+            self._sections[key].setText(
+                html if html else
+                '<span style="color:#444444;font-size:12px;">None.</span>'
+            )
