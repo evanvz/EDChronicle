@@ -66,6 +66,7 @@ class EngineeringBlueprintTable:
         self._blueprints: Dict[str, Dict[str, Any]] = {}
         self._materials: Dict[str, Dict[str, Any]] = {}
         self._engineer_locations: Dict[str, Dict[str, Any]] = {}
+        self._engineer_blueprint_counts: Dict[str, int] = {}
         self._engineer_requirements: Dict[str, Dict[str, str]] = {}
         self._requirements_mtime: Optional[float] = None
         self._load(force=True)
@@ -77,6 +78,7 @@ class EngineeringBlueprintTable:
                 self._blueprints = {}
                 self._materials = {}
                 self._engineer_locations = {}
+                self._engineer_blueprint_counts = {}
                 self.last_updated = None
                 self._mtime = None
                 return
@@ -102,13 +104,27 @@ class EngineeringBlueprintTable:
             self._blueprints = blueprints if isinstance(blueprints, dict) else {}
             self._materials = materials if isinstance(materials, dict) else {}
             self._engineer_locations = engineer_locations if isinstance(engineer_locations, dict) else {}
+            self._engineer_blueprint_counts = self._build_engineer_blueprint_counts()
         except Exception:
             log.exception("Failed to load engineering_blueprints.json")
             self._blueprints = {}
             self._materials = {}
             self._engineer_locations = {}
+            self._engineer_blueprint_counts = {}
             self.last_updated = None
             self._mtime = None
+
+    def _build_engineer_blueprint_counts(self) -> Dict[str, int]:
+        counts: Dict[str, int] = {}
+        for bp in self._blueprints.values():
+            grade_engineers = bp.get("grade_engineers") or {}
+            engineers_for_this_blueprint: set = set()
+            for grade_list in grade_engineers.values():
+                if isinstance(grade_list, list):
+                    engineers_for_this_blueprint.update(n for n in grade_list if isinstance(n, str))
+            for name in engineers_for_this_blueprint:
+                counts[name] = counts.get(name, 0) + 1
+        return counts
 
     def _load_requirements(self, force: bool = False) -> None:
         path = self.path.parent / "engineer_requirements.json"
@@ -264,3 +280,8 @@ class EngineeringBlueprintTable:
             for name, rec in self._engineer_locations.items()
             if isinstance(rec, dict) and "x" in rec
         }
+
+    def engineer_blueprint_count(self, engineer_name: str) -> int:
+        """Number of distinct ship blueprints this engineer offers, at any grade."""
+        self._load(force=False)
+        return self._engineer_blueprint_counts.get(engineer_name, 0)
