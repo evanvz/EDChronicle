@@ -77,6 +77,17 @@ def _parse_states(raw) -> List[str]:
     ]
 
 
+def _row_is_at_war(faction_state, active_states) -> bool:
+    """True if a faction_snapshots row's own faction_state or active_states
+    shows War or CivilWar -- mirrors player_faction_panel.py's
+    _bgs_action_core() war check, duplicated as logic (not imported) for
+    the same layering reason as _parse_states() above."""
+    states = {s.lower() for s in _parse_states(active_states)}
+    if isinstance(faction_state, str) and faction_state.strip():
+        states.add(faction_state.strip().lower())
+    return "war" in states or "civilwar" in states
+
+
 class Repository:
     def __init__(self, db: Database):
         self.db = db
@@ -520,7 +531,10 @@ class Repository:
         Each entry:
           system_address, system_name, influence, trend ("up"/"down"/"flat"/None),
           days_in_expansion_range (int or None), days_in_retreat_range (int or None),
-          conflict_risk (None or {"faction_name", "influence", "diff"})
+          conflict_risk (None or {"faction_name", "influence", "diff"}),
+          active_war (None, or {"faction_name", "influence"} where
+          faction_name/influence are None if no opponent could be
+          identified)
 
         trend/day-counts are None when there isn't enough history yet (a
         system seen only once) — deliberately not guessed from a single
@@ -615,6 +629,44 @@ class Repository:
                         "diff": best_diff,
                     }
 
+            active_war = None
+            own_row = self.db.conn.execute(
+                """
+                SELECT faction_state, active_states
+                FROM faction_snapshots
+                WHERE system_address = ? AND faction_name = ?
+                ORDER BY snapshot_date DESC
+                LIMIT 1
+                """,
+                (system_address, faction_name),
+            ).fetchone()
+            if own_row is not None and _row_is_at_war(own_row["faction_state"], own_row["active_states"]):
+                war_rivals = self.db.conn.execute(
+                    """
+                    SELECT fs.faction_name, fs.influence, fs.faction_state, fs.active_states
+                    FROM faction_snapshots fs
+                    WHERE fs.system_address = ? AND fs.faction_name != ?
+                      AND fs.snapshot_date = (
+                          SELECT MAX(snapshot_date) FROM faction_snapshots fs2
+                          WHERE fs2.system_address = fs.system_address
+                            AND fs2.faction_name = fs.faction_name
+                      )
+                    """,
+                    (system_address, faction_name),
+                ).fetchall()
+                best_opponent = None
+                for r in war_rivals:
+                    if not _row_is_at_war(r["faction_state"], r["active_states"]):
+                        continue
+                    r_influence = r["influence"] if isinstance(r["influence"], (int, float)) else 0.0
+                    best_influence = best_opponent["influence"] if best_opponent and isinstance(best_opponent["influence"], (int, float)) else -1.0
+                    if best_opponent is None or r_influence > best_influence:
+                        best_opponent = r
+                if best_opponent is not None:
+                    active_war = {"faction_name": best_opponent["faction_name"], "influence": best_opponent["influence"]}
+                else:
+                    active_war = {"faction_name": None, "influence": None}
+
             out.append({
                 "system_address": system_address,
                 "system_name": system_name,
@@ -623,6 +675,7 @@ class Repository:
                 "days_in_expansion_range": days_in_expansion_range,
                 "days_in_retreat_range": days_in_retreat_range,
                 "conflict_risk": conflict_risk,
+                "active_war": active_war,
             })
         return out
 
