@@ -136,7 +136,7 @@ class EngineeringPanel(QWidget):
 
         self._ship_tab = _ShipEngineeringTab(blueprint_table, wishlist_store, experimental_effects, repo, cfg)
         self._odyssey_tab = _OdysseyEngineeringTab(odyssey_table, blueprint_table, odyssey_wishlist_store, repo, cfg)
-        self._engineers_tab = _EngineersTab(blueprint_table)
+        self._engineers_tab = _EngineersTab(blueprint_table, odyssey_table)
         self._tabs.addTab(self._ship_tab, "Ships")
         self._tabs.addTab(self._odyssey_tab, "Suits & Weapons")
         self._tabs.addTab(self._engineers_tab, "Engineers")
@@ -1210,10 +1210,11 @@ class _EngineersTab(QWidget):
     app). Advisory only; requirement text is static reference data, not
     derived from live journal state beyond the overall unlock status."""
 
-    def __init__(self, blueprint_table: EngineeringBlueprintTable, parent=None):
+    def __init__(self, blueprint_table: EngineeringBlueprintTable, odyssey_table: OdysseyEngineeringTable, parent=None):
         super().__init__(parent)
         self.setStyleSheet("background:#080f18;")
         self._blueprints = blueprint_table
+        self._odyssey = odyssey_table
         self._state = None
         self._last_sig = None
 
@@ -1239,9 +1240,9 @@ class _EngineersTab(QWidget):
 
         self._section_grids: Dict[str, QGridLayout] = {}
         for key, label_text in (
-            ("unlocked", "UNLOCKED"),
             ("in_progress", "IN PROGRESS"),
             ("not_encountered", "NOT ENCOUNTERED"),
+            ("unlocked", "UNLOCKED"),
         ):
             hdr = QLabel(label_text)
             hdr.setStyleSheet(_HDR_STYLE)
@@ -1301,13 +1302,32 @@ class _EngineersTab(QWidget):
         # the card's background/border/padding is applied via QSS on the
         # QLabel widget itself instead (see refresh()). Only text spans live
         # in the HTML.
-        line = f'<span style="color:{accent["name_color"]};font-weight:700;">{self._esc(name)}</span>'
+        ship_count = self._blueprints.engineer_blueprint_count(name)
+        module_count = self._odyssey.engineer_module_count(name)
+
+        tags = []
+        if ship_count > 0:
+            tags.append("Ship")
+        if module_count > 0:
+            tags.append("Suit & Weapons")
+        tag_text = f" [{', '.join(tags)}]" if tags else ""
+
+        line = (
+            f'<span style="color:{accent["name_color"]};font-weight:700;">{self._esc(name)}</span>'
+            f'<span style="color:#666666;font-weight:400;">{self._esc(tag_text)}</span>'
+        )
         if system_text:
             line += f' <span style="color:#4D96FF;font-size:12px;">— {self._esc(system_text)}{dist_text}</span>'
         line += (
             f'<br><span style="color:{accent["status_color"]};font-size:12px;">'
             f'{accent["check"]}{self._esc(status_text)}</span>'
         )
+
+        if ship_count or module_count:
+            ship_word = "blueprint" if ship_count == 1 else "blueprints"
+            mod_word = "mod" if module_count == 1 else "mods"
+            summary = f"{ship_count} ship {ship_word}, {module_count} suit & weapon {mod_word}"
+            line += f'<br><span style="color:#888888;font-size:12px;">{self._esc(summary)}</span>'
 
         for field_key, field_label in (
             ("discover", "Discover"),
@@ -1363,7 +1383,7 @@ class _EngineersTab(QWidget):
             grouped[group].append(name)
             statuses[name] = status_text
 
-        for key in ("unlocked", "in_progress", "not_encountered"):
+        for key in ("in_progress", "not_encountered", "unlocked"):
             grid = self._section_grids[key]
             self._clear_grid(grid)
             entries = sorted(grouped[key])
