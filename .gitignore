@@ -9,6 +9,7 @@ venv/
 settings.json
 .aider*
 *.yml
+!.github/**
 data/
 models/
 .claude/
