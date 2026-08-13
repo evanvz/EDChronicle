@@ -309,14 +309,15 @@ class _ShipEngineeringTab(QWidget):
         carrier_hdr.setStyleSheet(_HDR_STYLE)
         right.addWidget(carrier_hdr)
 
-        self._carrier_table = _make_table(["Carrier", "System", "Dist (ly)", "Price", "Stock", "Age"])
+        self._carrier_table = _make_table(["Carrier", "Material", "System", "Dist (ly)", "Price", "Stock", "Age"])
         ch = self._carrier_table.horizontalHeader()
         ch.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         ch.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        ch.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        ch.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         ch.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         ch.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         ch.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+        ch.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
         right.addWidget(self._carrier_table, 1)
 
         self._carrier_note = QLabel("")
@@ -642,7 +643,8 @@ class _ShipEngineeringTab(QWidget):
         self._carrier_table.setSortingEnabled(False)
         self._carrier_table.setRowCount(len(rows))
         for r, (mat_name, listing) in enumerate(rows):
-            name_item = QTableWidgetItem(f"{listing['carrier_name']} ({mat_name})")
+            name_item = QTableWidgetItem(listing['carrier_name'])
+            mat_item = QTableWidgetItem(mat_name)
             sys_item = QTableWidgetItem(listing["system_name"])
             dist_item = _NumericTableWidgetItem(f"{listing['distance_ly']:.1f}", listing['distance_ly'])
             dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -661,11 +663,12 @@ class _ShipEngineeringTab(QWidget):
             age_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
             self._carrier_table.setItem(r, 0, name_item)
-            self._carrier_table.setItem(r, 1, sys_item)
-            self._carrier_table.setItem(r, 2, dist_item)
-            self._carrier_table.setItem(r, 3, price_item)
-            self._carrier_table.setItem(r, 4, stock_item)
-            self._carrier_table.setItem(r, 5, age_item)
+            self._carrier_table.setItem(r, 1, mat_item)
+            self._carrier_table.setItem(r, 2, sys_item)
+            self._carrier_table.setItem(r, 3, dist_item)
+            self._carrier_table.setItem(r, 4, price_item)
+            self._carrier_table.setItem(r, 5, stock_item)
+            self._carrier_table.setItem(r, 6, age_item)
         self._carrier_table.setSortingEnabled(True)
 
         staleness_note = "Carrier listings/locations are crowdsourced from EDDN and can be several days old."
@@ -851,14 +854,15 @@ class _OdysseyEngineeringTab(QWidget):
         carrier_hdr.setStyleSheet(_HDR_STYLE)
         right.addWidget(carrier_hdr)
 
-        self._carrier_table = _make_table(["Carrier", "System", "Dist (ly)", "Price", "Stock", "Age"])
+        self._carrier_table = _make_table(["Carrier", "Material", "System", "Dist (ly)", "Price", "Stock", "Age"])
         ch = self._carrier_table.horizontalHeader()
         ch.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         ch.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        ch.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        ch.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         ch.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         ch.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         ch.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+        ch.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
         right.addWidget(self._carrier_table, 1)
 
         self._carrier_note = QLabel("")
@@ -1144,7 +1148,8 @@ class _OdysseyEngineeringTab(QWidget):
         self._carrier_table.setSortingEnabled(False)
         self._carrier_table.setRowCount(len(rows))
         for r, (mat_name, listing) in enumerate(rows):
-            name_item = QTableWidgetItem(f"{listing['carrier_name']} ({mat_name})")
+            name_item = QTableWidgetItem(listing['carrier_name'])
+            mat_item = QTableWidgetItem(mat_name)
             sys_item = QTableWidgetItem(listing["system_name"])
             dist_item = _NumericTableWidgetItem(f"{listing['distance_ly']:.1f}", listing['distance_ly'])
             dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -1163,11 +1168,12 @@ class _OdysseyEngineeringTab(QWidget):
             age_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
             self._carrier_table.setItem(r, 0, name_item)
-            self._carrier_table.setItem(r, 1, sys_item)
-            self._carrier_table.setItem(r, 2, dist_item)
-            self._carrier_table.setItem(r, 3, price_item)
-            self._carrier_table.setItem(r, 4, stock_item)
-            self._carrier_table.setItem(r, 5, age_item)
+            self._carrier_table.setItem(r, 1, mat_item)
+            self._carrier_table.setItem(r, 2, sys_item)
+            self._carrier_table.setItem(r, 3, dist_item)
+            self._carrier_table.setItem(r, 4, price_item)
+            self._carrier_table.setItem(r, 5, stock_item)
+            self._carrier_table.setItem(r, 6, age_item)
         self._carrier_table.setSortingEnabled(True)
 
         staleness_note = "Carrier listings/locations are crowdsourced from EDDN and can be several days old."
