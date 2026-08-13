@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton,
     QComboBox, QSpinBox, QTableWidget, QTableWidgetItem,
     QHeaderView, QFrame, QTabWidget, QScrollArea,
 )
@@ -1190,6 +1190,13 @@ class _OdysseyEngineeringTab(QWidget):
         self._refresh_wishlist_table()
 
 
+_STATUS_ACCENT = {
+    "unlocked": {"accent": "#6BCB77", "status_color": "#6BCB77", "name_color": "#CCCCCC", "check": "✓ "},
+    "in_progress": {"accent": "#FFB347", "status_color": "#FFB347", "name_color": "#CCCCCC", "check": ""},
+    "not_encountered": {"accent": "#555555", "status_color": "#888888", "name_color": "#999999", "check": ""},
+}
+
+
 class _EngineersTab(QWidget):
     """Reference list of every in-game engineer -- discovery/meeting/
     unlock/referral requirements, grouped by the player's real current
@@ -1223,7 +1230,7 @@ class _EngineersTab(QWidget):
         content_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         scroll.setWidget(content)
 
-        self._sections: Dict[str, QLabel] = {}
+        self._section_grids: Dict[str, QGridLayout] = {}
         for key, label_text in (
             ("unlocked", "UNLOCKED"),
             ("in_progress", "IN PROGRESS"),
@@ -1232,12 +1239,18 @@ class _EngineersTab(QWidget):
             hdr = QLabel(label_text)
             hdr.setStyleSheet(_HDR_STYLE)
             content_layout.addWidget(hdr)
-            body = QLabel("")
-            body.setWordWrap(True)
-            body.setTextFormat(Qt.TextFormat.RichText)
-            body.setStyleSheet("background: transparent; border: none;")
-            content_layout.addWidget(body)
-            self._sections[key] = body
+
+            grid_container = QWidget()
+            grid_container.setStyleSheet("background: transparent;")
+            grid = QGridLayout(grid_container)
+            grid.setContentsMargins(0, 0, 0, 0)
+            grid.setHorizontalSpacing(6)
+            grid.setVerticalSpacing(6)
+            grid.setColumnStretch(0, 1)
+            grid.setColumnStretch(1, 1)
+            grid.setColumnStretch(2, 1)
+            content_layout.addWidget(grid_container)
+            self._section_grids[key] = grid
 
     def _esc(self, t) -> str:
         return str(t or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -1257,7 +1270,15 @@ class _EngineersTab(QWidget):
             return "in_progress", f"{prog} — not yet unlocked"
         return "not_encountered", "Not Encountered"
 
-    def _engineer_html(self, name: str, status_text: str, req: Dict[str, str], home: Optional[Dict[str, Any]]) -> str:
+    def _clear_grid(self, grid: QGridLayout) -> None:
+        while grid.count():
+            item = grid.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+    def _engineer_html(self, name: str, group: str, status_text: str, req: Dict[str, str], home: Optional[Dict[str, Any]]) -> str:
+        accent = _STATUS_ACCENT[group]
         ref_x = getattr(self._state, "system_x", None) if self._state else None
         ref_y = getattr(self._state, "system_y", None) if self._state else None
         ref_z = getattr(self._state, "system_z", None) if self._state else None
@@ -1268,13 +1289,17 @@ class _EngineersTab(QWidget):
         system_text = home.get("system_name") if home else None
 
         line = (
-            '<div style="margin-bottom:10px;padding:4px 8px;'
-            'background:#0d1a2a;border:1px solid #1e3a5a;border-radius:4px;">'
-            f'<span style="color:#CCCCCC;font-weight:700;">{self._esc(name)}</span>'
+            '<div style="padding:4px 8px;background:#0d1a2a;'
+            'border-width:1px 1px 1px 3px;border-style:solid;'
+            f'border-color:#1e3a5a #1e3a5a #1e3a5a {accent["accent"]};border-radius:4px;">'
+            f'<span style="color:{accent["name_color"]};font-weight:700;">{self._esc(name)}</span>'
         )
         if system_text:
             line += f' <span style="color:#4D96FF;font-size:12px;">— {self._esc(system_text)}{dist_text}</span>'
-        line += f'<br><span style="color:#FFB347;font-size:12px;">{self._esc(status_text)}</span>'
+        line += (
+            f'<br><span style="color:{accent["status_color"]};font-size:12px;">'
+            f'{accent["check"]}{self._esc(status_text)}</span>'
+        )
 
         for field_key, field_label in (
             ("discover", "Discover"),
@@ -1292,13 +1317,22 @@ class _EngineersTab(QWidget):
         line += '</div>'
         return line
 
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self._state is not None:
+            # Switching onto this tab doesn't fire a new journal event, so
+            # without this the tab stays on whatever it looked like the
+            # last time refresh() ran while visible -- possibly still
+            # blank from before it was ever shown.
+            self.refresh(self._state)
+
     def refresh(self, state) -> None:
         self._state = state
         if not self.isVisible():
             # Tab isn't the one currently on screen -- no point paying for
-            # 38 engineers' worth of HTML/section rebuilds the user can't
-            # see. self._state is already cached above for when the tab
-            # does become visible.
+            # 38 engineers' worth of card rebuilds the user can't see.
+            # self._state is already cached above for when the tab does
+            # become visible (see showEvent).
             return
 
         names = self._blueprints.all_engineer_names()
@@ -1313,12 +1347,21 @@ class _EngineersTab(QWidget):
             statuses[name] = status_text
 
         for key in ("unlocked", "in_progress", "not_encountered"):
+            grid = self._section_grids[key]
+            self._clear_grid(grid)
             entries = sorted(grouped[key])
-            html = "".join(
-                self._engineer_html(name, statuses[name], requirements.get(name) or {}, homes.get(name))
-                for name in entries
-            )
-            self._sections[key].setText(
-                html if html else
-                '<span style="color:#444444;font-size:12px;">None.</span>'
-            )
+            if not entries:
+                empty = QLabel('<span style="color:#444444;font-size:12px;">None.</span>')
+                empty.setTextFormat(Qt.TextFormat.RichText)
+                empty.setStyleSheet("background: transparent; border: none;")
+                grid.addWidget(empty, 0, 0)
+                continue
+            for i, name in enumerate(entries):
+                card = QLabel(
+                    self._engineer_html(name, key, statuses[name], requirements.get(name) or {}, homes.get(name))
+                )
+                card.setWordWrap(True)
+                card.setTextFormat(Qt.TextFormat.RichText)
+                card.setStyleSheet("background: transparent; border: none;")
+                row, col = divmod(i, 3)
+                grid.addWidget(card, row, col)
