@@ -1310,12 +1310,10 @@ class _EngineersTab(QWidget):
             tags.append("Ship")
         if module_count > 0:
             tags.append("Suit & Weapons")
-        tag_text = f" [{', '.join(tags)}]" if tags else ""
-
-        line = (
-            f'<span style="color:{accent["name_color"]};font-weight:700;">{self._esc(name)}</span>'
-            f'<span style="color:#666666;font-weight:400;">{self._esc(tag_text)}</span>'
-        )
+        line = f'<span style="color:{accent["name_color"]};font-weight:700;">{self._esc(name)}</span>'
+        if tags:
+            tag_text = f" [{', '.join(tags)}]"
+            line += f'<span style="color:#666666;font-weight:400;">{self._esc(tag_text)}</span>'
         if system_text:
             line += f' <span style="color:#4D96FF;font-size:12px;">— {self._esc(system_text)}{dist_text}</span>'
         line += (

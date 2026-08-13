@@ -18,6 +18,13 @@ log = logging.getLogger("edc.engineering_blueprints")
 # engineer.
 _ROLLS_PER_GRADE = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5}
 
+# grade_engineers (sourced from EDEngineer) and engineer_locations (sourced
+# from FDevIDs) disagree on this engineer's name -- remap onto the
+# engineer_locations spelling so his card's tag/summary can find him.
+_ENGINEER_NAME_ALIASES = {
+    "Tod McQuinn": "Tod 'The Blaster' McQuinn",
+}
+
 
 class EngineeringBlueprintTable:
     """
@@ -117,13 +124,16 @@ class EngineeringBlueprintTable:
     def _build_engineer_blueprint_counts(self) -> Dict[str, int]:
         counts: Dict[str, int] = {}
         for bp in self._blueprints.values():
+            if not isinstance(bp, dict):
+                continue
             grade_engineers = bp.get("grade_engineers") or {}
             engineers_for_this_blueprint: set = set()
             for grade_list in grade_engineers.values():
                 if isinstance(grade_list, list):
                     engineers_for_this_blueprint.update(n for n in grade_list if isinstance(n, str))
             for name in engineers_for_this_blueprint:
-                counts[name] = counts.get(name, 0) + 1
+                canonical_name = _ENGINEER_NAME_ALIASES.get(name, name)
+                counts[canonical_name] = counts.get(canonical_name, 0) + 1
         return counts
 
     def _load_requirements(self, force: bool = False) -> None:
@@ -155,7 +165,7 @@ class EngineeringBlueprintTable:
         """Returns fdnames sorted by display_name, for populating a picker."""
         self._load(force=False)
         return sorted(
-            self._blueprints.keys(),
+            (k for k, v in self._blueprints.items() if isinstance(v, dict)),
             key=lambda k: (self._blueprints[k].get("display_name") or k),
         )
 
