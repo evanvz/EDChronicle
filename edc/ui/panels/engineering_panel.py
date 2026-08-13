@@ -1288,12 +1288,12 @@ class _EngineersTab(QWidget):
             dist_text = f" — {dist:.1f} ly"
         system_text = home.get("system_name") if home else None
 
-        line = (
-            '<div style="padding:4px 8px;background:#0d1a2a;'
-            'border-width:1px 1px 1px 3px;border-style:solid;'
-            f'border-color:#1e3a5a #1e3a5a #1e3a5a {accent["accent"]};border-radius:4px;">'
-            f'<span style="color:{accent["name_color"]};font-weight:700;">{self._esc(name)}</span>'
-        )
+        # No wrapping <div style="..."> here -- QTextDocument (the rich-text
+        # engine backing QLabel HTML) doesn't render CSS `border` at all, so
+        # the card's background/border/padding is applied via QSS on the
+        # QLabel widget itself instead (see refresh()). Only text spans live
+        # in the HTML.
+        line = f'<span style="color:{accent["name_color"]};font-weight:700;">{self._esc(name)}</span>'
         if system_text:
             line += f' <span style="color:#4D96FF;font-size:12px;">— {self._esc(system_text)}{dist_text}</span>'
         line += (
@@ -1314,7 +1314,6 @@ class _EngineersTab(QWidget):
                     f'&nbsp;&nbsp;{field_label}: {self._esc(text)}</span>'
                 )
 
-        line += '</div>'
         return line
 
     def showEvent(self, event) -> None:
@@ -1356,12 +1355,21 @@ class _EngineersTab(QWidget):
                 empty.setStyleSheet("background: transparent; border: none;")
                 grid.addWidget(empty, 0, 0)
                 continue
+            accent = _STATUS_ACCENT[key]
             for i, name in enumerate(entries):
                 card = QLabel(
                     self._engineer_html(name, key, statuses[name], requirements.get(name) or {}, homes.get(name))
                 )
                 card.setWordWrap(True)
                 card.setTextFormat(Qt.TextFormat.RichText)
-                card.setStyleSheet("background: transparent; border: none;")
+                # QSS (QLabel's own stylesheet), not the rich-text HTML --
+                # QTextDocument doesn't render CSS `border` at all, but QSS
+                # does, including per-side width/color for the accent stripe.
+                card.setStyleSheet(
+                    "background:#0d1a2a; border-top:1px solid #1e3a5a; border-right:1px solid #1e3a5a; "
+                    "border-bottom:1px solid #1e3a5a; "
+                    f"border-left:3px solid {accent['accent']}; "
+                    "border-radius:4px; padding:4px 8px;"
+                )
                 row, col = divmod(i, 3)
                 grid.addWidget(card, row, col)
