@@ -317,6 +317,40 @@ class _BgsTickCheckWorker(QObject):
         self.finished.emit(result)
 
 
+class _ColonisationCandidatesWorker(QObject):
+    """One-shot background fetch of nearby colonisation candidates -- a
+    fresh instance is created only when the player's current system
+    actually changes, never on every HUD refresh (see
+    _maybe_refresh_colonisation_candidates), matching this project's
+    established throttle-then-cache pattern for EDSM calls."""
+    finished = pyqtSignal(str, list)  # system_name queried, candidates list
+
+    def __init__(self, system_name: str):
+        super().__init__()
+        self._system_name = system_name
+
+    def run(self):
+        from edc.core.colonisation_eligibility import find_nearby_colonisation_candidates
+        result = find_nearby_colonisation_candidates(self._system_name)
+        self.finished.emit(self._system_name, result)
+
+
+class _ColonisationEligibilityCheckWorker(QObject):
+    """One-shot background check for a manually-named candidate system --
+    created only on the user's explicit 'Check' button click, not throttled
+    (a genuine one-off action, not a per-refresh poll)."""
+    finished = pyqtSignal(dict)
+
+    def __init__(self, system_name: str):
+        super().__init__()
+        self._system_name = system_name
+
+    def run(self):
+        from edc.core.colonisation_eligibility import check_system_eligibility
+        result = check_system_eligibility(self._system_name)
+        self.finished.emit(result)
+
+
 class _CanonnRefreshWorker(QObject):
     finished = pyqtSignal(object, str, object, str)  # poi, poi_error, challenge, challenge_error
 
@@ -956,6 +990,11 @@ class MainWindow(QMainWindow):
         self._bgs_tick_timer.timeout.connect(self._on_bgs_tick_check_tick)
         self._bgs_tick_thread: QThread | None = None
         self._bgs_tick_worker: _BgsTickCheckWorker | None = None
+        self._colonisation_candidates_thread: QThread | None = None
+        self._colonisation_candidates_worker: _ColonisationCandidatesWorker | None = None
+        self._colonisation_candidates_system: str | None = None  # last system successfully queried for
+        self._colonisation_check_thread: QThread | None = None
+        self._colonisation_check_worker: _ColonisationEligibilityCheckWorker | None = None
         self._bgs_tick_timer.start()
         # QTimer.start() doesn't fire immediately -- without this, the
         # Player Faction card's "Last BGS tick" status sits on "unknown"
@@ -1144,6 +1183,7 @@ class MainWindow(QMainWindow):
         # Squadron tab
         self.squadron_panel = SquadronPanel(self.repo)
         self.squadron_panel.buy_search_requested.connect(self._on_squadron_buy_search_requested)
+        self.squadron_panel.eligibility_check_requested.connect(self._on_check_colonisation_eligibility_clicked)
 
         # Combat tab (stub)
         self.combat_panel = CombatPanel()
@@ -1934,6 +1974,9 @@ class MainWindow(QMainWindow):
 
         if name in ("Docked", "FSDJump", "Location"):
             self._save_faction_snapshots(self.state.factions_timestamp)
+
+        if name in ("FSDJump", "Location"):
+            self._maybe_refresh_colonisation_candidates()
 
         if name == "Docked":
             self._save_station_info(evt)
@@ -3864,6 +3907,37 @@ class MainWindow(QMainWindow):
     def _on_bgs_tick_check_finished(self, tick_iso) -> None:
         self.player_faction_panel.set_latest_known_tick(tick_iso)
         self.player_faction_panel.maybe_refresh_for_tick(tick_iso)
+
+    def _maybe_refresh_colonisation_candidates(self) -> None:
+        system_name = getattr(self.state, "system", None)
+        if not system_name or system_name == self._colonisation_candidates_system:
+            return
+        if self._colonisation_candidates_thread and self._colonisation_candidates_thread.isRunning():
+            return  # a fetch is already in flight -- next real system change will retry
+        self._colonisation_candidates_worker = _ColonisationCandidatesWorker(system_name)
+        self._colonisation_candidates_thread = QThread()
+        self._colonisation_candidates_worker.moveToThread(self._colonisation_candidates_thread)
+        self._colonisation_candidates_thread.started.connect(self._colonisation_candidates_worker.run)
+        self._colonisation_candidates_worker.finished.connect(self._on_colonisation_candidates_finished)
+        self._colonisation_candidates_worker.finished.connect(self._colonisation_candidates_thread.quit)
+        self._colonisation_candidates_thread.start()
+
+    def _on_colonisation_candidates_finished(self, system_name: str, candidates: list) -> None:
+        self._colonisation_candidates_system = system_name
+        self.squadron_panel.set_colonisation_candidates(system_name, candidates)
+
+    def _on_check_colonisation_eligibility_clicked(self, system_name: str) -> None:
+        if not system_name.strip():
+            return
+        if self._colonisation_check_thread and self._colonisation_check_thread.isRunning():
+            return  # a check is already in flight -- ignore rapid double-clicks
+        self._colonisation_check_worker = _ColonisationEligibilityCheckWorker(system_name.strip())
+        self._colonisation_check_thread = QThread()
+        self._colonisation_check_worker.moveToThread(self._colonisation_check_thread)
+        self._colonisation_check_thread.started.connect(self._colonisation_check_worker.run)
+        self._colonisation_check_worker.finished.connect(self.squadron_panel.set_eligibility_check_result)
+        self._colonisation_check_worker.finished.connect(self._colonisation_check_thread.quit)
+        self._colonisation_check_thread.start()
 
     def _refresh_squadron_station(self):
         """

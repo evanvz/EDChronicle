@@ -164,6 +164,7 @@ class _ColonisationDetailDialog(QDialog):
 
 class SquadronPanel(QWidget):
     buy_search_requested = pyqtSignal(str)
+    eligibility_check_requested = pyqtSignal(str)  # system name to check
 
     def __init__(self, repo, parent=None):
         super().__init__(parent)
@@ -171,6 +172,8 @@ class SquadronPanel(QWidget):
         self._depots: list = []
         self._depot_dialogs: dict = {}
         self._last_state = None
+        self._colonisation_candidates: list = []
+        self._colonisation_candidates_system: Optional[str] = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 8)
@@ -274,6 +277,68 @@ class SquadronPanel(QWidget):
         colon_l.addWidget(self._depot_table)
 
         root.addWidget(colon_card)
+
+        # ── Colonisation candidates — nearby unpopulated systems ────────────
+        cand_card = QFrame()
+        cand_card.setStyleSheet(_CARD_STYLE)
+        cand_l = QVBoxLayout(cand_card)
+        cand_l.setContentsMargins(8, 6, 8, 6)
+        cand_l.setSpacing(4)
+
+        cand_hdr = QLabel("COLONISATION CANDIDATES — WITHIN 15 LY")
+        cand_hdr.setStyleSheet(_HDR_STYLE)
+        cand_l.addWidget(cand_hdr)
+
+        self._candidates_status_label = QLabel("")
+        self._candidates_status_label.setWordWrap(True)
+        self._candidates_status_label.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
+        cand_l.addWidget(self._candidates_status_label)
+
+        self._candidates_table = QTableWidget()
+        self._candidates_table.setColumnCount(2)
+        self._candidates_table.setHorizontalHeaderLabels(["System", "Dist (ly)"])
+        self._candidates_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._candidates_table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+        self._candidates_table.verticalHeader().setVisible(False)
+        self._candidates_table.setAlternatingRowColors(True)
+        self._candidates_table.setStyleSheet(
+            "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
+            " gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
+            "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
+            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
+        )
+        cch = self._candidates_table.horizontalHeader()
+        cch.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        cch.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        self._candidates_table.setMaximumHeight(160)
+        cand_l.addWidget(self._candidates_table)
+
+        check_row = QHBoxLayout()
+        self._check_system_edit = QLineEdit()
+        self._check_system_edit.setPlaceholderText("Check a specific system name")
+        self._check_system_edit.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
+        check_btn = QPushButton("Check")
+        check_btn.setStyleSheet(_BTN_STYLE)
+        check_btn.clicked.connect(self._on_check_clicked)
+        check_row.addWidget(self._check_system_edit, 1)
+        check_row.addWidget(check_btn)
+        cand_l.addLayout(check_row)
+
+        self._check_result_label = QLabel("")
+        self._check_result_label.setWordWrap(True)
+        self._check_result_label.setStyleSheet("background:transparent; border:none;")
+        cand_l.addWidget(self._check_result_label)
+
+        cand_caveat = QLabel(
+            "Advisory only — based on EDSM's crowdsourced population data, which can lag "
+            "real-time changes. Confirms what's in range, not that you're currently at a "
+            "valid Colonisation Contact."
+        )
+        cand_caveat.setWordWrap(True)
+        cand_caveat.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
+        cand_l.addWidget(cand_caveat)
+
+        root.addWidget(cand_card)
 
         # ── Rank history ─────────────────────────────────────────────────
         history_hdr = QLabel("RANK HISTORY")
@@ -447,3 +512,47 @@ class SquadronPanel(QWidget):
         dlg.show()
         dlg.raise_()
         dlg.activateWindow()
+
+    # ── Colonisation candidates ─────────────────────────────────────────
+
+    def set_colonisation_candidates(self, system_name: str, candidates: list) -> None:
+        self._colonisation_candidates = candidates
+        self._colonisation_candidates_system = system_name
+
+        self._candidates_table.setRowCount(len(candidates))
+        for row, c in enumerate(candidates):
+            name_item = QTableWidgetItem(c.get("name") or "—")
+            dist_item = QTableWidgetItem(f"{c.get('distance_ly', 0):.1f}")
+            dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._candidates_table.setItem(row, 0, name_item)
+            self._candidates_table.setItem(row, 1, dist_item)
+
+        if candidates:
+            self._candidates_status_label.setText(f"Near {system_name}:")
+        else:
+            self._candidates_status_label.setText(
+                f"No unpopulated systems found within 15 ly of {system_name}."
+            )
+
+    def _on_check_clicked(self) -> None:
+        system_name = self._check_system_edit.text().strip()
+        if not system_name:
+            return
+        self._check_result_label.setText("Checking…")
+        self._check_result_label.setStyleSheet("color:#888888; background:transparent; border:none;")
+        self.eligibility_check_requested.emit(system_name)
+
+    def set_eligibility_check_result(self, result: dict) -> None:
+        eligible = result.get("eligible")
+        reason = result.get("reason") or ""
+        if eligible is True:
+            color = "#6BCB77"
+            prefix = "✓ Eligible — "
+        elif eligible is False:
+            color = "#FF6B6B"
+            prefix = "✗ Not eligible — "
+        else:
+            color = "#FFB347"
+            prefix = "⚠ "
+        self._check_result_label.setStyleSheet(f"color:{color}; background:transparent; border:none;")
+        self._check_result_label.setText(f"{prefix}{reason}")
