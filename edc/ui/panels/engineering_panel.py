@@ -1196,6 +1196,12 @@ _STATUS_ACCENT = {
     "not_encountered": {"accent": "#555555", "status_color": "#888888", "name_color": "#999999", "check": ""},
 }
 
+_CARD_QSS = {
+    "unlocked": "background:#0d1a2a; border-top:1px solid #1e3a5a; border-right:1px solid #1e3a5a; border-bottom:1px solid #1e3a5a; border-left:3px solid #6BCB77; border-radius:4px; padding:4px 8px;",
+    "in_progress": "background:#0d1a2a; border-top:1px solid #1e3a5a; border-right:1px solid #1e3a5a; border-bottom:1px solid #1e3a5a; border-left:3px solid #FFB347; border-radius:4px; padding:4px 8px;",
+    "not_encountered": "background:#0d1a2a; border-top:1px solid #1e3a5a; border-right:1px solid #1e3a5a; border-bottom:1px solid #1e3a5a; border-left:3px solid #555555; border-radius:4px; padding:4px 8px;",
+}
+
 
 class _EngineersTab(QWidget):
     """Reference list of every in-game engineer -- discovery/meeting/
@@ -1209,6 +1215,7 @@ class _EngineersTab(QWidget):
         self.setStyleSheet("background:#080f18;")
         self._blueprints = blueprint_table
         self._state = None
+        self._last_sig = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -1275,6 +1282,7 @@ class _EngineersTab(QWidget):
             item = grid.takeAt(0)
             widget = item.widget()
             if widget is not None:
+                widget.setParent(None)
                 widget.deleteLater()
 
     def _engineer_html(self, name: str, group: str, status_text: str, req: Dict[str, str], home: Optional[Dict[str, Any]]) -> str:
@@ -1334,6 +1342,16 @@ class _EngineersTab(QWidget):
             # become visible (see showEvent).
             return
 
+        sig = (
+            repr(getattr(state, "engineer_progress", None)),
+            getattr(state, "system_x", None),
+            getattr(state, "system_y", None),
+            getattr(state, "system_z", None),
+        )
+        if sig == getattr(self, "_last_sig", None):
+            return
+        self._last_sig = sig
+
         names = self._blueprints.all_engineer_names()
         requirements = self._blueprints.all_engineer_requirements()
         homes = self._blueprints.all_engineer_homes()
@@ -1355,21 +1373,16 @@ class _EngineersTab(QWidget):
                 empty.setStyleSheet("background: transparent; border: none;")
                 grid.addWidget(empty, 0, 0)
                 continue
-            accent = _STATUS_ACCENT[key]
             for i, name in enumerate(entries):
                 card = QLabel(
                     self._engineer_html(name, key, statuses[name], requirements.get(name) or {}, homes.get(name))
                 )
                 card.setWordWrap(True)
                 card.setTextFormat(Qt.TextFormat.RichText)
+                card.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
                 # QSS (QLabel's own stylesheet), not the rich-text HTML --
                 # QTextDocument doesn't render CSS `border` at all, but QSS
                 # does, including per-side width/color for the accent stripe.
-                card.setStyleSheet(
-                    "background:#0d1a2a; border-top:1px solid #1e3a5a; border-right:1px solid #1e3a5a; "
-                    "border-bottom:1px solid #1e3a5a; "
-                    f"border-left:3px solid {accent['accent']}; "
-                    "border-radius:4px; padding:4px 8px;"
-                )
+                card.setStyleSheet(_CARD_QSS[key])
                 row, col = divmod(i, 3)
                 grid.addWidget(card, row, col)
