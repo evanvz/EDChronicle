@@ -309,7 +309,7 @@ class _ShipEngineeringTab(QWidget):
         carrier_hdr.setStyleSheet(_HDR_STYLE)
         right.addWidget(carrier_hdr)
 
-        self._carrier_table = _make_table(["Carrier", "Material", "System", "Dist (ly)", "Price", "Stock", "Age"])
+        self._carrier_table = _make_table(["Material", "Carrier", "System", "Dist (ly)", "Price", "Stock", "Age"])
         ch = self._carrier_table.horizontalHeader()
         ch.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         ch.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
@@ -662,8 +662,8 @@ class _ShipEngineeringTab(QWidget):
             age_item = _NumericTableWidgetItem(age_text, age_sort)
             age_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
-            self._carrier_table.setItem(r, 0, name_item)
-            self._carrier_table.setItem(r, 1, mat_item)
+            self._carrier_table.setItem(r, 0, mat_item)
+            self._carrier_table.setItem(r, 1, name_item)
             self._carrier_table.setItem(r, 2, sys_item)
             self._carrier_table.setItem(r, 3, dist_item)
             self._carrier_table.setItem(r, 4, price_item)
@@ -854,7 +854,7 @@ class _OdysseyEngineeringTab(QWidget):
         carrier_hdr.setStyleSheet(_HDR_STYLE)
         right.addWidget(carrier_hdr)
 
-        self._carrier_table = _make_table(["Carrier", "Material", "System", "Dist (ly)", "Price", "Stock", "Age"])
+        self._carrier_table = _make_table(["Material", "Carrier", "System", "Dist (ly)", "Price", "Stock", "Age"])
         ch = self._carrier_table.horizontalHeader()
         ch.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         ch.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
@@ -1167,8 +1167,8 @@ class _OdysseyEngineeringTab(QWidget):
             age_item = _NumericTableWidgetItem(age_text, age_sort)
             age_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
-            self._carrier_table.setItem(r, 0, name_item)
-            self._carrier_table.setItem(r, 1, mat_item)
+            self._carrier_table.setItem(r, 0, mat_item)
+            self._carrier_table.setItem(r, 1, name_item)
             self._carrier_table.setItem(r, 2, sys_item)
             self._carrier_table.setItem(r, 3, dist_item)
             self._carrier_table.setItem(r, 4, price_item)
