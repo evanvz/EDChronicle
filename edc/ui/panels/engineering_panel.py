@@ -45,14 +45,18 @@ _TABLE_STYLE = (
 )
 
 
-def _format_age(last_updated: str, last_visited: str) -> str:
+def _format_age(last_updated: str, last_visited: str) -> tuple[str, float]:
     """Compact 'listing age / carrier-location age' for the carrier
     table's Age column -- last_updated is when this material listing was
     last seen on EDDN, last_visited is when we last had a Docked sighting
-    of the carrier itself (it may have moved since)."""
-    listed, _ = relative_time(last_updated)
-    visited, _ = relative_time(last_visited)
-    return f"{listed.replace(' ago', '')} / {visited.replace(' ago', '')}"
+    of the carrier itself (it may have moved since). Returns (display_text,
+    sort_value) -- sort_value is the older (larger) of the two ages in
+    seconds, since that's the single number that best represents "how
+    stale is this row overall" for column sorting."""
+    listed, listed_secs = relative_time(last_updated)
+    visited, visited_secs = relative_time(last_visited)
+    text = f"{listed.replace(' ago', '')} / {visited.replace(' ago', '')}"
+    return text, max(listed_secs, visited_secs)
 
 
 def _make_table(headers: List[str]) -> QTableWidget:
@@ -64,8 +68,23 @@ def _make_table(headers: List[str]) -> QTableWidget:
     t.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
     t.verticalHeader().setVisible(False)
     t.setAlternatingRowColors(True)
+    t.setSortingEnabled(True)
     t.setStyleSheet(_TABLE_STYLE)
     return t
+
+
+class _NumericTableWidgetItem(QTableWidgetItem):
+    """Sorts by an actual numeric value instead of the displayed string
+    (plain QTableWidgetItem sorting would put "42.0" before "9.0")."""
+
+    def __init__(self, text: str, sort_value: float):
+        super().__init__(text)
+        self._sort_value = sort_value
+
+    def __lt__(self, other):
+        if isinstance(other, _NumericTableWidgetItem):
+            return self._sort_value < other._sort_value
+        return super().__lt__(other)
 
 
 def _humanized_fdname_suffix(fdname: str) -> str:
@@ -412,15 +431,28 @@ class _ShipEngineeringTab(QWidget):
         self._store.save(self._wishlist)
         self._refresh_wishlist_table()
 
+    def _selected_wishlist_entry(self) -> Optional[Dict[str, Any]]:
+        item = self._wl_table.currentItem()
+        if item is None:
+            return None
+        # Any column's item on the selected row carries the same UserRole
+        # data (only column 0 is explicitly set) -- currentItem() can
+        # return any column depending on which cell was clicked, so look
+        # up column 0 of that row explicitly rather than assuming.
+        row = item.row()
+        col0 = self._wl_table.item(row, 0)
+        return col0.data(Qt.ItemDataRole.UserRole) if col0 else None
+
     def _remove_selected(self):
-        row = self._wl_table.currentRow()
-        if row < 0 or row >= len(self._wishlist):
+        entry = self._selected_wishlist_entry()
+        if entry is None or entry not in self._wishlist:
             return
-        del self._wishlist[row]
+        self._wishlist.remove(entry)
         self._store.save(self._wishlist)
         self._refresh_wishlist_table()
 
     def _refresh_wishlist_table(self):
+        self._wl_table.setSortingEnabled(False)
         self._wl_table.setRowCount(len(self._wishlist))
         for r, entry in enumerate(self._wishlist):
             fdname = entry["fdname"]
@@ -434,7 +466,8 @@ class _ShipEngineeringTab(QWidget):
             if experimental:
                 label += f" (+ {self._effects.display_name(experimental)})"
             name_item = QTableWidgetItem(label)
-            grade_item = QTableWidgetItem(str(grade))
+            name_item.setData(Qt.ItemDataRole.UserRole, entry)
+            grade_item = _NumericTableWidgetItem(str(grade), grade)
             grade_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
             missing = self._missing_count(entry)
@@ -448,26 +481,27 @@ class _ShipEngineeringTab(QWidget):
             self._wl_table.setItem(r, 0, name_item)
             self._wl_table.setItem(r, 1, grade_item)
             self._wl_table.setItem(r, 2, status_item)
+        self._wl_table.setSortingEnabled(True)
         self._refresh_detail_table()
 
     def _refresh_detail_table(self):
-        row = self._wl_table.currentRow()
-        if row < 0 or row >= len(self._wishlist):
+        entry = self._selected_wishlist_entry()
+        if entry is None:
             self._detail_table.setRowCount(0)
             self._refresh_engineer_table()
             self._refresh_carrier_table()
             return
-        entry = self._wishlist[row]
         reqs = self._combined_requirements(entry)
         rows = sorted(reqs.items(), key=lambda kv: self._blueprints.material_name(kv[0]))
 
+        self._detail_table.setSortingEnabled(False)
         self._detail_table.setRowCount(len(rows))
         for r, (sym, qty) in enumerate(rows):
             held = self._held_count(sym)
             name_item = QTableWidgetItem(self._blueprints.material_name(sym))
             type_item = QTableWidgetItem(self._blueprints.material_type(sym))
-            held_item = QTableWidgetItem(str(held))
-            req_item = QTableWidgetItem(str(qty))
+            held_item = _NumericTableWidgetItem(str(held), held)
+            req_item = _NumericTableWidgetItem(str(qty), qty)
             for it in (held_item, req_item):
                 it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
@@ -479,16 +513,16 @@ class _ShipEngineeringTab(QWidget):
             self._detail_table.setItem(r, 1, type_item)
             self._detail_table.setItem(r, 2, held_item)
             self._detail_table.setItem(r, 3, req_item)
+        self._detail_table.setSortingEnabled(True)
 
         self._refresh_engineer_table()
         self._refresh_carrier_table()
 
     def _refresh_engineer_table(self):
-        row = self._wl_table.currentRow()
-        if row < 0 or row >= len(self._wishlist):
+        entry = self._selected_wishlist_entry()
+        if entry is None:
             self._engineer_table.setRowCount(0)
             return
-        entry = self._wishlist[row]
         engineers = self._blueprints.engineers_for(entry["fdname"], entry["grade"])
 
         # getattr's default only covers a missing attribute — state.system_x
@@ -530,11 +564,14 @@ class _ShipEngineeringTab(QWidget):
 
         rows.sort(key=lambda r: (r[0] is None, r[0] if r[0] is not None else 0.0))
 
+        self._engineer_table.setSortingEnabled(False)
         self._engineer_table.setRowCount(len(rows))
         for r, (dist, eng_name, system_name, status_text, status_color) in enumerate(rows):
             name_item = QTableWidgetItem(eng_name)
             sys_item = QTableWidgetItem(system_name)
-            dist_item = QTableWidgetItem(f"{dist:.1f}" if dist is not None else "—")
+            dist_item = _NumericTableWidgetItem(
+                f"{dist:.1f}" if dist is not None else "—", dist if dist is not None else -1.0
+            )
             dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             status_item = QTableWidgetItem(status_text)
             status_item.setForeground(QColor(status_color))
@@ -543,14 +580,14 @@ class _ShipEngineeringTab(QWidget):
             self._engineer_table.setItem(r, 1, sys_item)
             self._engineer_table.setItem(r, 2, dist_item)
             self._engineer_table.setItem(r, 3, status_item)
+        self._engineer_table.setSortingEnabled(True)
 
     def _refresh_carrier_table(self):
-        row = self._wl_table.currentRow()
-        if row < 0 or row >= len(self._wishlist):
+        entry = self._selected_wishlist_entry()
+        if entry is None:
             self._carrier_table.setRowCount(0)
             self._carrier_note.setText("")
             return
-        entry = self._wishlist[row]
         reqs = self._combined_requirements(entry)
         missing_symbols = [sym for sym, qty in reqs.items() if self._held_count(sym) < qty]
         if not missing_symbols:
@@ -585,19 +622,25 @@ class _ShipEngineeringTab(QWidget):
                 rows.append((mat_name, listing))
         rows.sort(key=lambda r: r[1]["distance_ly"])
 
+        self._carrier_table.setSortingEnabled(False)
         self._carrier_table.setRowCount(len(rows))
         for r, (mat_name, listing) in enumerate(rows):
             name_item = QTableWidgetItem(f"{listing['carrier_name']} ({mat_name})")
             sys_item = QTableWidgetItem(listing["system_name"])
-            dist_item = QTableWidgetItem(f"{listing['distance_ly']:.1f}")
+            dist_item = _NumericTableWidgetItem(f"{listing['distance_ly']:.1f}", listing['distance_ly'])
             dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             price = listing.get("price")
-            price_item = QTableWidgetItem(f"{price:,}" if isinstance(price, int) else "—")
+            price_item = _NumericTableWidgetItem(
+                f"{price:,}" if isinstance(price, int) else "—", price if isinstance(price, int) else -1
+            )
             price_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             stock = listing.get("stock")
-            stock_item = QTableWidgetItem(str(stock) if isinstance(stock, int) else "—")
+            stock_item = _NumericTableWidgetItem(
+                str(stock) if isinstance(stock, int) else "—", stock if isinstance(stock, int) else -1
+            )
             stock_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            age_item = QTableWidgetItem(_format_age(listing.get("last_updated"), listing.get("last_visited")))
+            age_text, age_sort = _format_age(listing.get("last_updated"), listing.get("last_visited"))
+            age_item = _NumericTableWidgetItem(age_text, age_sort)
             age_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
             self._carrier_table.setItem(r, 0, name_item)
@@ -606,6 +649,7 @@ class _ShipEngineeringTab(QWidget):
             self._carrier_table.setItem(r, 3, price_item)
             self._carrier_table.setItem(r, 4, stock_item)
             self._carrier_table.setItem(r, 5, age_item)
+        self._carrier_table.setSortingEnabled(True)
 
         staleness_note = "Carrier listings/locations are crowdsourced from EDDN and can be several days old."
         self._carrier_note.setText(
@@ -621,6 +665,7 @@ class _ShipEngineeringTab(QWidget):
         suggestions = find_material_trades(shortfalls, owned)
 
         rows = sorted(suggestions.items(), key=lambda kv: self._blueprints.material_name(kv[0]))
+        self._trade_table.setSortingEnabled(False)
         self._trade_table.setRowCount(len(rows))
         for r, (sym, sugg) in enumerate(rows):
             need_item = QTableWidgetItem(f"{self._blueprints.material_name(sym)} (short {shortfalls[sym]})")
@@ -634,6 +679,7 @@ class _ShipEngineeringTab(QWidget):
             trade_item.setForeground(color)
             self._trade_table.setItem(r, 0, need_item)
             self._trade_table.setItem(r, 1, trade_item)
+        self._trade_table.setSortingEnabled(True)
 
     def refresh(self, state) -> None:
         self._state = state
@@ -870,11 +916,23 @@ class _OdysseyEngineeringTab(QWidget):
         self._store.save(self._wishlist)
         self._refresh_wishlist_table()
 
+    def _selected_wishlist_entry(self) -> Optional[Dict[str, Any]]:
+        item = self._wl_table.currentItem()
+        if item is None:
+            return None
+        # Any column's item on the selected row carries the same UserRole
+        # data (only column 0 is explicitly set) -- currentItem() can
+        # return any column depending on which cell was clicked, so look
+        # up column 0 of that row explicitly rather than assuming.
+        row = item.row()
+        col0 = self._wl_table.item(row, 0)
+        return col0.data(Qt.ItemDataRole.UserRole) if col0 else None
+
     def _remove_selected(self):
-        row = self._wl_table.currentRow()
-        if row < 0 or row >= len(self._wishlist):
+        entry = self._selected_wishlist_entry()
+        if entry is None or entry not in self._wishlist:
             return
-        del self._wishlist[row]
+        self._wishlist.remove(entry)
         self._store.save(self._wishlist)
         self._refresh_wishlist_table()
 
@@ -891,9 +949,11 @@ class _OdysseyEngineeringTab(QWidget):
         return entry["name"]
 
     def _refresh_wishlist_table(self):
+        self._wl_table.setSortingEnabled(False)
         self._wl_table.setRowCount(len(self._wishlist))
         for r, entry in enumerate(self._wishlist):
             name_item = QTableWidgetItem(self._display_name(entry))
+            name_item.setData(Qt.ItemDataRole.UserRole, entry)
             kind_item = QTableWidgetItem(_KIND_LABELS.get(entry["kind"], entry["kind"]))
 
             missing = self._missing_count(entry)
@@ -907,25 +967,26 @@ class _OdysseyEngineeringTab(QWidget):
             self._wl_table.setItem(r, 0, name_item)
             self._wl_table.setItem(r, 1, kind_item)
             self._wl_table.setItem(r, 2, status_item)
+        self._wl_table.setSortingEnabled(True)
         self._refresh_detail_table()
 
     def _refresh_detail_table(self):
-        row = self._wl_table.currentRow()
-        if row < 0 or row >= len(self._wishlist):
+        entry = self._selected_wishlist_entry()
+        if entry is None:
             self._detail_table.setRowCount(0)
             self._refresh_engineer_table()
             self._refresh_carrier_table()
             return
-        entry = self._wishlist[row]
         reqs = self._requirements_for(entry)
         rows = sorted(reqs.items(), key=lambda kv: self._material_name(kv[0]))
 
+        self._detail_table.setSortingEnabled(False)
         self._detail_table.setRowCount(len(rows))
         for r, (sym, qty) in enumerate(rows):
             held = self._held_count(sym)
             name_item = QTableWidgetItem(self._material_name(sym))
-            held_item = QTableWidgetItem(str(held))
-            req_item = QTableWidgetItem(str(qty))
+            held_item = _NumericTableWidgetItem(str(held), held)
+            req_item = _NumericTableWidgetItem(str(qty), qty)
             held_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             req_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
@@ -944,18 +1005,18 @@ class _OdysseyEngineeringTab(QWidget):
             self._detail_table.setItem(r, 1, held_item)
             self._detail_table.setItem(r, 2, req_item)
             self._detail_table.setItem(r, 3, source_item)
+        self._detail_table.setSortingEnabled(True)
 
         self._refresh_engineer_table(entry)
         self._refresh_carrier_table()
 
     def _refresh_engineer_table(self, entry: Optional[Dict[str, Any]] = None):
         if entry is None:
-            row = self._wl_table.currentRow()
-            if row < 0 or row >= len(self._wishlist):
+            entry = self._selected_wishlist_entry()
+            if entry is None:
                 self._engineer_table.setRowCount(0)
                 self._engineer_note.setText("")
                 return
-            entry = self._wishlist[row]
 
         kind = entry["kind"]
         if kind in ("suit_grade", "weapon_grade"):
@@ -994,21 +1055,24 @@ class _OdysseyEngineeringTab(QWidget):
 
         rows.sort(key=lambda r: (r[0] is None, r[0] if r[0] is not None else 0.0))
 
+        self._engineer_table.setSortingEnabled(False)
         self._engineer_table.setRowCount(len(rows))
         for r, (dist, eng_name, system_name) in enumerate(rows):
-            dist_item = QTableWidgetItem(f"{dist:.1f}" if dist is not None else "—")
+            dist_item = _NumericTableWidgetItem(
+                f"{dist:.1f}" if dist is not None else "—", dist if dist is not None else -1.0
+            )
             dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self._engineer_table.setItem(r, 0, QTableWidgetItem(eng_name))
             self._engineer_table.setItem(r, 1, QTableWidgetItem(system_name))
             self._engineer_table.setItem(r, 2, dist_item)
+        self._engineer_table.setSortingEnabled(True)
 
     def _refresh_carrier_table(self):
-        row = self._wl_table.currentRow()
-        if row < 0 or row >= len(self._wishlist):
+        entry = self._selected_wishlist_entry()
+        if entry is None:
             self._carrier_table.setRowCount(0)
             self._carrier_note.setText("")
             return
-        entry = self._wishlist[row]
         reqs = self._requirements_for(entry)
         missing_symbols = [sym for sym, qty in reqs.items() if self._held_count(sym) < qty]
         if not missing_symbols:
@@ -1043,19 +1107,25 @@ class _OdysseyEngineeringTab(QWidget):
                 rows.append((mat_name, listing))
         rows.sort(key=lambda r: r[1]["distance_ly"])
 
+        self._carrier_table.setSortingEnabled(False)
         self._carrier_table.setRowCount(len(rows))
         for r, (mat_name, listing) in enumerate(rows):
             name_item = QTableWidgetItem(f"{listing['carrier_name']} ({mat_name})")
             sys_item = QTableWidgetItem(listing["system_name"])
-            dist_item = QTableWidgetItem(f"{listing['distance_ly']:.1f}")
+            dist_item = _NumericTableWidgetItem(f"{listing['distance_ly']:.1f}", listing['distance_ly'])
             dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             price = listing.get("price")
-            price_item = QTableWidgetItem(f"{price:,}" if isinstance(price, int) else "—")
+            price_item = _NumericTableWidgetItem(
+                f"{price:,}" if isinstance(price, int) else "—", price if isinstance(price, int) else -1
+            )
             price_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             stock = listing.get("stock")
-            stock_item = QTableWidgetItem(str(stock) if isinstance(stock, int) else "—")
+            stock_item = _NumericTableWidgetItem(
+                str(stock) if isinstance(stock, int) else "—", stock if isinstance(stock, int) else -1
+            )
             stock_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            age_item = QTableWidgetItem(_format_age(listing.get("last_updated"), listing.get("last_visited")))
+            age_text, age_sort = _format_age(listing.get("last_updated"), listing.get("last_visited"))
+            age_item = _NumericTableWidgetItem(age_text, age_sort)
             age_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
             self._carrier_table.setItem(r, 0, name_item)
@@ -1064,6 +1134,7 @@ class _OdysseyEngineeringTab(QWidget):
             self._carrier_table.setItem(r, 3, price_item)
             self._carrier_table.setItem(r, 4, stock_item)
             self._carrier_table.setItem(r, 5, age_item)
+        self._carrier_table.setSortingEnabled(True)
 
         staleness_note = "Carrier listings/locations are crowdsourced from EDDN and can be several days old."
         self._carrier_note.setText(
