@@ -10,3 +10,4 @@ vosk>=0.3.45
 pycaw>=20230407
 pydirectinput>=1.0.4
 pyzmq>=27.0
+keyboard>=0.13.5

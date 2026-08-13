@@ -11,6 +11,7 @@ Both share a single Vosk recogniser with a combined grammar built from all
 active phrases.  Post-action mic blackout prevents TTS echo re-triggering.
 """
 import json
+import keyboard
 import logging
 import queue
 import time
@@ -196,6 +197,9 @@ class VoiceCommandListener(QObject):
         self._ship_commands: list[dict] = []
         self._grammar_json       = self._build_grammar()
         self._input_device_name: str | None = None
+        self._ptt_enabled = False
+        self._ptt_key     = "caps lock"
+        self._ptt_error_logged = False
 
     # ── Public config API ─────────────────────────────────────────────────────
 
@@ -217,6 +221,11 @@ class VoiceCommandListener(QObject):
     def set_input_device(self, device_name: str | None):
         """Called from main thread when the user picks a microphone in the panel."""
         self._input_device_name = device_name
+
+    def set_push_to_talk(self, enabled: bool, key: str):
+        """Called from main thread whenever the push-to-talk setting changes."""
+        self._ptt_enabled = bool(enabled)
+        self._ptt_key = (key or "caps lock").strip().lower()
 
     # ── Grammar ───────────────────────────────────────────────────────────────
 
@@ -387,6 +396,7 @@ class VoiceCommandListener(QObject):
                 # single-chunk misfire while still firing well before Vosk
                 # would finalize the utterance.
                 consecutive_trigger_partials = 0
+                ptt_was_held = True   # avoids a spurious reset on the very first PTT-gated chunk
 
                 try:
                     while self._running:
@@ -394,6 +404,30 @@ class VoiceCommandListener(QObject):
                             data = audio_q.get(timeout=0.5)
                         except queue.Empty:
                             continue
+
+                        if self._ptt_enabled:
+                            try:
+                                ptt_held = keyboard.is_pressed(self._ptt_key)
+                            except Exception as exc:
+                                if not getattr(self, "_ptt_error_logged", False):
+                                    log.error("push-to-talk key '%s' invalid: %s", self._ptt_key, exc)
+                                    self._ptt_error_logged = True
+                                continue
+                            if not ptt_held:
+                                if ptt_was_held:
+                                    # Key just released -- clear recognizer + fragment
+                                    # state so a phrase cut off mid-word doesn't leak
+                                    # into the next press.
+                                    try:
+                                        rec.Reset()
+                                    except Exception:
+                                        pass
+                                    fragments = []
+                                    partial_trigger_beeped = False
+                                    consecutive_trigger_partials = 0
+                                ptt_was_held = False
+                                continue
+                            ptt_was_held = True
 
                         now = time.monotonic()
 
