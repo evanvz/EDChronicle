@@ -31,6 +31,7 @@ class OdysseyEngineeringTable:
         self._weapons: Dict[str, Dict[str, Dict[str, int]]] = {}
         self._suit_modules: Dict[str, Dict[str, Any]] = {}
         self._weapon_modules: Dict[str, Dict[str, Any]] = {}
+        self._engineer_module_counts: Dict[str, int] = {}
         self._load(force=True)
 
         # Odyssey microresource symbol -> English display name (EDCD/FDevIDs
@@ -50,6 +51,7 @@ class OdysseyEngineeringTable:
                 self._weapons = {}
                 self._suit_modules = {}
                 self._weapon_modules = {}
+                self._engineer_module_counts = {}
                 self.last_updated = None
                 self._mtime = None
                 return
@@ -66,14 +68,28 @@ class OdysseyEngineeringTable:
             self._weapons = (data.get("weapons") or {}) if isinstance(data, dict) else {}
             self._suit_modules = (data.get("suit_modules") or {}) if isinstance(data, dict) else {}
             self._weapon_modules = (data.get("weapon_modules") or {}) if isinstance(data, dict) else {}
+            self._engineer_module_counts = self._build_engineer_module_counts()
         except Exception:
             log.exception("Failed to load odyssey_engineering.json")
             self._suits = {}
             self._weapons = {}
             self._suit_modules = {}
             self._weapon_modules = {}
+            self._engineer_module_counts = {}
             self.last_updated = None
             self._mtime = None
+
+    def _build_engineer_module_counts(self) -> Dict[str, int]:
+        counts: Dict[str, int] = {}
+        for modules in (self._suit_modules, self._weapon_modules):
+            for rec in modules.values():
+                engineers = rec.get("engineers") if isinstance(rec, dict) else None
+                if not isinstance(engineers, list):
+                    continue
+                for name in engineers:
+                    if isinstance(name, str):
+                        counts[name] = counts.get(name, 0) + 1
+        return counts
 
     def has_data(self) -> bool:
         self._load(force=False)
@@ -167,3 +183,8 @@ class OdysseyEngineeringTable:
         rec = self.suit_module(key) if kind == "suit" else self.weapon_module(key)
         names = (rec or {}).get("engineers")
         return list(names) if isinstance(names, list) else []
+
+    def engineer_module_count(self, engineer_name: str) -> int:
+        """Number of distinct suit + weapon modules this engineer offers."""
+        self._load(force=False)
+        return self._engineer_module_counts.get(engineer_name, 0)
