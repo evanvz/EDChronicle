@@ -202,12 +202,21 @@ def derive_bgs_action(sys_rec: Dict[str, Any]) -> Tuple[str, str]:
 
 def _format_forecast(prediction: Optional[Dict[str, Any]]) -> Tuple[str, str]:
     """Returns (text, color_hex) for the Forecast column, from a
-    Repository.get_faction_predictions() entry. Priority: conflict risk
+    Repository.get_faction_predictions() entry. Priority: active war (it
+    already happened, outranks a mere risk prediction) > conflict risk
     (a rival converging on your influence) > expansion/retreat risk (both
     are "impending event" signals from the real BGS thresholds) > plain
     trend > "not enough history yet"."""
     if not prediction:
         return ("—", "#7a7a7a")
+
+    active_war = prediction.get("active_war")
+    if active_war:
+        opponent = active_war.get("faction_name")
+        if opponent:
+            influence_pct = (active_war.get("influence") or 0.0) * 100
+            return (f"⚔ At War vs {opponent} ({influence_pct:.1f}%)", "#FF6B6B")
+        return ("⚔ At War — opponent unknown (EDSM data incomplete)", "#FF6B6B")
 
     conflict = prediction.get("conflict_risk")
     if conflict:

@@ -7,6 +7,7 @@ import pytest
 from persistence.database import Database
 from persistence.repository import Repository
 from persistence.schema import SCHEMA_SQL
+from edc.ui.panels.player_faction_panel import _format_forecast
 
 
 @pytest.fixture
@@ -82,3 +83,31 @@ def test_low_influence_opponent_found_despite_large_gap(repo):
     _save(repo, 1, _faction("Distant Rival", 0.2, faction_state="War"))
     predictions = repo.get_faction_predictions("Our Faction")
     assert predictions[0]["active_war"]["faction_name"] == "Distant Rival"
+
+
+# --- _format_forecast() -- active_war rendering ---
+
+def test_forecast_shows_named_war_opponent():
+    prediction = {"active_war": {"faction_name": "Rival Faction", "influence": 0.2}}
+    text, color = _format_forecast(prediction)
+    assert text == "⚔ At War vs Rival Faction (20.0%)"
+    assert color == "#FF6B6B"
+
+
+def test_forecast_shows_unknown_war_opponent():
+    prediction = {"active_war": {"faction_name": None, "influence": None}}
+    text, color = _format_forecast(prediction)
+    assert text == "⚔ At War — opponent unknown (EDSM data incomplete)"
+    assert color == "#FF6B6B"
+
+
+def test_forecast_falls_through_to_conflict_risk_when_not_at_war():
+    # No-regression check: active_war absent/None must not disturb the
+    # pre-existing conflict_risk branch.
+    prediction = {
+        "active_war": None,
+        "conflict_risk": {"faction_name": "Close Rival", "diff": 0.03},
+    }
+    text, color = _format_forecast(prediction)
+    assert text == "⚔ Conflict risk vs Close Rival (Δ3.0%)"
+    assert color == "#FFB347"
