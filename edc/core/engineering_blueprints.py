@@ -66,7 +66,10 @@ class EngineeringBlueprintTable:
         self._blueprints: Dict[str, Dict[str, Any]] = {}
         self._materials: Dict[str, Dict[str, Any]] = {}
         self._engineer_locations: Dict[str, Dict[str, Any]] = {}
+        self._engineer_requirements: Dict[str, Dict[str, str]] = {}
+        self._requirements_mtime: Optional[float] = None
         self._load(force=True)
+        self._load_requirements(force=True)
 
     def _load(self, force: bool = False) -> None:
         try:
@@ -106,6 +109,27 @@ class EngineeringBlueprintTable:
             self._engineer_locations = {}
             self.last_updated = None
             self._mtime = None
+
+    def _load_requirements(self, force: bool = False) -> None:
+        path = self.path.parent / "engineer_requirements.json"
+        try:
+            if not path.exists():
+                self._engineer_requirements = {}
+                self._requirements_mtime = None
+                return
+
+            m = path.stat().st_mtime
+            if (not force) and (self._requirements_mtime is not None) and (m == self._requirements_mtime):
+                return
+
+            data = json.loads(path.read_text(encoding="utf-8"))
+            self._requirements_mtime = m
+            engineers = data.get("engineers") if isinstance(data, dict) else None
+            self._engineer_requirements = engineers if isinstance(engineers, dict) else {}
+        except Exception:
+            log.exception("Failed to load engineer_requirements.json")
+            self._engineer_requirements = {}
+            self._requirements_mtime = None
 
     def has_data(self) -> bool:
         self._load(force=False)
@@ -204,3 +228,18 @@ class EngineeringBlueprintTable:
             "system_name": rec.get("system_name"),
             "x": rec.get("x"), "y": rec.get("y"), "z": rec.get("z"),
         }
+
+    def engineer_requirements(self, engineer_name: str) -> Optional[Dict[str, str]]:
+        """Returns the {"discover","meet","unlock","referral"} subset present
+        for this engineer, or None if unknown. Missing fields are simply
+        absent from the dict, not empty strings."""
+        self._load_requirements(force=False)
+        rec = self._engineer_requirements.get(engineer_name)
+        return rec if isinstance(rec, dict) else None
+
+    def all_engineer_names(self) -> List[str]:
+        """Every known engineer name, sourced from engineer_locations (the
+        superset -- every entry in engineer_requirements is expected to
+        also appear here, per this file's join-key requirement)."""
+        self._load(force=False)
+        return sorted(self._engineer_locations.keys())

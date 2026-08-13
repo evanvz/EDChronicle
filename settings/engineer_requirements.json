@@ -1,0 +1,192 @@
+{
+  "last_updated": "2026-08-13",
+  "source": "User-supplied compilation of official/community engineer unlock data",
+  "engineers": {
+    "Felicity Farseer": {
+      "discover": "Public data sources.",
+      "meet": "Gain exploration rank Scout or higher.",
+      "unlock": "Provide 1 unit of Meta Alloys."
+    },
+    "Juri Ishmaak": {
+      "discover": "From Felicity Farseer (grade 3-4).",
+      "meet": "Claim more than 50 federal combat bonds.",
+      "unlock": "Provide 100,000 or 1,000,000 credits worth of federal combat bonds (the amount needed depends on the currently unknown conditions)."
+    },
+    "Colonel Bris Dekker": {
+      "discover": "From Juri Ishmaak (grade 3-4).",
+      "meet": "Friendly with the Federation.",
+      "unlock": "Provide 1,000,000 or 10,000,000 credits worth of federal combat bonds (the amount needed depends on the currently unknown conditions)."
+    },
+    "The Sarge": {
+      "discover": "From Juri Ishmaak (grade 3-4).",
+      "meet": "Gain rank Midshipman or higher with the Federal Navy.",
+      "unlock": "Provide 50 units of Aberrant Shield Pattern Analysis."
+    },
+    "Elvira Martuuk": {
+      "discover": "Public knowledge.",
+      "meet": "Attain a maximum distance from your career start location of at least 300 light years.",
+      "unlock": "Provide 3 units of Soontill Relics."
+    },
+    "Mel Brandon": {
+      "discover": "From Elvira Martuuk (grade 3-4).",
+      "meet": "Gain invitation from Colonia Council.",
+      "unlock": "Provide 100,000 credits worth of bounty vouchers."
+    },
+    "Zacariah Nemo": {
+      "discover": "From Elvira Martuuk (grade 3-4).",
+      "meet": "Gain invitation from Party of Yoru.",
+      "unlock": "Provide 25 units of Xihe Companions."
+    },
+    "Marco Qwent": {
+      "discover": "From Elvira Martuuk (grade 3-4).",
+      "meet": "Gain invitation from Sirius Corporation.",
+      "unlock": "Provide 25 units of Modular Terminals."
+    },
+    "Chloe Sedesi": {
+      "discover": "From Marco Qwent (grade 3-4).",
+      "meet": "Attain a maximum distance from your career start location of at least 5,000 light years.",
+      "unlock": "Provide 25 units of Sensor Fragments."
+    },
+    "Lori Jameson": {
+      "discover": "From Marco Qwent (grade 3-4).",
+      "meet": "Gain combat rank Dangerous or higher.",
+      "unlock": "Provide 25 units of Kongga Ale."
+    },
+    "Professor Palin": {
+      "discover": "From Marco Qwent (grade 3-4).",
+      "meet": "Attain a maximum distance from your career start location of at least 5,000 light years.",
+      "unlock": "Provide 25 units of Sensor Fragments."
+    },
+    "The Dweller": {
+      "discover": "Common knowledge.",
+      "meet": "Deal with at least 5 black markets.",
+      "unlock": "Pay 500,000 credits."
+    },
+    "Marsha Hicks": {
+      "discover": "From The Dweller (grade 3-4).",
+      "meet": "Gain exploration rank Surveyor or higher.",
+      "unlock": "Provide 10 units of mined Osmium."
+    },
+    "Lei Cheung": {
+      "discover": "From The Dweller (grade 3-4).",
+      "meet": "You have traded in over 50 markets.",
+      "unlock": "Provide 200 units of Gold."
+    },
+    "Ram Tah": {
+      "discover": "From Lei Cheung (grade 3-4).",
+      "meet": "Gain exploration rank Surveyor or higher.",
+      "unlock": "Provide 50 units of Classified Scan Databanks."
+    },
+    "Tod 'The Blaster' McQuinn": {
+      "discover": "Common knowledge.",
+      "meet": "Earn more than 15 bounty vouchers.",
+      "unlock": "Provide 100,000 credits worth of bounty vouchers."
+    },
+    "Petra Olmanova": {
+      "discover": "From Tod 'The Blaster' McQuinn (grade 3-4).",
+      "meet": "Gain combat rank Expert or higher.",
+      "unlock": "Provide 200 units of Progenitor Cells."
+    },
+    "Selene Jean": {
+      "discover": "From Tod 'The Blaster' McQuinn (grade 3-4).",
+      "meet": "Mine at least 500 tons of ore.",
+      "unlock": "Provide 10 units of mined Painite."
+    },
+    "Bill Turner": {
+      "discover": "From Selene Jean (grade 3-4).",
+      "meet": "Gain Friendly status with the Alliance and Allied reputation with the Alioth Independents to get a permit to access the Alioth star system.",
+      "unlock": "Provide 50 units of Bromellite."
+    },
+    "Didi Vatermann": {
+      "discover": "From Selene Jean (grade 3-4).",
+      "meet": "Gain trade rank Merchant or higher.",
+      "unlock": "Provide 50 units of Lavian Brandy."
+    },
+    "Liz Ryder": {
+      "discover": "Public sources.",
+      "meet": "Gain Cordial or Friendly status with Eurybia Blue Mafia.",
+      "unlock": "Provide 200 units of Landmines."
+    },
+    "Etienne Dorn": {
+      "discover": "From Liz Ryder (grade 3-4).",
+      "meet": "Gain trade rank Dealer or higher.",
+      "unlock": "Provide 25 units of Occupied Escape Pods."
+    },
+    "Hera Tani": {
+      "discover": "From Liz Ryder (grade 3-4).",
+      "meet": "Gain rank Outsider or higher with the Empire.",
+      "unlock": "Provide 50 units of Kamitra Cigars."
+    },
+    "Broo Tarquin": {
+      "discover": "From Hera Tani (grade 3-4).",
+      "meet": "Gain combat rank Competent or higher.",
+      "unlock": "Provide 50 units of Fujin Tea."
+    },
+    "Tiana Fortune": {
+      "discover": "From Hera Tani (grade 3-4).",
+      "meet": "Friendly with the Empire.",
+      "unlock": "Provide 50 units of Decoded Emission Data."
+    },
+    "Hero Ferrari": {
+      "discover": "Common knowledge.",
+      "unlock": "Complete 10 surface conflict zones.",
+      "referral": "Provide 5 Settlement Defence Plans."
+    },
+    "Wellington Beck": {
+      "discover": "From Hero Ferrari.",
+      "unlock": "Sell a total of 15 Multimedia Entertainment, Classic Entertainment and Cat media to bartenders.",
+      "referral": "Provide 5 units of Insight Entertainment suites."
+    },
+    "Uma Laszlo": {
+      "discover": "From Wellington Beck.",
+      "unlock": "Reach Unfriendly reputation or lower with Sirius Corporation."
+    },
+    "Jude Navarro": {
+      "discover": "Common knowledge.",
+      "unlock": "Complete 10 Restore or Reactivation missions.",
+      "referral": "Provide 5 units of Genetic Repair Meds."
+    },
+    "Terra Velasquez": {
+      "discover": "From Jude Navarro.",
+      "unlock": "Complete 6 Covert theft and Covert heist missions.",
+      "referral": "Provide 15 Financial projections."
+    },
+    "Oden Geiger": {
+      "discover": "From Terra Velasquez.",
+      "unlock": "Sell a total of 20 Biological sample, Employee genetic data and Genetic research to bartenders."
+    },
+    "Domino Green": {
+      "discover": "Common knowledge.",
+      "unlock": "Travel at least 100 light years in shuttles.",
+      "referral": "Provide 5 doses of Push."
+    },
+    "Kit Fowler": {
+      "discover": "From Domino Green.",
+      "unlock": "Sell 5 Opinion polls to bartenders.",
+      "referral": "Provide 5 units of Surveillance equipment."
+    },
+    "Yarden Bond": {
+      "discover": "From Kit Fowler.",
+      "unlock": "Sell 5 Smear campaign plans to bartenders."
+    },
+    "Eleanor Bresa": {
+      "discover": "Common knowledge.",
+      "unlock": "Visit 5 settlements in the Colonia system.",
+      "referral": "Provide 10 Digital Designs."
+    },
+    "Rosa Dayette": {
+      "discover": "Common knowledge.",
+      "unlock": "Sell a total of 10 Culinary Recipes or Cocktail Recipes to stations in Colonia.",
+      "referral": "Provide 10 units of Manufacturing Instructions data."
+    },
+    "Baltanos": {
+      "discover": "Common knowledge.",
+      "unlock": "Reach Friendly reputation with the Colonia Council.",
+      "referral": "Provide 10 Faction Associates data."
+    },
+    "Yi Shen": {
+      "discover": "From Baltanos, Eleanor Bresa and Rosa Dayette.",
+      "unlock": "Complete referral tasks for Baltanos, Eleanor Bresa and Rosa Dayette."
+    }
+  }
+}
