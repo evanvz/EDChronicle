@@ -2611,8 +2611,8 @@ class MainWindow(QMainWindow):
             self._stop_voice_commands()
 
     def _ptt_key_button_label(self) -> str:
-        key = str(getattr(self.cfg, "push_to_talk_key", "caps lock") or "caps lock")
-        return f"Key: {key.title()}"
+        key = str(getattr(self.cfg, "push_to_talk_key", "f9") or "f9")
+        return f"Key: {key}"
 
     def _on_push_to_talk_toggled(self, checked: bool):
         self.cfg.push_to_talk_enabled = bool(checked)

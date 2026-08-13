@@ -42,7 +42,7 @@ class AppConfig:
     comms_rate: int = 210
     voice_commands_enabled: bool = False
     push_to_talk_enabled: bool = False
-    push_to_talk_key: str = "caps lock"
+    push_to_talk_key: str = "f9"
     always_on_top: bool = False
     eddn_contribute_enabled: bool = True
     market_search_radius_ly: int = 100
@@ -181,7 +181,7 @@ class ConfigStore:
                 comms_rate=int(data.get("comms_rate", 210) or 210),
                 voice_commands_enabled=bool(data.get("voice_commands_enabled", False)),
                 push_to_talk_enabled=bool(data.get("push_to_talk_enabled", False)),
-                push_to_talk_key=str(data.get("push_to_talk_key", "caps lock") or "caps lock"),
+                push_to_talk_key=str(data.get("push_to_talk_key", "f9") or "f9"),
                 always_on_top=bool(data.get("always_on_top", False)),
                 eddn_contribute_enabled=bool(data.get("eddn_contribute_enabled", True)),
                 market_search_radius_ly=int(data.get("market_search_radius_ly", 100) or 100),
@@ -216,7 +216,7 @@ class ConfigStore:
                         "comms_rate": int(getattr(cfg, "comms_rate", 210) or 210),
                         "voice_commands_enabled": bool(getattr(cfg, "voice_commands_enabled", False)),
                         "push_to_talk_enabled": bool(getattr(cfg, "push_to_talk_enabled", False)),
-                        "push_to_talk_key": str(getattr(cfg, "push_to_talk_key", "caps lock") or "caps lock"),
+                        "push_to_talk_key": str(getattr(cfg, "push_to_talk_key", "f9") or "f9"),
                         "always_on_top": bool(getattr(cfg, "always_on_top", False)),
                         "eddn_contribute_enabled": bool(getattr(cfg, "eddn_contribute_enabled", True)),
                         "market_search_radius_ly": int(getattr(cfg, "market_search_radius_ly", 100) or 100),

@@ -198,7 +198,7 @@ class VoiceCommandListener(QObject):
         self._grammar_json       = self._build_grammar()
         self._input_device_name: str | None = None
         self._ptt_enabled = False
-        self._ptt_key     = "caps lock"
+        self._ptt_key     = "f9"
         self._ptt_error_logged = False
 
     # ── Public config API ─────────────────────────────────────────────────────
@@ -225,7 +225,7 @@ class VoiceCommandListener(QObject):
     def set_push_to_talk(self, enabled: bool, key: str):
         """Called from main thread whenever the push-to-talk setting changes."""
         self._ptt_enabled = bool(enabled)
-        self._ptt_key = (key or "caps lock").strip().lower()
+        self._ptt_key = (key or "f9").strip().lower()
 
     # ── Grammar ───────────────────────────────────────────────────────────────
 
@@ -332,6 +332,11 @@ class VoiceCommandListener(QObject):
         blackout_until = 0.0
         fragments: list[tuple[float, list[str]]] = []   # recent (timestamp, words) for split-utterance recovery
         ready_announced = False   # "system ready" cue fires once per listener session
+        # Chunks of injected silence fed to Vosk after a PTT key-release, so it
+        # can detect end-of-utterance naturally and finalize instead of the
+        # phrase being cut off mid-word. ~1.8s — comfortably inside the
+        # finalization delay documented at _FRAGMENT_WINDOW above.
+        PTT_RELEASE_GRACE_CHUNKS = int(1.8 / (self.BLOCK_SIZE / self.SAMPLE_RATE))
         log.info("Voice command listener active — trigger='%s', %d ship commands",
                  self._trigger_word, len(self._ship_commands))
 
@@ -396,7 +401,11 @@ class VoiceCommandListener(QObject):
                 # single-chunk misfire while still firing well before Vosk
                 # would finalize the utterance.
                 consecutive_trigger_partials = 0
-                ptt_was_held = True   # avoids a spurious reset on the very first PTT-gated chunk
+                # False at cycle start: a not-yet-pressed key on the very first
+                # PTT-gated chunk must NOT read as a release transition (there's
+                # nothing in progress yet to give a grace period to).
+                ptt_key_was_held = False
+                ptt_release_grace_chunks_remaining = 0
 
                 try:
                     while self._running:
@@ -413,10 +422,37 @@ class VoiceCommandListener(QObject):
                                     log.error("push-to-talk key '%s' invalid: %s", self._ptt_key, exc)
                                     self._ptt_error_logged = True
                                 continue
-                            if not ptt_held:
-                                if ptt_was_held:
-                                    # Key just released -- clear recognizer + fragment
-                                    # state so a phrase cut off mid-word doesn't leak
+
+                            if ptt_held:
+                                # Real audio flowing normally — cancel any release
+                                # grace period so re-pressing before it expires
+                                # resumes live capture cleanly.
+                                ptt_release_grace_chunks_remaining = 0
+                                ptt_key_was_held = True
+                            else:
+                                if ptt_key_was_held:
+                                    # Key just released. Command matching only
+                                    # happens on Vosk finals, and a final only
+                                    # comes from Vosk detecting trailing silence
+                                    # after speech (~1-1.5s, see _FRAGMENT_WINDOW
+                                    # above) — so don't discard the in-progress
+                                    # utterance yet. Feed it a short window of
+                                    # real silence instead, so it can endpoint
+                                    # naturally through the unmodified
+                                    # final-handling code below rather than
+                                    # cutting the phrase off mid-word.
+                                    ptt_release_grace_chunks_remaining = PTT_RELEASE_GRACE_CHUNKS
+                                ptt_key_was_held = False
+
+                                if ptt_release_grace_chunks_remaining > 0:
+                                    ptt_release_grace_chunks_remaining -= 1
+                                    data = bytes(len(data))
+                                else:
+                                    # Grace period exhausted (or the key was
+                                    # already up with nothing pending) and no
+                                    # final was produced — nothing left to
+                                    # recover. Clear recognizer + fragment state
+                                    # so a phrase cut off mid-word doesn't leak
                                     # into the next press.
                                     try:
                                         rec.Reset()
@@ -425,9 +461,7 @@ class VoiceCommandListener(QObject):
                                     fragments = []
                                     partial_trigger_beeped = False
                                     consecutive_trigger_partials = 0
-                                ptt_was_held = False
-                                continue
-                            ptt_was_held = True
+                                    continue
 
                         now = time.monotonic()
 
@@ -480,6 +514,7 @@ class VoiceCommandListener(QObject):
                             self.ship_command_detected.emit(phrase)
                             blackout_until = now + _POST_ACTION_BLACKOUT
                             fragments = []
+                            ptt_release_grace_chunks_remaining = 0  # resolved — stop the grace period early
                             continue
 
                         # Nav matching is skipped when the ship trigger is present —
@@ -493,6 +528,7 @@ class VoiceCommandListener(QObject):
                                 self.command_detected.emit(tab)
                                 blackout_until = now + _POST_ACTION_BLACKOUT
                                 fragments = []
+                                ptt_release_grace_chunks_remaining = 0  # resolved — stop the grace period early
                                 continue
 
                         # Bare trigger word alone — acknowledge it was heard (unless
@@ -521,6 +557,7 @@ class VoiceCommandListener(QObject):
                                     continue  # possibly mid-phrase — wait for more
                             log.info("Unrecognised phrase: %s", combined)
                             self.command_unrecognised.emit()
+                            ptt_release_grace_chunks_remaining = 0  # resolved — stop the grace period early
 
                 except Exception as exc:
                     log.warning("Voice capture error, restarting in 3s: %s", exc)
