@@ -86,7 +86,9 @@ def _recent_counts(service: str, now: float) -> Dict[str, int]:
         dq = _records.get(logger_name)
         if not dq:
             continue
-        n = sum(1 for t in dq if now - t <= _WINDOW_SECONDS)
+        # Snapshot the deque before iterating to avoid RuntimeError from
+        # concurrent append() calls from background threads (EDDN/BGS listeners).
+        n = sum(1 for t in list(dq) if now - t <= _WINDOW_SECONDS)
         if n:
             counts[logger_name] = n
     return counts
