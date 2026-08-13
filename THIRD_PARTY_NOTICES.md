@@ -64,3 +64,14 @@ own game data, not separately licensed by EDCD (coriolis-data's
 `LICENSE.md` says its JSON data is Frontier's IP; FDevIDs carries no
 license file at all). Use here relies on Frontier's Fan Content Policy
 for non-commercial community tools, not an open-source license grant.
+
+## settings/engineer_requirements.json (not from an upstream project)
+
+Unlike the other reference files above, this one wasn't ported from a
+specific named open-source project. It's a compilation of each
+Engineer's discover/meet/unlock/referral requirements, supplied directly
+in the development session rather than sourced from a single upstream
+repository. The underlying facts are publicly-known Elite Dangerous game
+mechanics — the same information already documented across many
+community wikis and official sources (e.g. the Elite Dangerous Wiki's
+"Engineers" article) — not proprietary to any one project.

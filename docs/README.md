@@ -344,6 +344,7 @@ Some newer features persist to plain JSON under `settings/` or `data/` rather th
 | File | Contents |
 |------|----------|
 | `settings/engineering_blueprints.json` | Blueprint material costs per grade + which engineer(s) offer each (reference data, not user-specific) |
+| `settings/engineer_requirements.json` | Per-engineer discover/meet/unlock/referral requirement text for the Engineers reference tab (reference data, not user-specific) |
 | `settings/voice_commands.json` | Ship command bindings, tab-navigation trigger word, input/output audio device, feedback volume |
 | `data/engineering_wishlist.json` | User-selected blueprint/grade build targets |
 | `data/engineer_progress.json` | Per-engineer unlock rank/status, seeded at startup and updated on `EngineerProgress` events |

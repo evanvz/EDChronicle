@@ -1257,10 +1257,7 @@ class _EngineersTab(QWidget):
             return "in_progress", f"{prog} — not yet unlocked"
         return "not_encountered", "Not Encountered"
 
-    def _engineer_html(self, name: str, status_text: str) -> str:
-        req = self._blueprints.engineer_requirements(name) or {}
-        home = self._blueprints.engineer_home(name)
-
+    def _engineer_html(self, name: str, status_text: str, req: Dict[str, str], home: Optional[Dict[str, Any]]) -> str:
         ref_x = getattr(self._state, "system_x", None) if self._state else None
         ref_y = getattr(self._state, "system_y", None) if self._state else None
         ref_z = getattr(self._state, "system_z", None) if self._state else None
@@ -1297,7 +1294,16 @@ class _EngineersTab(QWidget):
 
     def refresh(self, state) -> None:
         self._state = state
+        if not self.isVisible():
+            # Tab isn't the one currently on screen -- no point paying for
+            # 38 engineers' worth of HTML/section rebuilds the user can't
+            # see. self._state is already cached above for when the tab
+            # does become visible.
+            return
+
         names = self._blueprints.all_engineer_names()
+        requirements = self._blueprints.all_engineer_requirements()
+        homes = self._blueprints.all_engineer_homes()
 
         grouped: Dict[str, List[str]] = {"unlocked": [], "in_progress": [], "not_encountered": []}
         statuses: Dict[str, str] = {}
@@ -1308,7 +1314,10 @@ class _EngineersTab(QWidget):
 
         for key in ("unlocked", "in_progress", "not_encountered"):
             entries = sorted(grouped[key])
-            html = "".join(self._engineer_html(name, statuses[name]) for name in entries)
+            html = "".join(
+                self._engineer_html(name, statuses[name], requirements.get(name) or {}, homes.get(name))
+                for name in entries
+            )
             self._sections[key].setText(
                 html if html else
                 '<span style="color:#444444;font-size:12px;">None.</span>'

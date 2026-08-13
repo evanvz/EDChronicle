@@ -243,3 +243,24 @@ class EngineeringBlueprintTable:
         also appear here, per this file's join-key requirement)."""
         self._load(force=False)
         return sorted(self._engineer_locations.keys())
+
+    def all_engineer_requirements(self) -> Dict[str, Dict[str, str]]:
+        """Every engineer's requirements dict at once -- callers needing
+        all engineers (e.g. a full reference list) should use this instead
+        of calling engineer_requirements() in a per-engineer loop, to avoid
+        a redundant file-mtime-check per engineer."""
+        self._load_requirements(force=False)
+        return dict(self._engineer_requirements)
+
+    def all_engineer_homes(self) -> Dict[str, Dict[str, Any]]:
+        """Every engineer's {"system_name","x","y","z"} at once -- same
+        reasoning as all_engineer_requirements()."""
+        self._load(force=False)
+        return {
+            name: {
+                "system_name": rec.get("system_name"),
+                "x": rec.get("x"), "y": rec.get("y"), "z": rec.get("z"),
+            }
+            for name, rec in self._engineer_locations.items()
+            if isinstance(rec, dict) and "x" in rec
+        }
