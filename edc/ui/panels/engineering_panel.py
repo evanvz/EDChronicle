@@ -452,6 +452,7 @@ class _ShipEngineeringTab(QWidget):
         self._refresh_wishlist_table()
 
     def _refresh_wishlist_table(self):
+        selected_entry = self._selected_wishlist_entry()
         self._wl_table.setSortingEnabled(False)
         self._wl_table.setRowCount(len(self._wishlist))
         for r, entry in enumerate(self._wishlist):
@@ -482,6 +483,22 @@ class _ShipEngineeringTab(QWidget):
             self._wl_table.setItem(r, 1, grade_item)
             self._wl_table.setItem(r, 2, status_item)
         self._wl_table.setSortingEnabled(True)
+        # Repopulating destroys/recreates every row, and re-enabling sorting
+        # re-applies the active sort -- Qt's selection highlight survives by
+        # row number, not by identity, so if the sort places a different
+        # entry at that row the highlight silently drifts to it. Restore by
+        # matching the captured entry's identity in its post-sort position.
+        if selected_entry is not None:
+            found_row = None
+            for row in range(self._wl_table.rowCount()):
+                col0 = self._wl_table.item(row, 0)
+                if col0 is not None and col0.data(Qt.ItemDataRole.UserRole) == selected_entry:
+                    found_row = row
+                    break
+            if found_row is not None:
+                self._wl_table.setCurrentCell(found_row, 0)
+            else:
+                self._wl_table.setCurrentCell(-1, -1)
         self._refresh_detail_table()
 
     def _refresh_detail_table(self):
@@ -570,7 +587,7 @@ class _ShipEngineeringTab(QWidget):
             name_item = QTableWidgetItem(eng_name)
             sys_item = QTableWidgetItem(system_name)
             dist_item = _NumericTableWidgetItem(
-                f"{dist:.1f}" if dist is not None else "—", dist if dist is not None else -1.0
+                f"{dist:.1f}" if dist is not None else "—", dist if dist is not None else float("inf")
             )
             dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             status_item = QTableWidgetItem(status_text)
@@ -631,12 +648,12 @@ class _ShipEngineeringTab(QWidget):
             dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             price = listing.get("price")
             price_item = _NumericTableWidgetItem(
-                f"{price:,}" if isinstance(price, int) else "—", price if isinstance(price, int) else -1
+                f"{price:,}" if isinstance(price, int) else "—", price if isinstance(price, int) else float("inf")
             )
             price_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             stock = listing.get("stock")
             stock_item = _NumericTableWidgetItem(
-                str(stock) if isinstance(stock, int) else "—", stock if isinstance(stock, int) else -1
+                str(stock) if isinstance(stock, int) else "—", stock if isinstance(stock, int) else float("inf")
             )
             stock_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             age_text, age_sort = _format_age(listing.get("last_updated"), listing.get("last_visited"))
@@ -949,6 +966,7 @@ class _OdysseyEngineeringTab(QWidget):
         return entry["name"]
 
     def _refresh_wishlist_table(self):
+        selected_entry = self._selected_wishlist_entry()
         self._wl_table.setSortingEnabled(False)
         self._wl_table.setRowCount(len(self._wishlist))
         for r, entry in enumerate(self._wishlist):
@@ -968,6 +986,22 @@ class _OdysseyEngineeringTab(QWidget):
             self._wl_table.setItem(r, 1, kind_item)
             self._wl_table.setItem(r, 2, status_item)
         self._wl_table.setSortingEnabled(True)
+        # Repopulating destroys/recreates every row, and re-enabling sorting
+        # re-applies the active sort -- Qt's selection highlight survives by
+        # row number, not by identity, so if the sort places a different
+        # entry at that row the highlight silently drifts to it. Restore by
+        # matching the captured entry's identity in its post-sort position.
+        if selected_entry is not None:
+            found_row = None
+            for row in range(self._wl_table.rowCount()):
+                col0 = self._wl_table.item(row, 0)
+                if col0 is not None and col0.data(Qt.ItemDataRole.UserRole) == selected_entry:
+                    found_row = row
+                    break
+            if found_row is not None:
+                self._wl_table.setCurrentCell(found_row, 0)
+            else:
+                self._wl_table.setCurrentCell(-1, -1)
         self._refresh_detail_table()
 
     def _refresh_detail_table(self):
@@ -1059,7 +1093,7 @@ class _OdysseyEngineeringTab(QWidget):
         self._engineer_table.setRowCount(len(rows))
         for r, (dist, eng_name, system_name) in enumerate(rows):
             dist_item = _NumericTableWidgetItem(
-                f"{dist:.1f}" if dist is not None else "—", dist if dist is not None else -1.0
+                f"{dist:.1f}" if dist is not None else "—", dist if dist is not None else float("inf")
             )
             dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self._engineer_table.setItem(r, 0, QTableWidgetItem(eng_name))
@@ -1116,12 +1150,12 @@ class _OdysseyEngineeringTab(QWidget):
             dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             price = listing.get("price")
             price_item = _NumericTableWidgetItem(
-                f"{price:,}" if isinstance(price, int) else "—", price if isinstance(price, int) else -1
+                f"{price:,}" if isinstance(price, int) else "—", price if isinstance(price, int) else float("inf")
             )
             price_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             stock = listing.get("stock")
             stock_item = _NumericTableWidgetItem(
-                str(stock) if isinstance(stock, int) else "—", stock if isinstance(stock, int) else -1
+                str(stock) if isinstance(stock, int) else "—", stock if isinstance(stock, int) else float("inf")
             )
             stock_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             age_text, age_sort = _format_age(listing.get("last_updated"), listing.get("last_visited"))
