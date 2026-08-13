@@ -29,8 +29,8 @@ from PyQt6.QtWidgets import (
     QAbstractScrollArea,
     QSizePolicy,
 )
-from PyQt6.QtCore import QThread, QObject, pyqtSignal, Qt, QTimer, QSettings, QPropertyAnimation, QEasingCurve, QSize
-from PyQt6.QtGui import QTextCursor, QColor, QIcon
+from PyQt6.QtCore import QThread, QObject, pyqtSignal, Qt, QTimer, QSettings, QPropertyAnimation, QEasingCurve, QSize, QEvent
+from PyQt6.QtGui import QTextCursor, QColor, QIcon, QKeySequence
 from pathlib import Path
 
 from edc.core.state import GameState
@@ -1240,6 +1240,19 @@ class MainWindow(QMainWindow):
         self.voice_cmd_check.toggled.connect(self._on_voice_commands_toggled)
         st.addWidget(self.voice_cmd_check)
 
+        ptt_row = QHBoxLayout()
+        self.ptt_check = QCheckBox("Push-to-talk (hold key to speak, instead of always listening)")
+        self.ptt_check.setChecked(bool(getattr(self.cfg, "push_to_talk_enabled", False)))
+        self.ptt_check.toggled.connect(self._on_push_to_talk_toggled)
+        ptt_row.addWidget(self.ptt_check)
+
+        self.ptt_key_btn = QPushButton(self._ptt_key_button_label())
+        self.ptt_key_btn.setToolTip("Click, then press the key you want to hold for push-to-talk.")
+        self.ptt_key_btn.clicked.connect(self._on_set_ptt_key_clicked)
+        ptt_row.addWidget(self.ptt_key_btn)
+        ptt_row.addStretch(1)
+        st.addLayout(ptt_row)
+
         # --- Window behaviour ---
         self.always_on_top_check = QCheckBox("Keep window always on top")
         self.always_on_top_check.setChecked(bool(getattr(self.cfg, "always_on_top", False)))
@@ -1389,6 +1402,7 @@ class MainWindow(QMainWindow):
         self._voice_cmd_models_dir = app_dir / "models"
         self._voice_cmd_worker = None
         self._voice_cmd_thread = None
+        self._ptt_capturing = False
         self._ship_dispatcher = ShipCommandDispatcher()
         # "All systems online." must wait for BOTH the full startup sequence
         # (splash closed, window shown, watchers started) AND the voice
@@ -2533,6 +2547,9 @@ class MainWindow(QMainWindow):
         self._voice_cmd_worker.update_ship_commands(cmds, trigger)
         self._voice_cmd_worker.set_nav_trigger_word(self.voice_commands_panel.nav_trigger_word())
         self._voice_cmd_worker.set_input_device(self.voice_commands_panel.input_device())
+        self._voice_cmd_worker.set_push_to_talk(
+            self.cfg.push_to_talk_enabled, self.cfg.push_to_talk_key,
+        )
 
     def _on_voice_commands_config_changed(self):
         """Called when the user edits the Voice Commands panel."""
@@ -2592,6 +2609,77 @@ class MainWindow(QMainWindow):
             self._start_voice_commands()
         else:
             self._stop_voice_commands()
+
+    def _ptt_key_button_label(self) -> str:
+        key = str(getattr(self.cfg, "push_to_talk_key", "caps lock") or "caps lock")
+        return f"Key: {key.title()}"
+
+    def _on_push_to_talk_toggled(self, checked: bool):
+        self.cfg.push_to_talk_enabled = bool(checked)
+        self.cfg_store.save(self.cfg)
+        if self._voice_cmd_worker:
+            self._voice_cmd_worker.set_push_to_talk(
+                self.cfg.push_to_talk_enabled, self.cfg.push_to_talk_key,
+            )
+
+    def _on_set_ptt_key_clicked(self):
+        if self._ptt_capturing:
+            return
+        self._ptt_capturing = True
+        self.ptt_key_btn.setText("Press a key... (Esc to cancel)")
+        from PyQt6.QtWidgets import QApplication
+        QApplication.instance().installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        if self._ptt_capturing and event.type() == QEvent.Type.KeyPress:
+            self._finish_ptt_capture(event.key())
+            return True
+        return super().eventFilter(obj, event)
+
+    def _finish_ptt_capture(self, qt_key: int) -> None:
+        from PyQt6.QtWidgets import QApplication
+        QApplication.instance().removeEventFilter(self)
+        self._ptt_capturing = False
+
+        if qt_key == Qt.Key.Key_Escape:
+            self.ptt_key_btn.setText(self._ptt_key_button_label())
+            return
+
+        _REJECTED_KEYS = {
+            Qt.Key.Key_Shift, Qt.Key.Key_Control, Qt.Key.Key_Alt,
+            Qt.Key.Key_Meta, Qt.Key.Key_AltGr,
+        }
+        if qt_key in _REJECTED_KEYS:
+            self.ptt_key_btn.setText("Can't use a bare modifier key — try again")
+            log.warning("Push-to-talk key capture rejected a bare modifier key")
+            return
+
+        key_name = QKeySequence(qt_key).toString()
+        # keyboard's own name normalization handles case/spacing for the
+        # overwhelming majority of keys directly from Qt's toString() output
+        # (verified: letters, digits, F-keys, Tab/Space/arrows/Home/End/
+        # PageUp/PageDown/Insert/Delete/Backspace/Return/Escape/CapsLock/
+        # NumLock/Print/Pause/Menu all pass through as-is). One confirmed
+        # exception needs an explicit override; anything else unexpected is
+        # caught by the validation call below rather than silently accepted.
+        _PTT_KEY_OVERRIDES = {"ScrollLock": "scroll lock"}
+        key_name = _PTT_KEY_OVERRIDES.get(key_name, key_name)
+
+        import keyboard
+        try:
+            keyboard.is_pressed(key_name)
+        except Exception:
+            self.ptt_key_btn.setText(f"'{key_name}' isn't supported — try a different key")
+            log.warning("Push-to-talk key capture: '%s' rejected by keyboard library", key_name)
+            return
+
+        self.cfg.push_to_talk_key = key_name
+        self.cfg_store.save(self.cfg)
+        self.ptt_key_btn.setText(self._ptt_key_button_label())
+        if self._voice_cmd_worker:
+            self._voice_cmd_worker.set_push_to_talk(
+                self.cfg.push_to_talk_enabled, self.cfg.push_to_talk_key,
+            )
 
     def _feedback_volume(self) -> float:
         """Voice-command feedback volume from the Voice Cmds panel slider —
