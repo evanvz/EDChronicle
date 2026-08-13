@@ -1010,6 +1010,7 @@ class MainWindow(QMainWindow):
             self._service_health_labels[name] = lbl
 
         self._service_health_timer = QTimer(self)
+        # 30s catches a real outage quickly without meaningfully adding overhead to a passive in-memory check.
         self._service_health_timer.setInterval(30 * 1000)
         self._service_health_timer.timeout.connect(self._on_service_health_tick)
         self._service_health_timer.start()

@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 import time
 from collections import deque
-from typing import Dict, Deque, Tuple
+from typing import Dict, Deque
 
 _SERVICE_LOGGERS: Dict[str, str] = {
     "edc.core.edsm_faction_lookup": "EDSM",
@@ -31,13 +31,11 @@ _WINDOW_SECONDS = 10 * 60
 _ISSUE_THRESHOLD = 3
 _MAX_RECORDS_PER_LOGGER = 50
 
-# {logger_name: deque[(timestamp, )]} -- capped per logger so a truly
+# {logger_name: deque[timestamp]} -- capped per logger so a truly
 # runaway failure loop can't grow this unboundedly; the 10-minute window
 # means old entries age out naturally well before the cap matters in
 # any realistic scenario.
 _records: Dict[str, Deque[float]] = {}
-
-_attached = False
 
 
 def _record(logger_name: str, when: float) -> None:
@@ -66,14 +64,10 @@ class ServiceHealthHandler(logging.Handler):
 def attach() -> None:
     """Idempotent -- safe to call more than once (e.g. if setup_logging()
     is ever re-invoked). Only attaches one handler to the root logger."""
-    global _attached
-    if _attached:
-        return
     root = logging.getLogger()
     already = any(isinstance(h, ServiceHealthHandler) for h in root.handlers)
     if not already:
         root.addHandler(ServiceHealthHandler())
-    _attached = True
 
 
 def _recent_counts(service: str, now: float) -> Dict[str, int]:
