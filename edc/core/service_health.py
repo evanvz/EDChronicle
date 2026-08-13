@@ -24,6 +24,7 @@ _SERVICE_LOGGERS: Dict[str, str] = {
     "edc.core.colonisation_eligibility": "EDSM",
     "edc.core.eddn_listener": "EDDN",
     "edc.core.eddn_market": "EDDN",
+    "edc.core.eddn_publisher": "EDDN",
     "edc.core.bgs_tick": "BGS Tick",
 }
 
