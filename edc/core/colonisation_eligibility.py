@@ -39,8 +39,11 @@ _DEFAULT_RADIUS_LY = 15.0
 
 
 def _query_sphere(system_name: str, radius_ly: float) -> Optional[List[Dict[str, Any]]]:
-    """Returns the raw sphere-systems JSON array, or None on any failure
-    (network error, bad response, non-list payload)."""
+    """Returns the raw sphere-systems JSON array on success (always includes
+    the queried system itself at distance 0), an empty list [] if EDSM's
+    response is a JSON object rather than a list -- EDSM's genuine "no such
+    system" signal, confirmed live -- or None on a real failure (network
+    error, bad status, or any other unparseable/unexpected response)."""
     try:
         resp = requests.get(
             _SPHERE_URL,
@@ -53,9 +56,11 @@ def _query_sphere(system_name: str, radius_ly: float) -> Optional[List[Dict[str,
     except Exception:
         log.exception("EDSM sphere-systems lookup failed for %r", system_name)
         return None
-    if not isinstance(data, list):
-        return None
-    return data
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        return []
+    return None
 
 
 def _is_unpopulated(entry: Dict[str, Any]) -> bool:
@@ -63,16 +68,25 @@ def _is_unpopulated(entry: Dict[str, Any]) -> bool:
     return isinstance(info, dict) and not info
 
 
-def find_nearby_colonisation_candidates(system_name: str, radius_ly: float = _DEFAULT_RADIUS_LY) -> List[Dict[str, Any]]:
-    """Unpopulated systems within radius_ly of system_name, closest first,
+def find_nearby_colonisation_candidates(system_name: str, radius_ly: float = _DEFAULT_RADIUS_LY) -> Dict[str, Any]:
+    """Returns {"candidates": list[dict], "center_populated": Optional[bool], "lookup_failed": bool}.
+    candidates: unpopulated systems within radius_ly of system_name, closest first,
     capped at _MAX_CANDIDATES. Each result: {"name": str, "distance_ly": float}.
-    Returns [] on lookup failure or when nothing qualifies -- callers can't
-    distinguish "EDSM unreachable" from "genuinely no candidates" from this
-    return value alone; that distinction isn't needed for the passive list
-    (both render as an empty list either way in the UI)."""
+    center_populated: True if system_name is itself a populated system (in which case every
+    candidate IS guaranteed genuinely eligible, since the center doubles as the populated
+    reference point) -- False if system_name is itself unpopulated (candidates are merely
+    "nearby," NOT verified eligible -- each one individually might or might not have its own
+    populated neighbor within range) -- None if the lookup failed or the system wasn't found.
+    lookup_failed: True if EDSM was unreachable or returned something unparseable -- distinct
+    from a genuine empty candidates list."""
     data = _query_sphere(system_name, radius_ly)
     if data is None:
-        return []
+        return {"candidates": [], "center_populated": None, "lookup_failed": True}
+    if not data:
+        return {"candidates": [], "center_populated": None, "lookup_failed": False}
+
+    center = next((e for e in data if e.get("distance") == 0), None)
+    center_populated = None if center is None else not _is_unpopulated(center)
 
     candidates = []
     for entry in data:
@@ -87,7 +101,11 @@ def find_nearby_colonisation_candidates(system_name: str, radius_ly: float = _DE
         candidates.append({"name": name, "distance_ly": float(distance)})
 
     candidates.sort(key=lambda c: c["distance_ly"])
-    return candidates[:_MAX_CANDIDATES]
+    return {
+        "candidates": candidates[:_MAX_CANDIDATES],
+        "center_populated": center_populated,
+        "lookup_failed": False,
+    }
 
 
 def check_system_eligibility(system_name: str) -> Dict[str, Any]:

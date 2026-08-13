@@ -323,7 +323,7 @@ class _ColonisationCandidatesWorker(QObject):
     actually changes, never on every HUD refresh (see
     _maybe_refresh_colonisation_candidates), matching this project's
     established throttle-then-cache pattern for EDSM calls."""
-    finished = pyqtSignal(str, list)  # system_name queried, candidates list
+    finished = pyqtSignal(str, dict)  # system_name queried, result dict (see find_nearby_colonisation_candidates)
 
     def __init__(self, system_name: str):
         super().__init__()
@@ -3922,9 +3922,9 @@ class MainWindow(QMainWindow):
         self._colonisation_candidates_worker.finished.connect(self._colonisation_candidates_thread.quit)
         self._colonisation_candidates_thread.start()
 
-    def _on_colonisation_candidates_finished(self, system_name: str, candidates: list) -> None:
+    def _on_colonisation_candidates_finished(self, system_name: str, result: dict) -> None:
         self._colonisation_candidates_system = system_name
-        self.squadron_panel.set_colonisation_candidates(system_name, candidates)
+        self.squadron_panel.set_colonisation_candidates(system_name, result)
 
     def _on_check_colonisation_eligibility_clicked(self, system_name: str) -> None:
         if not system_name.strip():

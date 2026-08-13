@@ -289,7 +289,7 @@ class SquadronPanel(QWidget):
         cand_hdr.setStyleSheet(_HDR_STYLE)
         cand_l.addWidget(cand_hdr)
 
-        self._candidates_status_label = QLabel("")
+        self._candidates_status_label = QLabel("Waiting for current system…")
         self._candidates_status_label.setWordWrap(True)
         self._candidates_status_label.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
         cand_l.addWidget(self._candidates_status_label)
@@ -515,7 +515,11 @@ class SquadronPanel(QWidget):
 
     # ── Colonisation candidates ─────────────────────────────────────────
 
-    def set_colonisation_candidates(self, system_name: str, candidates: list) -> None:
+    def set_colonisation_candidates(self, system_name: str, result: dict) -> None:
+        candidates = result.get("candidates") or []
+        center_populated = result.get("center_populated")
+        lookup_failed = bool(result.get("lookup_failed"))
+
         self._colonisation_candidates = candidates
         self._colonisation_candidates_system = system_name
 
@@ -527,12 +531,21 @@ class SquadronPanel(QWidget):
             self._candidates_table.setItem(row, 0, name_item)
             self._candidates_table.setItem(row, 1, dist_item)
 
-        if candidates:
-            self._candidates_status_label.setText(f"Near {system_name}:")
-        else:
+        if lookup_failed:
+            self._candidates_status_label.setText("Lookup failed — EDSM unreachable.")
+        elif center_populated is None and not candidates:
+            self._candidates_status_label.setText(f"{system_name} not found in EDSM.")
+        elif not candidates:
             self._candidates_status_label.setText(
                 f"No unpopulated systems found within 15 ly of {system_name}."
             )
+        elif center_populated is False:
+            self._candidates_status_label.setText(
+                f"Your current system ({system_name}) is unpopulated — these systems are nearby "
+                "but not verified eligible. Use Check below to confirm a specific one."
+            )
+        else:
+            self._candidates_status_label.setText(f"Near {system_name}:")
 
     def _on_check_clicked(self) -> None:
         system_name = self._check_system_edit.text().strip()
