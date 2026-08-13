@@ -1005,7 +1005,7 @@ class MainWindow(QMainWindow):
         self._service_health_labels: dict[str, QLabel] = {}
         for name in ("EDSM", "EDDN", "BGS Tick"):
             lbl = QLabel(f"● {name}")
-            lbl.setStyleSheet("color: #6BCB77;")  # green -- matches this app's existing "ok" color convention
+            lbl.setStyleSheet("color: #6BCB77; font-size: 10px;")  # green -- matches this app's existing "ok" color convention
             self.statusBar().addPermanentWidget(lbl)
             self._service_health_labels[name] = lbl
 
@@ -3911,10 +3911,10 @@ class MainWindow(QMainWindow):
     def _on_service_health_tick(self) -> None:
         for name, lbl in self._service_health_labels.items():
             if service_health.status(name) == "issue":
-                lbl.setStyleSheet("color: #FF6B6B;")  # red -- matches this app's existing "problem" color convention
+                lbl.setStyleSheet("color: #FF6B6B; font-size: 10px;")  # red -- matches this app's existing "problem" color convention
                 lbl.setToolTip(service_health.detail(name))
             else:
-                lbl.setStyleSheet("color: #6BCB77;")
+                lbl.setStyleSheet("color: #6BCB77; font-size: 10px;")
                 lbl.setToolTip("")
 
     def _on_bgs_tick_check_tick(self) -> None:
