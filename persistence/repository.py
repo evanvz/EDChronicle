@@ -632,7 +632,7 @@ class Repository:
             active_war = None
             own_row = self.db.conn.execute(
                 """
-                SELECT faction_state, active_states
+                SELECT faction_state, active_states, snapshot_date
                 FROM faction_snapshots
                 WHERE system_address = ? AND faction_name = ?
                 ORDER BY snapshot_date DESC
@@ -646,13 +646,9 @@ class Repository:
                     SELECT fs.faction_name, fs.influence, fs.faction_state, fs.active_states
                     FROM faction_snapshots fs
                     WHERE fs.system_address = ? AND fs.faction_name != ?
-                      AND fs.snapshot_date = (
-                          SELECT MAX(snapshot_date) FROM faction_snapshots fs2
-                          WHERE fs2.system_address = fs.system_address
-                            AND fs2.faction_name = fs.faction_name
-                      )
+                      AND fs.snapshot_date = ?
                     """,
-                    (system_address, faction_name),
+                    (system_address, faction_name, own_row["snapshot_date"]),
                 ).fetchall()
                 best_opponent = None
                 for r in war_rivals:

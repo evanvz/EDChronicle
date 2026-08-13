@@ -214,8 +214,10 @@ def _format_forecast(prediction: Optional[Dict[str, Any]]) -> Tuple[str, str]:
     if active_war:
         opponent = active_war.get("faction_name")
         if opponent:
-            influence_pct = (active_war.get("influence") or 0.0) * 100
-            return (f"⚔ At War vs {opponent} ({influence_pct:.1f}%)", "#FF6B6B")
+            influence = active_war.get("influence")
+            if influence is None:
+                return (f"⚔ At War vs {opponent} (influence unknown)", "#FF6B6B")
+            return (f"⚔ At War vs {opponent} ({influence * 100:.1f}%)", "#FF6B6B")
         return ("⚔ At War — opponent unknown (EDSM data incomplete)", "#FF6B6B")
 
     conflict = prediction.get("conflict_risk")

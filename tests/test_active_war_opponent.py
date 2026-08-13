@@ -85,6 +85,17 @@ def test_low_influence_opponent_found_despite_large_gap(repo):
     assert predictions[0]["active_war"]["faction_name"] == "Distant Rival"
 
 
+def test_stale_rival_snapshot_is_ignored_in_favor_of_same_date_rival(repo):
+    # Regression: a departed faction's old War snapshot (higher influence,
+    # much older date) must not outrank a rival whose War snapshot is from
+    # the SAME date as our own latest snapshot.
+    _save(repo, 1, _faction("Our Faction", 0.6, faction_state="War"), snapshot_date="2026-08-13")
+    _save(repo, 1, _faction("Stale Rival", 0.45, faction_state="War"), snapshot_date="2026-07-24")
+    _save(repo, 1, _faction("Current Rival", 0.2, faction_state="War"), snapshot_date="2026-08-13")
+    predictions = repo.get_faction_predictions("Our Faction")
+    assert predictions[0]["active_war"] == {"faction_name": "Current Rival", "influence": 0.2}
+
+
 # --- _format_forecast() -- active_war rendering ---
 
 def test_forecast_shows_named_war_opponent():
