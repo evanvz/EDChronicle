@@ -3,6 +3,8 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from edc.core import service_health
+
 def setup_logging(settings_dir: Path) -> None:
     logs_dir = settings_dir.parent / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
@@ -21,6 +23,7 @@ def setup_logging(settings_dir: Path) -> None:
     root.setLevel(logging.INFO)
     root.handlers.clear()
     root.addHandler(file_handler)
+    service_health.attach()
 
 def _purge_old_logs(logs_dir: Path, days: int) -> None:
     cutoff = time.time() - (days * 86400)

@@ -63,6 +63,7 @@ from edc.core.odyssey_engineering import OdysseyEngineeringTable
 from edc.core.odyssey_wishlist import OdysseyWishlist
 from edc.core.market_destination import MarketDestinationStore
 from edc.core.megaship_tracker import MegashipTracker
+from edc.core import service_health
 from edc.core.mission_events import MISSION_EVENT_NAMES
 from edc.core.megaship_scanner import scan_visited_megaships
 from edc.core.faction_refresh_tracker import FactionRefreshTracker
@@ -1000,6 +1001,19 @@ class MainWindow(QMainWindow):
         # Player Faction card's "Last BGS tick" status sits on "unknown"
         # for up to the full 10-minute interval after every launch.
         self._on_bgs_tick_check_tick()
+
+        self._service_health_labels: dict[str, QLabel] = {}
+        for name in ("EDSM", "EDDN", "BGS Tick"):
+            lbl = QLabel(f"● {name}")
+            lbl.setStyleSheet("color: #6BCB77;")  # green -- matches this app's existing "ok" color convention
+            self.statusBar().addPermanentWidget(lbl)
+            self._service_health_labels[name] = lbl
+
+        self._service_health_timer = QTimer(self)
+        self._service_health_timer.setInterval(30 * 1000)
+        self._service_health_timer.timeout.connect(self._on_service_health_tick)
+        self._service_health_timer.start()
+        self._on_service_health_tick()
 
         self.engine = EventEngine(
             self.state,
@@ -3892,6 +3906,15 @@ class MainWindow(QMainWindow):
         self._flush_thread.started.connect(self._flush_worker.run)
         self._flush_worker.finished.connect(self._flush_thread.quit)
         self._flush_thread.start()
+
+    def _on_service_health_tick(self) -> None:
+        for name, lbl in self._service_health_labels.items():
+            if service_health.status(name) == "issue":
+                lbl.setStyleSheet("color: #FF6B6B;")  # red -- matches this app's existing "problem" color convention
+                lbl.setToolTip(service_health.detail(name))
+            else:
+                lbl.setStyleSheet("color: #6BCB77;")
+                lbl.setToolTip("")
 
     def _on_bgs_tick_check_tick(self) -> None:
         if self._bgs_tick_thread and self._bgs_tick_thread.isRunning():
