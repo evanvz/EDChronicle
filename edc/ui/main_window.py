@@ -4124,7 +4124,12 @@ class MainWindow(QMainWindow):
                 continue
 
             est = rec.get("EstimatedValue")
-            dss_mapped = bool(rec.get("DSSMapped", False)) or bool(rec.get("BioGenuses"))
+            # DSSMapped can be stale/missing for bodies whose original
+            # SAAScanComplete event lived in a journal file that no longer
+            # exists on disk -- WasMapped is re-stamped on every later Scan
+            # of an already-mapped body, so it's the more durable signal
+            # (mirrors the identical fix in exploration_panel.py).
+            dss_mapped = bool(rec.get("DSSMapped", False)) or bool(rec.get("WasMapped", False)) or bool(rec.get("BioGenuses"))
             tf = bool(rec.get("Terraformable", False))
 
             bio = rec.get("BioSignals", 0) or 0
