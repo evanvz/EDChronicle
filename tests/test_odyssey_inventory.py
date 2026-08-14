@@ -1,13 +1,16 @@
 """Tests for Odyssey on-foot inventory tracking -- ShipLocker/Backpack
 handlers and file re-reads. Uses a real EventEngine + GameState (not
 mocks), matching this repo's established testing convention."""
+import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from edc.core.event_engine import EventEngine
 from edc.core.state import GameState
 from edc.engine.handlers import inventory
+from edc.ui.main_window import MainWindow
 
 
 @pytest.fixture
@@ -32,9 +35,6 @@ def test_shiplocker_items_loc_field_no_longer_exists(engine):
     assert not hasattr(engine.state, "shiplocker_items_loc")
 
 
-import json
-
-
 def _write_json(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data), encoding="utf-8")
 
@@ -57,3 +57,32 @@ def test_parse_shiplocker_items_merges_all_four_categories(engine):
         loc.update(l)
     assert counts == {"graphene": 3, "rdx": 5, "biometricdata": 1, "healthpack": 2}
     assert loc == {"graphene": "Graphene", "rdx": "RDX", "biometricdata": "Biometric Data", "healthpack": "Medkit"}
+
+
+def test_load_shiplocker_inventory_reads_all_four_categories_from_disk(tmp_path, engine):
+    # Exercises MainWindow._load_shiplocker_inventory() itself (not just the
+    # helper it calls) end-to-end: a real ShipLocker.json on disk, all four
+    # category arrays populated with distinct materials so a bug that only
+    # reads one category would fail this test.
+    _write_json(
+        tmp_path / "ShipLocker.json",
+        {
+            "Items": [{"Name": "graphene", "Name_Localised": "Graphene", "Count": 3}],
+            "Components": [{"Name": "rdx", "Name_Localised": "RDX", "Count": 5}],
+            "Data": [{"Name": "biometricdata", "Name_Localised": "Biometric Data", "Count": 1}],
+            "Consumables": [{"Name": "healthpack", "Name_Localised": "Medkit", "Count": 2}],
+        },
+    )
+    fake_self = SimpleNamespace(
+        cfg=SimpleNamespace(journal_dir=str(tmp_path)),
+        engine=engine,
+        state=engine.state,
+    )
+    MainWindow._load_shiplocker_inventory(fake_self)
+    assert fake_self.state.shiplocker_items == {"graphene": 3, "rdx": 5, "biometricdata": 1, "healthpack": 2}
+    assert fake_self.state.shiplocker_localised == {
+        "graphene": "Graphene",
+        "rdx": "RDX",
+        "biometricdata": "Biometric Data",
+        "healthpack": "Medkit",
+    }
