@@ -299,7 +299,7 @@ Notable files:
 - `player_faction_panel.py`
 - `squadron_panel.py`
 - `intel_panel.py`
-- `inventory_panel.py` — `ShiplockerPanel` (Odyssey) and `MaterialsPanel`
+- `inventory_panel.py` — `MaterialsPanel` (Raw/Manufactured/Encoded/Odyssey)
 - `voice_commands_panel.py`
 
 ### `persistence`
