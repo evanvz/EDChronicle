@@ -2646,9 +2646,9 @@ class MainWindow(QMainWindow):
 
     # Kept in sync with the sidebar order set up in __init__ (Overview
     # pinned first, then Combat, Engineering, Exobiology, Exploration,
-    # Fleet Carrier, Intel, Market, Materials, Mining, Odyssey, Player
-    # Faction, PowerPlay, Squadron, Voice Cmds, then Settings/Log pinned
-    # last). Voice Cmds/Settings/Log deliberately have no voice trigger.
+    # Fleet Carrier, Intel, Market, Materials, Mining, Player Faction,
+    # PowerPlay, Squadron, Trade Routes, Voice Cmds, then Settings/Log
+    # pinned last). Voice Cmds/Settings/Log deliberately have no voice trigger.
     _TAB_INDEX: dict = {
         "Overview":       0,
         "Combat":         1,
@@ -2660,10 +2660,9 @@ class MainWindow(QMainWindow):
         "Market":         7,
         "Materials":      8,
         "Mining":         9,
-        "Odyssey":        10,
-        "Player Faction": 11,
-        "PowerPlay":      12,
-        "Squadron":       13,
+        "Player Faction": 10,
+        "PowerPlay":      11,
+        "Squadron":       12,
     }
 
     def _start_voice_commands(self):
