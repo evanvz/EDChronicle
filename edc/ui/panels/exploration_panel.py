@@ -481,6 +481,7 @@ class ExplorationPanel(QWidget):
             materials     = rec.get("Materials") or {}
             first_footfall = bool(rec.get("FirstFootfall", False))
             has_footfall   = bool(rec.get("HasFootfall", False))
+            was_footfalled = bool(rec.get("WasFootfalled", False))
 
             if isinstance(bio, int) and bio > 0:
                 bio_bodies += 1
@@ -496,7 +497,7 @@ class ExplorationPanel(QWidget):
                 body, pc_disp, dist, est, tf, was_mapped, dss_mapped,
                 first, bio, geo, human, guardian, thargoid, other_sig,
                 genuses, landable, volcanism, materials, min_value,
-                first_footfall, has_footfall,
+                first_footfall, has_footfall, was_footfalled,
             )
             existing = self._body_cards.get(body)
             if existing is not None and existing[1] == signature:
@@ -540,7 +541,7 @@ class ExplorationPanel(QWidget):
         self, body, pc_disp, dist, est, tf, was_mapped, dss_mapped,
         first, bio, geo, human, guardian, thargoid, other_sig,
         genuses, landable, volcanism, materials, min_value,
-        first_footfall=False, has_footfall=False
+        first_footfall=False, has_footfall=False, was_footfalled=False
     ):
         esc = self._esc
 
@@ -611,6 +612,8 @@ class ExplorationPanel(QWidget):
             badges.append(self._badge("First Footfall", "#2a1500", "#FFD700", bold=True))
         elif has_footfall:
             badges.append(self._badge("Footfall", "#1a1a1a", "#AAAAAA"))
+        elif was_footfalled:
+            badges.append(self._badge("Already Footfalled", "#0a2a2a", "#5FB3B3"))
 
         if badges:
             badge_lbl = QLabel(" ".join(badges))

@@ -199,6 +199,7 @@ class SystemDataLoader:
                 "Landable": None if row["landable"] is None else bool(row["landable"]),
                 "WasMapped":      bool(row["was_mapped"]),
                 "DSSMapped":      bool(row["dss_mapped"]),
+                "WasFootfalled":  bool(row["was_footfalled"]) if "was_footfalled" in row.keys() else False,
                 "EstimatedValue": estimated_value,
                 "Volcanism":      row["volcanism"] if "volcanism" in row.keys() else "",
                 "Materials":      _materials,
