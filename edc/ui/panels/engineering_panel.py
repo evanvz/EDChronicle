@@ -900,12 +900,19 @@ class _OdysseyEngineeringTab(QWidget):
     def _held_count(self, symbol: str) -> int:
         if self._state is None:
             return 0
-        src = getattr(self._state, "shiplocker_items", None) or {}
-        return int(src.get(symbol.lower(), 0))
+        key = symbol.lower()
+        shiplocker = getattr(self._state, "shiplocker_items", None) or {}
+        backpack = getattr(self._state, "backpack_items", None) or {}
+        return int(shiplocker.get(key, 0)) + int(backpack.get(key, 0))
 
     def _material_name(self, symbol: str) -> str:
-        loc = getattr(self._state, "shiplocker_localised", None) or {} if self._state else {}
-        localised = loc.get(symbol.lower())
+        key = symbol.lower()
+        shiplocker_loc = getattr(self._state, "shiplocker_localised", None) or {} if self._state else {}
+        localised = shiplocker_loc.get(key)
+        if localised:
+            return localised
+        backpack_loc = getattr(self._state, "backpack_localised", None) or {} if self._state else {}
+        localised = backpack_loc.get(key)
         if localised:
             return localised
         return self._table.material_display_name(symbol) or symbol
