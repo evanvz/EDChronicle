@@ -463,7 +463,11 @@ class ExplorationPanel(QWidget):
             pc_disp    = self._norm_token(pc) or pc
             tf         = rec.get("Terraformable", False)
             was_mapped = bool(rec.get("WasMapped", False))
-            dss_mapped = bool(rec.get("DSSMapped", False)) or bool(rec.get("BioGenuses"))
+            # DSSMapped can be stale/missing for bodies whose original
+            # SAAScanComplete event lived in a journal file that no longer
+            # exists on disk -- WasMapped is re-stamped on every later Scan
+            # of an already-mapped body, so it's the more durable signal.
+            dss_mapped = bool(rec.get("DSSMapped", False)) or was_mapped or bool(rec.get("BioGenuses"))
             first      = rec.get("FirstDiscovered", False)
             bio       = rec.get("BioSignals",      0) or 0
             geo       = rec.get("GeoSignals",      0) or 0
