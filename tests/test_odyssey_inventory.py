@@ -143,6 +143,49 @@ def test_backpackchange_added_and_removed_in_same_event(engine):
     assert engine.state.backpack_items == {"rdx": 1}
 
 
+def test_bootstrap_replay_does_not_double_apply_backpackchange_over_disk_snapshot(tmp_path, engine):
+    # Reproduces the bootstrap-replay bug: Backpack.json on disk already
+    # reflects the CURRENT truth (healthpack: 3). During replay, a
+    # "Backpack" event triggers a disk re-read (correct: 3), but a
+    # "BackpackChange" event later in the same replay window (the game's
+    # normal embark/disembark sequence) then applies its delta ON TOP of
+    # that already-current snapshot, double-counting it. MainWindow's
+    # "_BootstrapEnd" handling must do one final authoritative re-read of
+    # both on-foot inventory files so the end state matches disk truth
+    # regardless of what replayed deltas did in between.
+    _write_json(tmp_path / "Backpack.json", {
+        "Items": [], "Components": [], "Data": [],
+        "Consumables": [{"Name": "healthpack", "Name_Localised": "Medkit", "Count": 3}],
+    })
+    fake_self = SimpleNamespace(
+        cfg=SimpleNamespace(journal_dir=str(tmp_path)),
+        engine=engine,
+        state=engine.state,
+        eddn_publisher=SimpleNamespace(observe=lambda evt: None),
+        engineering_panel=SimpleNamespace(refresh=lambda state: None),
+        _append=lambda text: None,
+        _refresh_engineering=lambda: None,
+        _schedule_hud_refresh=lambda: None,
+    )
+    fake_self._load_backpack_inventory = lambda: MainWindow._load_backpack_inventory(fake_self)
+    fake_self._load_shiplocker_inventory = lambda: MainWindow._load_shiplocker_inventory(fake_self)
+
+    MainWindow._on_event(fake_self, {"event": "_BootstrapStart"})
+    MainWindow._on_event(fake_self, {"event": "Backpack"})
+    assert fake_self.state.backpack_items == {"healthpack": 3}
+
+    MainWindow._on_event(fake_self, {
+        "event": "BackpackChange",
+        "Removed": [{"Name": "healthpack", "OwnerID": 0, "Count": 2, "Type": "Consumable"}],
+    })
+    # Bug: delta applied on top of the already-current disk snapshot.
+    assert fake_self.state.backpack_items == {"healthpack": 1}
+
+    MainWindow._on_event(fake_self, {"event": "_BootstrapEnd"})
+    # After replay ends, the authoritative re-read must win: disk truth is 3.
+    assert fake_self.state.backpack_items == {"healthpack": 3}
+
+
 def test_load_backpack_inventory_reads_all_four_categories_from_disk(tmp_path, engine):
     # Genuine end-to-end integration test for MainWindow._load_backpack_inventory()
     # itself (not just the underlying parse helper): a real Backpack.json on

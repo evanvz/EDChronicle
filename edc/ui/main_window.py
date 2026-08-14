@@ -2029,6 +2029,15 @@ class MainWindow(QMainWindow):
             return
         if name == "_BootstrapEnd":
             self._replaying = False
+            # ShipLocker.json/Backpack.json are always-current disk snapshots,
+            # not historical ones -- any BackpackChange/ShipLocker replayed
+            # during bootstrap may have applied its delta on top of an
+            # already-current snapshot read mid-replay, double-counting it.
+            # One authoritative re-read of both files now overwrites
+            # whatever the replay produced with the true current state.
+            self._load_shiplocker_inventory()
+            self._load_backpack_inventory()
+            self._refresh_engineering()
             return
 
         self._append(f"[EVENT] {name}")

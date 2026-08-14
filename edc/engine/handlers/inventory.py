@@ -113,6 +113,7 @@ def handle(engine, name: str | None, event: Dict[str, Any], msgs: List[str]) -> 
         locker = event.get("Items")
         if locker is not None:
             engine.state.shiplocker_items, engine.state.shiplocker_localised = engine._parse_shiplocker_items(locker)
+            engine.state.shiplocker_last_update = event.get("timestamp")
         return True
 
     elif name == "ModuleBuy":
