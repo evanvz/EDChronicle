@@ -167,7 +167,12 @@ def handle(engine, name: str | None, event: Dict[str, Any], msgs: List[str]) -> 
             terraform_state = event.get("TerraformState") or ""
             terraformable = terraform_state.strip().lower() not in ("", "notterraformable")
             was_mapped = bool(event.get("WasMapped", False))
-            dss_mapped = bool(event.get("DSSMapped", False))
+            # "DSSMapped" isn't a real journal field (confirmed against the
+            # official Scan event schema) -- WasMapped is the actual signal
+            # the game sends for "this body has been through a Detailed
+            # Surface Scan". Checked here too in case Frontier ever adds a
+            # real DSSMapped field.
+            dss_mapped = bool(event.get("DSSMapped", False)) or was_mapped
             first_discovered = not bool(event.get("WasDiscovered", True))
             landable_raw = event.get("Landable")
             landable = bool(landable_raw) if isinstance(landable_raw, bool) else None
