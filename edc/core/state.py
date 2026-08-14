@@ -169,9 +169,6 @@ class GameState:
     shiplocker_localised: Dict[str, str] = field(default_factory=dict)    # internal name -> display
     shiplocker_last_update: Optional[str] = None                          # journal timestamp
 
-    # Handler split expects this name (alias)
-    shiplocker_items_loc: Dict[str, str] = field(default_factory=dict)
-
     # Convenience: internal name -> category (raw/manufactured/encoded/odyssey)
     # Used as a fallback when an item has no explicit category.
     item_category: Dict[str, str] = field(default_factory=dict)
