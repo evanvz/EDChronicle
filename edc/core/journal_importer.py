@@ -77,6 +77,7 @@ class CachedBody:
     dss_mapped: int | None = 0
     estimated_value: int | None = None
     distance_ls: float | None = None
+    was_footfalled: int | None = 0
 
 
 @dataclass
@@ -458,6 +459,7 @@ class JournalImporter:
         landable = int(bool(landable_raw)) if isinstance(landable_raw, bool) else None
 
         was_mapped = int(bool(event.get("WasMapped", False)))
+        was_footfalled = int(bool(event.get("WasFootfalled", False)))
         distance_ls = event.get("DistanceFromArrivalLS")
         if not isinstance(distance_ls, (int, float)):
             distance_ls = None
@@ -539,6 +541,7 @@ class JournalImporter:
             terraformable=terraformable,
             landable=landable,
             was_mapped=was_mapped,
+            was_footfalled=was_footfalled,
             dss_mapped=0,
             estimated_value=estimated_value,
             distance_ls=float(distance_ls) if distance_ls is not None else None,
@@ -567,6 +570,7 @@ class JournalImporter:
             dss_mapped=0,
             estimated_value=estimated_value,
             distance_ls=float(distance_ls) if distance_ls is not None else None,
+            was_footfalled=was_footfalled,
         )
 
     def _handle_saa_scan_complete(self, event: dict[str, Any]) -> None:
@@ -616,6 +620,7 @@ class JournalImporter:
             estimated_value=cached.estimated_value,
             distance_ls=cached.distance_ls,
             first_mapped=first_mapped,
+            was_footfalled=cached.was_footfalled,
         )
 
     def _handle_disembark(self, event: dict[str, Any]) -> None:

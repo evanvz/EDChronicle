@@ -10,6 +10,8 @@ from persistence.database import Database
 from persistence.repository import Repository
 from persistence.schema import SCHEMA_SQL
 
+from edc.core.journal_importer import JournalImporter
+
 
 @pytest.fixture
 def repo(tmp_path):
@@ -56,3 +58,40 @@ def test_save_body_was_footfalled_overwrites_on_conflict(repo):
     )
     rows = list(repo.get_bodies(1))
     assert rows[0]["was_footfalled"] == 0
+
+
+def test_importer_parses_was_footfalled_from_scan(repo, tmp_path):
+    importer = JournalImporter(tmp_path, repo)
+    importer.current_system_address = 5
+    event = {
+        "event": "Scan", "ScanType": "Detailed", "BodyName": "Test Body 1",
+        "BodyID": 1, "SystemAddress": 5, "PlanetClass": "Rocky body",
+        "TerraformState": "", "WasMapped": False, "WasFootfalled": True,
+        "WasDiscovered": True, "DistanceFromArrivalLS": 100.0,
+    }
+    importer._process_event(event)
+    rows = list(repo.get_bodies(5))
+    assert rows[0]["was_footfalled"] == 1
+
+
+def test_importer_was_footfalled_survives_saa_scan_complete(repo, tmp_path):
+    # The real scenario this test guards: a body scanned with
+    # WasFootfalled=true, then later DSS-mapped in the same import pass --
+    # the SAAScanComplete call site must not reset was_footfalled to 0.
+    importer = JournalImporter(tmp_path, repo)
+    importer.current_system_address = 5
+    scan_event = {
+        "event": "Scan", "ScanType": "Detailed", "BodyName": "Test Body 1",
+        "BodyID": 1, "SystemAddress": 5, "PlanetClass": "Rocky body",
+        "TerraformState": "", "WasMapped": False, "WasFootfalled": True,
+        "WasDiscovered": True, "DistanceFromArrivalLS": 100.0,
+    }
+    importer._process_event(scan_event)
+    saa_event = {
+        "event": "SAAScanComplete", "BodyName": "Test Body 1", "BodyID": 1,
+        "SystemAddress": 5, "ProbesUsed": 5, "EfficiencyTarget": 6,
+    }
+    importer._process_event(saa_event)
+    rows = list(repo.get_bodies(5))
+    assert rows[0]["was_footfalled"] == 1
+    assert rows[0]["dss_mapped"] == 1
