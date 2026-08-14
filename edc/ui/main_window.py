@@ -754,6 +754,43 @@ class MainWindow(QMainWindow):
         if isinstance(inv, list):
             self.state.cargo_inventory = inv
 
+    def _load_shiplocker_inventory(self):
+        """
+        Reads ShipLocker.json -- per the journal manual, only the FIRST
+        "ShipLocker" event in a session carries the Items array inline;
+        every subsequent one is just a bare notification that the file
+        changed, so this must be re-read from disk every time to stay
+        current (same reasoning as _load_cargo_inventory() above). The
+        file has four category arrays -- Items, Components, Data,
+        Consumables -- all four are combined into one flat counts/
+        localised pair, matching how _OdysseyEngineeringTab._held_count()
+        expects a single dict (a material symbol only ever appears in one
+        category, so merging is collision-free).
+        """
+        journal_dir = getattr(self.cfg, "journal_dir", None)
+        if not journal_dir:
+            return
+        path = Path(journal_dir) / "ShipLocker.json"
+        try:
+            if not path.exists():
+                return
+            data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+        except Exception:
+            log.exception("Failed to read ShipLocker.json")
+            return
+
+        if not isinstance(data, dict):
+            return
+
+        counts: dict = {}
+        loc: dict = {}
+        for category in ("Items", "Components", "Data", "Consumables"):
+            c, l = self.engine._parse_shiplocker_items(data.get(category))
+            counts.update(c)
+            loc.update(l)
+        self.state.shiplocker_items = counts
+        self.state.shiplocker_localised = loc
+
     def _planet_value_class_name(self, planet_class: str) -> str:
         pc = (planet_class or "").strip()
         mapping = {
@@ -2041,6 +2078,11 @@ class MainWindow(QMainWindow):
             # journal manual), so the file itself must be re-read each time.
             self._load_cargo_inventory()
             self._refresh_market()
+
+        if name == "ShipLocker":
+            # Same journal quirk as Cargo above, and the same fix.
+            self._load_shiplocker_inventory()
+            self._refresh_engineering()
 
         if name == "EngineerProgress":
             self.engineer_progress_store.save(self.state.engineer_progress)
