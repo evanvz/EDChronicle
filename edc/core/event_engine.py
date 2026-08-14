@@ -1127,8 +1127,6 @@ class EventEngine:
                         "Composition":            event.get("Composition") or {},
                     }
                 )
-                if bool(event.get("WasFootfalled", False)):
-                    rec["HasFootfall"] = True
                 if body in self.state.bio_signals:
                     rec["BioSignals"] = self.state.bio_signals.get(body, 0)
                 if body in self.state.bio_genuses:

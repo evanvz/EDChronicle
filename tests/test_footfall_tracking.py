@@ -2,15 +2,16 @@
 journal importer's parsing, and the live Scan handler's data-loss fix.
 Real SQLite (temp file) and real EventEngine, not mocks, matching this
 repo's established convention."""
-from pathlib import Path
-
 import pytest
 
 from persistence.database import Database
 from persistence.repository import Repository
 from persistence.schema import SCHEMA_SQL
 
+from edc.core.event_engine import EventEngine
 from edc.core.journal_importer import JournalImporter
+from edc.core.state import GameState
+from edc.engine.handlers import exploration
 
 
 @pytest.fixture
@@ -96,10 +97,17 @@ def test_importer_was_footfalled_survives_saa_scan_complete(repo, tmp_path):
     assert rows[0]["was_footfalled"] == 1
     assert rows[0]["dss_mapped"] == 1
 
-
-from edc.core.event_engine import EventEngine
-from edc.core.state import GameState
-from edc.engine.handlers import exploration
+    # Regression: a following SAASignalsFound event (fired right after
+    # SAAScanComplete for any body with surface signals) must not reset
+    # was_footfalled back to its default of 0.
+    saa_signals_event = {
+        "event": "SAASignalsFound", "BodyName": "Test Body 1", "BodyID": 1,
+        "SystemAddress": 5,
+        "Signals": [{"Type": "$SAA_SignalType_Biological;", "Count": 3}],
+    }
+    importer._process_event(saa_signals_event)
+    rows = list(repo.get_bodies(5))
+    assert rows[0]["was_footfalled"] == 1
 
 
 @pytest.fixture
@@ -140,3 +148,12 @@ def test_scan_handler_body_never_footfalled_stays_false(engine):
     exploration.handle(engine, "Scan", _scan_event(), [])
     assert engine.state.bodies["Test Body 1"]["HasFootfall"] is False
     assert engine.state.bodies["Test Body 1"]["FirstFootfall"] is False
+
+
+def test_process_does_not_conflate_was_footfalled_into_has_footfall(engine):
+    # Real production entry point (EventEngine.process), not
+    # exploration.handle() directly -- WasFootfalled=True means someone
+    # (anyone) has footfalled the body, not that this player personally
+    # has. HasFootfall must stay False.
+    engine.process(_scan_event(was_footfalled=True))
+    assert engine.state.bodies["Test Body 1"]["HasFootfall"] is False

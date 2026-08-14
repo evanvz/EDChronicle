@@ -401,6 +401,7 @@ class JournalImporter:
                     dss_mapped=cached.dss_mapped,
                     estimated_value=cached.estimated_value,
                     distance_ls=cached.distance_ls,
+                    was_footfalled=cached.was_footfalled,
                 )
 
         bio, geo, human = _surface_signal_counts(event.get("Signals"))
