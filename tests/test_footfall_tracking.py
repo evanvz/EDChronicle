@@ -95,3 +95,48 @@ def test_importer_was_footfalled_survives_saa_scan_complete(repo, tmp_path):
     rows = list(repo.get_bodies(5))
     assert rows[0]["was_footfalled"] == 1
     assert rows[0]["dss_mapped"] == 1
+
+
+from edc.core.event_engine import EventEngine
+from edc.core.state import GameState
+from edc.engine.handlers import exploration
+
+
+@pytest.fixture
+def engine(tmp_path):
+    return EventEngine(GameState(), tmp_path)
+
+
+def _scan_event(was_footfalled=False):
+    return {
+        "event": "Scan", "ScanType": "Detailed", "BodyName": "Test Body 1",
+        "BodyID": 1, "SystemAddress": 5, "PlanetClass": "Rocky body",
+        "TerraformState": "", "WasMapped": False, "WasFootfalled": was_footfalled,
+        "WasDiscovered": True, "DistanceFromArrivalLS": 100.0,
+    }
+
+
+def test_scan_handler_reads_was_footfalled(engine):
+    exploration.handle(engine, "Scan", _scan_event(was_footfalled=True), [])
+    assert engine.state.bodies["Test Body 1"]["WasFootfalled"] is True
+
+
+def test_scan_handler_preserves_personal_footfall_across_rescan(engine):
+    # The actual data-loss repro this task fixes: simulate a prior
+    # Disembark having already set HasFootfall/FirstFootfall (the only
+    # real way these get set live), then confirm a later Scan of the same
+    # body doesn't wipe them.
+    exploration.handle(engine, "Scan", _scan_event(), [])
+    engine.state.bodies["Test Body 1"]["HasFootfall"] = True
+    engine.state.bodies["Test Body 1"]["FirstFootfall"] = True
+
+    exploration.handle(engine, "Scan", _scan_event(), [])
+
+    assert engine.state.bodies["Test Body 1"]["HasFootfall"] is True
+    assert engine.state.bodies["Test Body 1"]["FirstFootfall"] is True
+
+
+def test_scan_handler_body_never_footfalled_stays_false(engine):
+    exploration.handle(engine, "Scan", _scan_event(), [])
+    assert engine.state.bodies["Test Body 1"]["HasFootfall"] is False
+    assert engine.state.bodies["Test Body 1"]["FirstFootfall"] is False
