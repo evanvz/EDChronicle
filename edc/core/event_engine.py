@@ -1185,9 +1185,17 @@ class EventEngine:
         elif name == "Disembark":
             if bool(event.get("OnPlanet", False)):
                 body = self._norm_text(event.get("Body") or event.get("BodyName"))
-                first_footfall = bool(event.get("FirstFootfall", False))
                 if body:
                     rec = self.state.bodies.get(body) or {}
+                    # "FirstFootfall" isn't a real Disembark field (confirmed
+                    # against the official journal schema and a live game
+                    # session) -- WasFootfalled from the body's last scan is
+                    # the real signal: if nobody had footfalled there as of
+                    # that scan, this disembark is (almost certainly) the
+                    # first one. Defaults to True (first) when the body was
+                    # never scanned at all, same as this codebase's other
+                    # "no evidence of prior status" defaults.
+                    first_footfall = not bool(rec.get("WasFootfalled", False))
                     rec["HasFootfall"]   = True
                     rec["FirstFootfall"] = first_footfall
                     self.state.bodies[body] = rec
