@@ -217,6 +217,7 @@ class Database:
                 resources      TEXT,
                 last_updated   TEXT
             )""",
+            "ALTER TABLE bodies ADD COLUMN was_footfalled INTEGER DEFAULT 0",
         ]
         for sql in migrations:
             try:
@@ -228,7 +229,7 @@ class Database:
         self._apply_version_migrations()
 
     # Bump this constant whenever a migration requires journals to be re-imported.
-    _REQUIRED_SCHEMA_VERSION = 5
+    _REQUIRED_SCHEMA_VERSION = 6
 
     def _apply_version_migrations(self):
         self.conn.execute(
@@ -244,6 +245,7 @@ class Database:
             # v3: station_info (landing pad ground truth from Docked events) was added.
             # v4: station_info.station_services/station_faction (Interstellar Factors detection) was added.
             # v5: rings table (hotspot scan history) was added.
+            # v6: bodies.was_footfalled was added.
             # Re-import all journals to backfill.
             self.conn.execute("DELETE FROM processed_journals")
             if current == 0:

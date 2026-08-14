@@ -159,6 +159,7 @@ class Repository:
         tidal_lock=None,
         first_discovered=None,
         first_mapped=None,
+        was_footfalled: int = 0,
     ):
         self.db.execute(
             """
@@ -168,9 +169,9 @@ class Repository:
                 volcanism, materials, mass_em, radius, surface_gravity,
                 surface_temperature, surface_pressure, atmosphere_type, atmosphere,
                 atmosphere_composition, composition, tidal_lock, first_discovered,
-                first_mapped
+                first_mapped, was_footfalled
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(system_address, body_id) DO UPDATE SET
                 body_name               = excluded.body_name,
                 planet_class            = excluded.planet_class,
@@ -193,7 +194,8 @@ class Repository:
                 composition             = COALESCE(excluded.composition, bodies.composition),
                 tidal_lock              = COALESCE(excluded.tidal_lock, bodies.tidal_lock),
                 first_discovered        = COALESCE(excluded.first_discovered, bodies.first_discovered),
-                first_mapped            = COALESCE(excluded.first_mapped, bodies.first_mapped)
+                first_mapped            = COALESCE(excluded.first_mapped, bodies.first_mapped),
+                was_footfalled          = excluded.was_footfalled
             """,
             (
                 system_address, body_id, body_name, planet_class, terraformable,
@@ -201,7 +203,7 @@ class Repository:
                 volcanism, materials, mass_em, radius, surface_gravity,
                 surface_temperature, surface_pressure, atmosphere_type, atmosphere,
                 atmosphere_composition, composition, tidal_lock, first_discovered,
-                first_mapped,
+                first_mapped, was_footfalled,
             ),
         )
 
@@ -2007,6 +2009,7 @@ class Repository:
                 landable,
                 was_mapped,
                 dss_mapped,
+                was_footfalled,
                 estimated_value,
                 distance_ls,
                 volcanism,
