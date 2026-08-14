@@ -39,7 +39,7 @@ from edc.core.journal_watcher import JournalWatcher
 from edc.ui.watcher_controller import WatcherController
 from edc.ui.system_data_loader import SystemDataLoader
 from edc.ui.panels.combat_panel import CombatPanel
-from edc.ui.panels.inventory_panel import ShiplockerPanel, MaterialsPanel
+from edc.ui.panels.inventory_panel import MaterialsPanel
 from edc.ui.panels.powerplay_panel import PowerplayPanel
 from edc.ui.panels.overview_panel import OverviewPanel
 from edc.ui.panels.exploration_panel import ExplorationPanel
@@ -1277,8 +1277,6 @@ class MainWindow(QMainWindow):
         # Intel tab (external / advisory)
         self.intel_panel = IntelPanel()
 
-        self.shiplocker_panel = ShiplockerPanel()
-
         self.materials_panel = MaterialsPanel()
 
         # Voice Commands tab
@@ -1455,7 +1453,6 @@ class MainWindow(QMainWindow):
             (self.market_panel,          "Market"),
             (self.materials_panel,       "Materials"),
             (self.mining_panel,          "Mining"),
-            (self.shiplocker_panel,      "Odyssey"),
             (self.player_faction_panel,  "Player Faction"),
             (self.powerplay_panel,       "PowerPlay"),
             (self.squadron_panel,        "Squadron"),
@@ -3889,7 +3886,6 @@ class MainWindow(QMainWindow):
         self._refresh_squadron()
         self._refresh_intel()
         self._refresh_materials_inventory()
-        self._refresh_shiplocker_inventory()
         self._refresh_engineering()
         self._refresh_fleet_carrier()
         self._refresh_mining()
@@ -3898,9 +3894,6 @@ class MainWindow(QMainWindow):
 
     def _animate_overview_update(self, html: str):
         self.overview_panel.animate_overview_update(html)
-
-    def _refresh_shiplocker_inventory(self):
-        self.shiplocker_panel.refresh(self.state, self.item_catalog)
 
     def _refresh_materials_inventory(self):
         self.materials_panel.refresh(self.state, self.item_catalog)
