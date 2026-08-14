@@ -86,3 +86,87 @@ def test_load_shiplocker_inventory_reads_all_four_categories_from_disk(tmp_path,
         "biometricdata": "Biometric Data",
         "healthpack": "Medkit",
     }
+
+
+def test_backpack_fields_exist_on_state():
+    state = GameState()
+    assert state.backpack_items == {}
+    assert state.backpack_localised == {}
+
+
+def test_backpackchange_added_increments_backpack_items(engine):
+    event = {
+        "event": "BackpackChange",
+        "Added": [
+            {"Name": "healthpack", "Name_Localised": "Medkit", "OwnerID": 0, "Count": 2, "Type": "Consumable"},
+        ],
+    }
+    handled = inventory.handle(engine, "BackpackChange", event, [])
+    assert handled is True
+    assert engine.state.backpack_items == {"healthpack": 2}
+    assert engine.state.backpack_localised == {"healthpack": "Medkit"}
+
+
+def test_backpackchange_removed_decrements_and_removes_at_zero(engine):
+    engine.state.backpack_items = {"healthpack": 2}
+    engine.state.backpack_localised = {"healthpack": "Medkit"}
+    event = {
+        "event": "BackpackChange",
+        "Removed": [
+            {"Name": "healthpack", "OwnerID": 0, "Count": 2, "Type": "Consumable"},
+        ],
+    }
+    inventory.handle(engine, "BackpackChange", event, [])
+    assert "healthpack" not in engine.state.backpack_items
+
+
+def test_backpackchange_removed_partial_keeps_remainder(engine):
+    engine.state.backpack_items = {"healthpack": 5}
+    event = {
+        "event": "BackpackChange",
+        "Removed": [{"Name": "healthpack", "OwnerID": 0, "Count": 2, "Type": "Consumable"}],
+    }
+    inventory.handle(engine, "BackpackChange", event, [])
+    assert engine.state.backpack_items == {"healthpack": 3}
+
+
+def test_backpackchange_added_and_removed_in_same_event(engine):
+    # A single BackpackChange can carry both arrays at once (e.g. crafting
+    # something that consumes one material and produces another).
+    event = {
+        "event": "BackpackChange",
+        "Added": [{"Name": "rdx", "Name_Localised": "RDX", "OwnerID": 0, "Count": 1, "Type": "Component"}],
+        "Removed": [{"Name": "graphene", "OwnerID": 0, "Count": 1, "Type": "Component"}],
+    }
+    engine.state.backpack_items = {"graphene": 1}
+    inventory.handle(engine, "BackpackChange", event, [])
+    assert engine.state.backpack_items == {"rdx": 1}
+
+
+def test_load_backpack_inventory_reads_all_four_categories_from_disk(tmp_path, engine):
+    # Genuine end-to-end integration test for MainWindow._load_backpack_inventory()
+    # itself (not just the underlying parse helper): a real Backpack.json on
+    # disk, all four category arrays populated with distinct materials so a
+    # bug that only reads one category would fail this test.
+    _write_json(
+        tmp_path / "Backpack.json",
+        {
+            "Items": [{"Name": "graphene", "Name_Localised": "Graphene", "Count": 3}],
+            "Components": [{"Name": "rdx", "Name_Localised": "RDX", "Count": 5}],
+            "Data": [{"Name": "biometricdata", "Name_Localised": "Biometric Data", "Count": 1}],
+            "Consumables": [{"Name": "healthpack", "Name_Localised": "Medkit", "Count": 2}],
+        },
+    )
+    fake_self = SimpleNamespace(
+        cfg=SimpleNamespace(journal_dir=str(tmp_path)),
+        engine=engine,
+        state=engine.state,
+    )
+    MainWindow._load_backpack_inventory(fake_self)
+    assert fake_self.state.backpack_items == {"graphene": 3, "rdx": 5, "biometricdata": 1, "healthpack": 2}
+    assert fake_self.state.backpack_localised == {
+        "graphene": "Graphene",
+        "rdx": "RDX",
+        "biometricdata": "Biometric Data",
+        "healthpack": "Medkit",
+    }

@@ -46,6 +46,32 @@ def _adjust_material(engine, category: Optional[str], rec: Dict[str, Any], delta
         return
 
 
+def _adjust_backpack(engine, rec: Dict[str, Any], delta: int) -> None:
+    """
+    Apply a +/- delta to a single backpack material's live count, keeping
+    the matching localised-name dict in sync -- same shape as
+    _adjust_material() above, but backpack_items is one flat dict (no
+    per-category split), so there's no category-attr lookup needed.
+    """
+    nm = rec.get("Name")
+    if not isinstance(nm, str):
+        return
+    key = nm.strip().lower()
+    if not key:
+        return
+    nl = rec.get("Name_Localised")
+    display = nl.strip() if isinstance(nl, str) and nl.strip() else None
+
+    counts = engine.state.backpack_items
+    new_count = counts.get(key, 0) + delta
+    if new_count > 0:
+        counts[key] = new_count
+    else:
+        counts.pop(key, None)
+    if display:
+        engine.state.backpack_localised[key] = display
+
+
 def handle(engine, name: str | None, event: Dict[str, Any], msgs: List[str]) -> bool:
     """
     Inventory / commander state / load snapshots.
@@ -118,6 +144,15 @@ def handle(engine, name: str | None, event: Dict[str, Any], msgs: List[str]) -> 
             _adjust_material(engine, paid.get("Category"), paid, -int(paid.get("Count") or 0))
         if isinstance(received, dict):
             _adjust_material(engine, received.get("Category"), received, +int(received.get("Count") or 0))
+        return True
+
+    elif name == "BackpackChange":
+        for item in (event.get("Added") or []):
+            if isinstance(item, dict):
+                _adjust_backpack(engine, item, +int(item.get("Count") or 0))
+        for item in (event.get("Removed") or []):
+            if isinstance(item, dict):
+                _adjust_backpack(engine, item, -int(item.get("Count") or 0))
         return True
 
     elif name == "EngineerCraft":

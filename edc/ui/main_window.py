@@ -791,6 +791,40 @@ class MainWindow(QMainWindow):
         self.state.shiplocker_items = counts
         self.state.shiplocker_localised = loc
 
+    def _load_backpack_inventory(self):
+        """
+        Reads Backpack.json -- always re-read on every "Backpack" event
+        regardless of whether that particular event happens to carry the
+        category arrays inline, since Backpack's inline-vs-bare behavior
+        wasn't fully pinned down during investigation and a cheap file
+        read is correct either way (same robustness reasoning as
+        _load_cargo_inventory() and _load_shiplocker_inventory() above).
+        Same four-category merge as ShipLocker.
+        """
+        journal_dir = getattr(self.cfg, "journal_dir", None)
+        if not journal_dir:
+            return
+        path = Path(journal_dir) / "Backpack.json"
+        try:
+            if not path.exists():
+                return
+            data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+        except Exception:
+            log.exception("Failed to read Backpack.json")
+            return
+
+        if not isinstance(data, dict):
+            return
+
+        counts: dict = {}
+        loc: dict = {}
+        for category in ("Items", "Components", "Data", "Consumables"):
+            c, l = self.engine._parse_shiplocker_items(data.get(category))
+            counts.update(c)
+            loc.update(l)
+        self.state.backpack_items = counts
+        self.state.backpack_localised = loc
+
     def _planet_value_class_name(self, planet_class: str) -> str:
         pc = (planet_class or "").strip()
         mapping = {
@@ -2082,6 +2116,10 @@ class MainWindow(QMainWindow):
         if name == "ShipLocker":
             # Same journal quirk as Cargo above, and the same fix.
             self._load_shiplocker_inventory()
+            self._refresh_engineering()
+
+        if name == "Backpack":
+            self._load_backpack_inventory()
             self._refresh_engineering()
 
         if name == "EngineerProgress":

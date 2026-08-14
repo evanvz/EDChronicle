@@ -169,6 +169,11 @@ class GameState:
     shiplocker_localised: Dict[str, str] = field(default_factory=dict)    # internal name -> display
     shiplocker_last_update: Optional[str] = None                          # journal timestamp
 
+    # Odyssey (on-foot) backpack snapshot -- separate from the ship
+    # locker; carried on the commander's person, not stored on the ship.
+    backpack_items: Dict[str, int] = field(default_factory=dict)          # internal name -> count
+    backpack_localised: Dict[str, str] = field(default_factory=dict)      # internal name -> display
+
     # Convenience: internal name -> category (raw/manufactured/encoded/odyssey)
     # Used as a fallback when an item has no explicit category.
     item_category: Dict[str, str] = field(default_factory=dict)
