@@ -9,6 +9,10 @@ from PyQt6.QtWidgets import (
     QScrollArea,
     QFrame,
     QApplication,
+    QLineEdit,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
 )
 from PyQt6.QtCore import Qt
 
@@ -294,8 +298,11 @@ class IntelPanel(QWidget):
       3. Full farming guide browsable by category
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, repo, parent=None):
         super().__init__(parent)
+        self._repo = repo
+        self._state = None
+        self._farming_locations = None
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -444,6 +451,56 @@ class IntelPanel(QWidget):
         self.guide_display.setStyleSheet("background: transparent; border: none;")
         guide_l.addWidget(self.guide_display)
         self._content_layout.addWidget(guide_frame)
+
+        # ── Nearest farming opportunities card ──────────────────────────────
+        nearby_frame = QFrame()
+        nearby_frame.setStyleSheet(
+            "QFrame { background: #1a1a0d; border: 1px solid #3a3a1e;"
+            "border-radius: 5px; }"
+        )
+        nearby_l = QVBoxLayout(nearby_frame)
+        nearby_l.setContentsMargins(8, 6, 8, 6)
+        nearby_l.setSpacing(4)
+        nearby_hdr = QLabel("NEAREST FARMING OPPORTUNITIES")
+        nearby_hdr.setStyleSheet(
+            "color: #7a7a7a; font-size:12px; font-weight: bold; "
+            "letter-spacing: 1px; background: transparent; border: none;"
+        )
+        nearby_l.addWidget(nearby_hdr)
+
+        self.nearby_farming_filter = QLineEdit()
+        self.nearby_farming_filter.setPlaceholderText("Filter by material...")
+        self.nearby_farming_filter.textChanged.connect(self._on_nearby_farming_filter_changed)
+        nearby_l.addWidget(self.nearby_farming_filter)
+
+        self.nearby_farming_table = QTableWidget()
+        self.nearby_farming_table.setColumnCount(4)
+        self.nearby_farming_table.setHorizontalHeaderLabels(
+            ["Material", "Site / System", "Distance (ly)", "Source"]
+        )
+        self.nearby_farming_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.nearby_farming_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.nearby_farming_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self.nearby_farming_table.verticalHeader().setVisible(False)
+        self.nearby_farming_table.setAlternatingRowColors(True)
+        self.nearby_farming_table.setStyleSheet(
+            "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
+            " gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
+            "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
+            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
+            "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
+        )
+        h = self.nearby_farming_table.horizontalHeader()
+        h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        h.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        h.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        self.nearby_farming_table.setToolTip("Click the Site / System cell to copy its name to the clipboard.")
+        self.nearby_farming_table.cellClicked.connect(self._on_nearby_farming_cell_clicked)
+        self.nearby_farming_table.setMinimumHeight(150)
+        nearby_l.addWidget(self.nearby_farming_table)
+
+        self._content_layout.addWidget(nearby_frame)
 
         # ── BGS history card ──────────────────────────────────────────────
         bgs_frame = QFrame()
@@ -672,7 +729,49 @@ class IntelPanel(QWidget):
         return f"{days} days ago"
 
 
+    def _search_nearby_farming(self, material_filter: str) -> list:
+        if not self._farming_locations or self._repo is None:
+            return []
+        ref_x = getattr(self._state, "system_x", None) if self._state else None
+        ref_y = getattr(self._state, "system_y", None) if self._state else None
+        ref_z = getattr(self._state, "system_z", None) if self._state else None
+        if ref_x is None or ref_y is None or ref_z is None:
+            return []
+
+        all_records = getattr(self._farming_locations, "_records", []) or []
+        static_sites = [r for r in all_records if isinstance(r, dict) and r.get("system")]
+        static_names = [str(r.get("system")) for r in static_sites]
+        coords_raw = self._repo.get_system_coords_for_names(static_names) if static_names else {}
+        coords_by_system = {name.lower(): coords for name, coords in coords_raw.items()}
+
+        live_rows = self._repo.get_controlling_faction_snapshots_with_coords()
+
+        return _build_nearby_farming_results(
+            static_sites, coords_by_system, live_rows, all_records,
+            material_filter, ref_x, ref_y, ref_z,
+        )
+
+    def _on_nearby_farming_filter_changed(self):
+        results = self._search_nearby_farming(self.nearby_farming_filter.text())
+        self.nearby_farming_table.setSortingEnabled(False)
+        self.nearby_farming_table.setRowCount(len(results))
+        for row, r in enumerate(results):
+            self.nearby_farming_table.setItem(row, 0, QTableWidgetItem(r["material"]))
+            self.nearby_farming_table.setItem(row, 1, QTableWidgetItem(r["system_name"]))
+            self.nearby_farming_table.setItem(row, 2, QTableWidgetItem(f"{r['distance_ly']:.1f}"))
+            source_txt = f"Live — {r['state']}" if r.get("state") else ("Live" if r["source"] == "live" else "Static")
+            self.nearby_farming_table.setItem(row, 3, QTableWidgetItem(source_txt))
+
+    def _on_nearby_farming_cell_clicked(self, row: int, column: int) -> None:
+        if column != 1:  # Site / System
+            return
+        item = self.nearby_farming_table.item(row, column)
+        if item and item.text():
+            QApplication.clipboard().setText(item.text())
+
     def refresh(self, state, farming_locations, faction_history=None, farming_candidates=None):
+        self._state = state
+        self._farming_locations = farming_locations
         sys_name = getattr(state, "system", None) or ""
 
         # ── BGS history ───────────────────────────────────────────────────
@@ -1020,3 +1119,5 @@ class IntelPanel(QWidget):
                 "Intel (External, advisory only) — "
                 + " | ".join(parts)
             )
+
+        self._on_nearby_farming_filter_changed()

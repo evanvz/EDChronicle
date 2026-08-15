@@ -1284,7 +1284,7 @@ class MainWindow(QMainWindow):
         self.combat_panel = CombatPanel()
 
         # Intel tab (external / advisory)
-        self.intel_panel = IntelPanel()
+        self.intel_panel = IntelPanel(self.repo)
 
         self.materials_panel = MaterialsPanel()
 
