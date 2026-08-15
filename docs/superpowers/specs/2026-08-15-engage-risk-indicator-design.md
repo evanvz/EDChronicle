@@ -32,11 +32,27 @@ stores a **`Hostile`** flag on every `combat_contacts` entry
 specific, confident justification) that a Hostile-flagged ship is already
 attacking the player and killing it back carries **no bounty/notoriety
 consequence, unconditionally** — stronger than the PP-territory case,
-since it holds regardless of PowerPlay/Conflict-Zone context. This flag
-is captured into the data model but **never rendered anywhere** — no
-table column, no voice callout. This design surfaces it for the first
-time rather than re-deriving the claim (it predates this session and
-its rationale is already recorded in that comment).
+since it holds regardless of PowerPlay/Conflict-Zone context.
+
+**Correction after a fresh full read of `combat_panel.py` (caught before
+writing the plan, not assumed):** `Hostile` and the PP-enemy case are
+NOT actually unrendered — `combat_panel.py:355-421` already computes
+both at render time and shows them as "⚔ HOSTILE"/"⚔ PP ENEMY" text in
+the existing Enemy column, plus a distinct row background color (red for
+Hostile, purple for PP Enemy). The real, still-open gap is narrower than
+first framed: there is no single, explicit "is it safe to shoot"
+verdict — the two safe cases are only implied by color/text a viewer has
+to already know how to interpret, the Anarchy-caution case has no
+treatment at all today, and critically, the exact case that matters most
+(an ordinary Clean, non-PP contact — the Vargerson case, real bounty
+risk) renders with **default, unhighlighted styling** — visually
+identical to "nothing noteworthy here," even though it's the one case
+where engaging is actually risky. Voice is a full gap either way:
+`CombatPhrases.ship_targeted()` has no `hostile`/risk parameter at all
+today. This design adds one explicit, consolidated verdict (table column
++ voice clause) rather than making the viewer reverse-engineer risk from
+color, and gives the Unknown/risky case a visible signal it doesn't have
+today.
 
 External verification done before designing further (do not re-derive):
 Anarchy-controlled systems genuinely exempt the player from bounty/fine/
@@ -114,14 +130,19 @@ else.
 ### UI — new Combat tab column
 
 `edc/ui/panels/combat_panel.py`'s contacts table gains a new column,
-"Engage Risk", reading `rec.get("EngageRisk")` and rendering with the
-same color-coded badge convention already used for `is_high_bounty` in
-this file (found at combat_panel.py:377-411) — green/"Safe", yellow/
-"Caution", and the existing muted/warning color already used for
-low-confidence rows for "Unknown". Placed as its own column (not merged
-into the existing Enemy column, since that answers "what is this ship"
-and this answers "is it safe to shoot" — two different questions, both
-useful separately).
+"Engage Risk", reading `rec.get("EngageRisk")` and rendering plain text
+per cell — "Safe" (green foreground), "Caution" (yellow/amber
+foreground), "Unknown" (the existing muted/warning color already used
+elsewhere in this file for a not-confirmed state, e.g. the "at war
+(info)" case at combat_panel.py:373). This is purely additive: the
+existing row-background priority logic (destroyed → current → hostile →
+pp-enemy → high-bounty → wanted → war-faction → none, combat_panel.py:
+399-422) is untouched, so today's existing Hostile/PP-Enemy row
+highlighting keeps working exactly as it does now. The new column adds
+the one thing that's missing: an explicit label, present on every row
+including the ones that get no row-color today (Clean, no-PP-relevance
+contacts) — those rows will now show "Unknown" instead of blending into
+unstyled default text.
 
 ### Voice — extends the existing `ship_targeted()` assessment
 
