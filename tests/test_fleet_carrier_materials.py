@@ -1,12 +1,15 @@
 """Tests for Repository.save_fleet_carrier_materials_batch() and
 search_fleet_carrier_materials() -- real SQLite (temp file), not mocks."""
 import inspect
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from persistence.database import Database
 from persistence.repository import Repository
 from persistence.schema import SCHEMA_SQL
+
+_FRESH = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 @pytest.fixture
@@ -35,7 +38,7 @@ def _seed_coords(repo, system_name, x, y, z):
 
 
 def _seed_material(repo, market_id, symbol, price=1000, stock=5, demand=0,
-                    last_updated="2026-08-12T00:00:00Z", carrier_name="Test Carrier", carrier_id="ABC-123"):
+                    last_updated=_FRESH, carrier_name="Test Carrier", carrier_id="ABC-123"):
     repo.save_fleet_carrier_materials_batch([
         (market_id, symbol, carrier_name, carrier_id, price, stock, demand, last_updated)
     ])
@@ -72,16 +75,16 @@ def test_carrier_with_no_station_info_row_is_excluded(repo):
 
 
 def test_uses_inner_join_against_station_info_not_left_join():
-    # search_fleet_carrier_materials()'s WHERE clause filters on
-    # si.system_name -- the only place a location lives, since
-    # fleet_carrier_materials has no system_name column of its own. That
-    # means, for this exact query, INNER JOIN and LEFT JOIN produce
-    # byte-identical results for ANY seeded data: a row unmatched in
-    # station_info gets si.system_name = NULL under a LEFT JOIN, and SQL's
-    # `NULL IN (...)` is falsy, so the WHERE clause excludes it exactly as
-    # an INNER JOIN would -- confirmed empirically, no data-seeding test
-    # can distinguish the two join types here. Pinning the SQL text itself
-    # is the only way to catch a future INNER -> LEFT edit.
+    # search_fleet_carrier_materials() joins station_info (for system_name)
+    # and then system_coords (for x/y/z), since fleet_carrier_materials has
+    # no location columns of its own. That means, for this exact query,
+    # INNER JOIN and LEFT JOIN produce byte-identical results for ANY seeded
+    # data: a row unmatched in station_info gets si.system_name = NULL under
+    # a LEFT JOIN, which then fails to match any row in system_coords (NULL
+    # never equals a system_name), so the row is excluded from the result
+    # exactly as an INNER JOIN would -- confirmed empirically, no
+    # data-seeding test can distinguish the two join types here. Pinning the
+    # SQL text itself is the only way to catch a future INNER -> LEFT edit.
     source = inspect.getsource(Repository.search_fleet_carrier_materials)
     assert "INNER JOIN station_info" in source
     assert "LEFT JOIN station_info" not in source
@@ -189,7 +192,7 @@ def test_search_succeeds_with_more_systems_than_old_sqlite_variable_limit(repo):
 def test_prune_stale_fleet_carrier_materials_deletes_only_rows_past_7_day_cutoff(repo):
     _seed_station(repo, 1001, "Sol")
     _seed_coords(repo, "Sol", 0.0, 0.0, 0.0)
-    _seed_material(repo, 1001, "graphene", last_updated="2026-08-14T00:00:00Z")  # fresh, within 7 days
+    _seed_material(repo, 1001, "graphene", last_updated=_FRESH)  # fresh, within 7 days
     _seed_material(repo, 1001, "geneticrepairmeds", last_updated="2026-07-01T00:00:00Z")  # stale
 
     deleted = repo.prune_stale_fleet_carrier_materials()

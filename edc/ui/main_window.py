@@ -151,10 +151,10 @@ class _EdsmPowerPlayRefreshWorker(QObject):
 
 class _MarketPruneWorker(QObject):
     """
-    Deletes stale (>30d) market_prices rows — potentially slow at
-    galaxy-wide scale (millions of rows), so this must never run on the UI
-    thread. Opens its own connection per the project's cross-thread SQLite
-    rule.
+    Deletes stale market_prices rows (>30d) and stale fleet_carrier_materials
+    rows (>7d) — potentially slow at galaxy-wide scale (millions of rows),
+    so this must never run on the UI thread. Opens its own connection per
+    the project's cross-thread SQLite rule.
 
     Deliberately does NOT also VACUUM/reclaim disk space here. VACUUM
     needs an EXCLUSIVE lock on the whole file — running it automatically
@@ -165,7 +165,7 @@ class _MarketPruneWorker(QObject):
     "Compact Database Now" button (_MarketVacuumWorker) instead, so it
     only ever runs when the user has chosen to eat that cost right now.
     """
-    finished = pyqtSignal(int)  # deleted_count
+    finished = pyqtSignal(int)  # deleted_count (market_prices + fleet_carrier_materials combined)
 
     def __init__(self, db_path):
         super().__init__()
@@ -1693,15 +1693,16 @@ class MainWindow(QMainWindow):
                 self._edsm_powerplay_retry_timer.start()
 
     def _maybe_start_market_prune(self):
-        """Once/day is plenty — the prune threshold itself is 30 days, so
-        pruning more often would never find anything new to delete."""
+        """Once/day is plenty — the prune thresholds are 30 days for
+        market_prices and 7 days for fleet_carrier_materials, so pruning
+        more often would rarely find anything new to delete."""
         today = date.today().isoformat()
         if getattr(self.cfg, "last_market_prune_date", None) == today:
             return
         if self._market_prune_thread and self._market_prune_thread.isRunning():
             return
 
-        log.info("Pruning stale (>30d) market_prices rows in background")
+        log.info("Pruning stale market_prices (>30d) and fleet_carrier_materials (>7d) rows in background")
         self._market_prune_worker = _MarketPruneWorker(self.repo.db.db_path)
         self._market_prune_thread = QThread()
         self._market_prune_worker.moveToThread(self._market_prune_thread)
@@ -1711,7 +1712,7 @@ class MainWindow(QMainWindow):
         self._market_prune_thread.start()
 
     def _on_market_prune_finished(self, deleted: int) -> None:
-        log.info("Market prices prune complete: %d stale rows removed", deleted)
+        log.info("Prune complete: %d stale rows removed (market_prices + fleet_carrier_materials)", deleted)
         self.cfg.last_market_prune_date = date.today().isoformat()
         self.cfg_store.save(self.cfg)
 

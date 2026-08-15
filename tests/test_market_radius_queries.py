@@ -4,11 +4,15 @@ search_market_buy_prices, get_market_snapshot_in_radius) -- real SQLite
 (temp file), not mocks. These functions had no test coverage before this
 file; the tests here are safety nets for the IN-list -> JOIN rewrite
 (behavior must not change), not TDD-red tests."""
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 from persistence.database import Database
 from persistence.repository import Repository
 from persistence.schema import SCHEMA_SQL
+
+_FRESH = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 @pytest.fixture
@@ -27,7 +31,7 @@ def _seed_market_row(
     repo, market_id, commodity_name, system_name, station_name="Test Station",
     station_type="Coriolis", sell_price=1000, buy_price=None, mean_price=1000,
     demand=0, demand_bracket=0, stock=None, stock_bracket=0,
-    last_updated="2026-08-12T00:00:00Z",
+    last_updated=_FRESH,
 ):
     repo.save_market_snapshot_batch([(
         market_id, commodity_name, station_name, station_type, system_name,
@@ -129,7 +133,7 @@ def test_get_market_snapshot_in_radius_finds_station_within_radius(repo):
 
     snapshot = repo.get_market_snapshot_in_radius(0.0, 0.0, 0.0, 50.0)
     assert 1001 in snapshot
-    assert snapshot[1001]["sells"]["gold"] == (5000, 0, "2026-08-12T00:00:00Z")
+    assert snapshot[1001]["sells"]["gold"] == (5000, 0, _FRESH)
 
 
 def test_get_market_snapshot_in_radius_excludes_station_outside_radius(repo):
