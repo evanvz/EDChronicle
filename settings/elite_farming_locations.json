@@ -146,8 +146,7 @@
             "material": "Proto Heat Radiators",
             "state": "Boom"
           }
-        ],
-        "note": "Verified 2026-04-12 — earlier community guides had incorrect state mappings."
+        ]
       },
       {
         "name": "Dav's Hope",
