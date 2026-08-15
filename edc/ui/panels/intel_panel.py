@@ -1,10 +1,12 @@
 import logging
+from urllib.parse import quote, unquote
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QLabel,
     QScrollArea,
     QFrame,
+    QApplication,
 )
 from PyQt6.QtCore import Qt
 
@@ -144,6 +146,8 @@ class IntelPanel(QWidget):
         self.odyssey_display.setTextFormat(Qt.TextFormat.RichText)
         self.odyssey_display.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.odyssey_display.setStyleSheet("background: transparent; border: none;")
+        self.odyssey_display.setToolTip("Click a system name to copy it to the clipboard.")
+        self.odyssey_display.linkActivated.connect(self._on_odyssey_link)
         odyssey_l.addWidget(self.odyssey_display)
         self._content_layout.addWidget(odyssey_frame)
 
@@ -323,6 +327,10 @@ class IntelPanel(QWidget):
         line += '</div>'
         return line
 
+    def _on_odyssey_link(self, link: str):
+        if link.startswith("copy:"):
+            QApplication.clipboard().setText(unquote(link[len("copy:"):]))
+
     def _odyssey_candidates_html(self, candidates):
         """Renders the Odyssey farming candidates list as rich-text rows."""
         if not candidates:
@@ -346,7 +354,9 @@ class IntelPanel(QWidget):
             )
             rows.append(
                 '<div style="margin-bottom:6px;">'
-                f'<span style="color:#CCCCCC;font-weight:700;">{self._esc(system_name)}</span> '
+                f'<a href="copy:{quote(system_name)}" '
+                f'style="color:#CCCCCC;font-weight:700;text-decoration:none;">'
+                f'{self._esc(system_name)}</a> '
                 f'{badges}'
                 + (
                     f'<br><span style="color:#7a7a7a;font-size:12px;">'
