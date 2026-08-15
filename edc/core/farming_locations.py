@@ -108,6 +108,14 @@ class FarmingLocations:
                             s = self._norm(x)
                             if s:
                                 mats_clean.append(s)
+                        state_tags = rec.get("state_tags") or []
+                        if not isinstance(state_tags, list):
+                            state_tags = []
+                        state_tags_clean = []
+                        for x in state_tags:
+                            s = self._norm(x).lower()
+                            if s:
+                                state_tags_clean.append(s)
 
                         out = dict(rec)
                         out["domain"] = dom
@@ -119,6 +127,8 @@ class FarmingLocations:
                         if method:
                             out["method"] = method
                         out["key_materials"] = mats_clean
+                        if state_tags_clean:
+                            out["state_tags"] = state_tags_clean
 
                         records.append(out)
 

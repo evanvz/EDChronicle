@@ -30,7 +30,8 @@
         "method": "Search high-population Outbreak systems for High Grade Emissions, then collect and trade as needed",
         "key_materials": [
           "Pharmaceutical Isolators"
-        ]
+        ],
+        "state_tags": ["outbreak"]
       }
     ],
     "raw": [
@@ -163,7 +164,8 @@
         "method": "Low/High CZs, RES sites, pirate massacre loops, then scoop salvage",
         "key_materials": [
           "Mixed manufactured materials"
-        ]
+        ],
+        "state_tags": ["war", "pirate_attack"]
       }
     ],
     "odyssey_onfoot": [
@@ -196,7 +198,8 @@
         "key_materials": [
           "Broad Odyssey material coverage"
         ],
-        "note": "Good category to keep, but the exact best system changes over time."
+        "note": "Good category to keep, but the exact best system changes over time.",
+        "state_tags": ["pirate_attack", "war", "civil_unrest", "infrastructure_failure"]
       },
       {
         "name": "Abandoned settlements",
@@ -212,7 +215,8 @@
         "key_materials": [
           "Broad Odyssey material coverage"
         ],
-        "note": "No local law means no crime stat penalty for looting or trespassing."
+        "note": "No local law means no crime stat penalty for looting or trespassing.",
+        "state_tags": ["anarchy"]
       },
       {
         "name": "Power Generator Reactivation missions",
@@ -222,7 +226,8 @@
           "Power regulators",
           "Chemical, circuit and tech materials"
         ],
-        "note": "Needs a Maverick suit with Arc Cutter and Energy Link to get into powered-down buildings. Considered one of the best overall sources for these material categories."
+        "note": "Needs a Maverick suit with Arc Cutter and Energy Link to get into powered-down buildings. Considered one of the best overall sources for these material categories.",
+        "state_tags": ["war"]
       },
       {
         "name": "Building type hints (EXT/IND/STO)",

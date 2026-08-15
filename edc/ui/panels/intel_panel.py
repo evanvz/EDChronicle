@@ -13,6 +13,118 @@ from PyQt6.QtCore import Qt
 log = logging.getLogger(__name__)
 
 
+def _get_system_opportunities(state):
+    """
+    Returns a set of tags describing what farming opportunities exist
+    in the current system, from live game state. Module-level (not a
+    method) so it's testable without a QApplication.
+    """
+    tags = set()
+
+    # Allegiance/Government
+    govt = str(getattr(state, "system_government", "") or "").lower()
+    alleg = str(getattr(state, "system_allegiance", "") or "").lower()
+    sec = str(getattr(state, "system_security", "") or "").lower()
+    econ = str(getattr(state, "system_economy", "") or "").lower()
+
+    if "anarchy" in govt:
+        tags.add("anarchy")
+    if "low" in sec:
+        tags.add("low_security")
+    if "high tech" in econ or "hightech" in econ:
+        tags.add("high_tech")
+    if "military" in econ:
+        tags.add("military")
+    if "industrial" in econ:
+        tags.add("industrial")
+    if "empire" in alleg:
+        tags.add("empire")
+    if "federation" in alleg:
+        tags.add("federation")
+
+    # Faction active states
+    for f in (getattr(state, "factions", None) or []):
+        if not isinstance(f, dict):
+            continue
+        active = f.get("ActiveStates") or []
+        faction_state = str(f.get("FactionState") or "").lower()
+        all_states = [faction_state]
+        for st in active:
+            if isinstance(st, dict):
+                all_states.append(
+                    str(st.get("State") or "").lower()
+                )
+        for s in all_states:
+            if "boom" in s:
+                tags.add("boom")
+            if "war" in s or "civil war" in s:
+                tags.add("war")
+            if "outbreak" in s:
+                tags.add("outbreak")
+            if "pirate" in s:
+                tags.add("pirate_attack")
+            if "election" in s:
+                tags.add("election")
+            if "expansion" in s:
+                tags.add("expansion")
+            if "civilunrest" in s:
+                tags.add("civil_unrest")
+            if "infrastructurefailure" in s:
+                tags.add("infrastructure_failure")
+
+    return tags
+
+
+_STATE_TEXT_TAGS = {
+    "outbreak": "outbreak",
+    "boom": "boom",
+}
+
+
+def _state_text_to_tags(state_text: str) -> set:
+    """
+    Maps an examples[].state free-text value (from the farming guide's
+    HGE entry) to the live-tag vocabulary _get_system_opportunities()
+    produces. Deliberately narrow -- covers only the known state-text
+    variants this guide's data actually uses, not a general parser.
+    """
+    s = (state_text or "").lower()
+    tags = set()
+    for key, tag in _STATE_TEXT_TAGS.items():
+        if key in s:
+            tags.add(tag)
+    if "war" in s:
+        tags.add("war")
+    if "imperial" in s:
+        tags.add("empire")
+    if "federal" in s:
+        tags.add("federation")
+    return tags
+
+
+def _entry_matches_system(loc: dict, tags: set) -> set:
+    """
+    Returns the subset of `tags` this entry actually matches, driven by
+    curated data (loc["state_tags"], or -- for entries with an
+    examples[] list -- each example's own state mapped via
+    _state_text_to_tags()) -- never free-text keyword guessing against
+    the entry's name/method. Empty set means no live match (the entry
+    may still appear via an exact system/body name match, a separate,
+    unrelated path in FarmingLocations.get_for_system()).
+    """
+    examples = loc.get("examples")
+    if isinstance(examples, list) and examples:
+        matched = set()
+        for ex in examples:
+            if not isinstance(ex, dict):
+                continue
+            matched |= _state_text_to_tags(ex.get("state") or "") & tags
+        return matched
+
+    entry_tags = set(loc.get("state_tags") or [])
+    return entry_tags & tags
+
+
 class IntelPanel(QWidget):
     """
     Owns all widgets and refresh logic for the Intel tab.
@@ -267,6 +379,19 @@ class IntelPanel(QWidget):
                 f'<br><span style="color:#6BCB77;font-size:12px;">'
                 f'&nbsp;&nbsp;⚙ {self._esc(method)}</span>'
             )
+        matched_examples = loc.get("_matched_examples") or []
+        if matched_examples:
+            for ex in matched_examples:
+                mat = str(ex.get("material") or "")
+                st = str(ex.get("state") or "")
+                if not mat:
+                    continue
+                line += (
+                    f'<br><span style="color:#FFD93D;font-size:12px;">'
+                    f'&nbsp;&nbsp;⚡ {self._esc(mat)}'
+                    + (f' — {self._esc(st)}' if st else '')
+                    + '</span>'
+                )
         if note:
             line += (
                 f'<br><span style="color:#FFD93D;font-size:12px;">'
@@ -387,88 +512,6 @@ class IntelPanel(QWidget):
             return "1 day ago"
         return f"{days} days ago"
 
-    def _get_system_opportunities(self, state):
-        """
-        Returns a set of tags describing what farming
-        opportunities exist in the current system.
-        """
-        tags = set()
-
-        # Allegiance/Government
-        govt = str(getattr(state, "system_government", "") or "").lower()
-        alleg = str(getattr(state, "system_allegiance", "") or "").lower()
-        sec = str(getattr(state, "system_security", "") or "").lower()
-        econ = str(getattr(state, "system_economy", "") or "").lower()
-
-        if "anarchy" in govt:
-            tags.add("anarchy")
-        if "low" in sec:
-            tags.add("low_security")
-        if "high tech" in econ or "hightech" in econ:
-            tags.add("high_tech")
-        if "military" in econ:
-            tags.add("military")
-        if "industrial" in econ:
-            tags.add("industrial")
-
-        # Faction active states
-        for f in (getattr(state, "factions", None) or []):
-            if not isinstance(f, dict):
-                continue
-            active = f.get("ActiveStates") or []
-            faction_state = str(f.get("FactionState") or "").lower()
-            all_states = [faction_state]
-            for st in active:
-                if isinstance(st, dict):
-                    all_states.append(
-                        str(st.get("State") or "").lower()
-                    )
-            for s in all_states:
-                if "boom" in s:
-                    tags.add("boom")
-                if "war" in s or "civil war" in s:
-                    tags.add("war")
-                if "outbreak" in s:
-                    tags.add("outbreak")
-                if "pirate" in s:
-                    tags.add("pirate_attack")
-                if "election" in s:
-                    tags.add("election")
-                if "expansion" in s:
-                    tags.add("expansion")
-
-        return tags
-
-    def _entry_matches_system(self, loc, tags):
-        """
-        Returns True if this farming entry is relevant
-        to the current system based on active tags.
-        """
-        name   = str(loc.get("name") or "").lower()
-        method = str(loc.get("method") or "").lower()
-        combined = name + " " + method
-
-        if "boom" in tags and any(
-            k in combined for k in ["boom", "hge", "high grade"]
-        ):
-            return True
-        if "war" in tags and any(
-            k in combined for k in ["war", "conflict", "cz", "combat zone"]
-        ):
-            return True
-        if "outbreak" in tags and "outbreak" in combined:
-            return True
-        if "anarchy" in tags and any(
-            k in combined for k in ["anarchy", "high wake", "wake scan"]
-        ):
-            return True
-        if "low_security" in tags and any(
-            k in combined for k in ["low", "anarchy", "pirate"]
-        ):
-            return True
-        if "pirate_attack" in tags and "pirate" in combined:
-            return True
-        return False
 
     def refresh(self, state, farming_locations, faction_history=None, farming_candidates=None):
         sys_name = getattr(state, "system", None) or ""
@@ -562,17 +605,30 @@ class IntelPanel(QWidget):
         if farming_locations:
             try:
                 all_records = getattr(farming_locations, "_records", []) or []
-                opportunities = self._get_system_opportunities(state)
+                opportunities = _get_system_opportunities(state)
                 # Exact system name matches
                 by_system = farming_locations.get_for_system(sys_name) if sys_name else []
                 seen_ids = {id(r) for r in by_system}
-                # State-tag matches (boom/war/outbreak etc.)
-                state_matches = [
-                    r for r in all_records
-                    if isinstance(r, dict)
-                    and id(r) not in seen_ids
-                    and self._entry_matches_system(r, opportunities)
-                ]
+                # State-tag matches (boom/war/outbreak etc.) -- entries
+                # with an examples[] list only show the specific
+                # example(s) whose own state is actually live, not the
+                # whole entry.
+                state_matches = []
+                for r in all_records:
+                    if not isinstance(r, dict) or id(r) in seen_ids:
+                        continue
+                    matched_tags = _entry_matches_system(r, opportunities)
+                    if not matched_tags:
+                        continue
+                    entry = r
+                    if isinstance(r.get("examples"), list):
+                        entry = dict(r)
+                        entry["_matched_examples"] = [
+                            ex for ex in r["examples"]
+                            if isinstance(ex, dict)
+                            and _state_text_to_tags(ex.get("state") or "") & opportunities
+                        ]
+                    state_matches.append(entry)
                 farm_entries = by_system + state_matches
             except Exception:
                 farm_entries = []
@@ -727,6 +783,7 @@ class IntelPanel(QWidget):
         if farming_locations:
             try:
                 all_records = getattr(farming_locations, "_records", []) or []
+                opportunities = _get_system_opportunities(state)
                 # Group by domain
                 domain_order = [
                     "encoded", "raw", "manufactured",
@@ -768,7 +825,7 @@ class IntelPanel(QWidget):
                         f'</div>'
                     )
                     for loc in entries:
-                        is_match = self._entry_matches_system(
+                        is_match = _entry_matches_system(
                             loc, opportunities
                         )
                         guide_html.append(
