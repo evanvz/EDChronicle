@@ -137,14 +137,35 @@ today.
 CREATE INDEX IF NOT EXISTS idx_system_coords_xyz ON system_coords(x, y, z)
 ```
 
-Added via the existing flat migration-list pattern in
-`persistence/database.py:run_migrations()` (same pattern as the
-pre-existing `idx_fcm_symbol`/`idx_market_prices_system_name` index
-lines already in that list). `IF NOT EXISTS` makes it a no-op after the
-first run. Confirms the JOIN's bounding-box filter gets a `SEARCH`
-instead of the current `SCAN system_coords` (worth a live
-`EXPLAIN QUERY PLAN` check after building it, same verification style
-already used for `idx_market_prices_system_name`'s docstring).
+**Correction to an earlier assumption in this doc:** `idx_market_prices_system_name`
+is NOT in the flat `run_migrations()` list — re-checked directly against
+`persistence/database.py`. It lives in its own method,
+`Database.ensure_market_prices_indexes()` (`:52-64`), called only from
+`_MarketVacuumWorker.run()` (`edc/ui/main_window.py:190-219`), i.e. only
+when the user clicks Settings' "Compact Database Now" button. Its
+docstring explains why: building it took ~2+ minutes at 13.4M rows,
+needs a write lock, and `run_migrations()` runs synchronously on the
+main/UI thread at every startup (`edc/ui/main_window.py:914`) — an
+index build that slow would freeze the app on launch.
+
+`system_coords` (437,726 rows and continuously, unboundedly growing)
+is exactly the kind of table this concern applies to, even though it's
+smaller than market_prices today. The new index follows the same
+established pattern instead of the simpler flat-list one: a new
+`Database.ensure_system_coords_indexes()` method (same shape as
+`ensure_market_prices_indexes()`), called from the same
+`_MarketVacuumWorker.run()` alongside the existing call — not from
+`run_migrations()`.
+
+This index is a performance improvement, not a correctness requirement
+for the crash fix: the JOIN + `BETWEEN` query rewrite is what fixes the
+crash (bound-parameter count is fixed regardless of whether SQLite
+scans or seeks). Without the index, the bounding-box filter still
+returns correct results via a full `system_coords` table scan — slower,
+but the crash is fixed either way. Users who never click "Compact
+Database Now" keep the crash fix; they just don't get the query-speed
+improvement until they do (same tradeoff `market_prices` already
+accepted for `idx_market_prices_system_name`, unchanged by this plan).
 
 ### `fleet_carrier_materials` pruning
 
