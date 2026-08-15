@@ -585,7 +585,19 @@ class IntelPanel(QWidget):
                 all_records = getattr(farming_locations, "_records", []) or []
                 guardian_entries = [r for r in all_records if isinstance(r, dict) and r.get("domain") == "guardian"]
                 thargoid_entries = [r for r in all_records if isinstance(r, dict) and r.get("domain") == "thargoid"]
-                onfoot_entries   = [r for r in all_records if isinstance(r, dict) and r.get("domain") == "odyssey_onfoot"]
+
+                # Guide entries actually IN this system -- guardian_entries
+                # above stays global (needed for the "is this system in the
+                # guide at all" check below); the per-body display must only
+                # ever show sites that are actually here, not just the first
+                # N entries of the whole guide. Thargoid entries are excluded
+                # from this: confirmed (settings/elite_farming_locations.json)
+                # they carry no "system" field at all -- they're generic
+                # advisory reference material (e.g. "Scout NHSS"), not
+                # location-pinned sites, so thargoid_entries stays global too.
+                sys_entries = farming_locations.get_for_system(sys_name)
+                guardian_sys_entries = [r for r in sys_entries if r.get("domain") == "guardian"]
+                onfoot_sys_entries   = [r for r in sys_entries if r.get("domain") == "odyssey_onfoot"]
 
                 # Known systems for each domain (for new-site detection)
                 known_guardian_systems = {
@@ -668,7 +680,7 @@ class IntelPanel(QWidget):
                                 f'&nbsp;&nbsp;🔺 {g_sig} guardian signal(s)'
                                 f'</span>'
                             )
-                        for fm in guardian_entries[:3]:
+                        for fm in guardian_sys_entries[:3]:
                             name = str(fm.get("name") or "")
                             body_farm_html.append(
                                 f'<br><span style="color:{fg_g};font-size:12px;">'
@@ -681,7 +693,7 @@ class IntelPanel(QWidget):
                             f'&nbsp;&nbsp;⚠ {h_sig} human signal(s) — possible installation or crash site'
                             f'</span>'
                         )
-                        for fm in onfoot_entries[:2]:
+                        for fm in onfoot_sys_entries[:2]:
                             name = str(fm.get("name") or "")
                             fg, _ = self._domain_color("odyssey_onfoot")
                             body_farm_html.append(
