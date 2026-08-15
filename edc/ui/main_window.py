@@ -2535,6 +2535,7 @@ class MainWindow(QMainWindow):
                 legal_status = str(evt.get("LegalStatus") or "").strip()
                 wanted       = legal_status.lower() == "wanted"
                 hostile      = legal_status.lower() == "hostile"
+                legal_enemy  = legal_status.lower() == "enemy"
                 bounty       = int(evt.get("Bounty") or 0)
                 power        = (evt.get("Power") or "").strip()
                 faction      = (evt.get("Faction") or "").strip().lower()
@@ -2564,6 +2565,7 @@ class MainWindow(QMainWindow):
                 engage_risk = _engage_risk(
                     wanted, hostile, power, pledged, ctrl,
                     getattr(state, "system_government", None),
+                    enemy=legal_enemy,
                 )
 
                 pilot = evt.get("PilotName_Localised") or evt.get("PilotName") or ""

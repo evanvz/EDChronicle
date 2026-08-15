@@ -58,14 +58,22 @@ def _derive_conflicts_from_factions(factions: list) -> list:
 
 
 def _engage_risk(wanted: bool, hostile: bool, power: str | None, pledged: str | None,
-                  ctrl: str | None, government: str | None) -> str:
+                  ctrl: str | None, government: str | None, enemy: bool = False) -> str:
     """
     Returns "safe", "caution", or "unknown" -- whether killing a contact
     with these attributes is expected to draw a bounty against the
     player. Deliberately conservative: anything not confidently known
     safe defaults to "unknown", never a false "safe".
+
+    LegalStatus "Enemy" (an opposing PowerPlay power's own combatant) is
+    safe to kill wherever encountered, not just in the player's own
+    controlled territory -- confirmed externally (community-verified PP
+    mechanics): the bounty risk belongs to a rival power's *Clean* local
+    faction ship outside your own territory, not to an Enemy-flagged
+    combatant itself. The pp_enemy/in_my_pp_space inference below is kept
+    as a fallback for the rare case LegalStatus isn't populated.
     """
-    if wanted or hostile:
+    if wanted or hostile or enemy:
         return "safe"
     p = (pledged or "").strip().lower()
     in_my_pp_space = bool(p and ctrl and ctrl.strip().lower() == p)
@@ -598,6 +606,11 @@ class EventEngine:
             # alone (a ship merely belonging to a faction at war elsewhere in
             # the BGS isn't fair game outside an actual Conflict Zone).
             is_hostile = bool(legal_lower == "hostile")
+            # "Enemy" (an opposing PowerPlay power's own combatant) is safe
+            # to kill wherever encountered, not just in the player's own
+            # controlled territory -- confirmed externally, see
+            # _engage_risk()'s docstring.
+            is_enemy_status = bool(legal_lower == "enemy")
             bounty = event.get("Bounty")
 
             rank_val = event.get("PilotRank")
@@ -645,6 +658,7 @@ class EventEngine:
                         getattr(self.state, "pp_power", None),
                         getattr(self.state, "system_controlling_power", None),
                         getattr(self.state, "system_government", None),
+                        enemy=is_enemy_status,
                     ),
                     "LastSeen": ts,
                 }

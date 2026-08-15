@@ -37,6 +37,21 @@ def test_pp_enemy_outside_my_own_territory_is_not_safe():
     assert result == "unknown"
 
 
+def test_legal_status_enemy_is_safe_even_outside_my_own_territory():
+    # Confirmed externally: an opposing power's own combatant (LegalStatus
+    # "Enemy") is safe to kill wherever encountered -- the bounty risk
+    # belongs to a rival power's *Clean* local faction ship outside your
+    # own territory, not to an Enemy-flagged combatant itself. Same
+    # system shape as the Vargerson regression case above, but this time
+    # the contact IS flagged Enemy.
+    result = _engage_risk(
+        wanted=False, hostile=False, power="A. Lavigny-Duval",
+        pledged="Aisling Duval", ctrl="A. Lavigny-Duval", government="Confederacy",
+        enemy=True,
+    )
+    assert result == "safe"
+
+
 def test_anarchy_government_is_caution():
     result = _engage_risk(
         wanted=False, hostile=False, power="", pledged="", ctrl="", government="Anarchy",
