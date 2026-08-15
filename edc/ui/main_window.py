@@ -151,7 +151,7 @@ class _EdsmPowerPlayRefreshWorker(QObject):
 
 class _MarketPruneWorker(QObject):
     """
-    Deletes stale market_prices rows (>30d) and stale fleet_carrier_materials
+    Deletes stale market_prices rows (>14d) and stale fleet_carrier_materials
     rows (>7d) — potentially slow at galaxy-wide scale (millions of rows),
     so this must never run on the UI thread. Opens its own connection per
     the project's cross-thread SQLite rule.
@@ -1693,7 +1693,7 @@ class MainWindow(QMainWindow):
                 self._edsm_powerplay_retry_timer.start()
 
     def _maybe_start_market_prune(self):
-        """Once/day is plenty — the prune thresholds are 30 days for
+        """Once/day is plenty — the prune thresholds are 14 days for
         market_prices and 7 days for fleet_carrier_materials, so pruning
         more often would rarely find anything new to delete."""
         today = date.today().isoformat()
@@ -1702,7 +1702,7 @@ class MainWindow(QMainWindow):
         if self._market_prune_thread and self._market_prune_thread.isRunning():
             return
 
-        log.info("Pruning stale market_prices (>30d) and fleet_carrier_materials (>7d) rows in background")
+        log.info("Pruning stale market_prices (>14d) and fleet_carrier_materials (>7d) rows in background")
         self._market_prune_worker = _MarketPruneWorker(self.repo.db.db_path)
         self._market_prune_thread = QThread()
         self._market_prune_worker.moveToThread(self._market_prune_thread)

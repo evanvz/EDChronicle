@@ -10,7 +10,7 @@ from edc.core.station_pads import effective_pad_size
 # or a station nobody's visited in a while can make it flatly wrong, and
 # unlike a Fleet Carrier's arbitrary price this isn't visible as an obvious
 # outlier, so it's safer to disallow it than merely flag it.
-_MARKET_DATA_MAX_AGE_DAYS = 30
+_MARKET_DATA_MAX_AGE_DAYS = 14
 
 
 def _market_data_cutoff() -> str:
@@ -892,7 +892,7 @@ class Repository:
         """
         Deletes rows already excluded from search results by
         _market_data_cutoff() — a stale row is dead weight once nothing
-        can ever surface it, not just hidden. Same 30-day threshold as the
+        can ever surface it, not just hidden. Same 14-day threshold as the
         search filter, so this doesn't change what search can find, only
         what's still sitting on disk. Call from a worker thread only — a
         DELETE across the whole market_prices table is not instant at
