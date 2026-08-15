@@ -3103,14 +3103,24 @@ class MainWindow(QMainWindow):
         ctrl    = (getattr(self.state, "system_controlling_power", None) or "").strip()
         in_my_pp_space = bool(pledged and ctrl and ctrl == pledged)
 
-        def _qualifies(power: str, wanted: bool, bounty, rank: str) -> bool:
+        def _qualifies(power: str, wanted: bool, bounty, rank: str):
+            """Returns "bounty", "pp_enemy", or None -- which reason (if
+            any) this target is worth a commander quip for. Kept distinct
+            because the two cases speak different phrase pools: a
+            PowerPlay rival is engage-worthy without actually being
+            wanted/bountied, and saying "bounty confirmed" for one was
+            misleading (confirmed live: Aisling Duval PP contacts with
+            LegalStatus Clean, no Bounty journal event, still got bounty
+            wording)."""
             rank_ok      = rank.lower() in ("dangerous", "deadly", "elite")
             bounty_ok    = isinstance(bounty, int) and bounty >= 500_000
             bounty_target = wanted and bounty_ok and rank_ok
-            pp_enemy      = bool(pledged and power and power != pledged)
-            if in_my_pp_space:
-                return pp_enemy or bounty_target
-            return bounty_target
+            if bounty_target:
+                return "bounty"
+            pp_enemy = bool(pledged and power and power != pledged)
+            if in_my_pp_space and pp_enemy:
+                return "pp_enemy"
+            return None
 
         quip = ""
         if event_type == "ReceiveText":
@@ -3142,8 +3152,11 @@ class MainWindow(QMainWindow):
             wanted = legal == "wanted"
             bounty = evt.get("Bounty")
             rank   = str(evt.get("PilotRank") or "").strip()
-            if _qualifies(power, wanted, bounty, rank):
+            reason = _qualifies(power, wanted, bounty, rank)
+            if reason == "bounty":
                 quip = CombatPhrases.wanted_target_scan()
+            elif reason == "pp_enemy":
+                quip = CombatPhrases.powerplay_enemy_scan()
 
         if not quip:
             return

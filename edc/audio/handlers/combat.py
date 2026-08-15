@@ -57,6 +57,14 @@ class CombatPhrases:
         "Good news, Commander. That target's worth credits.",
     ]
 
+    POWERPLAY_ENEMY_SCAN = [
+        "Rival power vessel. No bounty, but they're fair game here, Commander.",
+        "Opposing power detected in our territory. Permission to engage?",
+        "That's an enemy of the cause. No bounty on them, but push them back.",
+        "Rival colours. This is our space -- let's remind them.",
+        "Hostile power signature. Contest them, Commander.",
+    ]
+
     @staticmethod
     def ship_targeted(ship: str, rank: str, power: str, is_enemy: bool,
                       wanted: bool, bounty: int, is_high_value: bool = False) -> str:
@@ -108,3 +116,7 @@ class CombatPhrases:
     @staticmethod
     def wanted_target_scan() -> str:
         return pick(CombatPhrases.WANTED_TARGET_SCAN)
+
+    @staticmethod
+    def powerplay_enemy_scan() -> str:
+        return pick(CombatPhrases.POWERPLAY_ENEMY_SCAN)
