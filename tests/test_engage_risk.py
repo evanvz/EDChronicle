@@ -28,7 +28,7 @@ def test_pp_enemy_outside_my_own_territory_is_not_safe():
     # I do NOT control this system (someone else does) -- must NOT be
     # misclassified as safe just because the powers differ.
     result = _engage_risk(
-        wanted=False, hostile=False, power="Aisling Duval",
+        wanted=False, hostile=False, power="A. Lavigny-Duval",
         pledged="Aisling Duval", ctrl="A. Lavigny-Duval", government="Confederacy",
     )
     assert result == "unknown"
