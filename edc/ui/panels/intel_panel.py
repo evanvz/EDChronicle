@@ -502,7 +502,7 @@ class IntelPanel(QWidget):
         h.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         h.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        self.nearby_farming_table.setToolTip("Click the Site / System cell to copy its name to the clipboard.")
+        self.nearby_farming_table.setToolTip("Click the System cell to copy its name to the clipboard.")
         self.nearby_farming_table.cellClicked.connect(self._on_nearby_farming_cell_clicked)
         self.nearby_farming_table.setMinimumHeight(150)
         nearby_l.addWidget(self.nearby_farming_table)
@@ -780,7 +780,7 @@ class IntelPanel(QWidget):
             self.nearby_farming_table.setItem(row, 3, QTableWidgetItem(source_txt))
 
     def _on_nearby_farming_cell_clicked(self, row: int, column: int) -> None:
-        if column != 1:  # Site / System
+        if column != 1:  # System
             return
         item = self.nearby_farming_table.item(row, column)
         if item and item.text():
