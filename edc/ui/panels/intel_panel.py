@@ -125,6 +125,26 @@ def _entry_matches_system(loc: dict, tags: set) -> set:
     return entry_tags & tags
 
 
+def _with_matched_examples(loc: dict, matched_tags: set, opportunities: set) -> dict:
+    """
+    Given an entry and the tags it matched, returns either the entry
+    unchanged (no match, or no examples[] to narrow down) or a shallow
+    copy carrying `_matched_examples` -- the specific example(s) whose
+    own state overlaps the live tags. Shared by every card that renders
+    farm entries, so a match always shows the same specific material(s)
+    regardless of which card it's rendered in.
+    """
+    if not matched_tags or not isinstance(loc.get("examples"), list):
+        return loc
+    entry = dict(loc)
+    entry["_matched_examples"] = [
+        ex for ex in loc["examples"]
+        if isinstance(ex, dict)
+        and _state_text_to_tags(ex.get("state") or "") & opportunities
+    ]
+    return entry
+
+
 class IntelPanel(QWidget):
     """
     Owns all widgets and refresh logic for the Intel tab.
@@ -620,15 +640,7 @@ class IntelPanel(QWidget):
                     matched_tags = _entry_matches_system(r, opportunities)
                     if not matched_tags:
                         continue
-                    entry = r
-                    if isinstance(r.get("examples"), list):
-                        entry = dict(r)
-                        entry["_matched_examples"] = [
-                            ex for ex in r["examples"]
-                            if isinstance(ex, dict)
-                            and _state_text_to_tags(ex.get("state") or "") & opportunities
-                        ]
-                    state_matches.append(entry)
+                    state_matches.append(_with_matched_examples(r, matched_tags, opportunities))
                 farm_entries = by_system + state_matches
             except Exception:
                 farm_entries = []
@@ -825,11 +837,12 @@ class IntelPanel(QWidget):
                         f'</div>'
                     )
                     for loc in entries:
-                        is_match = _entry_matches_system(
+                        matched_tags = _entry_matches_system(
                             loc, opportunities
                         )
+                        entry = _with_matched_examples(loc, matched_tags, opportunities)
                         guide_html.append(
-                            self._farm_entry_html(loc, highlight=is_match)
+                            self._farm_entry_html(entry, highlight=bool(matched_tags))
                         )
 
             except Exception:

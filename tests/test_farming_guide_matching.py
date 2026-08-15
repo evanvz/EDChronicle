@@ -11,6 +11,7 @@ from edc.ui.panels.intel_panel import (
     _get_system_opportunities,
     _entry_matches_system,
     _state_text_to_tags,
+    _with_matched_examples,
 )
 
 
@@ -104,6 +105,38 @@ def test_hge_manufactured_entry_matches_only_the_relevant_example():
         ],
     }
     assert _entry_matches_system(loc, {"boom"}) == {"boom"}
+
+
+# --- _with_matched_examples: shared by every card rendering farm entries ---
+
+_HGE_ENTRY = {
+    "name": "High Grade Emissions (HGE)",
+    "examples": [
+        {"material": "Pharmaceutical Isolators", "state": "Outbreak"},
+        {"material": "Proto Heat Radiators", "state": "Boom"},
+    ],
+}
+
+
+def test_with_matched_examples_narrows_to_the_matching_example_only():
+    matched_tags = _entry_matches_system(_HGE_ENTRY, {"boom"})
+    entry = _with_matched_examples(_HGE_ENTRY, matched_tags, {"boom"})
+    assert entry is not _HGE_ENTRY
+    assert [ex["material"] for ex in entry["_matched_examples"]] == ["Proto Heat Radiators"]
+    # Original record is untouched (shallow copy, not mutated in place).
+    assert "_matched_examples" not in _HGE_ENTRY
+
+
+def test_with_matched_examples_returns_entry_unchanged_when_no_match():
+    entry = _with_matched_examples(_HGE_ENTRY, set(), {"outbreak"})
+    assert entry is _HGE_ENTRY
+
+
+def test_with_matched_examples_returns_entry_unchanged_when_no_examples_field():
+    loc = {"name": "Anarchy-government systems", "state_tags": ["anarchy"]}
+    matched_tags = _entry_matches_system(loc, {"anarchy"})
+    entry = _with_matched_examples(loc, matched_tags, {"anarchy"})
+    assert entry is loc
 
 
 # --- FarmingLocations loader: state_tags round-trip ---
