@@ -184,3 +184,18 @@ def test_search_succeeds_with_more_systems_than_old_sqlite_variable_limit(repo):
 
     assert len(result["graphene"]) == 1
     assert result["graphene"][0]["carrier_name"] == "Test Carrier"
+
+
+def test_prune_stale_fleet_carrier_materials_deletes_only_rows_past_7_day_cutoff(repo):
+    _seed_station(repo, 1001, "Sol")
+    _seed_coords(repo, "Sol", 0.0, 0.0, 0.0)
+    _seed_material(repo, 1001, "graphene", last_updated="2026-08-14T00:00:00Z")  # fresh, within 7 days
+    _seed_material(repo, 1001, "geneticrepairmeds", last_updated="2026-07-01T00:00:00Z")  # stale
+
+    deleted = repo.prune_stale_fleet_carrier_materials()
+
+    assert deleted == 1
+    remaining = repo.db.conn.execute(
+        "SELECT material_symbol FROM fleet_carrier_materials"
+    ).fetchall()
+    assert [r["material_symbol"] for r in remaining] == ["graphene"]

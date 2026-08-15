@@ -176,15 +176,23 @@ class _MarketPruneWorker(QObject):
         from persistence.repository import Repository
 
         db = Database(self._db_path)
-        deleted = 0
+        deleted_market_prices = 0
+        deleted_fleet_carrier_materials = 0
         try:
             repo = Repository(db)
-            deleted = repo.prune_stale_market_prices()
-        except Exception:
-            log.exception("Market prices prune failed")
+            try:
+                deleted_market_prices = repo.prune_stale_market_prices()
+                log.info("Pruned %d stale market_prices rows", deleted_market_prices)
+            except Exception:
+                log.exception("Market prices prune failed")
+            try:
+                deleted_fleet_carrier_materials = repo.prune_stale_fleet_carrier_materials()
+                log.info("Pruned %d stale fleet_carrier_materials rows", deleted_fleet_carrier_materials)
+            except Exception:
+                log.exception("Fleet carrier materials prune failed")
         finally:
             db.close()
-        self.finished.emit(deleted)
+        self.finished.emit(deleted_market_prices + deleted_fleet_carrier_materials)
 
 
 class _MarketVacuumWorker(QObject):

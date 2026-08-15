@@ -904,6 +904,21 @@ class Repository:
         self.db.conn.commit()
         return cur.rowcount
 
+    def prune_stale_fleet_carrier_materials(self) -> int:
+        """
+        Deletes rows already excluded from search results by
+        _fleet_carrier_cutoff() — same reasoning as prune_stale_market_prices():
+        a stale row is dead weight once nothing can ever surface it, not
+        just hidden. Same 7-day threshold as the search filter, so this
+        doesn't change what search can find, only what's still sitting on
+        disk. Call from a worker thread only."""
+        cur = self.db.conn.execute(
+            "DELETE FROM fleet_carrier_materials WHERE last_updated < ?",
+            (_fleet_carrier_cutoff(),),
+        )
+        self.db.conn.commit()
+        return cur.rowcount
+
     def save_commodity_names_batch(self, pairs: list[tuple[str, str]]):
         """
         pairs: [(internal_name, display_name), ...] — captured from the
