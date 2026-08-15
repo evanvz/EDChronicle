@@ -1,6 +1,9 @@
 """Tests for the combat engage-risk verdict -- pure functions, no Qt
 needed."""
-from edc.core.event_engine import _engage_risk
+import pytest
+
+from edc.core.event_engine import EventEngine, _engage_risk
+from edc.core.state import GameState
 from edc.audio.handlers.combat import CombatPhrases
 
 
@@ -82,3 +85,37 @@ def test_ship_targeted_appends_no_clause_when_risk_not_given():
         "Vulture", "Competent", "", False, False, 0, False,
     )
     assert text == "Vulture Competent."
+
+
+# --- EventEngine.process() write path -- confirms "EngageRisk" lands on
+# combat_contacts, connecting event_engine.py's writer to combat_panel.py's
+# reader through the real entry point, not just _engage_risk() directly. ---
+
+@pytest.fixture
+def engine(tmp_path):
+    return EventEngine(GameState(), tmp_path)
+
+
+def _ship_targeted_event(legal_status, pilot="Test Pilot", ship="Vulture"):
+    return {
+        "event": "ShipTargeted", "TargetLocked": True, "ScanStage": 3,
+        "PilotName": pilot, "Ship": ship, "LegalStatus": legal_status,
+    }
+
+
+def test_wanted_contact_gets_safe_engage_risk(engine):
+    engine.process(_ship_targeted_event("Wanted"))
+    contact = next(iter(engine.state.combat_contacts.values()))
+    assert contact["EngageRisk"] == "safe"
+
+
+def test_hostile_contact_gets_safe_engage_risk(engine):
+    engine.process(_ship_targeted_event("Hostile"))
+    contact = next(iter(engine.state.combat_contacts.values()))
+    assert contact["EngageRisk"] == "safe"
+
+
+def test_clean_contact_no_pp_gets_unknown_engage_risk(engine):
+    engine.process(_ship_targeted_event("Clean"))
+    contact = next(iter(engine.state.combat_contacts.values()))
+    assert contact["EngageRisk"] == "unknown"

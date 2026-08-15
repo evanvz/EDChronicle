@@ -2571,11 +2571,10 @@ class MainWindow(QMainWindow):
                 key   = f"{pilot}|{ship}"
                 if key in self._tts_spoken_ships:
                     return ""
-                self._tts_spoken_ships.add(key)
-
                 now = time.monotonic()
                 if now < self._tts_ship_cooldown_until:
                     return ""
+                self._tts_spoken_ships.add(key)
                 self._tts_ship_cooldown_until = now + 6.0
                 return CombatPhrases.ship_targeted(
                     ship, rank, power, is_enemy, wanted, bounty, is_high_value, engage_risk

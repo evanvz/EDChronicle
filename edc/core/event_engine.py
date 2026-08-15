@@ -57,8 +57,8 @@ def _derive_conflicts_from_factions(factions: list) -> list:
     return conflicts
 
 
-def _engage_risk(wanted: bool, hostile: bool, power: str, pledged: str,
-                  ctrl: str, government: str) -> str:
+def _engage_risk(wanted: bool, hostile: bool, power: str | None, pledged: str | None,
+                  ctrl: str | None, government: str | None) -> str:
     """
     Returns "safe", "caution", or "unknown" -- whether killing a contact
     with these attributes is expected to draw a bounty against the

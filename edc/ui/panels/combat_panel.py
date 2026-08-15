@@ -440,7 +440,7 @@ class CombatPanel(QWidget):
                     "caution": QColor(220, 180, 80),
                     "unknown": QColor(220, 180, 180),
                 }.get(risk, QColor(220, 180, 180))
-                self.combat_table.item(r, 8).setForeground(risk_color)
+                self.combat_table.item(r, len(items) - 2).setForeground(risk_color)
 
                 if is_current:
                     selected_row = r
