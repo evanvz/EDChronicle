@@ -235,6 +235,7 @@ def test_display_cap_respected():
         limit=50,
     )
     assert len(results) == 50
+    assert results[-1]["distance_ly"] == 49.0
 
 
 def test_unmatched_guide_record_produces_nothing():

@@ -1,4 +1,5 @@
 import logging
+import time
 from urllib.parse import quote, unquote
 
 from persistence.repository import _parse_states
@@ -103,6 +104,7 @@ def _tags_from_faction_snapshot_row(row: dict) -> set:
     all_states = [str(row.get("faction_state") or "").lower()]
     all_states += [s.lower() for s in _parse_states(row.get("active_states"))]
     for s in all_states:
+        s_norm = s.replace(" ", "")
         if "boom" in s:
             tags.add("boom")
         if "war" in s or "civil war" in s:
@@ -115,9 +117,9 @@ def _tags_from_faction_snapshot_row(row: dict) -> set:
             tags.add("election")
         if "expansion" in s:
             tags.add("expansion")
-        if "civilunrest" in s:
+        if "civilunrest" in s_norm:
             tags.add("civil_unrest")
-        if "infrastructurefailure" in s:
+        if "infrastructurefailure" in s_norm:
             tags.add("infrastructure_failure")
 
     return tags
@@ -267,8 +269,9 @@ def _build_nearby_farming_results(
                     for ex in matched_examples
                 ]
             else:
+                fallback_state = ", ".join(sorted(matched_tags))
                 mat_state_pairs = [
-                    (mat, None) for mat in (rec.get("key_materials") or [])
+                    (mat, fallback_state) for mat in (rec.get("key_materials") or [])
                 ]
             for mat, st in mat_state_pairs:
                 if not mat:
@@ -303,6 +306,10 @@ class IntelPanel(QWidget):
         self._repo = repo
         self._state = None
         self._farming_locations = None
+        self._nearby_farming_cache_live_rows = None
+        self._nearby_farming_cache_coords = None
+        self._nearby_farming_cache_time = 0.0
+        self._nearby_farming_cache_system_address = None
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -476,7 +483,7 @@ class IntelPanel(QWidget):
         self.nearby_farming_table = QTableWidget()
         self.nearby_farming_table.setColumnCount(4)
         self.nearby_farming_table.setHorizontalHeaderLabels(
-            ["Material", "Site / System", "Distance (ly)", "Source"]
+            ["Material", "System", "Distance (ly)", "Source"]
         )
         self.nearby_farming_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.nearby_farming_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -740,24 +747,34 @@ class IntelPanel(QWidget):
 
         all_records = getattr(self._farming_locations, "_records", []) or []
         static_sites = [r for r in all_records if isinstance(r, dict) and r.get("system")]
-        static_names = [str(r.get("system")) for r in static_sites]
-        coords_raw = self._repo.get_system_coords_for_names(static_names) if static_names else {}
-        coords_by_system = {name.lower(): coords for name, coords in coords_raw.items()}
 
-        live_rows = self._repo.get_controlling_faction_snapshots_with_coords()
+        cur_system_address = getattr(self._state, "system_address", None) if self._state else None
+        now = time.monotonic()
+        stale = now - self._nearby_farming_cache_time >= 30.0
+        system_changed = cur_system_address != self._nearby_farming_cache_system_address
+        if self._nearby_farming_cache_live_rows is None or stale or system_changed:
+            static_names = [str(r.get("system")) for r in static_sites]
+            coords_raw = self._repo.get_system_coords_for_names(static_names) if static_names else {}
+            self._nearby_farming_cache_coords = {
+                name.lower(): coords for name, coords in coords_raw.items()
+            }
+            self._nearby_farming_cache_live_rows = self._repo.get_controlling_faction_snapshots_with_coords()
+            self._nearby_farming_cache_time = now
+            self._nearby_farming_cache_system_address = cur_system_address
 
         return _build_nearby_farming_results(
-            static_sites, coords_by_system, live_rows, all_records,
-            material_filter, ref_x, ref_y, ref_z,
+            static_sites, self._nearby_farming_cache_coords, self._nearby_farming_cache_live_rows,
+            all_records, material_filter, ref_x, ref_y, ref_z,
         )
 
     def _on_nearby_farming_filter_changed(self):
         results = self._search_nearby_farming(self.nearby_farming_filter.text())
-        self.nearby_farming_table.setSortingEnabled(False)
         self.nearby_farming_table.setRowCount(len(results))
         for row, r in enumerate(results):
             self.nearby_farming_table.setItem(row, 0, QTableWidgetItem(r["material"]))
-            self.nearby_farming_table.setItem(row, 1, QTableWidgetItem(r["system_name"]))
+            site_item = QTableWidgetItem(r["system_name"])
+            site_item.setToolTip(r["site_name"])
+            self.nearby_farming_table.setItem(row, 1, site_item)
             self.nearby_farming_table.setItem(row, 2, QTableWidgetItem(f"{r['distance_ly']:.1f}"))
             source_txt = f"Live — {r['state']}" if r.get("state") else ("Live" if r["source"] == "live" else "Static")
             self.nearby_farming_table.setItem(row, 3, QTableWidgetItem(source_txt))
