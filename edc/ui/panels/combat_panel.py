@@ -240,7 +240,10 @@ class CombatPanel(QWidget):
             '<span style="color:#C8A000;">■</span> High Bounty &nbsp;'
             '<span style="color:#503200;">■</span> Wanted &nbsp;'
             '<span style="color:#5A1E1E;">■</span> Destroyed &nbsp;'
-            '<span style="color:#5A2A2A;">■</span> At war (info only, not confirmed)'
+            '<span style="color:#5A2A2A;">■</span> At war (info only, not confirmed) &nbsp;'
+            '<span style="color:#78C878;">■</span> Safe to engage &nbsp;'
+            '<span style="color:#DCB450;">■</span> Caution (anarchy) &nbsp;'
+            '<span style="color:#DCB4B4;">■</span> Unknown risk (likely bounty)'
         )
         legend.setTextFormat(Qt.TextFormat.RichText)
         legend.setStyleSheet(
@@ -250,10 +253,10 @@ class CombatPanel(QWidget):
         card_l.addWidget(legend)
 
         self.combat_table = QTableWidget()
-        self.combat_table.setColumnCount(9)
+        self.combat_table.setColumnCount(10)
         self.combat_table.setHorizontalHeaderLabels([
             "Pilot", "Rank", "Ship", "Faction",
-            "Power", "Enemy", "Wanted", "Bounty", "Last Seen"
+            "Power", "Enemy", "Wanted", "Bounty", "Engage Risk", "Last Seen"
         ])
         self.combat_table.setEditTriggers(
             QTableWidget.EditTrigger.NoEditTriggers
@@ -280,7 +283,7 @@ class CombatPanel(QWidget):
         self.combat_table.horizontalHeader().setSectionResizeMode(
             3, QHeaderView.ResizeMode.Stretch
         )
-        for col in [1, 2, 4, 5, 6, 7, 8]:
+        for col in [1, 2, 4, 5, 6, 7, 8, 9]:
             self.combat_table.horizontalHeader().setSectionResizeMode(
                 col, QHeaderView.ResizeMode.ResizeToContents
             )
@@ -381,6 +384,9 @@ class CombatPanel(QWidget):
                     and str(rank).lower() in {"dangerous", "deadly", "elite"}
                 )
 
+                risk = rec.get("EngageRisk") or "unknown"
+                risk_txt = {"safe": "Safe", "caution": "Caution", "unknown": "Unknown"}.get(risk, "Unknown")
+
                 items = [
                     QTableWidgetItem(str(pilot)),
                     QTableWidgetItem(str(rank)),
@@ -390,6 +396,7 @@ class CombatPanel(QWidget):
                     QTableWidgetItem(enemy_txt),
                     QTableWidgetItem("Wanted" if wanted_f else ""),
                     QTableWidgetItem(bounty_txt),
+                    QTableWidgetItem(risk_txt),
                     QTableWidgetItem(last_seen),
                 ]
                 items[0].setData(Qt.ItemDataRole.UserRole, k)
@@ -427,6 +434,13 @@ class CombatPanel(QWidget):
                     if fg:
                         it.setForeground(fg)
                     self.combat_table.setItem(r, c, it)
+
+                risk_color = {
+                    "safe": QColor(120, 200, 120),
+                    "caution": QColor(220, 180, 80),
+                    "unknown": QColor(220, 180, 180),
+                }.get(risk, QColor(220, 180, 180))
+                self.combat_table.item(r, 8).setForeground(risk_color)
 
                 if is_current:
                     selected_row = r

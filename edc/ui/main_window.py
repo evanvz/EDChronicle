@@ -34,7 +34,7 @@ from PyQt6.QtGui import QTextCursor, QColor, QIcon, QKeySequence
 from pathlib import Path
 
 from edc.core.state import GameState
-from edc.core.event_engine import EventEngine
+from edc.core.event_engine import EventEngine, _engage_risk
 from edc.core.journal_watcher import JournalWatcher
 from edc.ui.watcher_controller import WatcherController
 from edc.ui.system_data_loader import SystemDataLoader
@@ -2534,6 +2534,7 @@ class MainWindow(QMainWindow):
                 rank         = str(evt.get("PilotRank") or "").strip()
                 legal_status = str(evt.get("LegalStatus") or "").strip()
                 wanted       = legal_status.lower() == "wanted"
+                hostile      = legal_status.lower() == "hostile"
                 bounty       = int(evt.get("Bounty") or 0)
                 power        = (evt.get("Power") or "").strip()
                 faction      = (evt.get("Faction") or "").strip().lower()
@@ -2557,14 +2558,13 @@ class MainWindow(QMainWindow):
                 ship_in_powers = bool(power and any(p.lower() == power_lower for p in system_powers))
                 ship_active    = ship_in_ctrl or ship_in_powers
 
-                if we_active and power and ship_active:
-                    is_enemy = True
-                    is_high_value = False
-                elif wanted and bounty > 500_000 and top_rank:
-                    is_enemy = False
-                    is_high_value = True
-                else:
-                    return ""
+                is_enemy      = bool(we_active and power and ship_active)
+                is_high_value = bool((not is_enemy) and wanted and bounty > 500_000 and top_rank)
+
+                engage_risk = _engage_risk(
+                    wanted, hostile, power, pledged, ctrl,
+                    getattr(state, "system_government", None),
+                )
 
                 pilot = evt.get("PilotName_Localised") or evt.get("PilotName") or ""
                 ship  = evt.get("Ship_Localised") or evt.get("Ship") or ""
@@ -2578,7 +2578,7 @@ class MainWindow(QMainWindow):
                     return ""
                 self._tts_ship_cooldown_until = now + 6.0
                 return CombatPhrases.ship_targeted(
-                    ship, rank, power, is_enemy, wanted, bounty, is_high_value
+                    ship, rank, power, is_enemy, wanted, bounty, is_high_value, engage_risk
                 )
 
             if event_type == "FSSBodySignals":
