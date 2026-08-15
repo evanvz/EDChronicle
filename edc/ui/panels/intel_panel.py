@@ -1,5 +1,7 @@
 import logging
 from urllib.parse import quote, unquote
+
+from persistence.repository import _parse_states
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -75,6 +77,48 @@ def _get_system_opportunities(state):
     return tags
 
 
+def _tags_from_faction_snapshot_row(row: dict) -> set:
+    """
+    Same tag vocabulary as _get_system_opportunities(), derived from a
+    persisted faction_snapshots row (government/allegiance/faction_state/
+    active_states) instead of live game state -- used for searching
+    systems the player isn't currently in. No security/economy tags:
+    faction_snapshots doesn't carry those columns (they're system-level,
+    not per-faction), and none of this guide's state_tags need them.
+    """
+    tags = set()
+    govt = str(row.get("government") or "").lower()
+    alleg = str(row.get("allegiance") or "").lower()
+    if "anarchy" in govt:
+        tags.add("anarchy")
+    if "empire" in alleg:
+        tags.add("empire")
+    if "federation" in alleg:
+        tags.add("federation")
+
+    all_states = [str(row.get("faction_state") or "").lower()]
+    all_states += [s.lower() for s in _parse_states(row.get("active_states"))]
+    for s in all_states:
+        if "boom" in s:
+            tags.add("boom")
+        if "war" in s or "civil war" in s:
+            tags.add("war")
+        if "outbreak" in s:
+            tags.add("outbreak")
+        if "pirate" in s:
+            tags.add("pirate_attack")
+        if "election" in s:
+            tags.add("election")
+        if "expansion" in s:
+            tags.add("expansion")
+        if "civilunrest" in s:
+            tags.add("civil_unrest")
+        if "infrastructurefailure" in s:
+            tags.add("infrastructure_failure")
+
+    return tags
+
+
 _STATE_TEXT_TAGS = {
     "outbreak": "outbreak",
     "boom": "boom",
@@ -143,6 +187,101 @@ def _with_matched_examples(loc: dict, matched_tags: set, opportunities: set) -> 
         and _state_text_to_tags(ex.get("state") or "") & opportunities
     ]
     return entry
+
+
+def _build_nearby_farming_results(
+    static_sites: list,
+    coords_by_system: dict,
+    live_rows: list,
+    guide_records: list,
+    material_filter: str,
+    ref_x: float, ref_y: float, ref_z: float,
+    limit: int = 50,
+) -> list:
+    """
+    Combines static named-site matches and live BGS-state matches into
+    one nearest-first, optionally material-filtered result list.
+
+    static_sites: guide records with a "system" field.
+    coords_by_system: {system_name_lower: (x, y, z)} for static_sites'
+    systems.
+    live_rows: raw rows from Repository.get_controlling_faction_snapshots_with_coords().
+    guide_records: the full farming_locations._records list, matched
+    against each live_row's derived tags.
+    """
+    def _dist(x, y, z):
+        return ((x - ref_x) ** 2 + (y - ref_y) ** 2 + (z - ref_z) ** 2) ** 0.5
+
+    mf = (material_filter or "").strip().lower()
+    results = []
+
+    for site in static_sites:
+        sys_name = str(site.get("system") or "")
+        coords = coords_by_system.get(sys_name.lower())
+        if not coords:
+            continue
+        x, y, z = coords
+        dist = _dist(x, y, z)
+        materials = site.get("key_materials") or []
+        examples = site.get("examples") or []
+        mat_names = list(materials) if materials else [
+            str(ex.get("material") or "") for ex in examples if isinstance(ex, dict)
+        ]
+        for mat in mat_names:
+            if not mat:
+                continue
+            if mf and mf not in mat.lower():
+                continue
+            results.append({
+                "material": mat,
+                "site_name": str(site.get("name") or ""),
+                "system_name": sys_name,
+                "distance_ly": dist,
+                "source": "static",
+                "state": None,
+            })
+
+    for row in live_rows:
+        x, y, z = row.get("x"), row.get("y"), row.get("z")
+        if x is None or y is None or z is None:
+            continue
+        dist = _dist(x, y, z)
+        tags = _tags_from_faction_snapshot_row(row)
+        if not tags:
+            continue
+        for rec in guide_records:
+            if not isinstance(rec, dict):
+                continue
+            matched_tags = _entry_matches_system(rec, tags)
+            if not matched_tags:
+                continue
+            entry = _with_matched_examples(rec, matched_tags, tags)
+            matched_examples = entry.get("_matched_examples")
+            if matched_examples:
+                mat_state_pairs = [
+                    (str(ex.get("material") or ""), str(ex.get("state") or ""))
+                    for ex in matched_examples
+                ]
+            else:
+                mat_state_pairs = [
+                    (mat, None) for mat in (rec.get("key_materials") or [])
+                ]
+            for mat, st in mat_state_pairs:
+                if not mat:
+                    continue
+                if mf and mf not in mat.lower():
+                    continue
+                results.append({
+                    "material": mat,
+                    "site_name": str(rec.get("name") or ""),
+                    "system_name": str(row.get("system_name") or ""),
+                    "distance_ly": dist,
+                    "source": "live",
+                    "state": st,
+                })
+
+    results.sort(key=lambda r: r["distance_ly"])
+    return results[:limit]
 
 
 class IntelPanel(QWidget):

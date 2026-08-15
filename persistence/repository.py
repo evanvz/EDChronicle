@@ -1914,6 +1914,33 @@ class Repository:
         )
         return candidates[:limit]
 
+    def get_controlling_faction_snapshots_with_coords(self) -> list[dict]:
+        """
+        Every system's controlling faction's most recent snapshot, joined
+        to its known coordinates -- raw data only, no guide-matching logic
+        (that belongs in the UI layer -- see _parse_states()'s docstring
+        for why persistence must not depend on it). Systems with no
+        system_coords row are excluded, since distance can't be computed
+        without one.
+        """
+        rows = self.db.execute(
+            """
+            SELECT s.system_name, fs.government, fs.allegiance,
+                   fs.faction_state, fs.active_states,
+                   sc.x, sc.y, sc.z
+            FROM faction_snapshots fs
+            LEFT JOIN systems s ON s.system_address = fs.system_address
+            INNER JOIN system_coords sc ON sc.system_name = s.system_name
+            WHERE fs.is_controlling = 1
+              AND fs.snapshot_date = (
+                  SELECT MAX(snapshot_date) FROM faction_snapshots fs2
+                  WHERE fs2.system_address = fs.system_address
+                    AND fs2.is_controlling = 1
+              )
+            """
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def get_codex_entries(self, system_address: int):
         return self.db.execute(
             """
