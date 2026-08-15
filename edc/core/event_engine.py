@@ -56,6 +56,27 @@ def _derive_conflicts_from_factions(factions: list) -> list:
             })
     return conflicts
 
+
+def _engage_risk(wanted: bool, hostile: bool, power: str, pledged: str,
+                  ctrl: str, government: str) -> str:
+    """
+    Returns "safe", "caution", or "unknown" -- whether killing a contact
+    with these attributes is expected to draw a bounty against the
+    player. Deliberately conservative: anything not confidently known
+    safe defaults to "unknown", never a false "safe".
+    """
+    if wanted or hostile:
+        return "safe"
+    p = (pledged or "").strip().lower()
+    in_my_pp_space = bool(p and ctrl and ctrl.strip().lower() == p)
+    pp_enemy = bool(p and power and power.strip().lower() != p)
+    if in_my_pp_space and pp_enemy:
+        return "safe"
+    if "anarchy" in (government or "").lower():
+        return "caution"
+    return "unknown"
+
+
 class EventEngine:
     def __init__(
         self,
@@ -619,6 +640,12 @@ class EventEngine:
                     "Wanted": bool(is_wanted),
                     "Hostile": bool(is_hostile),
                     "Bounty": bounty if isinstance(bounty, int) else None,
+                    "EngageRisk": _engage_risk(
+                        is_wanted, is_hostile, target_power,
+                        getattr(self.state, "pp_power", None),
+                        getattr(self.state, "system_controlling_power", None),
+                        getattr(self.state, "system_government", None),
+                    ),
                     "LastSeen": ts,
                 }
                 self.state.combat_current_key = key

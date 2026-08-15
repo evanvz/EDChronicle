@@ -67,7 +67,8 @@ class CombatPhrases:
 
     @staticmethod
     def ship_targeted(ship: str, rank: str, power: str, is_enemy: bool,
-                      wanted: bool, bounty: int, is_high_value: bool = False) -> str:
+                      wanted: bool, bounty: int, is_high_value: bool = False,
+                      engage_risk: str = "") -> str:
         """Compose a full target assessment phrase from available attributes."""
         parts = [ship or "Unknown ship"]
         if rank:
@@ -85,6 +86,12 @@ class CombatPhrases:
                 parts.append("Wanted.")
         elif bounty:
             parts.append(f"Bounty {bounty:,} credits.")
+        if engage_risk == "safe":
+            parts.append("Clear to engage.")
+        elif engage_risk == "caution":
+            parts.append("Caution -- anarchy space, not guaranteed near a port.")
+        elif engage_risk == "unknown":
+            parts.append("Engaging will likely draw a bounty.")
         return " ".join(parts)
 
     @staticmethod
