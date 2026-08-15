@@ -156,3 +156,31 @@ def test_zero_stock_listing_excluded_even_if_symbol_and_location_match(repo):
 
     result = repo.search_fleet_carrier_materials(["graphene"], 0.0, 0.0, 0.0, 50.0)
     assert result["graphene"] == []
+
+
+def test_search_succeeds_with_more_systems_than_old_sqlite_variable_limit(repo):
+    # Regression test for the production crash this fix addresses:
+    # sqlite3.OperationalError: too many SQL variables. The OLD
+    # implementation built one SQL bound parameter per system_coords row
+    # inside the search radius; with system_coords fed continuously and
+    # unboundedly by the EDDN listener, a real search once had to bind
+    # 36,148 parameters against this build's 32,766 limit
+    # (conn.getlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER)). Seed comfortably
+    # past that limit here so this test would fail with that exact
+    # OperationalError against the pre-fix code, and passes against the
+    # JOIN-based rewrite (whose bound-parameter count doesn't grow with
+    # table size at all).
+    dummy_coords = [
+        (f"Dummy System {i}", float(i % 100), float((i // 100) % 100), float(i // 10000), "2026-08-12T00:00:00Z")
+        for i in range(33_000)
+    ]
+    repo.save_system_coords_batch(dummy_coords)
+
+    _seed_station(repo, 1001, "Sol")
+    _seed_coords(repo, "Sol", 0.0, 0.0, 0.0)
+    _seed_material(repo, 1001, "graphene")
+
+    result = repo.search_fleet_carrier_materials(["graphene"], 0.0, 0.0, 0.0, 2000.0)
+
+    assert len(result["graphene"]) == 1
+    assert result["graphene"][0]["carrier_name"] == "Test Carrier"

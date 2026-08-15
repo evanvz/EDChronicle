@@ -1305,25 +1305,6 @@ class Repository:
             results.append(rec)
         return results
 
-    def _nearby_system_coords(self, x: float, y: float, z: float, radius_ly: float) -> dict:
-        """
-        Pre-filters system_coords to a bounding cube around (x,y,z) — cheap,
-        since system_coords has one row per system, not per station/commodity.
-        Used to avoid market_prices' commodity_name index returning every
-        station in the galaxy that ever sold a commodity (confirmed live:
-        1.5-7.5s per commodity for a common one like Gold/Tritium — a
-        station with 100+ commodities made Trade Opportunities take minutes)
-        before most of those rows get thrown away for being out of range.
-        Returns {system_name: (x, y, z)}; the cube is a loose superset of
-        the sphere, so callers still need their own exact distance check.
-        """
-        rows = self.db.conn.execute(
-            "SELECT system_name, x, y, z FROM system_coords "
-            "WHERE x BETWEEN ? AND ? AND y BETWEEN ? AND ? AND z BETWEEN ? AND ?",
-            (x - radius_ly, x + radius_ly, y - radius_ly, y + radius_ly, z - radius_ly, z + radius_ly),
-        ).fetchall()
-        return {r["system_name"]: (r["x"], r["y"], r["z"]) for r in rows}
-
     def search_market_prices(
         self, commodity_name: str, x: float, y: float, z: float, radius_ly: float,
         exclude_market_id: Optional[int] = None,
@@ -1336,32 +1317,40 @@ class Repository:
         recommends a destination we can't confirm you can physically dock
         at when a known-pad alternative exists. exclude_market_id skips a
         specific station (e.g. the one you're currently docked at).
-        """
-        coords_by_system = self._nearby_system_coords(x, y, z, radius_ly)
-        if not coords_by_system:
-            return []
 
-        placeholders = ",".join("?" for _ in coords_by_system)
+        Filters system_coords via a bounding-box JOIN rather than fetching
+        every nearby system name into Python first and binding one SQL
+        parameter per name — system_coords is galaxy-wide and unbounded
+        (fed continuously by the EDDN listener), and a per-name IN(...)
+        list once exceeded SQLite's bound-parameter limit in production
+        (~36k systems within a 200ly search). Bound-parameter count here
+        is now fixed regardless of table size.
+        """
         rows = self.db.conn.execute(
-            f"""
+            """
             SELECT m.market_id, m.station_name, m.station_type, m.system_name,
                    m.sell_price, m.demand, m.stock, m.last_updated,
-                   si.pads_small, si.pads_medium, si.pads_large, si.station_faction
+                   si.pads_small, si.pads_medium, si.pads_large, si.station_faction,
+                   sc.x, sc.y, sc.z
             FROM market_prices m
+            INNER JOIN system_coords sc ON sc.system_name = m.system_name
             LEFT JOIN station_info si ON si.market_id = m.market_id
             WHERE m.commodity_name = ? AND m.sell_price IS NOT NULL
                   AND (m.station_type IS NULL OR m.station_type != 'FleetCarrier')
                   AND m.last_updated >= ?
-                  AND m.system_name IN ({placeholders})
+                  AND sc.x BETWEEN ? AND ? AND sc.y BETWEEN ? AND ? AND sc.z BETWEEN ? AND ?
             """,
-            (commodity_name, _market_data_cutoff(), *coords_by_system.keys()),
+            (
+                commodity_name, _market_data_cutoff(),
+                x - radius_ly, x + radius_ly, y - radius_ly, y + radius_ly, z - radius_ly, z + radius_ly,
+            ),
         ).fetchall()
 
         results = []
         for r in rows:
             if exclude_market_id is not None and r["market_id"] == exclude_market_id:
                 continue
-            rx, ry, rz = coords_by_system[r["system_name"]]
+            rx, ry, rz = r["x"], r["y"], r["z"]
             dist = ((rx - x) ** 2 + (ry - y) ** 2 + (rz - z) ** 2) ** 0.5
             if dist > radius_ly:
                 continue
@@ -1393,36 +1382,39 @@ class Repository:
         (confirmed live: 100+ commodities x ~1s+ each made it take minutes).
         Returns {commodity_name: [results sorted best-first]}, same shape
         per-commodity as search_market_prices.
+
+        Filters system_coords via a bounding-box JOIN — see search_market_prices
+        for why (bound-parameter count independent of table size).
         """
         if not commodity_names:
             return {}
 
-        coords_by_system = self._nearby_system_coords(x, y, z, radius_ly)
-        if not coords_by_system:
-            return {name: [] for name in commodity_names}
-
-        sys_placeholders = ",".join("?" for _ in coords_by_system)
         commodity_placeholders = ",".join("?" for _ in commodity_names)
         rows = self.db.conn.execute(
             f"""
             SELECT m.market_id, m.station_name, m.station_type, m.system_name,
                    m.commodity_name, m.sell_price, m.demand, m.stock, m.last_updated,
-                   si.pads_small, si.pads_medium, si.pads_large
+                   si.pads_small, si.pads_medium, si.pads_large,
+                   sc.x, sc.y, sc.z
             FROM market_prices m
+            INNER JOIN system_coords sc ON sc.system_name = m.system_name
             LEFT JOIN station_info si ON si.market_id = m.market_id
             WHERE m.commodity_name IN ({commodity_placeholders}) AND m.sell_price IS NOT NULL
                   AND (m.station_type IS NULL OR m.station_type != 'FleetCarrier')
                   AND m.last_updated >= ?
-                  AND m.system_name IN ({sys_placeholders})
+                  AND sc.x BETWEEN ? AND ? AND sc.y BETWEEN ? AND ? AND sc.z BETWEEN ? AND ?
             """,
-            (*commodity_names, _market_data_cutoff(), *coords_by_system.keys()),
+            (
+                *commodity_names, _market_data_cutoff(),
+                x - radius_ly, x + radius_ly, y - radius_ly, y + radius_ly, z - radius_ly, z + radius_ly,
+            ),
         ).fetchall()
 
         by_commodity: dict[str, list[dict]] = {name: [] for name in commodity_names}
         for r in rows:
             if exclude_market_id is not None and r["market_id"] == exclude_market_id:
                 continue
-            rx, ry, rz = coords_by_system[r["system_name"]]
+            rx, ry, rz = r["x"], r["y"], r["z"]
             dist = ((rx - x) ** 2 + (ry - y) ** 2 + (rz - z) ** 2) ** 0.5
             if dist > radius_ly:
                 continue
@@ -1451,36 +1443,41 @@ class Repository:
         carries no location, so this INNER JOIN is the only way to place a
         carrier at all; one with no such row is silently excluded, never
         shown with an unknown location.
+
+        Filters system_coords via a bounding-box JOIN — see search_market_prices
+        for why (bound-parameter count independent of table size; this was
+        the function that actually crashed in production with "too many
+        SQL variables" once system_coords passed ~33k systems in-radius).
         """
         if not material_symbols:
             return {}
 
-        coords_by_system = self._nearby_system_coords(x, y, z, radius_ly)
-        if not coords_by_system:
-            return {sym: [] for sym in material_symbols}
-
-        sys_placeholders = ",".join("?" for _ in coords_by_system)
         sym_placeholders = ",".join("?" for _ in material_symbols)
         rows = self.db.conn.execute(
             f"""
             SELECT fcm.material_symbol, fcm.carrier_name, fcm.carrier_id, fcm.price,
                    fcm.stock, fcm.demand, fcm.last_updated,
-                   si.market_id, si.system_name, si.last_visited
+                   si.market_id, si.system_name, si.last_visited,
+                   sc.x, sc.y, sc.z
             FROM fleet_carrier_materials fcm
             INNER JOIN station_info si ON si.market_id = fcm.market_id
+            INNER JOIN system_coords sc ON sc.system_name = si.system_name
             WHERE fcm.material_symbol IN ({sym_placeholders})
                   AND fcm.stock > 0
                   AND fcm.last_updated >= ?
-                  AND si.system_name IN ({sys_placeholders})
+                  AND sc.x BETWEEN ? AND ? AND sc.y BETWEEN ? AND ? AND sc.z BETWEEN ? AND ?
             """,
-            (*material_symbols, _fleet_carrier_cutoff(), *coords_by_system.keys()),
+            (
+                *material_symbols, _fleet_carrier_cutoff(),
+                x - radius_ly, x + radius_ly, y - radius_ly, y + radius_ly, z - radius_ly, z + radius_ly,
+            ),
         ).fetchall()
 
         by_symbol: dict[str, list[dict]] = {sym: [] for sym in material_symbols}
         for r in rows:
             if exclude_market_id is not None and r["market_id"] == exclude_market_id:
                 continue
-            rx, ry, rz = coords_by_system[r["system_name"]]
+            rx, ry, rz = r["x"], r["y"], r["z"]
             dist = ((rx - x) ** 2 + (ry - y) ** 2 + (rz - z) ** 2) ** 0.5
             if dist > radius_ly:
                 continue
@@ -1501,33 +1498,36 @@ class Repository:
         search_market_prices, sorted ascending instead of descending, and
         requiring stock > 0 since a listed buy_price with nothing in stock
         isn't actually purchasable.
-        """
-        coords_by_system = self._nearby_system_coords(x, y, z, radius_ly)
-        if not coords_by_system:
-            return []
 
-        placeholders = ",".join("?" for _ in coords_by_system)
+        Filters system_coords via a bounding-box JOIN — see search_market_prices
+        for why (bound-parameter count independent of table size).
+        """
         rows = self.db.conn.execute(
-            f"""
+            """
             SELECT m.market_id, m.station_name, m.station_type, m.system_name,
                    m.buy_price, m.stock, m.last_updated,
-                   si.pads_small, si.pads_medium, si.pads_large, si.station_faction
+                   si.pads_small, si.pads_medium, si.pads_large, si.station_faction,
+                   sc.x, sc.y, sc.z
             FROM market_prices m
+            INNER JOIN system_coords sc ON sc.system_name = m.system_name
             LEFT JOIN station_info si ON si.market_id = m.market_id
             WHERE m.commodity_name = ? AND m.buy_price IS NOT NULL AND m.buy_price > 0
                   AND m.stock IS NOT NULL AND m.stock > 0
                   AND (m.station_type IS NULL OR m.station_type != 'FleetCarrier')
                   AND m.last_updated >= ?
-                  AND m.system_name IN ({placeholders})
+                  AND sc.x BETWEEN ? AND ? AND sc.y BETWEEN ? AND ? AND sc.z BETWEEN ? AND ?
             """,
-            (commodity_name, _market_data_cutoff(), *coords_by_system.keys()),
+            (
+                commodity_name, _market_data_cutoff(),
+                x - radius_ly, x + radius_ly, y - radius_ly, y + radius_ly, z - radius_ly, z + radius_ly,
+            ),
         ).fetchall()
 
         results = []
         for r in rows:
             if exclude_market_id is not None and r["market_id"] == exclude_market_id:
                 continue
-            rx, ry, rz = coords_by_system[r["system_name"]]
+            rx, ry, rz = r["x"], r["y"], r["z"]
             dist = ((rx - x) ** 2 + (ry - y) ** 2 + (rz - z) ** 2) ** 0.5
             if dist > radius_ly:
                 continue
@@ -1562,32 +1562,35 @@ class Repository:
         metadata repeated per row collapses to one entry per market_id.
         last_updated (ISO timestamp string) lets callers judge/warn on
         crowdsourced-data staleness per commodity, not just per station.
-        """
-        coords_by_system = self._nearby_system_coords(x, y, z, radius_ly)
-        if not coords_by_system:
-            return {}
 
-        placeholders = ",".join("?" for _ in coords_by_system)
+        Filters system_coords via a bounding-box JOIN — see search_market_prices
+        for why (bound-parameter count independent of table size).
+        """
         rows = self.db.conn.execute(
-            f"""
+            """
             SELECT m.market_id, m.station_name, m.station_type, m.system_name,
                    m.commodity_name, m.sell_price, m.demand, m.buy_price, m.stock,
                    m.last_updated,
-                   si.pads_small, si.pads_medium, si.pads_large, si.station_faction
+                   si.pads_small, si.pads_medium, si.pads_large, si.station_faction,
+                   sc.x, sc.y, sc.z
             FROM market_prices m
+            INNER JOIN system_coords sc ON sc.system_name = m.system_name
             LEFT JOIN station_info si ON si.market_id = m.market_id
             WHERE (m.sell_price IS NOT NULL
                      OR (m.buy_price IS NOT NULL AND m.buy_price > 0 AND m.stock IS NOT NULL AND m.stock > 0))
                   AND (m.station_type IS NULL OR m.station_type != 'FleetCarrier')
                   AND m.last_updated >= ?
-                  AND m.system_name IN ({placeholders})
+                  AND sc.x BETWEEN ? AND ? AND sc.y BETWEEN ? AND ? AND sc.z BETWEEN ? AND ?
             """,
-            (_market_data_cutoff(), *coords_by_system.keys()),
+            (
+                _market_data_cutoff(),
+                x - radius_ly, x + radius_ly, y - radius_ly, y + radius_ly, z - radius_ly, z + radius_ly,
+            ),
         ).fetchall()
 
         stations: dict[int, dict] = {}
         for r in rows:
-            rx, ry, rz = coords_by_system[r["system_name"]]
+            rx, ry, rz = r["x"], r["y"], r["z"]
             dist = ((rx - x) ** 2 + (ry - y) ** 2 + (rz - z) ** 2) ** 0.5
             if dist > radius_ly:
                 continue

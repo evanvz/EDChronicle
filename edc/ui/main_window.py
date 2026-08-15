@@ -210,6 +210,7 @@ class _MarketVacuumWorker(QObject):
             ran_full_vacuum = db.enable_incremental_auto_vacuum()
             db.incremental_vacuum()
             db.ensure_market_prices_indexes()
+            db.ensure_system_coords_indexes()
             note = " (first run — also switched to incremental auto-vacuum)" if ran_full_vacuum else ""
             self.finished.emit(True, f"Database compacted{note}.")
         except Exception as exc:

@@ -63,6 +63,20 @@ class Database:
         worker thread only, same reasoning as enable_incremental_auto_vacuum()."""
         self.conn.execute("CREATE INDEX IF NOT EXISTS idx_market_prices_system_name ON market_prices(system_name)")
 
+    def ensure_system_coords_indexes(self) -> None:
+        """system_coords has no index besides its PRIMARY KEY (system_name)
+        — every radius search (Market, Fleet Carrier Materials, Trade Route
+        Loop Planner) does a bounding-box JOIN against x/y/z with nothing to
+        narrow the row set first. Not run from run_migrations() (which runs
+        synchronously on the main/UI thread every startup) for the same
+        reason ensure_market_prices_indexes() isn't: system_coords is fed
+        continuously by the EDDN listener and grows unboundedly (437k+ rows
+        and climbing as of this writing) — an index build at that scale, or
+        whatever scale it reaches later, could freeze app launch. IF NOT
+        EXISTS makes every run after the first an instant no-op. Call from
+        a worker thread only, same reasoning as ensure_market_prices_indexes()."""
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_system_coords_xyz ON system_coords(x, y, z)")
+
     def run_migrations(self):
         """Add new columns to existing tables without breaking older DBs."""
         migrations = [
