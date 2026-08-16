@@ -7,6 +7,7 @@ minor faction, and that's a legitimate, permanent empty state, not a bug.
 """
 from __future__ import annotations
 
+import html
 import json
 import logging
 import time
@@ -14,7 +15,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from PyQt6.QtCore import Qt, QObject, QThread, QStringListModel, QTimer, pyqtSignal, QDate, QDateTime
+from PyQt6.QtCore import Qt, QObject, QThread, QStringListModel, QTimer, pyqtSignal, QDate
 from PyQt6.QtGui import QColor, QFontMetrics
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit, QPushButton,
@@ -1923,6 +1924,15 @@ class _FactionHistoryDialog(QDialog):
         self._chart.setBackgroundBrush(QColor("#080f18"))
         self._chart.setTitleBrush(QColor("#c8c8c8"))
         self._chart.legend().setLabelColor(QColor("#c8c8c8"))
+        self._axis_x = QDateTimeAxis()
+        self._axis_x.setFormat("MMM d")
+        self._axis_x.setLabelsColor(QColor("#888888"))
+        self._axis_y = QValueAxis()
+        self._axis_y.setRange(0, 100)
+        self._axis_y.setLabelFormat("%d%%")
+        self._axis_y.setLabelsColor(QColor("#888888"))
+        self._chart.addAxis(self._axis_x, Qt.AlignmentFlag.AlignBottom)
+        self._chart.addAxis(self._axis_y, Qt.AlignmentFlag.AlignLeft)
         self._chart_view = QChartView(self._chart)
         self._chart_view.setMinimumHeight(220)
         layout.addWidget(self._chart_view)
@@ -1969,7 +1979,7 @@ class _FactionHistoryDialog(QDialog):
             text, semantic_color = _format_forecast(p)
             forecast_lines.append(
                 f'<div style="margin-bottom:2px;">'
-                f'<span style="color:{identity_color};font-weight:700;">{fname}</span>'
+                f'<span style="color:{identity_color};font-weight:700;">{html.escape(fname)}</span>'
                 f' — <span style="color:{semantic_color};">{text}</span>'
                 f'</div>'
             )
@@ -1989,24 +1999,16 @@ class _FactionHistoryDialog(QDialog):
             by_faction.setdefault(h.get("faction_name") or "Unknown", []).append(h)
 
         self._chart.removeAllSeries()
-        for axis in list(self._chart.axes()):
-            self._chart.removeAxis(axis)
 
         ordered_factions = [p["faction_name"] for p in predictions if p["faction_name"] in by_faction]
         ordered_factions += [f for f in by_faction if f not in ordered_factions]
 
-        axis_x = QDateTimeAxis()
-        axis_x.setFormat("MMM d")
-        axis_x.setLabelsColor(QColor("#888888"))
-        axis_y = QValueAxis()
-        axis_y.setRange(0, 100)
-        axis_y.setLabelFormat("%d%%")
-        axis_y.setLabelsColor(QColor("#888888"))
-        self._chart.addAxis(axis_x, Qt.AlignmentFlag.AlignBottom)
-        self._chart.addAxis(axis_y, Qt.AlignmentFlag.AlignLeft)
+        def _fallback_color(fname: str) -> str:
+            idx = ordered_factions.index(fname) if fname in ordered_factions else 0
+            return _FACTION_CHART_COLORS[idx % len(_FACTION_CHART_COLORS)]
 
         for i, fname in enumerate(ordered_factions):
-            color = colors.get(fname, _FACTION_CHART_COLORS[i % len(_FACTION_CHART_COLORS)])
+            color = colors.get(fname, _fallback_color(fname))
             series = QLineSeries()
             series.setName(fname)
             series.setColor(QColor(color))
@@ -2017,19 +2019,19 @@ class _FactionHistoryDialog(QDialog):
                 qd = QDate.fromString(h.get("snapshot_date") or "", "yyyy-MM-dd")
                 if not qd.isValid():
                     continue
-                qdt = QDateTime(qd)
+                qdt = qd.startOfDay()
                 series.append(qdt.toMSecsSinceEpoch(), infl * 100)
             if series.count():
                 self._chart.addSeries(series)
-                series.attachAxis(axis_x)
-                series.attachAxis(axis_y)
+                series.attachAxis(self._axis_x)
+                series.attachAxis(self._axis_y)
 
         self._table.setRowCount(len(history))
         for row, h in enumerate(history):
             fname = h.get("faction_name") or "Unknown"
             date_item = QTableWidgetItem(h.get("snapshot_date") or "—")
             faction_item = QTableWidgetItem(fname)
-            faction_item.setForeground(QColor(colors.get(fname, _FACTION_CHART_COLORS[0])))
+            faction_item.setForeground(QColor(colors.get(fname, _fallback_color(fname))))
             infl = h.get("influence")
             infl_item = _NumericTableWidgetItem(
                 f"{infl * 100:.1f}%" if isinstance(infl, (int, float)) else "—",
