@@ -117,6 +117,10 @@ def _callout_reason(
     if is_own_power or is_own_faction:
         return None
 
+    faction_l = (faction or "").strip().lower()
+    if "internal security" in faction_l or "security service" in faction_l:
+        return None
+
     if hostile or enemy:
         return "enemy"
 

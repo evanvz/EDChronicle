@@ -113,6 +113,26 @@ def test_own_squadron_faction_never_called_out():
     assert result is None
 
 
+def test_internal_security_faction_never_called_out():
+    # Excluded regardless of category -- even Hostile/Enemy -- same as the
+    # own-side exclusion. Case-insensitive match on the faction string.
+    result = _callout_reason(
+        hostile=True, enemy=True, power="A. Lavigny-Duval", faction="Some INTERNAL Security Force",
+        pledged="Aisling Duval", squadron_faction="", ctrl="Aisling Duval", system_powers=[],
+        pp_state="", rank="Elite", squadron_at_war=True,
+    )
+    assert result is None
+
+
+def test_security_service_faction_never_called_out():
+    result = _callout_reason(
+        hostile=False, enemy=False, power="", faction="Federal Security Service",
+        pledged="", squadron_faction="", ctrl="", system_powers=[], pp_state="",
+        rank="Elite", squadron_at_war=True,
+    )
+    assert result is None
+
+
 def test_contested_pp_state_counts_as_relevant():
     result = _callout_reason(
         hostile=False, enemy=False, power="", faction="", pledged="Aisling Duval",

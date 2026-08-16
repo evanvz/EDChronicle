@@ -2573,13 +2573,11 @@ class MainWindow(QMainWindow):
                 bounty       = int(evt.get("Bounty") or 0)
                 power        = (evt.get("Power") or "").strip()
                 faction_raw  = evt.get("Faction") or ""
-                faction      = faction_raw.strip().lower()
                 is_friendly  = bool(pledged and power and power.lower() == pledged.lower())
                 top_rank     = rank.lower() in ("dangerous", "deadly", "elite")
 
-                # Never call out law enforcement or our own power's ships
-                if "internal security" in faction or "security service" in faction:
-                    return ""
+                # Never call out our own power's ships (law enforcement is
+                # excluded inside the shared _callout_reason() gate below)
                 if is_friendly:
                     return ""
 
@@ -3156,13 +3154,13 @@ class MainWindow(QMainWindow):
             getattr(self.state, "factions", None), getattr(self.state, "system_conflicts", None)
         ))
 
-        def _wording(wanted: bool, bounty, power: str) -> str:
+        def _wording(reason: str, wanted: bool, bounty, power: str) -> str:
             """Picks which phrase pool fits, once _callout_reason() has
             already decided a quip is warranted at all -- presentation
             only, not a gating decision."""
             if wanted and isinstance(bounty, int) and bounty >= 500_000:
                 return CombatPhrases.wanted_target_scan()
-            if pledged and power and power.strip().lower() != pledged.strip().lower():
+            if reason == "enemy" and pledged and power and power.strip().lower() != pledged.strip().lower():
                 return CombatPhrases.powerplay_enemy_scan()
             return CombatPhrases.high_value_contact_scan()
 
@@ -3209,7 +3207,7 @@ class MainWindow(QMainWindow):
                 ctrl, system_powers, pp_state, rank, squadron_at_war,
             )
             if reason is not None:
-                quip = _wording(wanted, bounty, power)
+                quip = _wording(reason, wanted, bounty, power)
 
         if not quip:
             return
