@@ -3948,13 +3948,6 @@ class MainWindow(QMainWindow):
         self.market_panel.search_for(commodity_name, mode="buy")
 
     def _refresh_intel(self):
-        system_address = getattr(self.state, "system_address", None)
-        faction_history = []
-        if isinstance(system_address, int):
-            try:
-                faction_history = self.repo.get_faction_history(system_address)
-            except Exception:
-                log.exception("Failed to load faction history")
         now = time.monotonic()
         if now - self._odyssey_candidates_cache_time >= 30.0:
             try:
@@ -3964,7 +3957,7 @@ class MainWindow(QMainWindow):
             self._odyssey_candidates_cache_time = now
         farming_candidates = self._odyssey_candidates_cache
         self.intel_panel.refresh(
-            self.state, self.farming_locations, faction_history, farming_candidates
+            self.state, self.farming_locations, farming_candidates
         )
 
     def _refresh_combat(self):

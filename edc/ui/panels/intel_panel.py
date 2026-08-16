@@ -509,29 +509,6 @@ class IntelPanel(QWidget):
         guide_l.addWidget(self.guide_display)
         self._content_layout.addWidget(guide_frame)
 
-        # ── BGS history card ──────────────────────────────────────────────
-        bgs_frame = QFrame()
-        bgs_frame.setStyleSheet(
-            "QFrame { background: #0d0d1a; border: 1px solid #2a2a4a;"
-            "border-radius: 5px; }"
-        )
-        bgs_l = QVBoxLayout(bgs_frame)
-        bgs_l.setContentsMargins(8, 6, 8, 6)
-        bgs_l.setSpacing(4)
-        bgs_hdr = QLabel("BGS HISTORY — THIS SYSTEM")
-        bgs_hdr.setStyleSheet(
-            "color: #7a7a7a; font-size:12px; font-weight: bold; "
-            "letter-spacing: 1px; background: transparent; border: none;"
-        )
-        bgs_l.addWidget(bgs_hdr)
-        self.bgs_display = QLabel("")
-        self.bgs_display.setWordWrap(True)
-        self.bgs_display.setTextFormat(Qt.TextFormat.RichText)
-        self.bgs_display.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.bgs_display.setStyleSheet("background: transparent; border: none;")
-        bgs_l.addWidget(self.bgs_display)
-        self._content_layout.addWidget(bgs_frame)
-
     def _esc(self, t):
         return str(t or "").replace(
             "&", "&amp;"
@@ -786,42 +763,10 @@ class IntelPanel(QWidget):
         if item and item.text():
             QApplication.clipboard().setText(item.text())
 
-    def refresh(self, state, farming_locations, faction_history=None, farming_candidates=None):
+    def refresh(self, state, farming_locations, farming_candidates=None):
         self._state = state
         self._farming_locations = farming_locations
         sys_name = getattr(state, "system", None) or ""
-
-        # ── BGS history ───────────────────────────────────────────────────
-        history_html = []
-        for rec in (faction_history or [])[:30]:
-            if not isinstance(rec, dict):
-                continue
-            fname = self._esc(rec.get("faction_name") or "")
-            fdate = self._esc(rec.get("snapshot_date") or "")
-            infl = rec.get("influence")
-            infl_txt = f"{float(infl) * 100:.1f}%" if isinstance(infl, (int, float)) else "?"
-            fstate = self._esc(rec.get("faction_state") or "")
-            ctrl_badge = (
-                ' <span style="color:#6BCB77;font-size:12px;">★ controlling</span>'
-                if rec.get("is_controlling") else ""
-            )
-            history_html.append(
-                f'<div style="margin-bottom:4px;">'
-                f'<span style="color:#888888;font-size:12px;">{fdate}</span> '
-                f'<span style="color:#CCCCCC;font-weight:700;">{fname}</span> '
-                f'<span style="color:#FFB347;">{infl_txt}</span>'
-                + (f' <span style="color:#4D96FF;font-size:12px;">[{fstate}]</span>' if fstate else "")
-                + ctrl_badge
-                + '</div>'
-            )
-
-        self.bgs_display.setText(
-            "".join(history_html) if history_html else
-            '<span style="color:#444444;font-size:12px;">'
-            'No BGS history recorded for this system yet — '
-            'history accumulates one snapshot per faction per day as you visit.'
-            '</span>'
-        )
 
         # ── Odyssey farming candidates ───────────────────────────────────
         self.odyssey_display.setText(
