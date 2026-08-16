@@ -294,11 +294,12 @@ class _EddnFlushWorker(QObject):
     """
     finished = pyqtSignal()
 
-    def __init__(self, db_path, coords, market, factions, stations, codex, fcmaterials):
+    def __init__(self, db_path, coords, market, factions, stations, codex, fcmaterials, carrier_access):
         super().__init__()
         self._db_path = db_path
         self._coords, self._market, self._factions = coords, market, factions
         self._stations, self._codex, self._fcmaterials = stations, codex, fcmaterials
+        self._carrier_access = carrier_access
 
     def run(self):
         from persistence.database import Database
@@ -307,7 +308,10 @@ class _EddnFlushWorker(QObject):
         db = Database(self._db_path)
         try:
             repo = Repository(db)
-            write_buffers(repo, self._coords, self._market, self._factions, self._stations, self._codex, self._fcmaterials)
+            write_buffers(
+                repo, self._coords, self._market, self._factions, self._stations,
+                self._codex, self._fcmaterials, self._carrier_access,
+            )
             db.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         except Exception:
             log.exception("Background EDDN flush failed")
@@ -3995,11 +3999,13 @@ class MainWindow(QMainWindow):
         """
         if self._flush_thread and self._flush_thread.isRunning():
             return  # previous flush still running — next tick will catch up
-        coords, market, factions, stations, codex, fcmaterials = self.eddn_market_cache.pop_buffers()
-        if not (coords or market or factions or stations or codex or fcmaterials):
+        coords, market, factions, stations, codex, fcmaterials, carrier_access = self.eddn_market_cache.pop_buffers()
+        if not (coords or market or factions or stations or codex or fcmaterials or carrier_access):
             return
 
-        self._flush_worker = _EddnFlushWorker(self.repo.db.db_path, coords, market, factions, stations, codex, fcmaterials)
+        self._flush_worker = _EddnFlushWorker(
+            self.repo.db.db_path, coords, market, factions, stations, codex, fcmaterials, carrier_access,
+        )
         self._flush_thread = QThread()
         self._flush_worker.moveToThread(self._flush_thread)
         self._flush_thread.started.connect(self._flush_worker.run)
