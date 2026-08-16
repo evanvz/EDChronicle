@@ -86,29 +86,30 @@ def _engage_risk(wanted: bool, hostile: bool, power: str | None, pledged: str | 
 
 
 def _callout_reason(
-    hostile: bool, enemy: bool, power: str, faction: str,
+    hostile: bool, enemy: bool, wanted: bool, power: str, faction: str,
     pledged: str, squadron_faction: str,
     ctrl: str, system_powers: list, pp_state: str,
-    rank: str, squadron_at_war: bool,
 ) -> str | None:
     """
-    Returns "enemy", "high_value", or None -- whether a scanned contact is
-    worth a voice callout at all (any callout, not which words to use).
+    Returns "enemy" or None -- whether a scanned contact is worth a voice
+    callout at all (any callout, not which words to use).
 
-    Two independent categories:
-      - "enemy": LegalStatus Hostile or Enemy (unconditional -- the game
-        has already decided this is fair game), or a rival PowerPlay
-        power's ship while we hold PP stake in this system (control it,
-        are one of the contesting powers, or it's Contested).
-      - "high_value": top-3 combat rank tier (Dangerous/Deadly/Elite), AND
-        the system is relevant to us -- either the PP-stake condition
-        above, or our squadron-aligned faction is a belligerent in an
-        active BGS War/CivilWar here (squadron_at_war=True). Rank alone
-        does not qualify outside a relevant system.
+    Callout-worthy: LegalStatus Hostile, Enemy, or Wanted (unconditional --
+    the game has already decided this is fair game), or a rival PowerPlay
+    power's ship while we hold PP stake in this system (control it, are
+    one of the contesting powers, or it's Contested).
+
+    Combat rank alone is never a reason to call a ship out -- an earlier
+    version added a rank-tier-in-relevant-system trigger, but live testing
+    showed it fired for plenty of Clean, non-wanted ships the player had
+    no reason to act on. Removed; rank still affects phrase wording
+    (CombatPhrases.ship_targeted's "High value target" clause) but no
+    longer gates whether anything is said at all.
 
     Never fires for a ship that's ours -- our pledged PowerPlay power, or
     our squadron-aligned faction -- regardless of category, checked first:
-    we don't shoot our own.
+    we don't shoot our own. Also never fires for law enforcement/security
+    faction ships.
     """
     power_l = (power or "").strip().lower()
     pledged_l = (pledged or "").strip().lower()
@@ -121,7 +122,7 @@ def _callout_reason(
     if "internal security" in faction_l or "security service" in faction_l:
         return None
 
-    if hostile or enemy:
+    if hostile or enemy or wanted:
         return "enemy"
 
     in_my_pp_space = bool(pledged_l and (
@@ -132,10 +133,6 @@ def _callout_reason(
     pp_enemy = bool(pledged_l and power_l and power_l != pledged_l)
     if in_my_pp_space and pp_enemy:
         return "enemy"
-
-    top_rank = rank.strip().lower() in ("dangerous", "deadly", "elite")
-    if top_rank and (in_my_pp_space or squadron_at_war):
-        return "high_value"
 
     return None
 

@@ -77,7 +77,7 @@ from edc.core.eddn_market import EddnMarketCache, write_buffers
 from edc.core.station_pads import extract_station_info
 from edc.core.rare_commodities import RareCommodityTable
 from edc.core.bounty_scanner import scan_active_bounties
-from edc.core.bgs_conflicts import squadron_faction_name, find_squadron_war_enemy
+from edc.core.bgs_conflicts import squadron_faction_name
 from edc.core.combat_bond_scanner import scan_unredeemed_combat_total
 from edc.core.materials_scanner import scan_latest_materials
 from edc.core.notoriety_scanner import scan_latest_notoriety
@@ -2597,12 +2597,9 @@ class MainWindow(QMainWindow):
                 is_high_value = bool((not is_enemy) and wanted and bounty > 500_000 and top_rank)
 
                 squadron_faction = squadron_faction_name(getattr(state, "factions", None))
-                squadron_at_war  = bool(find_squadron_war_enemy(
-                    getattr(state, "factions", None), getattr(state, "system_conflicts", None)
-                ))
                 callout_reason = _callout_reason(
-                    hostile, legal_enemy, power, faction_raw, pledged, squadron_faction,
-                    ctrl, system_powers, pp_state, rank, squadron_at_war,
+                    hostile, legal_enemy, wanted, power, faction_raw, pledged, squadron_faction,
+                    ctrl, system_powers, pp_state,
                 )
                 if callout_reason is None:
                     return ""
@@ -3150,9 +3147,6 @@ class MainWindow(QMainWindow):
         system_powers = [p.strip() for p in (getattr(self.state, "system_powers", []) or [])]
         pp_state = getattr(self.state, "system_powerplay_state", None)
         squadron_faction = squadron_faction_name(getattr(self.state, "factions", None))
-        squadron_at_war  = bool(find_squadron_war_enemy(
-            getattr(self.state, "factions", None), getattr(self.state, "system_conflicts", None)
-        ))
 
         def _wording(reason: str, wanted: bool, bounty, power: str) -> str:
             """Picks which phrase pool fits, once _callout_reason() has
@@ -3184,10 +3178,9 @@ class MainWindow(QMainWindow):
             if not contact:
                 return
             reason = _callout_reason(
-                bool(contact.get("Hostile")), bool(contact.get("Enemy")),
+                bool(contact.get("Hostile")), bool(contact.get("Enemy")), bool(contact.get("Wanted")),
                 contact.get("Power", ""), contact.get("Faction", ""),
                 pledged, squadron_faction, ctrl, system_powers, pp_state,
-                contact.get("Rank", ""), squadron_at_war,
             )
             if reason is not None:
                 quip = CombatPhrases.npc_challenge()
@@ -3201,10 +3194,9 @@ class MainWindow(QMainWindow):
             legal_enemy = legal == "enemy"
             bounty = evt.get("Bounty")
             faction = evt.get("Faction") or ""
-            rank   = str(evt.get("PilotRank") or "").strip()
             reason = _callout_reason(
-                hostile, legal_enemy, power, faction, pledged, squadron_faction,
-                ctrl, system_powers, pp_state, rank, squadron_at_war,
+                hostile, legal_enemy, wanted, power, faction, pledged, squadron_faction,
+                ctrl, system_powers, pp_state,
             )
             if reason is not None:
                 quip = _wording(reason, wanted, bounty, power)
