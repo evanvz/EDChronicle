@@ -560,121 +560,158 @@ class Repository:
         for row in systems:
             system_address = row["system_address"]
             system_name = row["system_name"]
-
-            history = [
-                dict(h) for h in self.db.conn.execute(
-                    """
-                    SELECT snapshot_date, influence FROM faction_snapshots
-                    WHERE system_address = ? AND faction_name = ? AND influence IS NOT NULL
-                    ORDER BY snapshot_date DESC
-                    LIMIT 14
-                    """,
-                    (system_address, faction_name),
-                ).fetchall()
-            ]
-
-            trend = None
-            if len(history) >= 2:
-                newest, oldest = history[0]["influence"], history[-1]["influence"]
-                if newest - oldest > 0.02:
-                    trend = "up"
-                elif oldest - newest > 0.02:
-                    trend = "down"
-                else:
-                    trend = "flat"
-
-            our_influence = history[0]["influence"] if history else None
-
-            days_in_expansion_range = None
-            if our_influence is not None and our_influence >= 0.70:
-                days_in_expansion_range = 0
-                for h in history:
-                    if h["influence"] >= 0.70:
-                        days_in_expansion_range += 1
-                    else:
-                        break
-
-            days_in_retreat_range = None
-            if our_influence is not None and our_influence < 0.05:
-                days_in_retreat_range = 0
-                for h in history:
-                    if h["influence"] < 0.05:
-                        days_in_retreat_range += 1
-                    else:
-                        break
-
-            conflict_risk = None
-            if our_influence is not None and our_influence >= 0.07:
-                rivals = self.db.conn.execute(
-                    """
-                    SELECT fs.faction_name, fs.influence
-                    FROM faction_snapshots fs
-                    WHERE fs.system_address = ? AND fs.faction_name != ?
-                      AND fs.influence IS NOT NULL AND fs.influence >= 0.07
-                      AND fs.snapshot_date = (
-                          SELECT MAX(snapshot_date) FROM faction_snapshots fs2
-                          WHERE fs2.system_address = fs.system_address
-                            AND fs2.faction_name = fs.faction_name
-                      )
-                    """,
-                    (system_address, faction_name),
-                ).fetchall()
-                best, best_diff = None, None
-                for r in rivals:
-                    diff = abs(r["influence"] - our_influence)
-                    if diff <= 0.05 and (best_diff is None or diff < best_diff):
-                        best, best_diff = r, diff
-                if best is not None:
-                    conflict_risk = {
-                        "faction_name": best["faction_name"],
-                        "influence": best["influence"],
-                        "diff": best_diff,
-                    }
-
-            active_war = None
-            own_row = self.db.conn.execute(
-                """
-                SELECT faction_state, active_states, snapshot_date
-                FROM faction_snapshots
-                WHERE system_address = ? AND faction_name = ?
-                ORDER BY snapshot_date DESC
-                LIMIT 1
-                """,
-                (system_address, faction_name),
-            ).fetchone()
-            if own_row is not None and _row_is_at_war(own_row["faction_state"], own_row["active_states"]):
-                war_rivals = self.db.conn.execute(
-                    """
-                    SELECT fs.faction_name, fs.influence, fs.faction_state, fs.active_states
-                    FROM faction_snapshots fs
-                    WHERE fs.system_address = ? AND fs.faction_name != ?
-                      AND fs.snapshot_date = ?
-                    """,
-                    (system_address, faction_name, own_row["snapshot_date"]),
-                ).fetchall()
-                best_opponent = None
-                for r in war_rivals:
-                    if not _row_is_at_war(r["faction_state"], r["active_states"]):
-                        continue
-                    r_influence = r["influence"] if isinstance(r["influence"], (int, float)) else 0.0
-                    best_influence = best_opponent["influence"] if best_opponent and isinstance(best_opponent["influence"], (int, float)) else -1.0
-                    if best_opponent is None or r_influence > best_influence:
-                        best_opponent = r
-                if best_opponent is not None:
-                    active_war = {"faction_name": best_opponent["faction_name"], "influence": best_opponent["influence"]}
-                else:
-                    active_war = {"faction_name": None, "influence": None}
-
+            prediction = self._predict_faction_in_system(system_address, faction_name)
             out.append({
                 "system_address": system_address,
                 "system_name": system_name,
-                "influence": our_influence,
-                "trend": trend,
-                "days_in_expansion_range": days_in_expansion_range,
-                "days_in_retreat_range": days_in_retreat_range,
-                "conflict_risk": conflict_risk,
-                "active_war": active_war,
+                **prediction,
             })
+        return out
+
+    def _predict_faction_in_system(self, system_address: int, faction_name: str) -> dict:
+        """
+        Single-(system, faction) half of get_faction_predictions()'s
+        computation — extracted so it can also be run for every faction in
+        a system (see get_all_faction_predictions_for_system), not just one
+        tracked faction. Same fields as one get_faction_predictions() entry,
+        minus system_address/system_name (the caller already has those).
+        """
+        history = [
+            dict(h) for h in self.db.conn.execute(
+                """
+                SELECT snapshot_date, influence FROM faction_snapshots
+                WHERE system_address = ? AND faction_name = ? AND influence IS NOT NULL
+                ORDER BY snapshot_date DESC
+                LIMIT 14
+                """,
+                (system_address, faction_name),
+            ).fetchall()
+        ]
+
+        trend = None
+        if len(history) >= 2:
+            newest, oldest = history[0]["influence"], history[-1]["influence"]
+            if newest - oldest > 0.02:
+                trend = "up"
+            elif oldest - newest > 0.02:
+                trend = "down"
+            else:
+                trend = "flat"
+
+        our_influence = history[0]["influence"] if history else None
+
+        days_in_expansion_range = None
+        if our_influence is not None and our_influence >= 0.70:
+            days_in_expansion_range = 0
+            for h in history[1:]:
+                if h["influence"] >= 0.70:
+                    days_in_expansion_range += 1
+                else:
+                    break
+
+        days_in_retreat_range = None
+        if our_influence is not None and our_influence < 0.05:
+            days_in_retreat_range = 0
+            for h in history[1:]:
+                if h["influence"] < 0.05:
+                    days_in_retreat_range += 1
+                else:
+                    break
+
+        conflict_risk = None
+        if our_influence is not None and our_influence >= 0.07:
+            rivals = self.db.conn.execute(
+                """
+                SELECT fs.faction_name, fs.influence
+                FROM faction_snapshots fs
+                WHERE fs.system_address = ? AND fs.faction_name != ?
+                  AND fs.influence IS NOT NULL AND fs.influence >= 0.07
+                  AND fs.snapshot_date = (
+                      SELECT MAX(snapshot_date) FROM faction_snapshots fs2
+                      WHERE fs2.system_address = fs.system_address
+                        AND fs2.faction_name = fs.faction_name
+                  )
+                """,
+                (system_address, faction_name),
+            ).fetchall()
+            best, best_diff = None, None
+            for r in rivals:
+                diff = abs(r["influence"] - our_influence)
+                if diff <= 0.05 and (best_diff is None or diff < best_diff):
+                    best, best_diff = r, diff
+            if best is not None:
+                conflict_risk = {
+                    "faction_name": best["faction_name"],
+                    "influence": best["influence"],
+                    "diff": best_diff,
+                }
+
+        active_war = None
+        own_row = self.db.conn.execute(
+            """
+            SELECT faction_state, active_states, snapshot_date
+            FROM faction_snapshots
+            WHERE system_address = ? AND faction_name = ?
+            ORDER BY snapshot_date DESC
+            LIMIT 1
+            """,
+            (system_address, faction_name),
+        ).fetchone()
+        if own_row is not None and _row_is_at_war(own_row["faction_state"], own_row["active_states"]):
+            war_rivals = self.db.conn.execute(
+                """
+                SELECT fs.faction_name, fs.influence, fs.faction_state, fs.active_states
+                FROM faction_snapshots fs
+                WHERE fs.system_address = ? AND fs.faction_name != ?
+                  AND fs.snapshot_date = ?
+                """,
+                (system_address, faction_name, own_row["snapshot_date"]),
+            ).fetchall()
+            best_opponent = None
+            for r in war_rivals:
+                if not _row_is_at_war(r["faction_state"], r["active_states"]):
+                    continue
+                r_influence = r["influence"] if isinstance(r["influence"], (int, float)) else 0.0
+                best_influence = best_opponent["influence"] if best_opponent and isinstance(best_opponent["influence"], (int, float)) else -1.0
+                if best_opponent is None or r_influence > best_influence:
+                    best_opponent = r
+            if best_opponent is not None:
+                active_war = {"faction_name": best_opponent["faction_name"], "influence": best_opponent["influence"]}
+            else:
+                active_war = {"faction_name": None, "influence": None}
+
+        return {
+            "influence": our_influence,
+            "trend": trend,
+            "days_in_expansion_range": days_in_expansion_range,
+            "days_in_retreat_range": days_in_retreat_range,
+            "conflict_risk": conflict_risk,
+            "active_war": active_war,
+        }
+
+    def get_all_faction_predictions_for_system(self, system_address: int) -> List[dict]:
+        """
+        Prediction (trend/expansion/retreat/conflict/active-war) for every
+        faction with a snapshot in this system, not just one tracked
+        faction — used by the Player Faction tab's per-system history
+        drill-down. Same fields as one get_faction_predictions() entry,
+        minus system_address/system_name, plus faction_name. Sorted by
+        current influence descending; entries with no known influence
+        (None) sort last.
+        """
+        rows = self.db.conn.execute(
+            "SELECT DISTINCT faction_name FROM faction_snapshots WHERE system_address = ?",
+            (system_address,),
+        ).fetchall()
+
+        out: List[dict] = []
+        for row in rows:
+            faction_name = row["faction_name"]
+            prediction = self._predict_faction_in_system(system_address, faction_name)
+            prediction["faction_name"] = faction_name
+            out.append(prediction)
+
+        out.sort(key=lambda p: (p["influence"] is None, -(p["influence"] or 0.0)))
         return out
 
     def save_ring(
