@@ -411,54 +411,6 @@ class IntelPanel(QWidget):
         body_farm_l.addWidget(self.body_farm_display)
         self._content_layout.addWidget(body_farm_frame)
 
-        # ── Odyssey farming candidates card ─────────────────────────────────
-        odyssey_frame = QFrame()
-        odyssey_frame.setStyleSheet(
-            "QFrame { background: #1a0d1a; border: 1px solid #3a1e3a;"
-            "border-radius: 5px; }"
-        )
-        odyssey_l = QVBoxLayout(odyssey_frame)
-        odyssey_l.setContentsMargins(8, 6, 8, 6)
-        odyssey_l.setSpacing(4)
-        odyssey_hdr = QLabel("ODYSSEY FARMING CANDIDATES")
-        odyssey_hdr.setStyleSheet(
-            "color: #7a7a7a; font-size:12px; font-weight: bold; "
-            "letter-spacing: 1px; background: transparent; border: none;"
-        )
-        odyssey_l.addWidget(odyssey_hdr)
-        self.odyssey_display = QLabel("")
-        self.odyssey_display.setWordWrap(True)
-        self.odyssey_display.setTextFormat(Qt.TextFormat.RichText)
-        self.odyssey_display.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.odyssey_display.setStyleSheet("background: transparent; border: none;")
-        self.odyssey_display.setToolTip("Click a system name to copy it to the clipboard.")
-        self.odyssey_display.linkActivated.connect(self._on_odyssey_link)
-        odyssey_l.addWidget(self.odyssey_display)
-        self._content_layout.addWidget(odyssey_frame)
-
-        # ── Full farming guide card ───────────────────────────────────────
-        guide_frame = QFrame()
-        guide_frame.setStyleSheet(
-            "QFrame { background: #0d1a10; border: 1px solid #1e3a20;"
-            "border-radius: 5px; }"
-        )
-        guide_l = QVBoxLayout(guide_frame)
-        guide_l.setContentsMargins(8, 6, 8, 6)
-        guide_l.setSpacing(4)
-        guide_hdr = QLabel("FARMING GUIDE — ALL CATEGORIES")
-        guide_hdr.setStyleSheet(
-            "color: #7a7a7a; font-size:12px; font-weight: bold; "
-            "letter-spacing: 1px; background: transparent; border: none;"
-        )
-        guide_l.addWidget(guide_hdr)
-        self.guide_display = QLabel("")
-        self.guide_display.setWordWrap(True)
-        self.guide_display.setTextFormat(Qt.TextFormat.RichText)
-        self.guide_display.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.guide_display.setStyleSheet("background: transparent; border: none;")
-        guide_l.addWidget(self.guide_display)
-        self._content_layout.addWidget(guide_frame)
-
         # ── Nearest farming opportunities card ──────────────────────────────
         nearby_frame = QFrame()
         nearby_frame.setStyleSheet(
@@ -508,6 +460,54 @@ class IntelPanel(QWidget):
         nearby_l.addWidget(self.nearby_farming_table)
 
         self._content_layout.addWidget(nearby_frame)
+
+        # ── Odyssey farming candidates card ─────────────────────────────────
+        odyssey_frame = QFrame()
+        odyssey_frame.setStyleSheet(
+            "QFrame { background: #1a0d1a; border: 1px solid #3a1e3a;"
+            "border-radius: 5px; }"
+        )
+        odyssey_l = QVBoxLayout(odyssey_frame)
+        odyssey_l.setContentsMargins(8, 6, 8, 6)
+        odyssey_l.setSpacing(4)
+        odyssey_hdr = QLabel("ODYSSEY FARMING CANDIDATES")
+        odyssey_hdr.setStyleSheet(
+            "color: #7a7a7a; font-size:12px; font-weight: bold; "
+            "letter-spacing: 1px; background: transparent; border: none;"
+        )
+        odyssey_l.addWidget(odyssey_hdr)
+        self.odyssey_display = QLabel("")
+        self.odyssey_display.setWordWrap(True)
+        self.odyssey_display.setTextFormat(Qt.TextFormat.RichText)
+        self.odyssey_display.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.odyssey_display.setStyleSheet("background: transparent; border: none;")
+        self.odyssey_display.setToolTip("Click a system name to copy it to the clipboard.")
+        self.odyssey_display.linkActivated.connect(self._on_odyssey_link)
+        odyssey_l.addWidget(self.odyssey_display)
+        self._content_layout.addWidget(odyssey_frame)
+
+        # ── Full farming guide card ───────────────────────────────────────
+        guide_frame = QFrame()
+        guide_frame.setStyleSheet(
+            "QFrame { background: #0d1a10; border: 1px solid #1e3a20;"
+            "border-radius: 5px; }"
+        )
+        guide_l = QVBoxLayout(guide_frame)
+        guide_l.setContentsMargins(8, 6, 8, 6)
+        guide_l.setSpacing(4)
+        guide_hdr = QLabel("FARMING GUIDE — ALL CATEGORIES")
+        guide_hdr.setStyleSheet(
+            "color: #7a7a7a; font-size:12px; font-weight: bold; "
+            "letter-spacing: 1px; background: transparent; border: none;"
+        )
+        guide_l.addWidget(guide_hdr)
+        self.guide_display = QLabel("")
+        self.guide_display.setWordWrap(True)
+        self.guide_display.setTextFormat(Qt.TextFormat.RichText)
+        self.guide_display.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.guide_display.setStyleSheet("background: transparent; border: none;")
+        guide_l.addWidget(self.guide_display)
+        self._content_layout.addWidget(guide_frame)
 
         # ── BGS history card ──────────────────────────────────────────────
         bgs_frame = QFrame()
