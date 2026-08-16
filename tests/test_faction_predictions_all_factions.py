@@ -104,5 +104,5 @@ def test_all_factions_reflects_per_faction_forecast_independently(repo):
     _save(repo, 1, _faction("Retreating Faction", 0.02))
     predictions = repo.get_all_faction_predictions_for_system(1)
     by_name = {p["faction_name"]: p for p in predictions}
-    assert by_name["Expanding Faction"]["days_in_expansion_range"] == 0
-    assert by_name["Retreating Faction"]["days_in_retreat_range"] == 0
+    assert by_name["Expanding Faction"]["days_in_expansion_range"] == 1
+    assert by_name["Retreating Faction"]["days_in_retreat_range"] == 1

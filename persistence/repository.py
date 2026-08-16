@@ -603,7 +603,7 @@ class Repository:
         days_in_expansion_range = None
         if our_influence is not None and our_influence >= 0.70:
             days_in_expansion_range = 0
-            for h in history[1:]:
+            for h in history:
                 if h["influence"] >= 0.70:
                     days_in_expansion_range += 1
                 else:
@@ -612,7 +612,7 @@ class Repository:
         days_in_retreat_range = None
         if our_influence is not None and our_influence < 0.05:
             days_in_retreat_range = 0
-            for h in history[1:]:
+            for h in history:
                 if h["influence"] < 0.05:
                     days_in_retreat_range += 1
                 else:
