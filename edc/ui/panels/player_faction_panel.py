@@ -14,13 +14,14 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from PyQt6.QtCore import Qt, QObject, QThread, QStringListModel, QTimer, pyqtSignal
+from PyQt6.QtCore import Qt, QObject, QThread, QStringListModel, QTimer, pyqtSignal, QDate, QDateTime
 from PyQt6.QtGui import QColor, QFontMetrics
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QFrame, QFileDialog, QDialog,
     QApplication, QCompleter, QSizePolicy,
 )
+from PyQt6.QtCharts import QChart, QChartView, QLineSeries, QDateTimeAxis, QValueAxis
 
 from edc.core.edsm_faction_lookup import (
     fetch_system_factions, fetch_system_coords, fetch_system_stations, ERROR_BLOCKED, ERROR_NOT_FOUND,
@@ -198,6 +199,12 @@ def derive_bgs_action(sys_rec: Dict[str, Any]) -> Tuple[str, str]:
     regardless of state — a state-specific headline isn't the only lever."""
     text, color = _bgs_action_core(sys_rec)
     return (f"{text} {_GENERAL_BGS_HINT}", color)
+
+
+_FACTION_CHART_COLORS = [
+    "#4D96FF", "#FFB347", "#6BCB77", "#FF6B6B",
+    "#B983FF", "#FFD93D", "#4DD8C8", "#FF8FB1",
+]
 
 
 def _format_forecast(prediction: Optional[Dict[str, Any]]) -> Tuple[str, str]:
@@ -1889,11 +1896,11 @@ class PlayerFactionPanel(QWidget):
 class _FactionHistoryDialog(QDialog):
     """
     Non-modal per-system BGS history drill-down, opened by clicking a bucket
-    table row's Influence cell. Holds the Forecast text that used to live in
-    its own table column (moved here since it was one of three Stretch
-    columns fighting Action for width) plus the real day-by-day snapshots
-    already collected in faction_snapshots — nothing new is persisted here,
-    this only displays what save_faction_snapshot() already records daily.
+    table row's Influence cell. Shows every faction present in the system
+    (not just the tracked one): a forecast line per faction, an
+    influence-over-time graph, and a plain day-by-day table — nothing new
+    is persisted here, this only displays what save_faction_snapshot()
+    already records daily.
     """
 
     def __init__(self, panel: "PlayerFactionPanel", system_address: int, system_name: str):
@@ -1902,17 +1909,27 @@ class _FactionHistoryDialog(QDialog):
         self._system_address = system_address
         self.setWindowTitle(f"BGS History — {system_name}")
         self.setStyleSheet("QDialog { background:#080f18; color:#c8c8c8; }")
-        self.resize(520, 420)
+        self.resize(640, 700)
 
         layout = QVBoxLayout(self)
+
         self._forecast_label = QLabel("")
         self._forecast_label.setWordWrap(True)
-        self._forecast_label.setStyleSheet("background:transparent; border:none; font-weight:bold; padding:4px;")
+        self._forecast_label.setTextFormat(Qt.TextFormat.RichText)
+        self._forecast_label.setStyleSheet("background:transparent; border:none; padding:4px;")
         layout.addWidget(self._forecast_label)
 
+        self._chart = QChart()
+        self._chart.setBackgroundBrush(QColor("#080f18"))
+        self._chart.setTitleBrush(QColor("#c8c8c8"))
+        self._chart.legend().setLabelColor(QColor("#c8c8c8"))
+        self._chart_view = QChartView(self._chart)
+        self._chart_view.setMinimumHeight(220)
+        layout.addWidget(self._chart_view)
+
         self._table = QTableWidget()
-        self._table.setColumnCount(3)
-        self._table.setHorizontalHeaderLabels(["Date", "Influence", "Active State"])
+        self._table.setColumnCount(4)
+        self._table.setHorizontalHeaderLabels(["Date", "Faction", "Influence", "Active State"])
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
         self._table.verticalHeader().setVisible(False)
@@ -1926,28 +1943,93 @@ class _FactionHistoryDialog(QDialog):
         h = self._table.horizontalHeader()
         h.setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
         h.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
-        h.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        h.setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
+        h.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         self._table.setColumnWidth(0, 100)
-        self._table.setColumnWidth(1, 90)
+        self._table.setColumnWidth(1, 140)
+        self._table.setColumnWidth(2, 90)
         layout.addWidget(self._table, 1)
 
     def refresh(self) -> None:
-        prediction = self._panel._last_predictions.get(self._system_address)
-        forecast_text, forecast_color = _format_forecast(prediction)
-        self._forecast_label.setText(f"Forecast: {forecast_text}")
-        self._forecast_label.setStyleSheet(
-            f"background:transparent; border:none; font-weight:bold; padding:4px; color:{forecast_color};"
+        try:
+            predictions = self._panel._repo.get_all_faction_predictions_for_system(self._system_address)
+        except Exception:
+            log.exception("Failed to load faction predictions for system %s", self._system_address)
+            predictions = []
+
+        colors: Dict[str, str] = {
+            p["faction_name"]: _FACTION_CHART_COLORS[i % len(_FACTION_CHART_COLORS)]
+            for i, p in enumerate(predictions)
+        }
+
+        forecast_lines = []
+        for p in predictions:
+            fname = p["faction_name"]
+            identity_color = colors.get(fname, _FACTION_CHART_COLORS[0])
+            text, semantic_color = _format_forecast(p)
+            forecast_lines.append(
+                f'<div style="margin-bottom:2px;">'
+                f'<span style="color:{identity_color};font-weight:700;">{fname}</span>'
+                f' — <span style="color:{semantic_color};">{text}</span>'
+                f'</div>'
+            )
+        self._forecast_label.setText(
+            "".join(forecast_lines) if forecast_lines else
+            '<span style="color:#444444;">No factions tracked in this system yet.</span>'
         )
 
         try:
-            history = self._panel._repo.get_faction_history(self._system_address, self._panel._faction_name)
+            history = self._panel._repo.get_faction_history(self._system_address)
         except Exception:
             log.exception("Failed to load faction history for system %s", self._system_address)
             history = []
 
+        by_faction: Dict[str, list] = {}
+        for h in history:
+            by_faction.setdefault(h.get("faction_name") or "Unknown", []).append(h)
+
+        self._chart.removeAllSeries()
+        for axis in list(self._chart.axes()):
+            self._chart.removeAxis(axis)
+
+        ordered_factions = [p["faction_name"] for p in predictions if p["faction_name"] in by_faction]
+        ordered_factions += [f for f in by_faction if f not in ordered_factions]
+
+        axis_x = QDateTimeAxis()
+        axis_x.setFormat("MMM d")
+        axis_x.setLabelsColor(QColor("#888888"))
+        axis_y = QValueAxis()
+        axis_y.setRange(0, 100)
+        axis_y.setLabelFormat("%d%%")
+        axis_y.setLabelsColor(QColor("#888888"))
+        self._chart.addAxis(axis_x, Qt.AlignmentFlag.AlignBottom)
+        self._chart.addAxis(axis_y, Qt.AlignmentFlag.AlignLeft)
+
+        for i, fname in enumerate(ordered_factions):
+            color = colors.get(fname, _FACTION_CHART_COLORS[i % len(_FACTION_CHART_COLORS)])
+            series = QLineSeries()
+            series.setName(fname)
+            series.setColor(QColor(color))
+            for h in sorted(by_faction[fname], key=lambda r: r.get("snapshot_date") or ""):
+                infl = h.get("influence")
+                if not isinstance(infl, (int, float)):
+                    continue
+                qd = QDate.fromString(h.get("snapshot_date") or "", "yyyy-MM-dd")
+                if not qd.isValid():
+                    continue
+                qdt = QDateTime(qd)
+                series.append(qdt.toMSecsSinceEpoch(), infl * 100)
+            if series.count():
+                self._chart.addSeries(series)
+                series.attachAxis(axis_x)
+                series.attachAxis(axis_y)
+
         self._table.setRowCount(len(history))
         for row, h in enumerate(history):
+            fname = h.get("faction_name") or "Unknown"
             date_item = QTableWidgetItem(h.get("snapshot_date") or "—")
+            faction_item = QTableWidgetItem(fname)
+            faction_item.setForeground(QColor(colors.get(fname, _FACTION_CHART_COLORS[0])))
             infl = h.get("influence")
             infl_item = _NumericTableWidgetItem(
                 f"{infl * 100:.1f}%" if isinstance(infl, (int, float)) else "—",
@@ -1958,8 +2040,9 @@ class _FactionHistoryDialog(QDialog):
             active_names += [st for st in _parse_states(h.get("active_states")) if st not in active_names]
             state_item = QTableWidgetItem(", ".join(active_names) if active_names else "—")
             self._table.setItem(row, 0, date_item)
-            self._table.setItem(row, 1, infl_item)
-            self._table.setItem(row, 2, state_item)
+            self._table.setItem(row, 1, faction_item)
+            self._table.setItem(row, 2, infl_item)
+            self._table.setItem(row, 3, state_item)
 
 
 class _FactionBucketDialog(QDialog):
