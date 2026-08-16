@@ -29,7 +29,7 @@ def test_dollar_wrapped_name_is_unwrapped_to_bare_lowercase_symbol():
     cache = EddnMarketCache(repo=None)
     cache.on_fcmaterials_message(_msg([_item("$graphene_name;")]))
 
-    coords, market, factions, stations, codex, fcmaterials = cache.pop_buffers()
+    coords, market, factions, stations, codex, fcmaterials, carrier_access = cache.pop_buffers()
     assert len(fcmaterials) == 1
     market_id, symbol = fcmaterials[0][0], fcmaterials[0][1]
     assert market_id == 3705242624
@@ -40,7 +40,7 @@ def test_uppercase_wrapped_name_is_lowercased():
     cache = EddnMarketCache(repo=None)
     cache.on_fcmaterials_message(_msg([_item("$GRAPHENE_name;")]))
 
-    _, _, _, _, _, fcmaterials = cache.pop_buffers()
+    _, _, _, _, _, fcmaterials, _ = cache.pop_buffers()
     assert fcmaterials[0][1] == "graphene"
 
 
@@ -48,5 +48,5 @@ def test_empty_name_after_unwrap_is_skipped():
     cache = EddnMarketCache(repo=None)
     cache.on_fcmaterials_message(_msg([_item("")]))
 
-    _, _, _, _, _, fcmaterials = cache.pop_buffers()
+    _, _, _, _, _, fcmaterials, _ = cache.pop_buffers()
     assert fcmaterials == []

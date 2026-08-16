@@ -149,6 +149,7 @@ class Database:
             )""",
             "ALTER TABLE station_info ADD COLUMN station_services TEXT",
             "ALTER TABLE station_info ADD COLUMN station_faction TEXT",
+            "ALTER TABLE station_info ADD COLUMN carrier_docking_access TEXT",
             """CREATE TABLE IF NOT EXISTS commodity_names (
                 internal_name TEXT PRIMARY KEY,
                 display_name  TEXT NOT NULL

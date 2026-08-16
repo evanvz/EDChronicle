@@ -925,6 +925,30 @@ class Repository:
         )
         self.db.conn.commit()
 
+    def save_carrier_docking_access_batch(self, records: list[tuple]):
+        """
+        records: [(market_id, docking_access, timestamp), ...] -- from EDDN
+        commodity/3's optional carrierDockingAccess field. Upserts only the
+        carrier_docking_access column on station_info; if no row exists yet
+        for this market_id (no Docked sighting seen), inserts a skeletal
+        row with just market_id + this column -- a later Docked sighting's
+        own upsert (save_station_info_batch) fills in the rest without
+        touching this column. Harmless either arrival order.
+        """
+        if not records:
+            return
+        cur = self.db.conn.cursor()
+        cur.executemany(
+            """
+            INSERT INTO station_info (market_id, carrier_docking_access)
+            VALUES (?, ?)
+            ON CONFLICT(market_id) DO UPDATE SET
+                carrier_docking_access = excluded.carrier_docking_access
+            """,
+            [(market_id, access) for market_id, access, _ts in records],
+        )
+        self.db.conn.commit()
+
     def prune_stale_market_prices(self) -> int:
         """
         Deletes rows already excluded from search results by
@@ -1510,6 +1534,7 @@ class Repository:
             SELECT fcm.material_symbol, fcm.carrier_name, fcm.carrier_id, fcm.price,
                    fcm.stock, fcm.demand, fcm.last_updated,
                    si.market_id, si.system_name, si.last_visited,
+                   si.carrier_docking_access AS docking_access,
                    sc.x, sc.y, sc.z
             FROM fleet_carrier_materials fcm
             INNER JOIN station_info si ON si.market_id = fcm.market_id
@@ -1517,6 +1542,7 @@ class Repository:
             WHERE fcm.material_symbol IN ({sym_placeholders})
                   AND fcm.stock > 0
                   AND fcm.last_updated >= ?
+                  AND (si.carrier_docking_access IS NULL OR si.carrier_docking_access = 'all')
                   AND sc.x BETWEEN ? AND ? AND sc.y BETWEEN ? AND ? AND sc.z BETWEEN ? AND ?
             """,
             (

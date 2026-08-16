@@ -45,6 +45,13 @@ class EddnMarketCache:
         # Keyed by (market_id, material_symbol) -- Fleet Carrier material
         # listings from fcmaterials_journal/1 sightings, any commander's.
         self._fcmaterials_buffer: Dict[Tuple[int, str], tuple] = {}
+        # Keyed by market_id -- a carrier's self-reported docking access
+        # from commodity/3's optional carrierDockingAccess field, any
+        # commander's. The only data source that can ever answer "can I
+        # land here" for someone else's carrier (see module docstring
+        # context in this task's design spec) -- coverage is necessarily
+        # incomplete since the field is optional.
+        self._carrier_access_buffer: Dict[int, Tuple[int, str, str]] = {}
 
     def on_coords_seen(self, system_name: str, x: float, y: float, z: float) -> None:
         if not system_name:
@@ -61,6 +68,10 @@ class EddnMarketCache:
         station_type = msg.get("stationType") or ""
         system_name = msg.get("systemName") or ""
         timestamp = msg.get("timestamp") or ""
+
+        docking_access = msg.get("carrierDockingAccess")
+        if isinstance(docking_access, str) and docking_access:
+            self._carrier_access_buffer[market_id] = (market_id, docking_access, timestamp)
 
         for c in (msg.get("commodities") or []):
             if not isinstance(c, dict):
@@ -119,16 +130,16 @@ class EddnMarketCache:
                 timestamp,
             )
 
-    def buffered_counts(self) -> Tuple[int, int, int, int, int]:
-        """Returns (coord_count, market_row_count, faction_count, station_count, fcmaterials_count) currently buffered — for status/logging."""
+    def buffered_counts(self) -> Tuple[int, int, int, int, int, int]:
+        """Returns (coord_count, market_row_count, faction_count, station_count, fcmaterials_count, carrier_access_count) currently buffered — for status/logging."""
         return (
             len(self._coord_buffer), len(self._market_buffer), len(self._faction_buffer),
-            len(self._station_buffer), len(self._fcmaterials_buffer),
+            len(self._station_buffer), len(self._fcmaterials_buffer), len(self._carrier_access_buffer),
         )
 
     def pop_buffers(self):
         """
-        Snapshots and clears all six buffers, returning their contents as
+        Snapshots and clears all seven buffers, returning their contents as
         plain lists/tuples — for handing off to a background worker with
         its own DB connection (see main_window.py's _EddnFlushWorker).
         Cheap, main-thread-only dict operations; the actual DB writes are
@@ -140,13 +151,15 @@ class EddnMarketCache:
         stations = list(self._station_buffer.values())
         codex = list(self._codex_buffer.values())
         fcmaterials = list(self._fcmaterials_buffer.values())
+        carrier_access = list(self._carrier_access_buffer.values())
         self._coord_buffer.clear()
         self._market_buffer.clear()
         self._faction_buffer.clear()
         self._station_buffer.clear()
         self._codex_buffer.clear()
         self._fcmaterials_buffer.clear()
-        return coords, market, factions, stations, codex, fcmaterials
+        self._carrier_access_buffer.clear()
+        return coords, market, factions, stations, codex, fcmaterials, carrier_access
 
     def flush(self) -> None:
         """Synchronous flush on the caller's own thread/connection — only
@@ -158,11 +171,11 @@ class EddnMarketCache:
         the main thread every 45s, which froze the UI for however long a
         big buffered batch took to write (confirmed live, worse right
         after docking at a busy station's market)."""
-        coords, market, factions, stations, codex, fcmaterials = self.pop_buffers()
-        write_buffers(self._repo, coords, market, factions, stations, codex, fcmaterials)
+        coords, market, factions, stations, codex, fcmaterials, carrier_access = self.pop_buffers()
+        write_buffers(self._repo, coords, market, factions, stations, codex, fcmaterials, carrier_access)
 
 
-def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials) -> None:
+def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, carrier_access) -> None:
     """The actual writes — factored out so both the main-thread flush()
     (shutdown) and a background worker (periodic, see main_window.py) can
     use the identical logic against whichever Repository they're given."""
@@ -206,3 +219,9 @@ def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials) 
             repo.save_fleet_carrier_materials_batch(fcmaterials)
         except Exception:
             log.exception("Failed to flush fleet_carrier_materials batch")
+
+    if carrier_access:
+        try:
+            repo.save_carrier_docking_access_batch(carrier_access)
+        except Exception:
+            log.exception("Failed to flush carrier_docking_access batch")
