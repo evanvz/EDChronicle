@@ -4,8 +4,7 @@ from typing import Any, Dict, List
 # Fields per the official Journal Manual (Fleet Carriers, §11). Only
 # handles events relevant to a carrier the commander owns/is docked at —
 # CarrierDecommission/CancelDecommission/CrewServices/ShipPack/ModulePack/
-# DockingPermission/NameChanged are not tracked (out of scope for a status
-# overview panel).
+# NameChanged are not tracked (out of scope for a status overview panel).
 #
 # Squadron members can now see CarrierStats for their SQUADRON's shared
 # carrier too (CarrierType:"SquadronCarrier" — confirmed empirically, not
@@ -148,6 +147,23 @@ def handle(engine, name: str | None, event: Dict[str, Any], msgs: List[str]) -> 
         engine.state.carrier_next_jump_system = system if isinstance(system, str) and system else None
         body = event.get("Body")
         engine.state.carrier_next_jump_body = body if isinstance(body, str) and body else None
+        return True
+
+    elif name == "CarrierDockingPermission":
+        carrier_id = event.get("CarrierID")
+        squadron_carrier = engine.state.squadron_carrier
+        if squadron_carrier and carrier_id == squadron_carrier.get("market_id"):
+            sc = dict(squadron_carrier)
+            sc["docking_access"] = event.get("DockingAccess")
+            allow_notorious = event.get("AllowNotorious")
+            sc["allow_notorious"] = allow_notorious if isinstance(allow_notorious, bool) else sc.get("allow_notorious")
+            engine.state.squadron_carrier = sc
+            return True
+        if not _owned_id_matches(engine, carrier_id):
+            return True
+        engine.state.carrier_docking_access = event.get("DockingAccess")
+        allow_notorious = event.get("AllowNotorious")
+        engine.state.carrier_allow_notorious = allow_notorious if isinstance(allow_notorious, bool) else engine.state.carrier_allow_notorious
         return True
 
     elif name == "CarrierJumpCancelled":

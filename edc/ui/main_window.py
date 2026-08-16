@@ -2134,9 +2134,10 @@ class MainWindow(QMainWindow):
                 self.eddn_publisher.maybe_publish_commodity(market_data, docking_access)
 
         if name == "FCMaterials":
-            fc_data = self._load_current_fcmaterials()
-            if fc_data and getattr(self.cfg, "eddn_contribute_enabled", False) and not self._replaying:
-                self.eddn_publisher.maybe_publish_fcmaterials(fc_data)
+            if getattr(self.cfg, "eddn_contribute_enabled", False) and not self._replaying:
+                fc_data = self._load_current_fcmaterials()
+                if fc_data and fc_data.get("MarketID") == evt.get("MarketID"):
+                    self.eddn_publisher.maybe_publish_fcmaterials(fc_data)
 
         if name == "NavRoute":
             self._load_nav_route()
