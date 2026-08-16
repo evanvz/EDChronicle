@@ -34,7 +34,7 @@ from PyQt6.QtGui import QTextCursor, QColor, QIcon, QKeySequence
 from pathlib import Path
 
 from edc.core.state import GameState
-from edc.core.event_engine import EventEngine, _engage_risk
+from edc.core.event_engine import EventEngine, _engage_risk, _callout_reason
 from edc.core.journal_watcher import JournalWatcher
 from edc.ui.watcher_controller import WatcherController
 from edc.ui.system_data_loader import SystemDataLoader
@@ -77,7 +77,7 @@ from edc.core.eddn_market import EddnMarketCache, write_buffers
 from edc.core.station_pads import extract_station_info
 from edc.core.rare_commodities import RareCommodityTable
 from edc.core.bounty_scanner import scan_active_bounties
-from edc.core.bgs_conflicts import squadron_faction_name
+from edc.core.bgs_conflicts import squadron_faction_name, find_squadron_war_enemy
 from edc.core.combat_bond_scanner import scan_unredeemed_combat_total
 from edc.core.materials_scanner import scan_latest_materials
 from edc.core.notoriety_scanner import scan_latest_notoriety
@@ -2572,7 +2572,8 @@ class MainWindow(QMainWindow):
                 legal_enemy  = legal_status.lower() == "enemy"
                 bounty       = int(evt.get("Bounty") or 0)
                 power        = (evt.get("Power") or "").strip()
-                faction      = (evt.get("Faction") or "").strip().lower()
+                faction_raw  = evt.get("Faction") or ""
+                faction      = faction_raw.strip().lower()
                 is_friendly  = bool(pledged and power and power.lower() == pledged.lower())
                 top_rank     = rank.lower() in ("dangerous", "deadly", "elite")
 
@@ -2584,6 +2585,7 @@ class MainWindow(QMainWindow):
 
                 ctrl          = (getattr(state, "system_controlling_power", None) or "").strip()
                 system_powers = [p.strip() for p in (getattr(state, "system_powers", []) or [])]
+                pp_state      = getattr(state, "system_powerplay_state", None)
                 we_control    = bool(pledged and ctrl and ctrl.lower() == pledged.lower())
                 we_present    = bool(pledged and any(p.lower() == pledged.lower() for p in system_powers))
                 we_active     = we_control or we_present
@@ -2595,6 +2597,17 @@ class MainWindow(QMainWindow):
 
                 is_enemy      = bool(we_active and power and ship_active)
                 is_high_value = bool((not is_enemy) and wanted and bounty > 500_000 and top_rank)
+
+                squadron_faction = squadron_faction_name(getattr(state, "factions", None))
+                squadron_at_war  = bool(find_squadron_war_enemy(
+                    getattr(state, "factions", None), getattr(state, "system_conflicts", None)
+                ))
+                callout_reason = _callout_reason(
+                    hostile, legal_enemy, power, faction_raw, pledged, squadron_faction,
+                    ctrl, system_powers, pp_state, rank, squadron_at_war,
+                )
+                if callout_reason is None:
+                    return ""
 
                 engage_risk = _engage_risk(
                     wanted, hostile, power, pledged, ctrl,
@@ -3136,26 +3149,22 @@ class MainWindow(QMainWindow):
 
         pledged = (getattr(self.state, "pp_power", None) or "").strip()
         ctrl    = (getattr(self.state, "system_controlling_power", None) or "").strip()
-        in_my_pp_space = bool(pledged and ctrl and ctrl == pledged)
+        system_powers = [p.strip() for p in (getattr(self.state, "system_powers", []) or [])]
+        pp_state = getattr(self.state, "system_powerplay_state", None)
+        squadron_faction = squadron_faction_name(getattr(self.state, "factions", None))
+        squadron_at_war  = bool(find_squadron_war_enemy(
+            getattr(self.state, "factions", None), getattr(self.state, "system_conflicts", None)
+        ))
 
-        def _qualifies(power: str, wanted: bool, bounty, rank: str):
-            """Returns "bounty", "pp_enemy", or None -- which reason (if
-            any) this target is worth a commander quip for. Kept distinct
-            because the two cases speak different phrase pools: a
-            PowerPlay rival is engage-worthy without actually being
-            wanted/bountied, and saying "bounty confirmed" for one was
-            misleading (confirmed live: Aisling Duval PP contacts with
-            LegalStatus Clean, no Bounty journal event, still got bounty
-            wording)."""
-            rank_ok      = rank.lower() in ("dangerous", "deadly", "elite")
-            bounty_ok    = isinstance(bounty, int) and bounty >= 500_000
-            bounty_target = wanted and bounty_ok and rank_ok
-            if bounty_target:
-                return "bounty"
-            pp_enemy = bool(pledged and power and power != pledged)
-            if in_my_pp_space and pp_enemy:
-                return "pp_enemy"
-            return None
+        def _wording(wanted: bool, bounty, power: str) -> str:
+            """Picks which phrase pool fits, once _callout_reason() has
+            already decided a quip is warranted at all -- presentation
+            only, not a gating decision."""
+            if wanted and isinstance(bounty, int) and bounty >= 500_000:
+                return CombatPhrases.wanted_target_scan()
+            if pledged and power and power.strip().lower() != pledged.strip().lower():
+                return CombatPhrases.powerplay_enemy_scan()
+            return CombatPhrases.high_value_contact_scan()
 
         quip = ""
         if event_type == "ReceiveText":
@@ -3176,8 +3185,13 @@ class MainWindow(QMainWindow):
             )
             if not contact:
                 return
-            if _qualifies(contact.get("Power", ""), contact.get("Wanted", False),
-                          contact.get("Bounty"), contact.get("Rank", "")):
+            reason = _callout_reason(
+                bool(contact.get("Hostile")), bool(contact.get("Enemy")),
+                contact.get("Power", ""), contact.get("Faction", ""),
+                pledged, squadron_faction, ctrl, system_powers, pp_state,
+                contact.get("Rank", ""), squadron_at_war,
+            )
+            if reason is not None:
                 quip = CombatPhrases.npc_challenge()
         elif event_type == "ShipTargeted":
             if not evt.get("TargetLocked") or int(evt.get("ScanStage", 0) or 0) < 3:
@@ -3185,13 +3199,17 @@ class MainWindow(QMainWindow):
             power  = (evt.get("Power") or "").strip()
             legal  = str(evt.get("LegalStatus") or "").strip().lower()
             wanted = legal == "wanted"
+            hostile = legal == "hostile"
+            legal_enemy = legal == "enemy"
             bounty = evt.get("Bounty")
+            faction = evt.get("Faction") or ""
             rank   = str(evt.get("PilotRank") or "").strip()
-            reason = _qualifies(power, wanted, bounty, rank)
-            if reason == "bounty":
-                quip = CombatPhrases.wanted_target_scan()
-            elif reason == "pp_enemy":
-                quip = CombatPhrases.powerplay_enemy_scan()
+            reason = _callout_reason(
+                hostile, legal_enemy, power, faction, pledged, squadron_faction,
+                ctrl, system_powers, pp_state, rank, squadron_at_war,
+            )
+            if reason is not None:
+                quip = _wording(wanted, bounty, power)
 
         if not quip:
             return
