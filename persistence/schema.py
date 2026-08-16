@@ -118,6 +118,7 @@ CREATE TABLE IF NOT EXISTS station_info (
     pads_large    INTEGER,
     station_services TEXT,
     station_faction  TEXT,
+    carrier_docking_access TEXT,
     last_visited  TEXT
 );
 

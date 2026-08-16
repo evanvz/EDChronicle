@@ -627,9 +627,17 @@ class _ShipEngineeringTab(QWidget):
 
         radius = float(getattr(self._cfg, "market_search_radius_ly", 100) or 100)
         current_market_id = getattr(self._state, "current_market_id", None) if self._state else None
+        always_include_ids = {
+            mid for mid in (
+                getattr(self._state, "carrier_market_id", None),
+                getattr(self._state, "carrier_owned_market_id", None),
+                (getattr(self._state, "squadron_carrier", None) or {}).get("market_id"),
+            ) if isinstance(mid, int)
+        }
         try:
             by_symbol = self._repo.search_fleet_carrier_materials(
                 missing_symbols, ref_x, ref_y, ref_z, radius, exclude_market_id=current_market_id,
+                always_include_market_ids=always_include_ids,
             )
         except Exception:
             log.exception("Failed to search fleet carrier materials")
@@ -1148,9 +1156,17 @@ class _OdysseyEngineeringTab(QWidget):
 
         radius = float(getattr(self._cfg, "market_search_radius_ly", 100) or 100)
         current_market_id = getattr(self._state, "current_market_id", None) if self._state else None
+        always_include_ids = {
+            mid for mid in (
+                getattr(self._state, "carrier_market_id", None),
+                getattr(self._state, "carrier_owned_market_id", None),
+                (getattr(self._state, "squadron_carrier", None) or {}).get("market_id"),
+            ) if isinstance(mid, int)
+        }
         try:
             by_symbol = self._repo.search_fleet_carrier_materials(
                 missing_symbols, ref_x, ref_y, ref_z, radius, exclude_market_id=current_market_id,
+                always_include_market_ids=always_include_ids,
             )
         except Exception:
             log.exception("Failed to search fleet carrier materials")

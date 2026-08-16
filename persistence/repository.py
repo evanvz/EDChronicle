@@ -1510,6 +1510,7 @@ class Repository:
     def search_fleet_carrier_materials(
         self, material_symbols: list[str], x: float, y: float, z: float, radius_ly: float,
         exclude_market_id: Optional[int] = None,
+        always_include_market_ids: Optional[set] = None,
     ) -> dict[str, list[dict]]:
         """
         For each symbol in material_symbols, the nearby Fleet Carriers
@@ -1529,6 +1530,10 @@ class Repository:
             return {}
 
         sym_placeholders = ",".join("?" for _ in material_symbols)
+        always_include = [mid for mid in (always_include_market_ids or set()) if isinstance(mid, int)]
+        access_ok_clause = "(si.carrier_docking_access IS NULL OR si.carrier_docking_access = 'all')"
+        if always_include:
+            access_ok_clause = f"({access_ok_clause} OR si.market_id IN ({','.join('?' for _ in always_include)}))"
         rows = self.db.conn.execute(
             f"""
             SELECT fcm.material_symbol, fcm.carrier_name, fcm.carrier_id, fcm.price,
@@ -1542,11 +1547,12 @@ class Repository:
             WHERE fcm.material_symbol IN ({sym_placeholders})
                   AND fcm.stock > 0
                   AND fcm.last_updated >= ?
-                  AND (si.carrier_docking_access IS NULL OR si.carrier_docking_access = 'all')
+                  AND {access_ok_clause}
                   AND sc.x BETWEEN ? AND ? AND sc.y BETWEEN ? AND ? AND sc.z BETWEEN ? AND ?
             """,
             (
                 *material_symbols, _fleet_carrier_cutoff(),
+                *always_include,
                 x - radius_ly, x + radius_ly, y - radius_ly, y + radius_ly, z - radius_ly, z + radius_ly,
             ),
         ).fetchall()

@@ -114,3 +114,44 @@ def test_confirmed_restricted_carrier_is_excluded(repo, restricted_value):
 
     result = repo.search_fleet_carrier_materials(["graphene"], 0.0, 0.0, 0.0, 50.0)
     assert result["graphene"] == []
+
+
+def test_restricted_carrier_in_always_include_set_is_still_included(repo):
+    # Own/squadron carrier: docking access is confirmed-restricted, but the
+    # market_id is in always_include_market_ids, so it must survive the filter.
+    _seed_station(repo, 1001, "Sol")
+    _seed_coords(repo, "Sol", 0.0, 0.0, 0.0)
+    _seed_material(repo, 1001, "graphene")
+    repo.save_carrier_docking_access_batch([(1001, "friends", "2026-08-12T00:00:00Z")])
+
+    result = repo.search_fleet_carrier_materials(
+        ["graphene"], 0.0, 0.0, 0.0, 50.0, always_include_market_ids={1001},
+    )
+    assert len(result["graphene"]) == 1
+    assert result["graphene"][0]["docking_access"] == "friends"
+
+
+def test_restricted_carrier_not_in_always_include_set_still_excluded(repo):
+    # No regression: a different, unrelated restricted carrier stays excluded
+    # even when always_include_market_ids is non-empty (for some other carrier).
+    _seed_station(repo, 1001, "Sol")
+    _seed_coords(repo, "Sol", 0.0, 0.0, 0.0)
+    _seed_material(repo, 1001, "graphene")
+    repo.save_carrier_docking_access_batch([(1001, "friends", "2026-08-12T00:00:00Z")])
+
+    result = repo.search_fleet_carrier_materials(
+        ["graphene"], 0.0, 0.0, 0.0, 50.0, always_include_market_ids={9999},
+    )
+    assert result["graphene"] == []
+
+
+def test_always_include_market_ids_defaults_to_none_unchanged_behavior(repo):
+    # No always_include_market_ids argument at all -- old call signature,
+    # old behavior: restricted carrier still excluded.
+    _seed_station(repo, 1001, "Sol")
+    _seed_coords(repo, "Sol", 0.0, 0.0, 0.0)
+    _seed_material(repo, 1001, "graphene")
+    repo.save_carrier_docking_access_batch([(1001, "friends", "2026-08-12T00:00:00Z")])
+
+    result = repo.search_fleet_carrier_materials(["graphene"], 0.0, 0.0, 0.0, 50.0)
+    assert result["graphene"] == []
