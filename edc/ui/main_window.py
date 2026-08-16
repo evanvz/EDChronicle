@@ -710,6 +710,27 @@ class MainWindow(QMainWindow):
 
         return data
 
+    def _load_current_fcmaterials(self):
+        """
+        Reads FCMaterials.json (written by the game alongside the journal
+        whenever the carrier's Commodities Market screen is opened) --
+        mirrors _load_current_market()'s Market.json reading exactly, for
+        the same reason: EDDN publishing needs the raw dict shape, not a
+        UI-shaped subset.
+        """
+        journal_dir = getattr(self.cfg, "journal_dir", None)
+        if not journal_dir:
+            return None
+        fc_path = Path(journal_dir) / "FCMaterials.json"
+        try:
+            if not fc_path.exists():
+                return None
+            data = json.loads(fc_path.read_text(encoding="utf-8", errors="replace"))
+        except Exception:
+            log.exception("Failed to read FCMaterials.json")
+            return None
+        return data
+
     def _load_nav_route(self) -> None:
         """
         Reads NavRoute.json (written alongside the journal whenever a
@@ -2107,7 +2128,15 @@ class MainWindow(QMainWindow):
             self.market_panel.refresh_commodity_names()
             self.mining_panel.refresh_commodity_names()
             if market_data and getattr(self.cfg, "eddn_contribute_enabled", False) and not self._replaying:
-                self.eddn_publisher.maybe_publish_commodity(market_data)
+                docking_access = None
+                if market_data.get("MarketID") == getattr(self.state, "carrier_owned_market_id", None):
+                    docking_access = getattr(self.state, "carrier_docking_access", None)
+                self.eddn_publisher.maybe_publish_commodity(market_data, docking_access)
+
+        if name == "FCMaterials":
+            fc_data = self._load_current_fcmaterials()
+            if fc_data and getattr(self.cfg, "eddn_contribute_enabled", False) and not self._replaying:
+                self.eddn_publisher.maybe_publish_fcmaterials(fc_data)
 
         if name == "NavRoute":
             self._load_nav_route()
