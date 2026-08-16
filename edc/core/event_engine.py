@@ -85,6 +85,57 @@ def _engage_risk(wanted: bool, hostile: bool, power: str | None, pledged: str | 
     return "unknown"
 
 
+def _callout_reason(
+    hostile: bool, enemy: bool, power: str, faction: str,
+    pledged: str, squadron_faction: str,
+    ctrl: str, system_powers: list, pp_state: str,
+    rank: str, squadron_at_war: bool,
+) -> str | None:
+    """
+    Returns "enemy", "high_value", or None -- whether a scanned contact is
+    worth a voice callout at all (any callout, not which words to use).
+
+    Two independent categories:
+      - "enemy": LegalStatus Hostile or Enemy (unconditional -- the game
+        has already decided this is fair game), or a rival PowerPlay
+        power's ship while we hold PP stake in this system (control it,
+        are one of the contesting powers, or it's Contested).
+      - "high_value": top-3 combat rank tier (Dangerous/Deadly/Elite), AND
+        the system is relevant to us -- either the PP-stake condition
+        above, or our squadron-aligned faction is a belligerent in an
+        active BGS War/CivilWar here (squadron_at_war=True). Rank alone
+        does not qualify outside a relevant system.
+
+    Never fires for a ship that's ours -- our pledged PowerPlay power, or
+    our squadron-aligned faction -- regardless of category, checked first:
+    we don't shoot our own.
+    """
+    power_l = (power or "").strip().lower()
+    pledged_l = (pledged or "").strip().lower()
+    is_own_power = bool(pledged_l and power_l and power_l == pledged_l)
+    is_own_faction = bool(squadron_faction and faction and faction == squadron_faction)
+    if is_own_power or is_own_faction:
+        return None
+
+    if hostile or enemy:
+        return "enemy"
+
+    in_my_pp_space = bool(pledged_l and (
+        (ctrl or "").strip().lower() == pledged_l
+        or pledged_l in [p.strip().lower() for p in (system_powers or [])]
+        or (pp_state or "").strip().lower() == "contested"
+    ))
+    pp_enemy = bool(pledged_l and power_l and power_l != pledged_l)
+    if in_my_pp_space and pp_enemy:
+        return "enemy"
+
+    top_rank = rank.strip().lower() in ("dangerous", "deadly", "elite")
+    if top_rank and (in_my_pp_space or squadron_at_war):
+        return "high_value"
+
+    return None
+
+
 class EventEngine:
     def __init__(
         self,
@@ -652,6 +703,7 @@ class EventEngine:
                     "Power": target_power,
                     "Wanted": bool(is_wanted),
                     "Hostile": bool(is_hostile),
+                    "Enemy": bool(is_enemy_status),
                     "Bounty": bounty if isinstance(bounty, int) else None,
                     "EngageRisk": _engage_risk(
                         is_wanted, is_hostile, target_power,

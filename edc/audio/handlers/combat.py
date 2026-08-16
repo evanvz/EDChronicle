@@ -65,6 +65,14 @@ class CombatPhrases:
         "Hostile power signature. Contest them, Commander.",
     ]
 
+    HIGH_VALUE_CONTACT_SCAN = [
+        "Notable contact, Commander. Worth your attention.",
+        "High-threat signature detected. Stay sharp.",
+        "That one's dangerous. Your call, Commander.",
+        "Elite-rated contact in the area. Proceed with caution.",
+        "Combat-capable target nearby. Handle as needed.",
+    ]
+
     @staticmethod
     def ship_targeted(ship: str, rank: str, power: str, is_enemy: bool,
                       wanted: bool, bounty: int, is_high_value: bool = False,
@@ -127,3 +135,7 @@ class CombatPhrases:
     @staticmethod
     def powerplay_enemy_scan() -> str:
         return pick(CombatPhrases.POWERPLAY_ENEMY_SCAN)
+
+    @staticmethod
+    def high_value_contact_scan() -> str:
+        return pick(CombatPhrases.HIGH_VALUE_CONTACT_SCAN)
