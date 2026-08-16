@@ -221,3 +221,40 @@ def test_maybe_publish_commodity_skips_beta_build():
     pub.maybe_publish_commodity(_market([_item()]))
 
     assert pub._queue.empty()
+
+
+def test_docking_access_added_when_provided():
+    msg = build_commodity_message(_market([_item()]), docking_access="all")
+    assert msg["carrierDockingAccess"] == "all"
+
+
+def test_docking_access_absent_when_not_provided():
+    msg = build_commodity_message(_market([_item()]))
+    assert "carrierDockingAccess" not in msg
+
+
+def test_docking_access_absent_when_empty_string():
+    msg = build_commodity_message(_market([_item()]), docking_access="")
+    assert "carrierDockingAccess" not in msg
+
+
+def test_maybe_publish_commodity_threads_docking_access_into_queued_message():
+    pub = EddnPublisher()
+    pub.observe({"event": "Commander", "Name": "CMDR Test"})
+    pub.observe({"event": "LoadGame", "Commander": "CMDR Test", "gameversion": "4.0", "build": "r300000"})
+
+    pub.maybe_publish_commodity(_market([_item()]), docking_access="friends")
+
+    payload = pub._queue.get_nowait()
+    assert payload["message"]["carrierDockingAccess"] == "friends"
+
+
+def test_maybe_publish_commodity_omits_docking_access_key_when_not_given():
+    pub = EddnPublisher()
+    pub.observe({"event": "Commander", "Name": "CMDR Test"})
+    pub.observe({"event": "LoadGame", "Commander": "CMDR Test", "gameversion": "4.0", "build": "r300000"})
+
+    pub.maybe_publish_commodity(_market([_item()]))
+
+    payload = pub._queue.get_nowait()
+    assert "carrierDockingAccess" not in payload["message"]

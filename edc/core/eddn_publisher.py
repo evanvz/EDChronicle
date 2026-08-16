@@ -28,6 +28,7 @@ log = logging.getLogger(__name__)
 _GATEWAY_URL = "https://eddn.edcd.io:4430/upload/"
 _SCHEMA_REF = "https://eddn.edcd.io/schemas/journal/1"
 _COMMODITY_SCHEMA_REF = "https://eddn.edcd.io/schemas/commodity/3"
+_FCMATERIALS_SCHEMA_REF = "https://eddn.edcd.io/schemas/fcmaterials_journal/1"
 
 _ALLOWED_EVENTS = {"Docked", "FSDJump", "Scan", "Location", "SAASignalsFound", "CarrierJump", "CodexEntry"}
 
@@ -124,7 +125,7 @@ def build_message(
     return msg
 
 
-def build_commodity_message(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def build_commodity_message(data: Dict[str, Any], docking_access: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """
     Returns a commodity/3-schema-compliant "message" body built from a
     Market.json dict, or None if required fields are missing or no
@@ -209,12 +210,90 @@ def build_commodity_message(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if not commodities:
         return None
 
-    return {
+    msg = {
         "systemName": system_name,
         "stationName": station_name,
         "marketId": market_id,
         "timestamp": timestamp,
         "commodities": commodities,
+    }
+    if isinstance(docking_access, str) and docking_access:
+        msg["carrierDockingAccess"] = docking_access
+    return msg
+
+
+def build_fcmaterials_message(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Returns an fcmaterials_journal/1-schema-compliant "message" body built
+    from an FCMaterials.json dict, or None if required fields are missing
+    or no valid items remain. Schema requires exactly timestamp, event
+    ("FCMaterials"), MarketID, CarrierName, CarrierID, Items[] at the top
+    level (additionalProperties: false), and exactly id (int, lowercase),
+    Name, Price, Stock, Demand per item -- verified directly against
+    EDCD/EDDN's schema repo, not assumed.
+    """
+    if not isinstance(data, dict):
+        return None
+
+    market_id = data.get("MarketID")
+    carrier_name = data.get("CarrierName")
+    carrier_id = data.get("CarrierID")
+    timestamp = data.get("timestamp")
+    items = data.get("Items")
+
+    if not (
+        isinstance(market_id, int)
+        and isinstance(carrier_name, str) and carrier_name
+        and isinstance(carrier_id, str) and carrier_id
+        and isinstance(timestamp, str) and timestamp
+        and isinstance(items, list)
+    ):
+        return None
+
+    out_items: list = []
+    dropped_invalid = 0
+    for it in items:
+        if not isinstance(it, dict):
+            dropped_invalid += 1
+            continue
+        item_id = it.get("id")
+        name = it.get("Name")
+        price = it.get("Price")
+        stock = it.get("Stock")
+        demand = it.get("Demand")
+        if not (
+            isinstance(item_id, int) and not isinstance(item_id, bool)
+            and isinstance(name, str) and name
+            and isinstance(price, int) and not isinstance(price, bool)
+            and isinstance(stock, int) and not isinstance(stock, bool)
+            and isinstance(demand, int) and not isinstance(demand, bool)
+        ):
+            dropped_invalid += 1
+            continue
+        out_items.append({
+            "id": item_id,
+            "Name": name,
+            "Price": price,
+            "Stock": stock,
+            "Demand": demand,
+        })
+
+    if dropped_invalid:
+        log.warning(
+            "EDDN fcmaterials message for %r/%r dropped %d malformed item(s)",
+            carrier_name, market_id, dropped_invalid,
+        )
+
+    if not out_items:
+        return None
+
+    return {
+        "timestamp": timestamp,
+        "event": "FCMaterials",
+        "MarketID": market_id,
+        "CarrierName": carrier_name,
+        "CarrierID": carrier_id,
+        "Items": out_items,
     }
 
 
@@ -322,13 +401,13 @@ class EddnPublisher:
         except queue.Full:
             log.warning("EDDN publish queue full — dropping message")
 
-    def maybe_publish_commodity(self, data: Dict[str, Any]) -> None:
+    def maybe_publish_commodity(self, data: Dict[str, Any], docking_access: Optional[str] = None) -> None:
         if self._is_beta:
             return
         if not self._commander:
             return
 
-        msg = build_commodity_message(data)
+        msg = build_commodity_message(data, docking_access)
         if msg is None:
             return
 
@@ -350,6 +429,35 @@ class EddnPublisher:
             self._queue.put_nowait(payload)
         except queue.Full:
             log.warning("EDDN publish queue full — dropping commodity message")
+
+    def maybe_publish_fcmaterials(self, data: Dict[str, Any]) -> None:
+        if self._is_beta:
+            return
+        if not self._commander:
+            return
+
+        msg = build_fcmaterials_message(data)
+        if msg is None:
+            return
+
+        msg["horizons"] = self._horizons
+        msg["odyssey"] = self._odyssey
+
+        payload = {
+            "$schemaRef": _FCMATERIALS_SCHEMA_REF,
+            "header": {
+                "uploaderID": self._commander,
+                "softwareName": _SOFTWARE_NAME,
+                "softwareVersion": _SOFTWARE_VERSION,
+                "gameversion": self._gameversion,
+                "gamebuild": self._gamebuild,
+            },
+            "message": msg,
+        }
+        try:
+            self._queue.put_nowait(payload)
+        except queue.Full:
+            log.warning("EDDN publish queue full — dropping fcmaterials message")
 
     def _worker_loop(self) -> None:
         while not self._stop.is_set():
