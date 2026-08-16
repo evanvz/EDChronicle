@@ -312,7 +312,7 @@ class _ShipEngineeringTab(QWidget):
         carrier_hdr.setStyleSheet(_HDR_STYLE)
         right.addWidget(carrier_hdr)
 
-        self._carrier_table = _make_table(["Material", "Carrier", "System", "Dist (ly)", "Price", "Stock", "Age"])
+        self._carrier_table = _make_table(["Material", "Carrier", "System", "Dist (ly)", "Price", "Stock", "Age", "Access"])
         ch = self._carrier_table.horizontalHeader()
         ch.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         ch.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
@@ -321,6 +321,7 @@ class _ShipEngineeringTab(QWidget):
         ch.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         ch.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
         ch.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
+        ch.setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)
         right.addWidget(self._carrier_table, 1)
 
         self._carrier_note = QLabel("")
@@ -664,6 +665,10 @@ class _ShipEngineeringTab(QWidget):
             age_text, age_sort = _format_age(listing.get("last_updated"), listing.get("last_visited"))
             age_item = _NumericTableWidgetItem(age_text, age_sort)
             age_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            access_open = listing.get("docking_access") == "all"
+            access_item = QTableWidgetItem("Open" if access_open else "Unknown")
+            access_item.setForeground(QColor("#6BCB77") if access_open else QColor("#888888"))
+            access_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
             self._carrier_table.setItem(r, 0, mat_item)
             self._carrier_table.setItem(r, 1, name_item)
@@ -672,9 +677,13 @@ class _ShipEngineeringTab(QWidget):
             self._carrier_table.setItem(r, 4, price_item)
             self._carrier_table.setItem(r, 5, stock_item)
             self._carrier_table.setItem(r, 6, age_item)
+            self._carrier_table.setItem(r, 7, access_item)
         self._carrier_table.setSortingEnabled(True)
 
-        staleness_note = "Carrier listings/locations are crowdsourced from EDDN and can be several days old."
+        staleness_note = (
+            "Carrier listings/locations are crowdsourced from EDDN and can be several days old. "
+            "Carriers with confirmed restricted access are filtered out; \"Unknown\" access is not guaranteed open."
+        )
         self._carrier_note.setText(
             staleness_note if rows else
             f"No carriers found selling these materials within {radius:.0f} ly. {staleness_note}"
@@ -857,7 +866,7 @@ class _OdysseyEngineeringTab(QWidget):
         carrier_hdr.setStyleSheet(_HDR_STYLE)
         right.addWidget(carrier_hdr)
 
-        self._carrier_table = _make_table(["Material", "Carrier", "System", "Dist (ly)", "Price", "Stock", "Age"])
+        self._carrier_table = _make_table(["Material", "Carrier", "System", "Dist (ly)", "Price", "Stock", "Age", "Access"])
         ch = self._carrier_table.horizontalHeader()
         ch.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         ch.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
@@ -866,6 +875,7 @@ class _OdysseyEngineeringTab(QWidget):
         ch.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         ch.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
         ch.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
+        ch.setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)
         right.addWidget(self._carrier_table, 1)
 
         self._carrier_note = QLabel("")
@@ -1176,6 +1186,10 @@ class _OdysseyEngineeringTab(QWidget):
             age_text, age_sort = _format_age(listing.get("last_updated"), listing.get("last_visited"))
             age_item = _NumericTableWidgetItem(age_text, age_sort)
             age_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            access_open = listing.get("docking_access") == "all"
+            access_item = QTableWidgetItem("Open" if access_open else "Unknown")
+            access_item.setForeground(QColor("#6BCB77") if access_open else QColor("#888888"))
+            access_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
             self._carrier_table.setItem(r, 0, mat_item)
             self._carrier_table.setItem(r, 1, name_item)
@@ -1184,9 +1198,13 @@ class _OdysseyEngineeringTab(QWidget):
             self._carrier_table.setItem(r, 4, price_item)
             self._carrier_table.setItem(r, 5, stock_item)
             self._carrier_table.setItem(r, 6, age_item)
+            self._carrier_table.setItem(r, 7, access_item)
         self._carrier_table.setSortingEnabled(True)
 
-        staleness_note = "Carrier listings/locations are crowdsourced from EDDN and can be several days old."
+        staleness_note = (
+            "Carrier listings/locations are crowdsourced from EDDN and can be several days old. "
+            "Carriers with confirmed restricted access are filtered out; \"Unknown\" access is not guaranteed open."
+        )
         self._carrier_note.setText(
             staleness_note if rows else
             f"No carriers found selling these materials within {radius:.0f} ly. {staleness_note}"
