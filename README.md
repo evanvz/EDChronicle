@@ -29,12 +29,13 @@ Inspired by [EDCoPilot](https://www.razzafrag.com/) by CMDR RazzaFrag.
 - Codex entry logging and DSS genus discovery tracking
 
 ### Combat
-- Combat Contacts table: every ship you've scanned this session, with rank, faction, Power, bounty, and legal status
-- Confirmed-safe-target detection based on actual Elite Dangerous Crime & Punishment rules (not guessed): a `Hostile` legal status is flagged as safe to engage anywhere, PowerPlay enemies are flagged in any system your pledged Power actively contests (controls, is contesting/undermining, or the system is Contested — not just systems it already controls), and high-value bounty targets (Dangerous+/500k+/Wanted) are flagged everywhere
+- Combat Contacts table: every ship you've scanned this session, with rank, faction, Power, bounty, legal status, and an Engage Risk column
+- Engage Risk detection based on actual Elite Dangerous Crime & Punishment rules (not guessed): `Wanted`, `Hostile`, and `Enemy` legal statuses are all flagged Safe to engage, a PowerPlay rival is flagged Safe in any system your pledged Power actively contests (controls, is contesting/undermining, or the system is Contested), Anarchy-government systems are flagged Caution, everything else defaults to Unknown rather than a false Safe
+- Voice callouts are gated to genuinely actionable contacts only — `Wanted`, `Hostile`, `Enemy`, or a PowerPlay rival in a system your pledged Power actively contests — never for a ship that's your own pledged Power or your own squadron-aligned faction, and never for law enforcement/security faction ships
 - BGS squadron-war context: shown as an informational note when a scanned ship's faction is at active War/Civil War with your squadron-aligned faction — not treated as a free kill, since that requires an actual Conflict Zone engagement
 - Warns when your current ship (from live `Loadout` tracking) has no weapons fitted at all, regardless of the target
 - Notoriety tracking with decay info, separate from active bounties
-- Interstellar Factors bounty clearance: tracks outstanding `CommitCrime` bounties per issuing faction and finds the closest station you've personally confirmed offers Interstellar Factors (excluding stations owned by the issuing faction, which can't clear it)
+- Interstellar Factors bounty clearance: tracks outstanding `CommitCrime` bounties per issuing faction and finds the closest known station offering Interstellar Factors — galaxy-wide via EDDN `Docked` sightings, not just your own visits (excluding stations owned by the issuing faction, which can't clear it)
 - Massacre mission stacking: active kill-count missions grouped by target faction and system, showing kills credited so far and stack size — one kill correctly credits every stacked mission simultaneously, matching real game behavior, and flags a mission as ready to turn in once its count is met
 
 ### PowerPlay
@@ -58,6 +59,7 @@ Inspired by [EDCoPilot](https://www.razzafrag.com/) by CMDR RazzaFrag.
 - Per-system recommended BGS action (e.g. "War active — combat kills help win it", "Expansion pending — keep up trade/missions/bounties") with War/Civil War/Election rows highlighted
 - Active-mission tracking: which of your currently accepted missions help the squadron-aligned faction
 - BGS activity attribution: bounty redemptions and trade transactions are credited to your squadron-aligned faction's running session total, but only when done at a station it actually controls — mirrors the real crediting rule, not just "anything I did nearby"
+- Per-system BGS history drill-down (click a bucket dialog row's Influence cell): every faction present in that system, not just the tracked one — a forecast line per faction (expansion/retreat/conflict/active-war risk), an influence-over-time graph, and a full day-by-day table
 
 ### Squadron
 - Squadron name, rank, rank history, and trophies from journal-exposed squadron events (the game does not expose a member roster, chat, or wing-mission data to third-party tools)
@@ -94,6 +96,7 @@ Inspired by [EDCoPilot](https://www.razzafrag.com/) by CMDR RazzaFrag.
 - Shows exactly which materials you're short, and how many
 - Lists every known engineer who offers the selected blueprint/grade, sorted by distance from your current location, with your real unlock rank compared against what that specific grade requires
 - Suits & Weapons (Odyssey) tab flags each required material as Bartender-tradeable (Chemicals/Circuits/Tech asset groups) or farm/loot only (Data and one-off Item/Consumable materials, which can't be bartered at all)
+- "Sold by Carriers" search: nearby Fleet Carriers selling a needed material, closest first, with each carrier's self-reported docking access (Open/Unknown) — carriers with confirmed restricted access are filtered out entirely
 - Optional voice + Overview panel alert when you're near a farming location for a material on your wishlist
 
 ### Fleet Carrier
@@ -105,6 +108,7 @@ Inspired by [EDCoPilot](https://www.razzafrag.com/) by CMDR RazzaFrag.
 
 ### Intel
 - External points of interest and farming location matches for the current system, cross-referenced against community data
+- Nearest Farming Opportunity search: combines named farming-guide sites with live BGS-state matches across every tracked system, filterable by material, sorted by distance, click-to-copy
 
 ### Voice commands
 - Say a trigger phrase to fire in-game ship actions (power distribution, cargo scoop, landing gear, etc.) via keybind dispatch — reads your actual bound keys from the game's `.binds` file
@@ -135,7 +139,7 @@ EDChronicle draws on the same community data network the rest of the Elite Dange
 - **[Canonn](https://canonn.tech)** — community-sourced Codex/POI intel for the current system and nearest unclaimed Codex challenge
 - **[Inara](https://inara.cz)** — optional bulk CSV export of a minor faction's full system presence list, for the Player Faction tab's bulk import
 
-EDChronicle can also contribute back: "Contribute data to EDDN" in Settings (on by default, matching EDMarketConnector's own default — turn it off if you'd rather not) publishes a subset of your journal events (jumps, docking, scans, surface signal scans, carrier jumps, codex entries) to EDDN's `journal/1` schema, and your own market visits (commodity buy/sell prices, stock, demand) to EDDN's `commodity/3` schema whenever you open a station's Commodities screen — the same feed the Market tab's own search draws from. Both benefit every tool that consumes EDDN, not just EDChronicle. No personal data beyond your commander name is included, and EDDN obfuscates that before distributing it further.
+EDChronicle can also contribute back: "Contribute data to EDDN" in Settings (on by default, matching EDMarketConnector's own default — turn it off if you'd rather not) publishes a subset of your journal events (jumps, docking, scans, surface signal scans, carrier jumps, codex entries) to EDDN's `journal/1` schema, your own market visits (commodity buy/sell prices, stock, demand — including your own Fleet Carrier's docking access, when applicable) to EDDN's `commodity/3` schema whenever you open a station's Commodities screen, and your own Fleet Carrier's material listings to EDDN's `fcmaterials_journal/1` schema whenever you open its bartender screen — the same feeds the Market tab's search and the Engineering tab's "Sold by Carriers" search draw from. All of this benefits every tool that consumes EDDN, not just EDChronicle. No personal data beyond your commander name is included, and EDDN obfuscates that before distributing it further.
 
 Engineering blueprint costs, Experimental Effect data, Odyssey grade/module recipes, and the Material Trader's trade ratios are static offline reference data sourced from [EDCD/coriolis-data](https://github.com/EDCD/coriolis-data), [EDCD/FDevIDs](https://github.com/EDCD/FDevIDs), [msarilar/EDEngineer](https://github.com/msarilar/EDEngineer), and [jixxed/ed-odyssey-materials-helper](https://github.com/jixxed/ed-odyssey-materials-helper) — see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the MIT-licensed portions' full attribution.
 
@@ -200,9 +204,10 @@ Flow:
 1. `edc/core/eddn_listener.py` subscribes to EDDN's live ZeroMQ relay in the background, feeding PowerPlay sightings into `edc/core/eddn_powerplay.py`, commodity/faction sightings into `edc/core/eddn_market.py`, and journal-schema messages more broadly
 2. `edc/core/edsm_powerplay.py` refreshes a daily-cached EDSM PowerPlay dump on startup (a plain request with an identifying User-Agent — EDSM's Cloudflare front-end 403s the default python-requests UA, not the request itself)
 3. `edc/ui/panels/powerplay_finder_panel.py` cross-checks each Spansh search result's controlling power against both sources and flags disagreement
-4. `eddn_market.py` buffers commodity prices and squadron-faction sightings in memory and flushes to SQLite periodically in a batch, rather than writing per-message
+4. `eddn_market.py` buffers commodity prices, station sightings, Fleet Carrier material listings, carrier docking access, and squadron-faction sightings in memory and flushes to SQLite periodically in a batch, rather than writing per-message
 5. On every raw journal event, `MainWindow` calls `edc/core/eddn_publisher.py::observe()` to track session header fields (commander, game version, Horizons/Odyssey flags); if "Contribute data to EDDN" is enabled in Settings, `maybe_publish()` builds a schema-compliant `journal/1` message and queues it for background delivery to the EDDN gateway
-6. On the `Market` event, `_load_current_market()`'s already-parsed `Market.json` dict is also handed to `maybe_publish_commodity()`, which builds a `commodity/3` message (applying EDDN's required elisions/renames) and queues it on the same gateway worker — same opt-in setting, no separate toggle
+6. On the `Market` event, `_load_current_market()`'s already-parsed `Market.json` dict is also handed to `maybe_publish_commodity()`, which builds a `commodity/3` message (applying EDDN's required elisions/renames, plus your own carrier's docking access when the market is confirmed your own) and queues it on the same gateway worker — same opt-in setting, no separate toggle
+7. On the `FCMaterials` event, `_load_current_fcmaterials()` reads `FCMaterials.json` and hands it to `maybe_publish_fcmaterials()`, which builds an `fcmaterials_journal/1` message and queues it the same way
 
 ### 5. Player Faction (BGS) tracking path
 
@@ -231,8 +236,8 @@ Notable files:
 - `edsm_powerplay.py` — daily-cached EDSM PowerPlay dump cross-check
 - `edsm_faction_lookup.py` — per-system faction lookup (with retry on transient failures) for Player Faction add/import
 - `eddn_listener.py` / `eddn_powerplay.py` — live EDDN PowerPlay subscription
-- `eddn_market.py` — buffered EDDN commodity price + squadron faction sighting ingestion
-- `eddn_publisher.py` — opt-in `journal/1` (jumps, docking, scans...) and `commodity/3` (market visits) publishing back to EDDN
+- `eddn_market.py` — buffered EDDN commodity price, station, Fleet Carrier material listing, carrier docking access, and squadron faction sighting ingestion
+- `eddn_publisher.py` — opt-in `journal/1` (jumps, docking, scans...), `commodity/3` (market visits, including your own carrier's docking access), and `fcmaterials_journal/1` (your own carrier's material listings) publishing back to EDDN
 - `canonn_client.py` — Canonn Codex/POI community intel
 - `inara_faction_csv.py` — parses Inara's faction-presence CSV export format
 - `bgs_conflicts.py` — squadron-aligned faction lookup, finds who it's at active war with in the current system, and backs BGS activity attribution (bounty/trade crediting)
@@ -344,8 +349,9 @@ Notable files:
 | `dss_genus_discovery` | Genus discoveries recorded via DSS scan |
 | `faction_snapshots` | Per-system, per-day BGS snapshot (influence, states, controlling status) for the squadron-aligned faction, from journal visits and EDDN |
 | `dismissed_faction_systems` | Systems manually hidden from the Player Faction tab |
-| `station_info` | Ground-truth landing pad counts and station services from your own `Docked` events |
+| `station_info` | Landing pad counts, station services, and (for Fleet Carriers) self-reported docking access — from `Docked` events, yours and every commander's via EDDN |
 | `market_prices` | Galaxy-wide commodity prices from the EDDN commodity feed, keyed by market + commodity |
+| `fleet_carrier_materials` | Galaxy-wide Fleet Carrier engineering material listings from EDDN, keyed by market + material |
 | `system_coords` | System coordinates harvested passively from EDDN journal messages, used for Market tab distance filtering |
 | `commodity_names` | Internal-name → display-name mapping, seeded from your own `Market.json` visits |
 | `processed_journals` | Journal files already imported (file name + size) |
