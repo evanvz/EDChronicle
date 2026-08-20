@@ -487,44 +487,63 @@ class _FactionRefreshWorker(QObject):
             # Distance sorting needs system_coords, which the faction
             # endpoint never provides — only fetch it (extra request) for
             # systems that don't already have it, e.g. from EDDN.
-            has_coords = set(repo.get_system_coords_for_names(self._system_names).keys())
+            try:
+                has_coords = set(repo.get_system_coords_for_names(self._system_names).keys())
+            except Exception:
+                log.exception("Failed to load known system coords for full refresh")
+                has_coords = set()
 
             for i, system_name in enumerate(self._system_names, start=1):
                 if self._cancel:
                     break
                 self.progress.emit(i, total, system_name)
 
-                result, error = fetch_system_factions(system_name)
-                if not result:
+                # Any single system's failure (network error, EDSM block,
+                # or a transient DB error like "database is locked" while
+                # another background job holds the write lock) must not
+                # kill the whole refresh silently -- confirmed live: an
+                # uncaught exception here used to skip finished.emit()
+                # below entirely, leaving the UI stuck showing "Refreshing
+                # 0/N..." forever with no way to recover short of an app
+                # restart. One system's failure now just counts as failed
+                # and the loop moves on.
+                try:
+                    result, error = fetch_system_factions(system_name)
+                    if not result:
+                        failed += 1
+                        time.sleep(0.3)
+                        continue
+
+                    snapshot_date = date.today().isoformat()
+                    present_names = set()
+                    for faction in result["factions"]:
+                        is_controlling = bool(faction.pop("is_controlling", False))
+                        data_timestamp = faction.pop("LastUpdate", None)
+                        repo.save_faction_snapshot(
+                            result["system_address"], faction, snapshot_date, is_controlling,
+                            data_timestamp, "edsm",
+                        )
+                        name = (faction.get("Name") or "").strip().lower()
+                        if name:
+                            present_names.add(name)
+
+                    if target and target not in present_names:
+                        repo.dismiss_faction_system(self._squadron_faction_name, result["system_address"])
+                        retreated += 1
+
+                    if system_name not in has_coords:
+                        coords = fetch_system_coords(system_name)
+                        if coords:
+                            now_iso = datetime.now(timezone.utc).isoformat()
+                            repo.save_system_coords_batch([(system_name, *coords, now_iso)])
+
+                    refreshed += 1
+                except Exception:
+                    log.exception("Failed refreshing system %r during full EDSM refresh", system_name)
                     failed += 1
-                    time.sleep(0.3)
-                    continue
-
-                snapshot_date = date.today().isoformat()
-                present_names = set()
-                for faction in result["factions"]:
-                    is_controlling = bool(faction.pop("is_controlling", False))
-                    data_timestamp = faction.pop("LastUpdate", None)
-                    repo.save_faction_snapshot(
-                        result["system_address"], faction, snapshot_date, is_controlling,
-                        data_timestamp, "edsm",
-                    )
-                    name = (faction.get("Name") or "").strip().lower()
-                    if name:
-                        present_names.add(name)
-
-                if target and target not in present_names:
-                    repo.dismiss_faction_system(self._squadron_faction_name, result["system_address"])
-                    retreated += 1
-
-                if system_name not in has_coords:
-                    coords = fetch_system_coords(system_name)
-                    if coords:
-                        now_iso = datetime.now(timezone.utc).isoformat()
-                        repo.save_system_coords_batch([(system_name, *coords, now_iso)])
-
-                refreshed += 1
                 time.sleep(0.3)
+        except Exception:
+            log.exception("Full EDSM refresh aborted unexpectedly")
         finally:
             db.close()
 

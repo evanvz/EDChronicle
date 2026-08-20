@@ -150,3 +150,38 @@ def test_get_market_snapshot_in_radius_excludes_stale_row(repo):
 
     snapshot = repo.get_market_snapshot_in_radius(0.0, 0.0, 0.0, 50.0)
     assert snapshot == {}
+
+
+# ---- prune_stale_market_prices ----
+
+def test_prune_stale_market_prices_deletes_only_rows_past_cutoff(repo):
+    _seed_coords(repo, "Sol", 0.0, 0.0, 0.0)
+    _seed_market_row(repo, 1001, "gold", "Sol", last_updated=_FRESH)
+    _seed_market_row(repo, 1001, "silver", "Sol", last_updated="2026-01-01T00:00:00Z")
+
+    deleted = repo.prune_stale_market_prices()
+
+    assert deleted == 1
+    remaining = repo.db.conn.execute("SELECT commodity_name FROM market_prices").fetchall()
+    assert [r["commodity_name"] for r in remaining] == ["gold"]
+
+
+def test_prune_stale_market_prices_batches_across_boundary(repo):
+    # Regression test: this used to run as one giant DELETE, holding
+    # SQLite's write lock for its entire duration (confirmed live: ~2
+    # minutes at 1.5M+ rows), which starved other concurrent background
+    # writers (the historical journal importer, the Player Faction daily
+    # EDSM refresh) past their 30s busy_timeout, failing with "database is
+    # locked". Now batched, committing after every batch_size rows -- seed
+    # more stale rows than one batch to prove the loop correctly spans
+    # multiple batches and still deletes everything stale.
+    _seed_coords(repo, "Sol", 0.0, 0.0, 0.0)
+    for i in range(5):
+        _seed_market_row(repo, 1001, f"stale{i}", "Sol", last_updated="2026-01-01T00:00:00Z")
+    _seed_market_row(repo, 1001, "gold", "Sol", last_updated=_FRESH)
+
+    deleted = repo.prune_stale_market_prices(batch_size=2)
+
+    assert deleted == 5
+    remaining = repo.db.conn.execute("SELECT commodity_name FROM market_prices").fetchall()
+    assert [r["commodity_name"] for r in remaining] == ["gold"]

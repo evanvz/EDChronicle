@@ -1,4 +1,5 @@
 import json
+import time
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
@@ -949,7 +950,7 @@ class Repository:
         )
         self.db.conn.commit()
 
-    def prune_stale_market_prices(self) -> int:
+    def prune_stale_market_prices(self, batch_size: int = 20_000) -> int:
         """
         Deletes rows already excluded from search results by
         _market_data_cutoff() — a stale row is dead weight once nothing
@@ -957,28 +958,58 @@ class Repository:
         search filter, so this doesn't change what search can find, only
         what's still sitting on disk. Call from a worker thread only — a
         DELETE across the whole market_prices table is not instant at
-        galaxy-wide scale (millions of rows)."""
-        cur = self.db.conn.execute(
-            "DELETE FROM market_prices WHERE last_updated < ?",
-            (_market_data_cutoff(),),
-        )
-        self.db.conn.commit()
-        return cur.rowcount
+        galaxy-wide scale (millions of rows).
 
-    def prune_stale_fleet_carrier_materials(self) -> int:
+        Deleted in batches, each its own committed transaction, rather
+        than one giant DELETE — a single multi-million-row DELETE holds
+        SQLite's write lock for its entire duration (confirmed live: ~2
+        minutes at 1.5M+ rows), which starves every OTHER concurrent
+        background writer (the historical journal importer, the Player
+        Faction daily EDSM refresh) past their 30s busy_timeout, failing
+        with "database is locked". Committing after every batch releases
+        the lock repeatedly, giving other writers a real chance to
+        interleave instead of one long exclusive hold.
+        """
+        cutoff = _market_data_cutoff()
+        total_deleted = 0
+        while True:
+            cur = self.db.conn.execute(
+                "DELETE FROM market_prices WHERE rowid IN "
+                "(SELECT rowid FROM market_prices WHERE last_updated < ? LIMIT ?)",
+                (cutoff, batch_size),
+            )
+            self.db.conn.commit()
+            deleted = cur.rowcount
+            total_deleted += deleted
+            if deleted < batch_size:
+                break
+            time.sleep(0.05)
+        return total_deleted
+
+    def prune_stale_fleet_carrier_materials(self, batch_size: int = 20_000) -> int:
         """
         Deletes rows already excluded from search results by
         _fleet_carrier_cutoff() — same reasoning as prune_stale_market_prices():
         a stale row is dead weight once nothing can ever surface it, not
         just hidden. Same 7-day threshold as the search filter, so this
         doesn't change what search can find, only what's still sitting on
-        disk. Call from a worker thread only."""
-        cur = self.db.conn.execute(
-            "DELETE FROM fleet_carrier_materials WHERE last_updated < ?",
-            (_fleet_carrier_cutoff(),),
-        )
-        self.db.conn.commit()
-        return cur.rowcount
+        disk. Call from a worker thread only. Batched the same way and for
+        the same reason as prune_stale_market_prices()."""
+        cutoff = _fleet_carrier_cutoff()
+        total_deleted = 0
+        while True:
+            cur = self.db.conn.execute(
+                "DELETE FROM fleet_carrier_materials WHERE rowid IN "
+                "(SELECT rowid FROM fleet_carrier_materials WHERE last_updated < ? LIMIT ?)",
+                (cutoff, batch_size),
+            )
+            self.db.conn.commit()
+            deleted = cur.rowcount
+            total_deleted += deleted
+            if deleted < batch_size:
+                break
+            time.sleep(0.05)
+        return total_deleted
 
     def save_commodity_names_batch(self, pairs: list[tuple[str, str]]):
         """

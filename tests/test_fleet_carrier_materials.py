@@ -202,3 +202,25 @@ def test_prune_stale_fleet_carrier_materials_deletes_only_rows_past_7_day_cutoff
         "SELECT material_symbol FROM fleet_carrier_materials"
     ).fetchall()
     assert [r["material_symbol"] for r in remaining] == ["graphene"]
+
+
+def test_prune_stale_fleet_carrier_materials_batches_across_boundary(repo):
+    # Regression test: the prune used to run as one giant DELETE, holding
+    # SQLite's write lock for the whole operation and starving other
+    # concurrent background writers (confirmed live: "database is locked"
+    # in the historical journal importer and the Player Faction daily
+    # refresh worker). Now batched, committing after every batch_size rows
+    # -- seed more stale rows than one batch to prove the loop correctly
+    # spans multiple batches and still deletes everything stale.
+    _seed_station(repo, 1001, "Sol")
+    for i in range(5):
+        _seed_material(repo, 1001, f"stale{i}", last_updated="2026-07-01T00:00:00Z")
+    _seed_material(repo, 1001, "graphene", last_updated=_FRESH)
+
+    deleted = repo.prune_stale_fleet_carrier_materials(batch_size=2)
+
+    assert deleted == 5
+    remaining = repo.db.conn.execute(
+        "SELECT material_symbol FROM fleet_carrier_materials"
+    ).fetchall()
+    assert [r["material_symbol"] for r in remaining] == ["graphene"]
