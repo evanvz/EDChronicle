@@ -92,15 +92,6 @@ class ExplorationPhrases:
         "First one down on {body}. Watch your step regardless.",
     ]
 
-    GEO_SIGNALS = [
-        "Geological signals detected.",
-        "Geo signals on this planet.",
-        "Geological activity detected.",
-        "Ground's active down there, Commander.",
-        "Something's stirring geologically on this body.",
-        "Geological readings worth a look.",
-    ]
-
     GUARDIAN_SIGNALS = [
         "Guardian signal detected. {count} on planet.",
         "{count} Guardian signal on planet.",
@@ -273,10 +264,6 @@ class ExplorationPhrases:
     @staticmethod
     def first_footfall(body: str) -> str:
         return pick(ExplorationPhrases.FIRST_FOOTFALL, body=body)
-
-    @staticmethod
-    def geo_signals(body: str, count: int) -> str:
-        return pick(ExplorationPhrases.GEO_SIGNALS)
 
     @staticmethod
     def guardian_signals(body: str, count: int) -> str:
