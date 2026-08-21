@@ -358,6 +358,7 @@ class TTSEngine:
         self._comms_worker       = None
         self._comms_thread       = None
         self._comms_voice_pool: list[str] = []
+        self._last_comms_voice: str | None = None
         self._output_device_name: str | None = None
 
     def set_output_device(self, device_name: str | None):
@@ -504,7 +505,12 @@ class TTSEngine:
             pass
 
     def speak_comms(self, text: str):
-        """Queue a comms phrase using a randomly picked voice from the pool."""
+        """Queue a comms phrase using a randomly picked voice from the pool,
+        excluding whichever voice spoke last -- plain random.choice() could
+        otherwise pick the same voice several times in a row by chance,
+        which is what made a 10-voice pool feel like only 2-3 voices in
+        practice (confirmed: comms message volume per session is low
+        enough that pure randomness clusters easily)."""
         if not self._comms_enabled:
             return
         if not isinstance(text, str) or not text.strip():
@@ -512,7 +518,14 @@ class TTSEngine:
         if self._comms_queue.qsize() >= 3:
             return
         pool = getattr(self, "_comms_voice_pool", [])
-        voice_id = random.choice(pool) if pool else None
+        if not pool:
+            voice_id = None
+        elif len(pool) == 1:
+            voice_id = pool[0]
+        else:
+            choices = [v for v in pool if v != self._last_comms_voice]
+            voice_id = random.choice(choices)
+        self._last_comms_voice = voice_id
         self._comms_counter += 1
         try:
             self._comms_queue.put_nowait((5, self._comms_counter, text, voice_id))
