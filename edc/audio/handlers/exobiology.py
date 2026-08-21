@@ -9,6 +9,9 @@ class ExobiologyPhrases:
         "Biological contact logged. First of three.",
         "Initial scan complete. Two more required.",
         "Log entry recorded. Two scans remaining.",
+        "{species} — first sample logged. Two to go.",
+        "First reading on {species}. Two more needed.",
+        "Got our first sample of {species}, Commander.",
     ]
 
     SCAN_SECOND = [
@@ -16,6 +19,9 @@ class ExobiologyPhrases:
         "Two of three samples collected.",
         "Sample two confirmed. Final scan needed.",
         "Halfway done. One scan remaining.",
+        "{species} — second sample down. One to go.",
+        "Two samples on {species} now. Last one's up to you.",
+        "Almost there with {species}, Commander.",
     ]
 
     SCAN_THIRD = [
@@ -24,6 +30,9 @@ class ExobiologyPhrases:
         "Three of three. Proceed to analyse.",
         "All samples gathered. Analysis ready.",
         "That's the set, Commander. Run the analysis.",
+        "{species} — full set collected. Ready to analyse.",
+        "Third and final sample of {species} logged.",
+        "That's {species} done, Commander. Analyse when ready.",
     ]
 
     SCAN_COMPLETE = [
@@ -31,6 +40,9 @@ class ExobiologyPhrases:
         "Fully catalogued. You may proceed.",
         "Three samples recorded. Analysis done.",
         "Biological scan complete. Move to next site.",
+        "{species} fully catalogued, Commander.",
+        "That's {species} logged for good. Move on when ready.",
+        "Analysis on {species} complete. Nicely done.",
     ]
 
     SELL_DATA = [
@@ -39,6 +51,9 @@ class ExobiologyPhrases:
         "{count} species sold for {value} million credits.",
         "Data sold. {value} million from {count} organisms.",
         "Not bad, Commander. {value} million for {count} species.",
+        "{count} species logged and sold, {value} million richer for it.",
+        "That data was worth the trip — {value} million for {count} species.",
+        "Vista Genomics just paid {value} million for {count} species, Commander.",
     ]
 
     SCAN_CODEX = [
@@ -46,6 +61,9 @@ class ExobiologyPhrases:
         "{species} — codex entry recorded.",
         "Biological contact. {species}. Codex scan logged.",
         "{species} confirmed via codex scan.",
+        "{species}. Nice find for the codex, Commander.",
+        "Got {species} logged in the codex now.",
+        "{species} — another one for the books.",
     ]
 
     CCR_DISTANCE_REACHED = [
@@ -53,14 +71,19 @@ class ExobiologyPhrases:
         "Minimum distance met. Next sample viable.",
         "You may take the next sample. Distance cleared.",
         "Separation distance achieved. Next sample ready.",
-        "distance met. Proceed to next sample.",
+        "Minimum distance re-established. Proceed to next sample.",
+        "Clear to sample again, Commander.",
+        "Back to a safe distance. Go ahead.",
     ]
 
     CCR_TOO_CLOSE = [
         "Too close. Move further from last scan point.",
-        "distance lost. Move away from previous sample.",
+        "Move away from the previous sample point.",
         "Warning. Inside minimum scan distance.",
         "You have moved too close. Maintain required separation.",
+        "Back off a bit, Commander — too close to the last sample.",
+        "Give it more room. You're inside the minimum distance.",
+        "Step back, Commander. Too close for a clean sample.",
     ]
 
     STAGE_MAP = {
@@ -91,4 +114,3 @@ class ExobiologyPhrases:
         return pick(ExobiologyPhrases.SELL_DATA,
                     value=earnings // 1_000_000,
                     count=species_count)
-

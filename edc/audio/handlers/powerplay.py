@@ -10,6 +10,8 @@ class PowerPlayPhrases:
         "Friendly system. {power} — reinforcement available.",
         "{power} territory. We can reinforce here.",
         "Friendly ground, Commander. Let's shore it up.",
+        "{power} holds this one. Good place to lend a hand.",
+        "{power} space, Commander. Worth reinforcing.",
     ]
 
     PP_REINFORCEMENT_FORTIFIED = [
@@ -17,6 +19,8 @@ class PowerPlayPhrases:
         "{power} fortified system. Reinforcement target.",
         "Friendly stronghold. {power} controls here.",
         "{power} stronghold. Reinforce and defend.",
+        "{power} stronghold, Commander. Already solid, but every bit helps.",
+        "Well-held ground — {power} stronghold here.",
     ]
 
     PP_UNDERMINING = [
@@ -25,6 +29,8 @@ class PowerPlayPhrases:
         "Enemy controlled. {power}. Undermining available.",
         "{power} system. Undermining possible.",
         "Enemy dirt, Commander. Let's make them regret holding it.",
+        "{power} controls this one. Time to make a dent.",
+        "{power} territory, Commander. Ripe for undermining.",
     ]
 
     PP_UNDERMINING_FORTIFIED = [
@@ -32,6 +38,8 @@ class PowerPlayPhrases:
         "{power} stronghold. High resistance — undermining target.",
         "Fortified undermining system. {power} controls here.",
         "{power} has fortified this system. Undermining available.",
+        "Tough nut — {power} stronghold, Commander. Undermining's an uphill fight here.",
+        "{power} dug in deep here. Undermining available regardless.",
     ]
 
     PP_ACQUISITION = [
@@ -40,12 +48,16 @@ class PowerPlayPhrases:
         "No controlling power. Acquisition system.",
         "Acquisition target. System is open.",
         "Nobody's claimed this one yet, Commander. Let's fix that.",
+        "Up for grabs, Commander. Acquisition target.",
+        "This one's free real estate. Acquisition available.",
     ]
 
     PP_ACQUISITION_EXPANSION = [
         "Expansion system. Acquisition in progress.",
         "Active acquisition system. Expansion underway.",
         "Expansion target. Acquisition available.",
+        "Expansion underway here, Commander. Worth pushing.",
+        "System's expanding. Good time to get involved.",
     ]
 
     PP_ACQUISITION_CONTESTED = [
@@ -53,6 +65,8 @@ class PowerPlayPhrases:
         "Contested system. Acquisition available.",
         "PowerPlay contest in progress. Acquisition target.",
         "Contested space. Multiple powers competing.",
+        "More than one power wants this one, Commander.",
+        "Contested ground. Could go either way.",
     ]
 
     PP_NEUTRAL = [
@@ -60,24 +74,32 @@ class PowerPlayPhrases:
         "Uncontested system.",
         "No PowerPlay control here.",
         "Neutral territory.",
+        "Nothing going on here, PowerPlay-wise.",
+        "Quiet system. No PowerPlay activity.",
     ]
 
     PP_POWER_PRESENT = [
         "{power} has presence here. Not the controlling faction.",
         "Our power active in this system. Operating without control.",
         "{power} operating here. No system control.",
+        "{power}'s here, Commander, just not in charge.",
+        "We've got a foothold — {power} present, not controlling.",
     ]
 
     PP_UNDERMINING_PRESENT = [
         "{power} is present. Undermining possible.",
         "Our power has presence here. Undermining viable.",
         "{power} active in this system. Undermining target.",
+        "{power}'s in this system. Undermining's on the table.",
+        "We've got presence here — {power}, undermining possible.",
     ]
 
     PP_NOT_PRESENT = [
         "{power} has no presence in this system.",
         "Our power is not active here.",
         "{power} not present. No undermining opportunity.",
+        "Nothing of ours here, Commander. {power} isn't present.",
+        "{power} has no foothold in this system.",
     ]
 
     @staticmethod

@@ -5,7 +5,16 @@ from edc.audio.tts_phrases import pick
 class ExplorationPhrases:
 
     FSD_JUMP = [
-        "Entering system",
+        "Entering system.",
+        "Jump initiated.",
+        "Hyperspace in three, two, one.",
+        "Here we go, Commander.",
+        "Charging the drive. Hold tight.",
+        "Punching it.",
+        "FSD spooling. This one's for the logbook.",
+        "Away we go.",
+        "Next stop, unknown.",
+        "Committing to the jump.",
     ]
 
     IN_SYSTEM = [
@@ -13,6 +22,10 @@ class ExplorationPhrases:
         "Location: {system}.",
         "{system} system.",
         "In {system}.",
+        "We're in {system} now.",
+        "{system}. Home for now, Commander.",
+        "Dropped into {system}.",
+        "{system} — logged and ready.",
     ]
 
     ARRIVED = [
@@ -22,6 +35,10 @@ class ExplorationPhrases:
         "System entry.",
         "Well, here we are.",
         "Made it in one piece, Commander.",
+        "Systems nominal. We're in.",
+        "Touchdown in normal space.",
+        "That's the jump done.",
+        "Smooth as ever, Commander.",
     ]
 
     VALUABLE_BODIES_SUMMARY = [
@@ -30,6 +47,8 @@ class ExplorationPhrases:
         "{count} bodies worth mapping in this system.",
         "System contains {count} high value planets.",
         "{count} bodies here are worth the detour, Commander.",
+        "Worth slowing down for — {count} high value bodies here.",
+        "{count} bodies could pay for this whole trip, Commander.",
     ]
 
     FSS_COMPLETE = [
@@ -38,6 +57,8 @@ class ExplorationPhrases:
         "Discovery scan finished. {bodies} bodies detected.",
         "{bodies} bodies found. Full system scan complete.",
         "Scan's done. {bodies} on the board.",
+        "{bodies} bodies charted. Nothing hiding from us now, Commander.",
+        "That's the system mapped — {bodies} bodies total.",
     ]
 
     FIRST_DISCOVERY = [
@@ -47,6 +68,8 @@ class ExplorationPhrases:
         "{body} — no prior records. First discovery detected.",
         "New discovery. {body} is uncharted territory.",
         "Nobody's been here before us. {body} — nice find, Commander.",
+        "{body} — first eyes on this one, Commander.",
+        "Nobody's logged {body} before us. Make it count.",
     ]
 
     FIRST_MAPPED = [
@@ -55,6 +78,8 @@ class ExplorationPhrases:
         "First cartographic record. {body} has never been mapped before.",
         "{body} — first mapping confirmed.",
         "Mapped and logged, Commander. Not bad for a day's work.",
+        "{body} — surface fully charted, first time ever.",
+        "{body} done. First map in the books.",
     ]
 
     FIRST_FOOTFALL = [
@@ -63,48 +88,65 @@ class ExplorationPhrases:
         "No prior landings recorded. {body} — first footfall.",
         "{body} — you are the first person to stand here.",
         "First boots on the ground, Commander. Try not to trip.",
+        "{body} — footprints where there were none, Commander.",
+        "First one down on {body}. Watch your step regardless.",
     ]
 
     GEO_SIGNALS = [
         "Geological signals detected.",
         "Geo signals on this planet.",
         "Geological activity detected.",
+        "Ground's active down there, Commander.",
+        "Something's stirring geologically on this body.",
+        "Geological readings worth a look.",
     ]
 
     GUARDIAN_SIGNALS = [
         "Guardian signal detected. {count} on planet.",
         "{count} Guardian signal on planet.",
         "Ancient technology present. {count} Guardian signal.",
+        "Guardian ruins nearby, Commander. {count} signal.",
+        "Old tech on the scanners. {count} Guardian signal.",
     ]
 
     GUARDIAN_SIGNALS_MULTIPLE = [
         "{count} Guardian signals detected.",
         "Multiple Guardian signals. {count} on planet.",
         "Ancient technology detected. {count} Guardian signals.",
+        "{count} Guardian sites here. Worth the trip down, Commander.",
+        "Plenty of old tech on this one — {count} Guardian signals.",
     ]
 
     GUARDIAN_SIGNALS_UNCHARTED = [
         "Uncharted Guardian signals detected. This system is not in the farming guide. Possible new site.",
         "Guardian signals on an uncharted body. {count} signal. Consider logging this location.",
         "Ancient technology detected in an unknown system. {count} Guardian signal. Worth investigating.",
+        "{count} Guardian signal, no record of this site anywhere. Yours to claim, Commander.",
+        "Nobody's logged this one. {count} Guardian signal, uncharted.",
     ]
 
     GUARDIAN_SIGNALS_UNCHARTED_MULTIPLE = [
         "Uncharted Guardian signals. {count} detected. This system is not in the farming guide.",
         "{count} Guardian signals on an uncharted body. Possible undiscovered site.",
         "Multiple Guardian signals in an unknown system. {count} detected. Consider logging this location.",
+        "{count} Guardian signals, none of them logged anywhere. Worth the write-up.",
+        "Fresh find, Commander — {count} Guardian signals, uncharted.",
     ]
 
     THARGOID_SIGNALS = [
         "Thargoid signal detected. {count} on planet.",
         "{count} Thargoid signal. Stay alert, Commander.",
         "Non-human signal detected. {count} Thargoid signal.",
+        "{count} Thargoid signal on this body. Eyes open, Commander.",
+        "Non-human tech nearby. {count} signal. Proceed carefully.",
     ]
 
     THARGOID_SIGNALS_MULTIPLE = [
         "{count} Thargoid signals detected. Stay alert.",
         "Multiple Thargoid signals. {count} on planet.",
         "Non-human signatures detected. {count} Thargoid signals.",
+        "{count} Thargoid signals here. Tread carefully, Commander.",
+        "Non-human presence confirmed. {count} signals — stay sharp.",
     ]
 
     HUMAN_SIGNALS = [
@@ -112,6 +154,8 @@ class ExplorationPhrases:
         "Human-origin signal, unidentified. Could be a wreck, could be a settlement.",
         "Unidentified human site on this body.",
         "POI detected, human origin. Type unknown until we're closer.",
+        "Something man-made down there, unidentified.",
+        "Unknown human structure detected. Could be worth a look.",
     ]
 
     SAA_COMPLETE = [
@@ -120,6 +164,8 @@ class ExplorationPhrases:
         "DSS mapping complete on {body}.",
         "Probe mapping done. {body} charted.",
         "{body}, mapped top to bottom. Good work.",
+        "{body} — every inch mapped, Commander.",
+        "Full surface data on {body}. Job done.",
     ]
 
     MEGASHIP_PP_MERITS = [
@@ -127,30 +173,40 @@ class ExplorationPhrases:
         "Megaship on sensors. Scan for merits.",
         "Megaship signal confirmed. Worth scanning.",
         "Megaship in range. PowerPlay merits available.",
+        "Big contact on sensors — megaship, merits up for grabs.",
+        "Megaship nearby. Don't let those merits go to waste, Commander.",
     ]
 
     NHSS_DETECTED = [
         "Non-human signal source detected. Threat level {threat}.",
         "Non-human signal source on sensors. Threat level {threat}.",
         "Caution. Non-human signal source. Threat level {threat}.",
+        "Something non-human out there. Threat level {threat}, Commander.",
+        "Unidentified non-human contact. Threat level {threat} — proceed with care.",
     ]
 
     MEGASHIP_PP_UNDERMINING = [
         "Megaship detected. Scan for undermining merits.",
         "Megaship on sensors. Undermining merits available.",
         "Megaship signal. Undermining target — scan it.",
+        "Megaship in range — good target for undermining, Commander.",
+        "There's our undermining opportunity. Megaship on sensors.",
     ]
 
     MEGASHIP_PP_REINFORCEMENT = [
         "Megaship detected. Scan for reinforcement merits.",
         "Megaship on sensors. Reinforcement merits available.",
         "Megaship signal. Reinforce — scan the megaship.",
+        "Megaship in range — good target for reinforcement, Commander.",
+        "There's our reinforcement opportunity. Megaship on sensors.",
     ]
 
     MEGASHIP_PP_ACQUISITION = [
         "Megaship detected. Scan for acquisition merits.",
         "Megaship on sensors. Acquisition merits available.",
         "Megaship signal. Acquisition target — scan it.",
+        "Megaship in range — good target for acquisition, Commander.",
+        "There's our acquisition opportunity. Megaship on sensors.",
     ]
 
     CODEX_ENTRY = [
@@ -159,6 +215,8 @@ class ExplorationPhrases:
         "Codex updated. {name} recorded.",
         "New entry. {name}.",
         "Something new for the logbook. {name}.",
+        "{name}. One more for the collection, Commander.",
+        "Logged: {name}.",
     ]
 
     PHENOMENA_DETECTED = [
@@ -166,6 +224,8 @@ class ExplorationPhrases:
         "Notable phenomena on sensors.",
         "Sensors picking up something unusual out there.",
         "Worth a look, Commander — stellar phenomena detected.",
+        "Something odd out there, Commander. Stellar phenomena on sensors.",
+        "Not your average reading — phenomena detected.",
     ]
 
     @staticmethod

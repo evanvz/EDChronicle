@@ -9,6 +9,9 @@ class CombatPhrases:
         "{faction} issued {credits} credit bounty. Received.",
         "Bounty of {credits} credits received.",
         "Combat voucher received. {credits}",
+        "That's {credits} credits, courtesy of {faction}.",
+        "{faction} bounty paid out. {credits} credits in the bank.",
+        "Nice one, Commander. {credits} credits from {faction}.",
     ]
 
     INTERDICTION = [
@@ -17,6 +20,9 @@ class CombatPhrases:
         "Hostile interdiction incoming. Evade or submit.",
         "Frame shift interference. Interdiction in progress.",
         "Someone is pulling us out. Engage evasion.",
+        "Brace, Commander — we're being pulled out.",
+        "Contact's got a lock on us. Evasive action.",
+        "Here we go — interdiction incoming.",
     ]
 
     ESCAPE_INTERDICTION = [
@@ -24,6 +30,9 @@ class CombatPhrases:
         "Evasion successful. We are clear.",
         "Interdiction broken. Resuming cruise.",
         "Clear of gravity well. Good flying, Commander.",
+        "Shook them off. Back to cruise.",
+        "That's them dealt with. Resuming course.",
+        "Nice flying, Commander — we're clear.",
     ]
 
     UNDER_ATTACK = [
@@ -31,12 +40,18 @@ class CombatPhrases:
         "Hull under attack.",
         "Incoming fire detected.",
         "Combat alert. Taking damage.",
+        "We're being hit, Commander.",
+        "Shields down, taking fire.",
+        "Return fire or evade, your call, Commander.",
     ]
 
     KILL_BOND = [
         "Kill bond awarded received. {credits} credits from {faction}.",
         "Combat bond from {faction}. {credits} credits received.",
         "{credits} credits received.",
+        "That's {credits} credits from {faction}, well earned.",
+        "Combat bond secured. {credits} credits, courtesy of {faction}.",
+        "{credits} credits banked from {faction}.",
     ]
 
     NPC_CHALLENGE = [
@@ -46,6 +61,9 @@ class CombatPhrases:
         "Noted. Arming up. Let's see how brave they really are.",
         "They want a fight. Happy to oblige.",
         "Copy that. Targeting solutions ready, Commander.",
+        "Bring it on, then.",
+        "Let's see what they've got, Commander.",
+        "Challenge accepted.",
     ]
 
     WANTED_TARGET_SCAN = [
@@ -55,6 +73,9 @@ class CombatPhrases:
         "Bounty confirmed. Permission to engage, Commander?",
         "That one's wanted. Let's make this count.",
         "Good news, Commander. That target's worth credits.",
+        "Wanted status confirmed. Free to engage, Commander.",
+        "That's a paying target, Commander.",
+        "They've got a bounty on them. Your call.",
     ]
 
     POWERPLAY_ENEMY_SCAN = [
@@ -63,6 +84,9 @@ class CombatPhrases:
         "That's an enemy of the cause. No bounty on them, but push them back.",
         "Rival colours. This is our space -- let's remind them.",
         "Hostile power signature. Contest them, Commander.",
+        "Rival power. No bounty risk here, Commander.",
+        "Enemy of our cause, right in our own territory.",
+        "Fair game, Commander — rival power detected.",
     ]
 
     HIGH_VALUE_CONTACT_SCAN = [
@@ -71,6 +95,9 @@ class CombatPhrases:
         "That one's dangerous. Your call, Commander.",
         "Elite-rated contact in the area. Proceed with caution.",
         "Combat-capable target nearby. Handle as needed.",
+        "Sensors flag this one as dangerous, Commander.",
+        "Worth extra caution — high-value contact nearby.",
+        "That's not a pushover, Commander. Stay sharp.",
     ]
 
     @staticmethod
