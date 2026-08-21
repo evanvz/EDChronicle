@@ -23,13 +23,13 @@ def _install_exception_hook():
 
     def main_hook(exc_type, exc_value, exc_tb):
         _log.critical("Unhandled exception in main thread:\n%s",
-                      "".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
+                    "".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
     sys.excepthook = main_hook
 
     def thread_hook(args):
         _log.critical("Unhandled exception in thread '%s':\n%s",
-                      args.thread.name if args.thread else "unknown",
-                      "".join(traceback.format_exception(args.exc_type, args.exc_value, args.exc_tb)))
+                    args.thread.name if args.thread else "unknown",
+                    "".join(traceback.format_exception(args.exc_type, args.exc_value, args.exc_tb)))
     threading.excepthook = thread_hook
 
     try:

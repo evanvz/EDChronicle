@@ -12,11 +12,11 @@ class SystemDataLoader:
     """
 
     def __init__(self, state, repo, planet_values,
-                 on_refresh_exploration,
-                 on_refresh_materials_shortlist,
-                 on_refresh_exobiology,
-                 planet_value_class_name_fn,
-                 on_enrichment_needed=None):
+                on_refresh_exploration,
+                on_refresh_materials_shortlist,
+                on_refresh_exobiology,
+                planet_value_class_name_fn,
+                on_enrichment_needed=None):
         self.state = state
         self.repo = repo
         self.planet_values = planet_values

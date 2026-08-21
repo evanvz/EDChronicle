@@ -102,8 +102,8 @@ class ConfigStore:
         Returns: (migrated_data, changed)
 
         v1 -> v2:
-          - normalize min_planet_value_100k
-          - add schema_version
+        - normalize min_planet_value_100k
+        - add schema_version
         """
         changed = False
 
