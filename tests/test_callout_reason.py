@@ -35,15 +35,28 @@ def test_wanted_is_enemy_when_rank_unknown():
     assert result == "enemy"
 
 
-def test_wanted_below_player_rank_is_none():
-    # A Wanted ship ranked below the player's own Combat rank is trivial --
-    # not worth a callout.
+def test_wanted_4_ranks_below_player_is_none():
+    # Elite Dangerous's own combat-rank formula (max(0, 1 + 0.25*(target -
+    # player))) hits exactly zero progress 4 tiers below the player's own
+    # rank -- not worth a callout at that point.
     result = _callout_reason(
         hostile=False, enemy=False, wanted=True, power="", faction="", pledged="",
         squadron_faction="", ctrl="", system_powers=[], pp_state="",
-        pilot_rank="Novice", player_combat_rank=6,  # player: Dangerous
+        pilot_rank="Novice", player_combat_rank=6,  # player: Dangerous, target 4 tiers below
     )
     assert result is None
+
+
+def test_wanted_3_ranks_below_player_still_earns_points_is_enemy():
+    # 3 tiers below still earns non-zero rank progress (0.25x per the
+    # formula) -- still worth a callout, unlike the old hard floor which
+    # required at-or-above.
+    result = _callout_reason(
+        hostile=False, enemy=False, wanted=True, power="", faction="", pledged="",
+        squadron_faction="", ctrl="", system_powers=[], pp_state="",
+        pilot_rank="Competent", player_combat_rank=6,  # player: Dangerous, target 3 tiers below
+    )
+    assert result == "enemy"
 
 
 def test_wanted_at_or_above_player_rank_is_enemy():
@@ -103,23 +116,41 @@ def test_plain_clean_no_signals_is_none():
     assert result is None
 
 
-def test_own_power_never_called_out_even_if_wanted():
-    # A ship can't really be both "ours" and Wanted in practice, but the
-    # own-side exclusion must still win if it somehow were -- checked
-    # first, unconditionally, per the design: we don't shoot our own.
+def test_own_power_clean_ship_never_called_out():
     result = _callout_reason(
-        hostile=False, enemy=False, wanted=True, power="Aisling Duval", faction="", pledged="Aisling Duval",
+        hostile=False, enemy=False, wanted=False, power="Aisling Duval", faction="", pledged="Aisling Duval",
         squadron_faction="", ctrl="Aisling Duval", system_powers=[], pp_state="",
     )
     assert result is None
 
 
-def test_own_squadron_faction_never_called_out():
+def test_own_squadron_faction_clean_ship_never_called_out():
+    result = _callout_reason(
+        hostile=False, enemy=False, wanted=False, power="", faction="Our Faction", pledged="",
+        squadron_faction="Our Faction", ctrl="", system_powers=[], pp_state="",
+    )
+    assert result is None
+
+
+def test_own_squadron_faction_wanted_ship_still_called_out():
+    # Confirmed live: 500k+ bounty Wanted ships belonging to our own
+    # squadron-aligned faction (that faction's own criminals) were being
+    # silently suppressed by the own-faction exclusion. Wanted means the
+    # faction itself has already flagged this ship -- not "ours" to
+    # protect just because the faction name matches.
     result = _callout_reason(
         hostile=False, enemy=False, wanted=True, power="", faction="Our Faction", pledged="",
         squadron_faction="Our Faction", ctrl="", system_powers=[], pp_state="",
     )
-    assert result is None
+    assert result == "enemy"
+
+
+def test_own_power_hostile_ship_still_called_out():
+    result = _callout_reason(
+        hostile=True, enemy=False, wanted=False, power="Aisling Duval", faction="", pledged="Aisling Duval",
+        squadron_faction="", ctrl="Aisling Duval", system_powers=[], pp_state="",
+    )
+    assert result == "enemy"
 
 
 def test_internal_security_faction_never_called_out():

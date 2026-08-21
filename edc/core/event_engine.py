@@ -93,10 +93,17 @@ _COMBAT_RANK_TIERS = (
 
 def _wanted_rank_meets_player(pilot_rank: str, player_combat_rank: int | None) -> bool:
     """
-    True if a Wanted contact's rank is at or above the player's own Combat
-    rank -- below that, killing it is trivial and not worth interrupting
-    for. Missing/unparseable data defaults to True (still call out): we'd
-    rather over-call on an unknown than silently drop a real one.
+    True if killing a Wanted contact of this rank would still earn the
+    player non-zero Combat rank progress. Elite Dangerous's own combat-
+    rank formula is progress_multiplier = max(0, 1.0 + 0.25 * (target_idx
+    - player_idx)) -- confirmed against two independent community data
+    points (a Deadly-rank player: Elite=1.25/Deadly=1.00/Dangerous=0.75/
+    Master=0.50/Expert=0.25/below Expert=0; a Novice-rank player:
+    Harmless=0.5/Elite=2.5 -- both fit this formula exactly). That hits
+    zero exactly 4 tiers below the player's own rank, so a target ranked
+    up to 3 tiers below still counts. Missing/unparseable data defaults
+    to True (still call out): we'd rather over-call on an unknown than
+    silently drop a real one.
     """
     if player_combat_rank is None:
         return True
@@ -104,7 +111,7 @@ def _wanted_rank_meets_player(pilot_rank: str, player_combat_rank: int | None) -
         idx = _COMBAT_RANK_TIERS.index((pilot_rank or "").strip().lower())
     except ValueError:
         return True
-    return idx >= player_combat_rank
+    return idx >= player_combat_rank - 3
 
 
 def _callout_reason(
@@ -118,10 +125,11 @@ def _callout_reason(
     callout at all (any callout, not which words to use).
 
     Callout-worthy: LegalStatus Hostile or Enemy (unconditional -- the game
-    has already decided this is fair game), a Wanted ship ranked at or
-    above the player's own Combat rank (see _wanted_rank_meets_player --
-    a Wanted ship far below our own rank is trivial, not worth a callout),
-    or a rival PowerPlay power's ship while we hold PP stake in this system
+    has already decided this is fair game), a Wanted ship still worth
+    non-zero Combat rank progress against the player's own rank (see
+    _wanted_rank_meets_player -- a Wanted ship far enough below our own
+    rank earns nothing, not worth a callout), or a rival PowerPlay power's
+    ship while we hold PP stake in this system
     (control it, are one of the contesting powers, or it's Contested).
 
     Combat rank alone (outside the Wanted-rank check above) is never a
@@ -131,16 +139,23 @@ def _callout_reason(
     Removed; rank still affects phrase wording (CombatPhrases.ship_targeted's
     "High value target" clause).
 
-    Never fires for a ship that's ours -- our pledged PowerPlay power, or
-    our squadron-aligned faction -- regardless of category, checked first:
-    we don't shoot our own. Also never fires for law enforcement/security
-    faction ships.
+    Never fires for a Clean ship that's ours -- our pledged PowerPlay
+    power, or our squadron-aligned faction -- we don't shoot our own. But
+    that protection doesn't extend to a Hostile/Enemy/Wanted ship even
+    from our own faction/power: LegalStatus already means the game (or
+    that faction's own bounty system) has decided this one is fair game,
+    membership be damned (confirmed live: 500k+ bounty Wanted ships
+    belonging to our own squadron-aligned faction -- i.e. that faction's
+    own criminals -- were being silently suppressed here). Also never
+    fires for law enforcement/security faction ships, regardless of
+    category.
     """
     power_l = (power or "").strip().lower()
     pledged_l = (pledged or "").strip().lower()
     is_own_power = bool(pledged_l and power_l and power_l == pledged_l)
     is_own_faction = bool(squadron_faction and faction and faction == squadron_faction)
-    if is_own_power or is_own_faction:
+    legally_fair_game = hostile or enemy or wanted
+    if (is_own_power or is_own_faction) and not legally_fair_game:
         return None
 
     faction_l = (faction or "").strip().lower()
