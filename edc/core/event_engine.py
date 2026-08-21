@@ -490,8 +490,15 @@ class EventEngine:
                         prog[rec["Power"]] = float(cp)
             self.state.system_powerplay_conflict_progress = prog
             self._apply_external_intel(self.state.system, event.get("SystemAddress"))
+            self.state.is_docked = bool(event.get("Docked"))
             if self.state.system:
                 msgs.append(f"Location: {self.state.system}")
+
+        elif name == "Docked":
+            self.state.is_docked = True
+
+        elif name == "Undocked":
+            self.state.is_docked = False
 
         elif name == "FSDJump":
             new_sys = event.get("StarSystem", self.state.system)
@@ -881,8 +888,13 @@ class EventEngine:
                     f"| Total: {self.state.pp_merits:,}"
                 )
                 # PP enemy kills (Clean legal status) fire only PowerplayMerits,
-                # not Bounty/FactionKillBond/CommitCrime. Large merit gains = kill.
-                if gained >= 30:
+                # not Bounty/FactionKillBond/CommitCrime, so a large gain was
+                # being taken as "must be a kill" -- but PP commodity trade
+                # delivery also grants large PowerplayMerits chunks (confirmed
+                # live: a dockside MarketSell of a PP trade good produced a
+                # 3960-merit gain, miscounted as a phantom kill). Kills can't
+                # happen while docked, so that's excluded here.
+                if gained >= 30 and not self.state.is_docked:
                     try:
                         ts = event.get("timestamp") or ""
                         cur_key = (getattr(self.state, "combat_current_key", "") or
