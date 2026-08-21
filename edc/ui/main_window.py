@@ -3053,7 +3053,18 @@ class MainWindow(QMainWindow):
     def _on_voice_unrecognised(self):
         """Trigger word was heard but the phrase matched nothing — closing
         click (with static tail) so the user knows to just retry instead of
-        wondering if the system hung."""
+        wondering if the system hung.
+
+        Only played when push-to-talk is enabled. Holding the PTT key is a
+        deliberate "I'm trying a command now" gesture, so an unrecognised
+        result there is real feedback. Without PTT (always-listening/auto
+        mode), trigger detection also accepts Vosk's early partial results
+        for responsiveness — background game audio/dialogue misheard as
+        the trigger word is common, and since nothing deliberate preceded
+        it, the click just reads as a harsh, unexplained noise (confirmed
+        via user report) rather than useful feedback."""
+        if not getattr(self.cfg, "push_to_talk_enabled", False):
+            return
         self._play_radio_click(end=True)
 
     def _on_voice_command(self, tab_name: str):
