@@ -85,26 +85,51 @@ def _engage_risk(wanted: bool, hostile: bool, power: str | None, pledged: str | 
     return "unknown"
 
 
+_COMBAT_RANK_TIERS = (
+    "harmless", "mostly harmless", "novice", "competent",
+    "expert", "master", "dangerous", "deadly", "elite",
+)
+
+
+def _wanted_rank_meets_player(pilot_rank: str, player_combat_rank: int | None) -> bool:
+    """
+    True if a Wanted contact's rank is at or above the player's own Combat
+    rank -- below that, killing it is trivial and not worth interrupting
+    for. Missing/unparseable data defaults to True (still call out): we'd
+    rather over-call on an unknown than silently drop a real one.
+    """
+    if player_combat_rank is None:
+        return True
+    try:
+        idx = _COMBAT_RANK_TIERS.index((pilot_rank or "").strip().lower())
+    except ValueError:
+        return True
+    return idx >= player_combat_rank
+
+
 def _callout_reason(
     hostile: bool, enemy: bool, wanted: bool, power: str, faction: str,
     pledged: str, squadron_faction: str,
     ctrl: str, system_powers: list, pp_state: str,
+    pilot_rank: str = "", player_combat_rank: int | None = None,
 ) -> str | None:
     """
     Returns "enemy" or None -- whether a scanned contact is worth a voice
     callout at all (any callout, not which words to use).
 
-    Callout-worthy: LegalStatus Hostile, Enemy, or Wanted (unconditional --
-    the game has already decided this is fair game), or a rival PowerPlay
-    power's ship while we hold PP stake in this system (control it, are
-    one of the contesting powers, or it's Contested).
+    Callout-worthy: LegalStatus Hostile or Enemy (unconditional -- the game
+    has already decided this is fair game), a Wanted ship ranked at or
+    above the player's own Combat rank (see _wanted_rank_meets_player --
+    a Wanted ship far below our own rank is trivial, not worth a callout),
+    or a rival PowerPlay power's ship while we hold PP stake in this system
+    (control it, are one of the contesting powers, or it's Contested).
 
-    Combat rank alone is never a reason to call a ship out -- an earlier
-    version added a rank-tier-in-relevant-system trigger, but live testing
-    showed it fired for plenty of Clean, non-wanted ships the player had
-    no reason to act on. Removed; rank still affects phrase wording
-    (CombatPhrases.ship_targeted's "High value target" clause) but no
-    longer gates whether anything is said at all.
+    Combat rank alone (outside the Wanted-rank check above) is never a
+    reason to call a ship out -- an earlier version added a rank-tier-in-
+    relevant-system trigger, but live testing showed it fired for plenty
+    of Clean, non-wanted ships the player had no reason to act on.
+    Removed; rank still affects phrase wording (CombatPhrases.ship_targeted's
+    "High value target" clause).
 
     Never fires for a ship that's ours -- our pledged PowerPlay power, or
     our squadron-aligned faction -- regardless of category, checked first:
@@ -122,7 +147,9 @@ def _callout_reason(
     if "internal security" in faction_l or "security service" in faction_l:
         return None
 
-    if hostile or enemy or wanted:
+    if hostile or enemy:
+        return "enemy"
+    if wanted and _wanted_rank_meets_player(pilot_rank, player_combat_rank):
         return "enemy"
 
     in_my_pp_space = bool(pledged_l and (

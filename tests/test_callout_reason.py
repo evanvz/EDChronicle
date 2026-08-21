@@ -25,13 +25,41 @@ def test_legal_enemy_is_enemy_unconditional():
     assert result == "enemy"
 
 
-def test_wanted_is_enemy_unconditional():
-    # Confirmed via live testing: a plain Wanted ship must always be called
-    # out, regardless of rank/PP/BGS relevance -- the game has already
-    # decided this is fair game.
+def test_wanted_is_enemy_when_rank_unknown():
+    # No pilot_rank/player_combat_rank supplied -- defaults permissive
+    # (still called out), same as before rank-gating existed.
     result = _callout_reason(
         hostile=False, enemy=False, wanted=True, power="", faction="", pledged="",
         squadron_faction="", ctrl="", system_powers=[], pp_state="",
+    )
+    assert result == "enemy"
+
+
+def test_wanted_below_player_rank_is_none():
+    # A Wanted ship ranked below the player's own Combat rank is trivial --
+    # not worth a callout.
+    result = _callout_reason(
+        hostile=False, enemy=False, wanted=True, power="", faction="", pledged="",
+        squadron_faction="", ctrl="", system_powers=[], pp_state="",
+        pilot_rank="Novice", player_combat_rank=6,  # player: Dangerous
+    )
+    assert result is None
+
+
+def test_wanted_at_or_above_player_rank_is_enemy():
+    result = _callout_reason(
+        hostile=False, enemy=False, wanted=True, power="", faction="", pledged="",
+        squadron_faction="", ctrl="", system_powers=[], pp_state="",
+        pilot_rank="Dangerous", player_combat_rank=6,  # player: Dangerous
+    )
+    assert result == "enemy"
+
+
+def test_wanted_unparseable_rank_is_enemy():
+    result = _callout_reason(
+        hostile=False, enemy=False, wanted=True, power="", faction="", pledged="",
+        squadron_faction="", ctrl="", system_powers=[], pp_state="",
+        pilot_rank="", player_combat_rank=6,
     )
     assert result == "enemy"
 

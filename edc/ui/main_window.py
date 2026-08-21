@@ -2604,9 +2604,11 @@ class MainWindow(QMainWindow):
                 is_high_value = bool((not is_enemy) and wanted and bounty > 500_000 and top_rank)
 
                 squadron_faction = squadron_faction_name(getattr(state, "factions", None))
+                player_combat_rank = (getattr(state, "ranks", None) or {}).get("Combat")
                 callout_reason = _callout_reason(
                     hostile, legal_enemy, wanted, power, faction_raw, pledged, squadron_faction,
                     ctrl, system_powers, pp_state,
+                    pilot_rank=rank, player_combat_rank=player_combat_rank,
                 )
                 if callout_reason is None:
                     return ""
@@ -3195,10 +3197,12 @@ class MainWindow(QMainWindow):
             )
             if not contact:
                 return
+            player_combat_rank = (getattr(self.state, "ranks", None) or {}).get("Combat")
             reason = _callout_reason(
                 bool(contact.get("Hostile")), bool(contact.get("Enemy")), bool(contact.get("Wanted")),
                 contact.get("Power", ""), contact.get("Faction", ""),
                 pledged, squadron_faction, ctrl, system_powers, pp_state,
+                pilot_rank=contact.get("Rank", ""), player_combat_rank=player_combat_rank,
             )
             if reason is not None:
                 quip = CombatPhrases.npc_challenge()
@@ -3212,9 +3216,12 @@ class MainWindow(QMainWindow):
             legal_enemy = legal == "enemy"
             bounty = evt.get("Bounty")
             faction = evt.get("Faction") or ""
+            pilot_rank = str(evt.get("PilotRank") or "").strip()
+            player_combat_rank = (getattr(self.state, "ranks", None) or {}).get("Combat")
             reason = _callout_reason(
                 hostile, legal_enemy, wanted, power, faction, pledged, squadron_faction,
                 ctrl, system_powers, pp_state,
+                pilot_rank=pilot_rank, player_combat_rank=player_combat_rank,
             )
             if reason is not None:
                 quip = _wording(reason, wanted, bounty, power)
