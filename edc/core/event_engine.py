@@ -490,15 +490,8 @@ class EventEngine:
                         prog[rec["Power"]] = float(cp)
             self.state.system_powerplay_conflict_progress = prog
             self._apply_external_intel(self.state.system, event.get("SystemAddress"))
-            self.state.is_docked = bool(event.get("Docked"))
             if self.state.system:
                 msgs.append(f"Location: {self.state.system}")
-
-        elif name == "Docked":
-            self.state.is_docked = True
-
-        elif name == "Undocked":
-            self.state.is_docked = False
 
         elif name == "FSDJump":
             new_sys = event.get("StarSystem", self.state.system)
@@ -887,33 +880,15 @@ class EventEngine:
                     f"| Session: +{self.state.pp_merits_session:,} "
                     f"| Total: {self.state.pp_merits:,}"
                 )
-                # PP enemy kills (Clean legal status) fire only PowerplayMerits,
-                # not Bounty/FactionKillBond/CommitCrime, so a large gain was
-                # being taken as "must be a kill" -- but PP commodity trade
-                # delivery also grants large PowerplayMerits chunks (confirmed
-                # live: a dockside MarketSell of a PP trade good produced a
-                # 3960-merit gain, miscounted as a phantom kill). Kills can't
-                # happen while docked, so that's excluded here.
-                if gained >= 30 and not self.state.is_docked:
-                    try:
-                        ts = event.get("timestamp") or ""
-                        cur_key = (getattr(self.state, "combat_current_key", "") or
-                                   getattr(self.state, "combat_last_key", "")) or ""
-                        kill_key = f"kill|{ts}|{cur_key}"
-                        if kill_key not in self.state.counted_combat_keys:
-                            self.state.counted_combat_keys.add(kill_key)
-                            self.state.session_kills += 1
-                    except Exception:
-                        pass
-                    try:
-                        cur_key = (getattr(self.state, "combat_current_key", "") or
-                                   getattr(self.state, "combat_last_key", "")) or ""
-                        contacts = getattr(self.state, "combat_contacts", None) or {}
-                        if cur_key and cur_key in contacts and isinstance(contacts[cur_key], dict):
-                            contacts[cur_key]["Destroyed"] = True
-                            self.state.combat_contacts = contacts
-                    except Exception:
-                        pass
+                # A large gain here used to be treated as proof of a PP-enemy
+                # kill (no dedicated kill event exists for one) -- dropped:
+                # PP commodity-trade delivery also grants large single-gain
+                # merit chunks (confirmed live: a dockside MarketSell of a PP
+                # trade good produced a 3960-merit gain, miscounted as a
+                # phantom kill), and merit size alone can't tell the two
+                # apart. session_kills now only counts an actual kill event
+                # (Bounty, FactionKillBond, CommitCrime murder) -- a PP-enemy
+                # kill with no such event goes uncounted rather than guessed.
 
         elif name == "Cargo":
             self.state.cargo_count = event.get("Count")

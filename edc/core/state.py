@@ -10,7 +10,6 @@ class GameState:
     credits: Optional[int] = None
     system: Optional[str] = None
     system_address: Optional[int] = None
-    is_docked: bool = False
     system_x: Optional[float] = None
     system_y: Optional[float] = None
     system_z: Optional[float] = None
