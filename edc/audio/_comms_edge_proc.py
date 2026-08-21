@@ -62,6 +62,56 @@ def _make_radio_end_click(sr: int, volume: float) -> "np.ndarray":
     return np.concatenate([click, tail]).astype("float32")
 
 
+_SIGNAL_QUALITY_PRESETS = [
+    {"name": "clear",       "weight": 45, "drive": 5.0,  "noise": 0.003, "dropout_chance": 0.0},
+    {"name": "weak",        "weight": 30, "drive": 8.0,  "noise": 0.006, "dropout_chance": 0.25},
+    {"name": "poor",        "weight": 17, "drive": 11.0, "noise": 0.012, "dropout_chance": 0.55},
+    {"name": "breaking_up", "weight": 8,  "drive": 9.0,  "noise": 0.010, "dropout_chance": 0.85},
+]
+
+
+def _pick_signal_quality() -> dict:
+    """Picks one signal-quality preset per transmission -- distortion drive,
+    noise floor, and dropout chance are bundled together rather than
+    randomized independently, since real radio signal quality is one
+    correlated thing (a weak signal is distorted AND noisy AND prone to
+    dropouts together, not each on its own dice roll). Weighted so most
+    transmissions come through clear/mostly-fine and "breaking up" is rare."""
+    weights = [p["weight"] for p in _SIGNAL_QUALITY_PRESETS]
+    import random
+    return random.choices(_SIGNAL_QUALITY_PRESETS, weights=weights, k=1)[0]
+
+
+def _apply_dropouts(data: "np.ndarray", sr: int, chance: float) -> "np.ndarray":
+    """Randomly attenuates 1-3 short windows (60-220ms) of the waveform to
+    simulate a weak/breaking-up radio signal cutting in and out. `chance`
+    is the probability that ANY dropout happens in this message at all --
+    most calls with a low/zero chance return the data unchanged. Windows
+    fade down and back up rather than snapping to silence (a real weak
+    signal fades, it doesn't cut to instant dead air), and are pulled down
+    to a faint residual level rather than fully muted."""
+    import random
+    import numpy as np
+
+    if random.random() >= chance or len(data) < sr * 0.3:
+        return data
+    data = data.copy()
+    num_dropouts = random.randint(1, 3)
+    for _ in range(num_dropouts):
+        dropout_len = random.randint(int(sr * 0.06), int(sr * 0.22))
+        if dropout_len >= len(data):
+            continue
+        start = random.randint(0, len(data) - dropout_len)
+        fade = int(sr * 0.015)
+        window = np.full(dropout_len, 0.08, dtype="float32")
+        if fade * 2 < dropout_len:
+            ramp = np.linspace(1.0, 0.08, fade).astype("float32")
+            window[:fade] = ramp
+            window[-fade:] = ramp[::-1]
+        data[start:start + dropout_len] *= window
+    return data
+
+
 def _to_stereo(mono: "np.ndarray", pan: float, left_gain: float, right_gain: float) -> "np.ndarray":
     import numpy as np
     return np.column_stack([mono * left_gain, mono * right_gain]).astype("float32")
@@ -120,10 +170,12 @@ def _dsp_and_play(pcm_bytes: bytes, sample_rate: int, volume: float, pan: float,
     if peak > 0:
         data = data / peak * 0.85
 
+    quality = _pick_signal_quality()
     sos = butter(5, [400, 2800], btype="band", fs=sr, output="sos")
     data = sosfilt(sos, data)
-    data = np.tanh(data * 7.0) / 7.0
-    data += np.random.normal(0, 0.004, len(data)).astype("float32")
+    data = np.tanh(data * quality["drive"]) / quality["drive"]
+    data = _apply_dropouts(data, sr, quality["dropout_chance"])
+    data += np.random.normal(0, quality["noise"], len(data)).astype("float32")
     data = np.clip(data * float(volume) * 1.8, -1.0, 1.0)
 
     pan_start = float(max(-1.0, min(1.0, pan)))
