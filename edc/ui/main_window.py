@@ -2299,8 +2299,15 @@ class MainWindow(QMainWindow):
 
         if tts_text:
             if name == "StartJump":
-                _p = self._tts_priority(name)
-                QTimer.singleShot(5000, lambda t=tts_text, p=_p: self.tts.speak(t, priority=p))
+                # Spoken immediately, not delayed -- this is the "here we
+                # go" cue at the moment the jump is initiated. A prior
+                # 5-second artificial delay here meant the line often
+                # played after the jump was already well underway
+                # (confirmed live) -- there's no technical reason to wait,
+                # unlike FSDJump/Location's delay below, which plausibly
+                # waits out the game's own arrival cinematic before
+                # announcing arrival details.
+                self.tts.speak(tts_text, priority=self._tts_priority(name))
             elif name in ("FSDJump", "Location", "LoadGame"):
                 _p = self._tts_priority(name)
                 QTimer.singleShot(8000, lambda t=tts_text, p=_p: self.tts.speak(t, priority=p))
