@@ -64,6 +64,7 @@ class AppConfig:
                 "SAAScanComplete": False,
                 "Disembark": True,
                 "FSSAllBodiesFound": True,
+                "FSSSignalDiscovered": True,
                 "UnderAttack": True,
                 "ShipTargeted": True,
                 "Bounty": True,
