@@ -469,15 +469,21 @@ class EventEngine:
         elif name == "FSDJump":
             new_sys = event.get("StarSystem", self.state.system)
             new_system_address = event.get("SystemAddress")
+            # FSDJump can re-fire for the system we're already in (e.g.
+            # journal replay after a disconnect/reconnect) -- clearing
+            # unconditionally dropped resolved_body_ids to just the entry
+            # body every time, producing a false "bodies unresolved"
+            # regression despite nothing having changed. Only clear on a
+            # genuine system change, like Location does.
+            system_changed = new_sys != self.state.system or (
+                isinstance(new_system_address, int)
+                and new_system_address != self.state.system_address
+            )
             self.state.system = new_sys
             if isinstance(new_system_address, int):
                 self.state.system_address = new_system_address
-            # Unlike Location (which can fire without a system change, e.g.
-            # on login), FSDJump always means a genuine new system -- clear
-            # first so system_data_loader's "preserve if DB has 0 rows"
-            # fallback doesn't leak the previous system's resolved bodies
-            # into this one.
-            self.state.resolved_body_ids.clear()
+            if system_changed:
+                self.state.resolved_body_ids.clear()
             entry_body_id = event.get("BodyID")
             if isinstance(entry_body_id, int):
                 self.state.resolved_body_ids.add(entry_body_id)
