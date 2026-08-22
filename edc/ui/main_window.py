@@ -3751,17 +3751,20 @@ class MainWindow(QMainWindow):
             # backfilled from Spansh/DB cache -- resolved_body_ids only
             # counts personal Scan events, which under-counts (and can read
             # 0-1) for an already-catalogued system nobody's individually
-            # scanned yet. "Unresolved" here means genuinely unknown (no
-            # data from any source), not "not personally scanned by you".
+            # scanned yet. "known" here means genuinely known (from any
+            # source), not "personally scanned by you".
             known = len(getattr(self.state, "bodies", {}) or {})
-            # fss_complete tracks FSSDiscoveryScan's own Progress field (the
-            # honk's scan-progress %, often 1.0 immediately) — not whether
-            # every body has been individually resolved. Gating on it here
-            # let it suppress this warning while bodies were still unresolved
-            # (confirmed live: 8/10 resolved, fss_complete already True).
-            if isinstance(total, int) and total > known:
-                remaining = total - known
-                lines.append(f"🔎 Action: {remaining} bodies unresolved (FSS)")
+            resolved = len(getattr(self.state, "resolved_body_ids", set()) or set())
+            # Always shown (not just while incomplete) -- matches the
+            # Exploration tab's persistent progress line (per user request),
+            # rather than only appearing as a gap warning and disappearing
+            # once Spansh/DB backfill catches up.
+            if isinstance(total, int) and total > 0:
+                unknown = max(0, total - known)
+                lines.append(
+                    f"🔎 Intel: {known}/{total} bodies known "
+                    f"({resolved} scanned by you) — {unknown} unknown"
+                )
         except Exception:
             pass
 
@@ -3965,15 +3968,13 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-        # HUD should NOT duplicate Overview action lines; keep "Action:" hints in Overview only.
-        hud_lines = []
-        for ln in (lines or []):
-            if not isinstance(ln, str):
-                continue
-            if ln.startswith("🌍 Action:") or ln.startswith("🔬 Action:") or ln.startswith("🧬 Action:") or ln.startswith("🛡️") or ln.startswith("🔎 Action:") or ln.startswith("🪨 Action:") or ln.startswith("⛏️ Action:") or ln.startswith("✨ Action:") or ln.startswith("🧩 Action:") or ln.startswith("📌 Intel:"):                continue
-            hud_lines.append(ln)
-        # Suppress Action lines from HUD (they belong in Overview panel)
-        clean_lines = [ln for ln in lines if "Action:" not in ln]
+        # Suppress Action/Intel/POI lines from HUD -- they're mirrored into
+        # the Overview panel's action box already (final_lines above), so
+        # showing them here too just duplicates the same line twice on screen.
+        clean_lines = [
+            ln for ln in lines
+            if "Action:" not in ln and "Intel:" not in ln and "POI:" not in ln
+        ]
         self.hud.setText("\n".join(clean_lines) if clean_lines else "Not connected")
         self._refresh_system_card()
         self._refresh_exploration()
