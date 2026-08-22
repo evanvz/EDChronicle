@@ -265,7 +265,16 @@ class ExplorationPanel(QWidget):
 
         rings.sort(key=_dist)
 
-        closest_unscanned = next((name for name, rec in rings if not rec.get("scanned")), None)
+        # "Closest unscanned" is meant to flag a genuine gap -- worth going
+        # out of your way to be first to report. A ring with community data
+        # already isn't that, even though you personally haven't scanned it
+        # (per user request -- same reasoning as dropping "not scanned by
+        # you" from the community status line itself).
+        closest_unscanned = next(
+            (name for name, rec in rings
+             if not rec.get("scanned") and not (rec.get("community_signals") or [])),
+            None,
+        )
 
         lines = []
         for name, rec in rings:
