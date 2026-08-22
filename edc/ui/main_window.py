@@ -4083,9 +4083,9 @@ class MainWindow(QMainWindow):
             # Contact Alert
             try:
                 for alert in (getattr(self.state, "pp_enemy_alerts", None) or []):
-                    if not isinstance(alert, dict):
+                    if not isinstance(alert, str):
                         continue
-                    msg = alert.get("msg", "")
+                    msg = alert
                     if msg and msg not in seen:
                         seen.add(msg)
                         contact_lines.append(
