@@ -2765,6 +2765,7 @@ class MainWindow(QMainWindow):
                     hostile, legal_enemy, wanted, power, faction_raw, pledged, squadron_faction,
                     ctrl, system_powers, pp_state,
                     pilot_rank=rank, player_combat_rank=player_combat_rank,
+                    ship_has_weapons=getattr(state, "ship_has_weapons", None),
                 )
                 if callout_reason is None:
                     return ""
@@ -3356,6 +3357,7 @@ class MainWindow(QMainWindow):
                 contact.get("Power", ""), contact.get("Faction", ""),
                 pledged, squadron_faction, ctrl, system_powers, pp_state,
                 pilot_rank=contact.get("Rank", ""), player_combat_rank=player_combat_rank,
+                ship_has_weapons=getattr(self.state, "ship_has_weapons", None),
             )
             if reason is not None:
                 quip = CombatPhrases.npc_challenge()
@@ -3375,6 +3377,7 @@ class MainWindow(QMainWindow):
                 hostile, legal_enemy, wanted, power, faction, pledged, squadron_faction,
                 ctrl, system_powers, pp_state,
                 pilot_rank=pilot_rank, player_combat_rank=player_combat_rank,
+                ship_has_weapons=getattr(self.state, "ship_has_weapons", None),
             )
             if reason is not None:
                 quip = _wording(reason, wanted, bounty, power)

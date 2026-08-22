@@ -119,10 +119,17 @@ def _callout_reason(
     pledged: str, squadron_faction: str,
     ctrl: str, system_powers: list, pp_state: str,
     pilot_rank: str = "", player_combat_rank: int | None = None,
+    ship_has_weapons: bool | None = None,
 ) -> str | None:
     """
     Returns "enemy" or None -- whether a scanned contact is worth a voice
     callout at all (any callout, not which words to use).
+
+    Unarmed ships (ship_has_weapons is False, from the Loadout event) never
+    get a callout at all, regardless of category -- there's nothing
+    actionable to call out when engaging isn't even an option. Unknown
+    (None, no Loadout seen yet) defaults permissive, same posture as the
+    other "missing data" defaults in this function.
 
     Callout-worthy: LegalStatus Hostile or Enemy (unconditional -- the game
     has already decided this is fair game), a Wanted ship still worth
@@ -150,6 +157,9 @@ def _callout_reason(
     fires for law enforcement/security faction ships, regardless of
     category.
     """
+    if ship_has_weapons is False:
+        return None
+
     power_l = (power or "").strip().lower()
     pledged_l = (pledged or "").strip().lower()
     is_own_power = bool(pledged_l and power_l and power_l == pledged_l)

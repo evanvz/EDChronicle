@@ -9,6 +9,26 @@ from edc.audio.handlers.combat import CombatPhrases
 
 # --- _callout_reason ---
 
+def test_unarmed_ship_never_called_out_even_if_hostile():
+    # Per request: no weapons fitted means nothing is actionable, so no
+    # callout regardless of category (Hostile/Enemy/Wanted/PP-rival).
+    result = _callout_reason(
+        hostile=True, enemy=False, wanted=False, power="", faction="", pledged="",
+        squadron_faction="", ctrl="", system_powers=[], pp_state="",
+        ship_has_weapons=False,
+    )
+    assert result is None
+
+
+def test_unknown_weapon_status_defaults_permissive():
+    result = _callout_reason(
+        hostile=True, enemy=False, wanted=False, power="", faction="", pledged="",
+        squadron_faction="", ctrl="", system_powers=[], pp_state="",
+        ship_has_weapons=None,
+    )
+    assert result == "enemy"
+
+
 def test_hostile_is_enemy_unconditional():
     result = _callout_reason(
         hostile=True, enemy=False, wanted=False, power="", faction="", pledged="",
