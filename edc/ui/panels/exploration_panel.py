@@ -396,6 +396,10 @@ class ExplorationPanel(QWidget):
                     bits.append(f'<span style="color:#FF6B6B;">Threat {tl}</span>')
                 if isinstance(tr, (int, float)):
                     bits.append(f'<span style="color:#888888;">TR {int(tr)}s</span>')
+                if cat == "Megaship" and s.get("AlreadySeen"):
+                    # Re-scanning grants no further merits -- flag it so it
+                    # doesn't look identical to a fresh, unscanned one.
+                    bits.append('<span style="color:#666666;">(already scanned)</span>')
                 html.append(" ".join(bits))
             pass
 
@@ -527,10 +531,15 @@ class ExplorationPanel(QWidget):
         personally_scanned = len(getattr(state, "resolved_body_ids", set()) or set())
         scanned     = len(state.bodies)
         if isinstance(total, int) and total > 0:
-            unknown = max(0, total - scanned)
+            # Leads with personal FSS progress, not known/total -- known can
+            # hit total almost instantly on arrival from Spansh/DB backfill
+            # alone, well before FSS is anywhere near done, which read as
+            # "0 unknown" (nothing left to do) while the game's own FSS
+            # panel still showed most bodies unrevealed (confirmed live:
+            # 27/27 known here, 3/27 in the game's own FSS scanner).
+            extra = f" — {scanned} known via Spansh/DB" if scanned > personally_scanned else ""
             self.exploration_hint.setText(
-                f"Bodies: {scanned}/{total} known "
-                f"({personally_scanned} scanned by you) — {unknown} unknown"
+                f"Bodies: {personally_scanned}/{total} resolved (FSS){extra}"
             )
         else:
             self.exploration_hint.setText(

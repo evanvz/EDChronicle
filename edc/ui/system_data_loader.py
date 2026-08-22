@@ -229,6 +229,16 @@ class SystemDataLoader:
         if loaded_body_count == 0 and existing_resolved_ids:
             self.state.resolved_body_ids.update(existing_resolved_ids)
 
+        # Stars have no PlanetClass, so they never appear in get_bodies()
+        # above -- resolved_bodies is the only durable record that one was
+        # ever personally scanned.
+        try:
+            for body_id in self.repo.get_resolved_body_ids(system_address):
+                if isinstance(body_id, int):
+                    self.state.resolved_body_ids.add(body_id)
+        except Exception:
+            logger.exception("Failed to load resolved bodies for system_address=%s", system_address)
+
         self._merge_spansh_bodies_into_state(system_address)
 
         expected = getattr(self.state, "system_body_count", None)
@@ -302,6 +312,38 @@ class SystemDataLoader:
                 "Complete": samples >= 3,
                 "LastScanType": "DB",
             }
+
+        # Codex-sourced confirmations (Notable Stellar Phenomena included --
+        # is_phenomena distinguishes an already-confirmed NSP from an
+        # ordinary pending Codex hint) -- keyed by BodyID rather than a
+        # body name, so unlike the exobiology loop above this doesn't need
+        # a matching state.bodies entry to restore.
+        try:
+            for row in self.repo.get_codex_entries(system_address):
+                body_id = row["body_id"]
+                genus = row["genus"]
+                if not isinstance(body_id, int) or not genus:
+                    continue
+                is_phenomena = bool(row["is_phenomena"])
+                base_value = row["base_value"]
+                key = f"{body_id}|{genus}|CODEX"
+                self.state.exo[key] = {
+                    "BodyID": body_id,
+                    "BodyName": "Space" if is_phenomena else "",
+                    "Genus": genus,
+                    "Species": row["species"],
+                    "Variant": row["variant"],
+                    "Samples": 0,
+                    "Complete": is_phenomena,
+                    "IsPhenomena": is_phenomena,
+                    "LastScanType": "CODEX",
+                    "CodexEntryID": row["codex_entry_id"],
+                    "CodexName": row["codex_name"],
+                    "BaseValue": base_value,
+                    "PotentialValue": base_value,
+                }
+        except Exception:
+            logger.exception("Failed to load codex entries for system_address=%s", system_address)
 
         self._refresh_exploration()
         self._refresh_materials_shortlist()

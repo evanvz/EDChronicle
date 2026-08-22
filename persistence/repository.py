@@ -333,26 +333,48 @@ class Repository:
         codex_entry_id: int | None,
         codex_name: str | None,
         base_value: int | None,
+        is_phenomena: int = 0,
     ):
         self.db.execute(
             """
             INSERT INTO codex_entries (
                 system_address, body_id, genus, species,
-                variant, codex_entry_id, codex_name, base_value
+                variant, codex_entry_id, codex_name, base_value, is_phenomena
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(system_address, body_id, genus) DO UPDATE SET
                 species        = excluded.species,
                 variant        = excluded.variant,
                 codex_entry_id = excluded.codex_entry_id,
                 codex_name     = excluded.codex_name,
-                base_value     = excluded.base_value
+                base_value     = excluded.base_value,
+                is_phenomena   = excluded.is_phenomena
             """,
             (
                 system_address, body_id, genus, species,
-                variant, codex_entry_id, codex_name, base_value,
+                variant, codex_entry_id, codex_name, base_value, is_phenomena,
             ),
         )
+
+    def save_resolved_body(self, system_address: int, body_id: int) -> None:
+        """Personal FSS/Scan resolution for a body with no PlanetClass (a
+        star) -- `bodies` can't hold it, so this is the only durable record
+        that it was ever resolved."""
+        self.db.execute(
+            """
+            INSERT INTO resolved_bodies (system_address, body_id)
+            VALUES (?, ?)
+            ON CONFLICT(system_address, body_id) DO NOTHING
+            """,
+            (system_address, body_id),
+        )
+
+    def get_resolved_body_ids(self, system_address: int) -> list[int]:
+        rows = self.db.execute(
+            "SELECT body_id FROM resolved_bodies WHERE system_address = ?",
+            (system_address,),
+        ).fetchall()
+        return [row["body_id"] for row in rows]
 
     def save_system_name_if_missing(self, system_address: int, system_name: str):
         """
@@ -2046,7 +2068,7 @@ class Repository:
             """
             SELECT
                 system_address, body_id, genus, species,
-                variant, codex_entry_id, codex_name, base_value
+                variant, codex_entry_id, codex_name, base_value, is_phenomena
             FROM codex_entries
             WHERE system_address = ?
             ORDER BY body_id, genus

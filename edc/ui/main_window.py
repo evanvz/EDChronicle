@@ -487,6 +487,130 @@ class MainWindow(QMainWindow):
         except Exception:
             log.exception("Failed to save ring data")
 
+    def _save_body_data(self):
+        """
+        Personally-scanned bodies were never written to the local DB during
+        live play -- only journal_importer.py's one-time startup backfill
+        ever called repo.save_body(), so any body scanned this session was
+        lost the moment you left and returned to the system (confirmed
+        live: resolved_body_ids dropped from 27/27 to 1/27 on a same-session
+        revisit, no reload involved -- system_data_loader's DB restore found
+        nothing to restore). Only bodies we actually scanned (a real
+        BodyID) are saved -- Spansh-backfilled entries have BodyID None and
+        are already covered by save_spansh_body elsewhere.
+        """
+        system_address = getattr(self.state, "system_address", None)
+        bodies = getattr(self.state, "bodies", None) or {}
+        if not isinstance(system_address, int) or not bodies:
+            return
+        for body_name, rec in bodies.items():
+            if not isinstance(rec, dict):
+                continue
+            body_id = rec.get("BodyID")
+            planet_class = rec.get("PlanetClass")
+            if not isinstance(body_id, int) or not isinstance(planet_class, str) or not planet_class:
+                continue
+            try:
+                materials = rec.get("Materials")
+                materials_json = json.dumps(materials) if isinstance(materials, dict) and materials else None
+                atmo_comp = rec.get("AtmosphereComposition")
+                atmo_comp_json = json.dumps(atmo_comp) if isinstance(atmo_comp, list) and atmo_comp else None
+                comp = rec.get("Composition")
+                comp_json = json.dumps(comp) if isinstance(comp, dict) and comp else None
+                tidal_lock = rec.get("TidalLock")
+                first_discovered = rec.get("FirstDiscovered")
+
+                self.repo.save_body(
+                    system_address=system_address,
+                    body_id=body_id,
+                    body_name=body_name,
+                    planet_class=planet_class,
+                    terraformable=int(bool(rec.get("Terraformable"))),
+                    landable=rec.get("Landable"),
+                    was_mapped=int(bool(rec.get("WasMapped"))),
+                    dss_mapped=int(bool(rec.get("DSSMapped"))),
+                    estimated_value=rec.get("EstimatedValue"),
+                    distance_ls=rec.get("DistanceLS"),
+                    volcanism=rec.get("Volcanism") or None,
+                    materials=materials_json,
+                    mass_em=rec.get("MassEM"),
+                    radius=rec.get("Radius"),
+                    surface_gravity=rec.get("SurfaceGravity"),
+                    surface_temperature=rec.get("SurfaceTemperature"),
+                    surface_pressure=rec.get("SurfacePressure"),
+                    atmosphere_type=rec.get("AtmosphereType") or None,
+                    atmosphere=rec.get("Atmosphere") or None,
+                    atmosphere_composition=atmo_comp_json,
+                    composition=comp_json,
+                    tidal_lock=int(bool(tidal_lock)) if tidal_lock is not None else None,
+                    first_discovered=int(bool(first_discovered)) if first_discovered is not None else None,
+                    was_footfalled=int(bool(rec.get("WasFootfalled"))),
+                )
+            except Exception:
+                log.exception("Failed to save body data for %s", body_name)
+
+    def _save_resolved_bodies(self):
+        """
+        resolved_body_ids includes stars (via a real Scan/AutoScan event),
+        which have no PlanetClass and so are never covered by
+        _save_body_data()/repo.save_body() (that table is planet-data-
+        shaped). Without this, a star's resolved status reverts to
+        unresolved on any reload or revisit -- confirmed as the remaining
+        gap after fixing planets. Rings/belt clusters don't need this: the
+        live Scan handler already excludes them from resolved_body_ids
+        entirely (they're not counted toward system_body_count either).
+        """
+        system_address = getattr(self.state, "system_address", None)
+        resolved = getattr(self.state, "resolved_body_ids", None) or set()
+        if not isinstance(system_address, int) or not resolved:
+            return
+        for body_id in resolved:
+            if not isinstance(body_id, int):
+                continue
+            try:
+                self.repo.save_resolved_body(system_address, body_id)
+            except Exception:
+                log.exception("Failed to save resolved body %s", body_id)
+
+    def _save_codex_entries(self):
+        """
+        Notable Stellar Phenomena Codex confirmations (Complete=True,
+        IsPhenomena=True -- see event_engine.py's CodexEntry handler) have
+        no body of their own to key off ("Space"), so they can't go through
+        _save_exobiology_to_db()'s body_name-keyed table the way a real
+        DSS'd organism does. codex_entries is body_id-keyed and already
+        existed for this (previously unused by any live code path) --
+        without this, a phenomena confirmation reverts to an unscanned
+        "0/3" Codex hint on the next revisit.
+        """
+        system_address = getattr(self.state, "system_address", None)
+        exo = getattr(self.state, "exo", None) or {}
+        if not isinstance(system_address, int) or not exo:
+            return
+        for rec in exo.values():
+            if not isinstance(rec, dict) or (rec.get("LastScanType") or "").upper() != "CODEX":
+                continue
+            body_id = rec.get("BodyID")
+            genus = rec.get("Genus")
+            species = rec.get("Species") or rec.get("CodexName") or ""
+            variant = rec.get("Variant") or ""
+            if not isinstance(body_id, int) or not genus or not species or not variant:
+                continue
+            try:
+                self.repo.save_codex_entry(
+                    system_address=system_address,
+                    body_id=body_id,
+                    genus=genus,
+                    species=species,
+                    variant=variant,
+                    codex_entry_id=rec.get("CodexEntryID"),
+                    codex_name=rec.get("CodexName"),
+                    base_value=rec.get("BaseValue") if isinstance(rec.get("BaseValue"), int) else None,
+                    is_phenomena=int(bool(rec.get("IsPhenomena"))),
+                )
+            except Exception:
+                log.exception("Failed to save codex entry for genus %s", genus)
+
     def _load_persisted_rings(self, system_address: int) -> None:
         """
         Backfills state.rings from previously-persisted scan data on arrival
@@ -2251,6 +2375,20 @@ class MainWindow(QMainWindow):
         # Refresh exploration panel when signal or scan data arrives
         if name in ("FSSSignalDiscovered", "FSSDiscoveryScan", "SAASignalsFound",
                     "Scan", "FSSBodySignals", "SAAScanComplete"):
+            # Re-scanning a megaship already flagged for merits doesn't grant
+            # them again -- tag it here so the Exploration tab's signal list
+            # can show "already scanned" instead of looking identical to a
+            # fresh one (per user request).
+            try:
+                for sig in (getattr(self.state, "system_signals", None) or []):
+                    if isinstance(sig, dict) and sig.get("Category") == "Megaship":
+                        mega_key = MegashipTracker.key(
+                            getattr(self.state, "system_address", None),
+                            sig.get("SignalName") or "",
+                        )
+                        sig["AlreadySeen"] = self.megaship_tracker.has_seen(mega_key)
+            except Exception:
+                pass
             self._refresh_exploration()
 
         # SAAScanComplete without a matching SAASignalsFound means a ring
@@ -2260,6 +2398,18 @@ class MainWindow(QMainWindow):
         # reverts to "not scanned" on the next restart.
         if name in ("Scan", "SAASignalsFound", "SAAScanComplete"):
             self._save_ring_data()
+
+        # Personal body-scan data was never persisted live -- resolved
+        # progress was lost the moment you left and returned to a system
+        # within the same session (see _save_body_data's docstring).
+        if name in ("Scan", "SAASignalsFound", "SAAScanComplete"):
+            self._save_body_data()
+            self._save_resolved_bodies()
+
+        # Codex-sourced species/phenomena confirmations, keyed by BodyID
+        # rather than the planet-data-shaped bodies/exobiology tables.
+        if name == "CodexEntry":
+            self._save_codex_entries()
 
         # Refresh intel panel when signal data, DSS scan, or a fresh BGS
         # snapshot (Docked) arrives
@@ -3756,14 +3906,18 @@ class MainWindow(QMainWindow):
             known = len(getattr(self.state, "bodies", {}) or {})
             resolved = len(getattr(self.state, "resolved_body_ids", set()) or set())
             # Always shown (not just while incomplete) -- matches the
-            # Exploration tab's persistent progress line (per user request),
-            # rather than only appearing as a gap warning and disappearing
-            # once Spansh/DB backfill catches up.
+            # Exploration tab's persistent progress line (per user request).
+            # Leads with resolved/total (personal FSS progress) rather than
+            # known/total -- known can hit total almost instantly on arrival
+            # from Spansh/DB backfill alone, well before FSS is anywhere
+            # near done, making "0 unknown" read as "nothing left to do"
+            # when the in-game FSS panel still shows most bodies unrevealed
+            # (confirmed live: 27/27 known, 0 unknown shown here while the
+            # game's own FSS scanner still read 3/27).
             if isinstance(total, int) and total > 0:
-                unknown = max(0, total - known)
+                extra = f" — {known} known via Spansh/DB" if known > resolved else ""
                 lines.append(
-                    f"🔎 Intel: {known}/{total} bodies known "
-                    f"({resolved} scanned by you) — {unknown} unknown"
+                    f"🔎 Intel: {resolved}/{total} bodies resolved (FSS){extra}"
                 )
         except Exception:
             pass

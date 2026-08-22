@@ -43,3 +43,39 @@ def test_planetary_codex_entry_not_marked_complete(tmp_path):
     rec = next(iter(engine.state.exo.values()))
     assert rec["IsPhenomena"] is False
     assert rec["Complete"] is False
+
+
+def test_nsp_codex_entry_gets_space_body_name_and_nonempty_variant(tmp_path):
+    # "Purpureum Metallic Crystals" has no " - " separator, unlike planetary
+    # organisms ("Species - Color") -- variant_txt must not end up empty, or
+    # _save_exobiology_to_db()'s non-empty check silently drops the save.
+    engine = _engine(tmp_path)
+    engine.process(_codex_event(
+        "Purpureum Metallic Crystals",
+        nearest_destination="$Fixed_Event_Life_Cloud;",
+    ))
+    rec = next(iter(engine.state.exo.values()))
+    assert rec["BodyName"] == "Space"
+    assert rec["Variant"]
+    assert rec["Species"]
+
+
+def test_nsp_codex_entry_appends_exobiology_complete_message(tmp_path):
+    # CodexEntry never goes through ScanOrganic's own completion messaging,
+    # so without this a phenomena confirmation's Complete=True would never
+    # trigger _save_exobiology_to_db() (that save is itself gated on this
+    # exact message appearing in msgs).
+    engine = _engine(tmp_path)
+    _, msgs = engine.process(_codex_event(
+        "Purpureum Metallic Crystals",
+        nearest_destination="$Fixed_Event_Life_Cloud;",
+    ))
+    assert any(m.startswith("Exobiology complete: ") for m in msgs)
+
+    # Second identical CodexEntry (Frontier can log the same one twice) must
+    # not re-announce it.
+    _, msgs2 = engine.process(_codex_event(
+        "Purpureum Metallic Crystals",
+        nearest_destination="$Fixed_Event_Life_Cloud;",
+    ))
+    assert not any(m.startswith("Exobiology complete: ") for m in msgs2)

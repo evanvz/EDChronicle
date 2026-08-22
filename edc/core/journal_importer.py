@@ -181,6 +181,8 @@ class JournalImporter:
             self._handle_disembark(event)
         elif name == "Docked":
             self._handle_docked(event)
+        elif name == "CodexEntry":
+            self._handle_codex_entry(event)
 
     def _upsert_visit(
         self,
@@ -444,6 +446,18 @@ class JournalImporter:
             )
             return  # rings have no PlanetClass — not a planetary body record
 
+        # Stars have no PlanetClass either, so they'd otherwise never reach
+        # save_body() below -- resolved_bodies is the only durable record
+        # that a star was personally scanned/resolved (mirrors the live
+        # path's resolved_body_ids.add(), which also excludes belt clusters
+        # since those aren't counted toward system_body_count).
+        body_id_raw = event.get("BodyID")
+        if isinstance(body_id_raw, int) and "Belt Cluster" not in body_name:
+            try:
+                self.repo.save_resolved_body(system_address, body_id_raw)
+            except Exception:
+                pass
+
         planet_class = event.get("PlanetClass") or ""
         if not isinstance(planet_class, str) or not planet_class:
             return
@@ -698,4 +712,56 @@ class JournalImporter:
             species=species,
             variant=variant,
             samples=3,
+        )
+
+    def _handle_codex_entry(self, event: dict[str, Any]) -> None:
+        """
+        Mirrors event_engine.py's live CodexEntry handling closely enough to
+        backfill codex_entries -- Notable Stellar Phenomena confirmations
+        (e.g. Metallic Crystals) included, keyed by BodyID since they have
+        no body of their own. base_value is left None here (this importer
+        has no exo_values table to derive it from); the live path fills
+        that in going forward.
+        """
+        system_address = event.get("SystemAddress")
+        if not isinstance(system_address, int):
+            system_address = self.current_system_address
+        if not isinstance(system_address, int):
+            return
+
+        body_id = event.get("BodyID")
+        if not isinstance(body_id, int):
+            return
+
+        name_loc = event.get("Name_Localised")
+        if not isinstance(name_loc, str) or not name_loc.strip():
+            return
+
+        genus = _norm_text(name_loc.strip().split(" ", 1)[0])
+        if not genus:
+            return
+
+        species_txt = name_loc.strip()
+        variant_txt = ""
+        if " - " in name_loc:
+            left, right = name_loc.split(" - ", 1)
+            species_txt = left.strip()
+            variant_txt = right.strip()
+
+        is_phenomena = bool((event.get("NearestDestination") or "").strip())
+        if is_phenomena and not variant_txt:
+            variant_txt = species_txt
+
+        entry_id = event.get("EntryID")
+
+        self.repo.save_codex_entry(
+            system_address=system_address,
+            body_id=body_id,
+            genus=genus,
+            species=species_txt,
+            variant=variant_txt,
+            codex_entry_id=entry_id if isinstance(entry_id, int) else None,
+            codex_name=name_loc.strip(),
+            base_value=None,
+            is_phenomena=int(is_phenomena),
         )

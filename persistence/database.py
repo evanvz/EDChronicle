@@ -233,6 +233,21 @@ class Database:
                 last_updated   TEXT
             )""",
             "ALTER TABLE bodies ADD COLUMN was_footfalled INTEGER DEFAULT 0",
+            # Tracks which BodyIDs were personally resolved via FSS/Scan --
+            # separate from `bodies` (planet-data-shaped, requires a
+            # PlanetClass) so stars, which have none, can still be recorded
+            # as resolved and survive a reload/revisit.
+            """CREATE TABLE IF NOT EXISTS resolved_bodies (
+                system_address INTEGER NOT NULL,
+                body_id        INTEGER NOT NULL,
+                PRIMARY KEY (system_address, body_id)
+            )""",
+            # Notable Stellar Phenomena Codex entries (e.g. Metallic
+            # Crystals) are a single-scan confirmation with no body of
+            # their own to key off -- is_phenomena distinguishes those from
+            # an ordinary pending Codex hint so a revisit can restore
+            # "already confirmed" instead of "still needs scanning".
+            "ALTER TABLE codex_entries ADD COLUMN is_phenomena INTEGER DEFAULT 0",
         ]
         for sql in migrations:
             try:
@@ -244,7 +259,7 @@ class Database:
         self._apply_version_migrations()
 
     # Bump this constant whenever a migration requires journals to be re-imported.
-    _REQUIRED_SCHEMA_VERSION = 6
+    _REQUIRED_SCHEMA_VERSION = 7
 
     def _apply_version_migrations(self):
         self.conn.execute(
@@ -261,6 +276,8 @@ class Database:
             # v4: station_info.station_services/station_faction (Interstellar Factors detection) was added.
             # v5: rings table (hotspot scan history) was added.
             # v6: bodies.was_footfalled was added.
+            # v7: resolved_bodies table (star FSS-resolution) and
+            #     codex_entries.is_phenomena (NSP Codex confirmations) were added.
             # Re-import all journals to backfill.
             self.conn.execute("DELETE FROM processed_journals")
             if current == 0:

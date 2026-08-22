@@ -2098,9 +2098,20 @@ class EventEngine:
             # itself IS the completion, not a hint toward one.
             is_phenomena = bool((event.get("NearestDestination") or "").strip())
 
+            # NSP names (e.g. "Purpureum Metallic Crystals") have no " - "
+            # separator, so variant_txt above is empty -- fall back to the
+            # full name so _save_exobiology_to_db()'s non-empty check on
+            # both Species and Variant doesn't silently drop the save.
+            if is_phenomena and not variant_txt:
+                variant_txt = species_txt
+
             rec.update(
                 {
                     "BodyID": body_id,
+                    # Floats in a Lagrange cloud, not on the body's surface --
+                    # "Body N" reads as a planet/star we scanned, which is
+                    # misleading for something found in open space near it.
+                    "BodyName": "Space" if is_phenomena else "",
                     "Genus": genus,
                     "Genus_Localised": genus_loc,
                     "Species": species_txt,
@@ -2118,6 +2129,15 @@ class EventEngine:
                 }
             )
             self.state.exo[codex_key] = rec
+
+            # A CodexEntry never goes through ScanOrganic's own "Exobiology
+            # complete" messaging (that only fires for the 3-sample cycle),
+            # so without this an NSP confirmation's Complete=True above
+            # would never actually reach _save_exobiology_to_db() -- that
+            # save is itself gated on seeing this exact message.
+            if is_phenomena and not rec.get("CompletionAnnounced", False):
+                msgs.append(f"Exobiology complete: {genus}")
+                rec["CompletionAnnounced"] = True
 
         # Dispatch order matters slightly: inventory first, then exploration/exobio, then PP, then misc.
         handled = False
