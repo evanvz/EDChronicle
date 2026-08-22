@@ -35,6 +35,7 @@ from pathlib import Path
 
 from edc.core.state import GameState
 from edc.core.event_engine import EventEngine, _engage_risk, _callout_reason
+from edc.core.ring_signals import RING_NAME_RE
 from edc.core.journal_watcher import JournalWatcher
 from edc.ui.watcher_controller import WatcherController
 from edc.ui.system_data_loader import SystemDataLoader
@@ -498,6 +499,11 @@ class MainWindow(QMainWindow):
             for rec in self.repo.get_rings_for_system(system_address):
                 ring_name = rec.get("ring_name")
                 if not ring_name or ring_name in self.state.rings:
+                    continue
+                # Older sessions could persist asteroid Belts alongside real
+                # rings before that got filtered at the source -- skip any
+                # stale Belt rows already sitting in the local DB.
+                if not RING_NAME_RE.match(ring_name):
                     continue
                 self.state.rings[ring_name] = {
                     "system_address": system_address,
@@ -3785,7 +3791,13 @@ class MainWindow(QMainWindow):
                 if s.get("Category") == "TouristBeacon":
                     tour += 1
             if phen:
-                lines.append(f"✨ Action: Stellar phenomena discovered ({phen})")
+                # No count here -- Frontier's FSSSignalDiscovered gives no
+                # distinguishing field for multiple phenomena sources in the
+                # same system (no BodyID, no coordinates), so our dedup can
+                # collapse genuinely separate sources into one tracked
+                # signal. A number here would misleadingly imply an exact
+                # count; this is presence-only ("detected"), not a tally.
+                lines.append("✨ Action: Stellar phenomena detected")
             if mega:
                 lines.append(f"🚢 Action: Megaship signals discovered ({mega})")
             if gen_ships:

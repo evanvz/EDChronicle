@@ -590,9 +590,24 @@ class ExobiologyPanel(QWidget):
             var_txt = self._variant_color(
                 rec.get("Variant") or rec.get("CodexName") or ""
             )
+            # Notable Stellar Phenomena entries (e.g. Metallic Crystals) are
+            # a single-scan Codex confirmation, not a hint toward a 3-sample
+            # Genetic Sampler cycle -- the CodexEntry itself is the whole
+            # completion, so show it as done rather than "0/3".
+            if rec.get("IsPhenomena"):
+                row_status = "COMPLETE"
+                prog_row = "1/1"
+                # Floats in a Lagrange cloud, not on the body's surface --
+                # "Body 1" reads as a planet/star we scanned, which is
+                # misleading for something found in open space near it.
+                display_body = "Space"
+            else:
+                row_status = "CODEX"
+                prog_row = "0/3"
+                display_body = body_txt
             rows.append((
-                0, "CODEX", body_txt, genus, species_txt.strip(),
-                var_txt, pot_txt, base_txt, "0/3", "CODEX"
+                0, row_status, display_body, genus, species_txt.strip(),
+                var_txt, pot_txt, base_txt, prog_row, row_status
             ))
 
         def _status_rank(s):

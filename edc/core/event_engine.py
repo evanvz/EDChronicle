@@ -1168,6 +1168,13 @@ class EventEngine:
                     ring_name = self._norm_text(ring.get("Name"))
                     if not ring_name:
                         continue
+                    # The journal's "Rings" array also lists asteroid Belts
+                    # (e.g. "...A Belt") alongside real planetary/stellar
+                    # rings (e.g. "...A Ring") -- Belts have no hotspots and
+                    # can't be SAA-probed, so they don't belong in the
+                    # Exploration tab's "Rings in this system" list.
+                    if not _RING_NAME_RE.match(ring_name):
+                        continue
                     rec = self.state.rings.get(ring_name, {})
                     rec.setdefault("scanned", False)
                     rec.setdefault("hotspots", [])
@@ -2080,6 +2087,17 @@ class EventEngine:
             species_loc = variant_loc.split(" - ", 1)[0].strip() if variant_loc else ""
             genus_loc = species_loc.split(" ", 1)[0].strip() if species_loc else ""
 
+            # NearestDestination is only populated for entries anchored to a
+            # Notable Stellar Phenomena (e.g. Metallic Crystals in a
+            # Lagrange cloud) -- confirmed via real journal data: planetary
+            # organisms carry Latitude/Longitude and an empty
+            # NearestDestination, NSP entities carry NearestDestination
+            # (e.g. "Notable stellar phenomena") and no coordinates. Those
+            # are single-scan Codex confirmations (Short Range Composition
+            # Scanner, no 3-sample Genetic Sampler cycle) -- the CodexEntry
+            # itself IS the completion, not a hint toward one.
+            is_phenomena = bool((event.get("NearestDestination") or "").strip())
+
             rec.update(
                 {
                     "BodyID": body_id,
@@ -2090,7 +2108,8 @@ class EventEngine:
                     "Variant": variant_txt,
                     "Variant_Localised": variant_loc,
                     "Samples": 0,
-                    "Complete": False,
+                    "Complete": is_phenomena,
+                    "IsPhenomena": is_phenomena,
                     "LastScanType": "CODEX",
                     "CodexEntryID": entry_id,
                     "CodexName": name_loc.strip(),
