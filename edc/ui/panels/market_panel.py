@@ -785,11 +785,20 @@ class MarketPanel(QWidget):
         # Merge (don't replace) — a destination remembered from an earlier
         # station visit must survive later visits to other stations, since
         # whatever's still in cargo from that earlier stop still needs it.
-        # Enemy-PowerPlay systems are excluded before this merge too, so an
-        # excluded destination is never remembered/recommended later either.
-        # Re-applied (not just once) so toggling the checkbox off restores
-        # a previously-excluded destination instead of it staying dropped.
+        # Enemy-PowerPlay systems, non-squadron stations (per the squadron-
+        # only checkbox), and stations below the minimum pad size are all
+        # excluded before this merge too, so an excluded destination is
+        # never remembered/recommended later either. Re-applied (not just
+        # once) so relaxing any of these filters restores a previously-
+        # excluded destination instead of it staying dropped.
+        # _filter_faction_only and _filter_min_pad were previously only
+        # ever wired into the manual search render, never this one --
+        # confirmed live: Trade Opportunities kept showing non-squadron
+        # (including enemy-PP) and small-pad stations regardless of either
+        # control.
         opportunities, enemy_excluded = self._filter_enemy_pp(opportunities)
+        opportunities = self._filter_faction_only(opportunities)
+        opportunities = self._filter_min_pad(opportunities)
         for o in opportunities:
             key = normalize_commodity_name(o.get("name") or "")
             if key:
@@ -969,6 +978,7 @@ class MarketPanel(QWidget):
     def _apply_pad_filter(self) -> None:
         if self._last_results is not None:
             self._render_results()
+        self._render_trade_opportunities()
 
     def _on_exclude_enemy_pp_toggled(self) -> None:
         if self._last_results is not None:
@@ -978,6 +988,23 @@ class MarketPanel(QWidget):
     def _on_faction_only_toggled(self) -> None:
         if self._last_results is not None:
             self._render_results()
+        self._render_trade_opportunities()
+
+    def _filter_min_pad(self, results: list) -> list:
+        """Drops destinations below the selected minimum landing pad size.
+        Was inline in the manual search render only -- Trade Opportunities
+        never applied it at all (confirmed live: small-pad destinations kept
+        showing there regardless of the combo box)."""
+        min_pad = self._pad_filter_combo.currentData()
+        if not min_pad:
+            return results
+        rank = {"S": 1, "M": 2, "L": 3}
+        min_rank = rank[min_pad]
+        return [
+            r for r in results
+            if (r.get("pad_size") or pad_size_hint(r.get("station_type"))) not in rank
+            or rank[r.get("pad_size") or pad_size_hint(r.get("station_type"))] >= min_rank
+        ]
 
     def _filter_faction_only(self, results: list) -> list:
         """Same idea as Trade Route Loop Planner's equivalent checkbox —
@@ -1033,15 +1060,7 @@ class MarketPanel(QWidget):
         results = self._last_results or []
         raw, radius, buy_mode = self._last_search_desc
 
-        min_pad = self._pad_filter_combo.currentData()
-        if min_pad:
-            rank = {"S": 1, "M": 2, "L": 3}
-            min_rank = rank[min_pad]
-            results = [
-                r for r in results
-                if (r.get("pad_size") or pad_size_hint(r.get("station_type"))) not in rank
-                or rank[r.get("pad_size") or pad_size_hint(r.get("station_type"))] >= min_rank
-            ]
+        results = self._filter_min_pad(results)
 
         results, enemy_excluded = self._filter_enemy_pp(results)
         results = self._filter_faction_only(results)
