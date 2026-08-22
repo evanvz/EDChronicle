@@ -286,8 +286,8 @@ class ExplorationPanel(QWidget):
                 if community:
                     cs_txt = ", ".join(f"{h.get('name')} x{h.get('count')}" for h in community)
                     status = (
-                        f'<span style="color:#4D96FF;">🌐 Community: {self._esc(cs_txt)} '
-                        f'(not scanned by you){marker}</span>'
+                        f'<span style="color:#4D96FF;">🌐 Community: {self._esc(cs_txt)}'
+                        f'{marker}</span>'
                     )
                 else:
                     color = "#FFD93D" if name == closest_unscanned else "#888888"
