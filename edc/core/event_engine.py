@@ -1067,12 +1067,21 @@ class EventEngine:
 
         elif name == "CommitCrime":
             bounty = event.get("Bounty")
+            fine = event.get("Fine")
             faction = event.get("Faction")
             if isinstance(bounty, int) and isinstance(faction, str) and faction:
                 try:
                     active = dict(getattr(self.state, "active_bounties", None) or {})
                     active[faction] = active.get(faction, 0) + bounty
                     self.state.active_bounties = active
+                except Exception:
+                    pass
+
+            if isinstance(fine, int) and isinstance(faction, str) and faction:
+                try:
+                    active_fines = dict(getattr(self.state, "active_fines", None) or {})
+                    active_fines[faction] = active_fines.get(faction, 0) + fine
+                    self.state.active_fines = active_fines
                 except Exception:
                     pass
 
@@ -1132,6 +1141,18 @@ class EventEngine:
                 else:
                     active.clear()
                 self.state.active_bounties = active
+            except Exception:
+                pass
+
+        elif name == "PayFines":
+            try:
+                active_fines = dict(getattr(self.state, "active_fines", None) or {})
+                faction = event.get("Faction")
+                if isinstance(faction, str) and faction:
+                    active_fines.pop(faction, None)
+                else:
+                    active_fines.clear()
+                self.state.active_fines = active_fines
             except Exception:
                 pass
 

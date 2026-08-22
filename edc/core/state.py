@@ -121,6 +121,14 @@ class GameState:
     closest_interstellar_factors: Optional[Dict[str, Any]] = None
     closest_squadron_station: Optional[Dict[str, Any]] = None
 
+    # Fines (CommitCrime with a Fine field, cleared by PayFines) are a
+    # separate mechanic from bounties -- paid at ANY station the issuing
+    # faction controls (no danger, no need to avoid it), the opposite of a
+    # bounty's "avoid that faction" requirement. Keyed per faction since
+    # each needs its own closest-controlled-station lookup.
+    active_fines: Dict[str, int] = field(default_factory=dict)
+    closest_fine_stations: Dict[str, Any] = field(default_factory=dict)
+
     # Notoriety (from the "Statistics" event's Crime.Notoriety) — distinct
     # from bounties: decays 1 point per 2 hours of active in-game time, not
     # clearable by paying. notoriety_timestamp is when this reading was taken.

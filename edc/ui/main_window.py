@@ -78,6 +78,7 @@ from edc.core.eddn_market import EddnMarketCache, write_buffers
 from edc.core.station_pads import extract_station_info
 from edc.core.rare_commodities import RareCommodityTable
 from edc.core.bounty_scanner import scan_active_bounties
+from edc.core.fine_scanner import scan_active_fines
 from edc.core.bgs_conflicts import squadron_faction_name
 from edc.core.combat_bond_scanner import scan_unredeemed_combat_total
 from edc.core.materials_scanner import scan_latest_materials
@@ -250,7 +251,7 @@ class _StartupHistoryScanWorker(QObject):
 
     def run(self):
         result = {
-            "active_bounties": {}, "combat_unsold_total": None,
+            "active_bounties": {}, "active_fines": {}, "combat_unsold_total": None,
             "squadron_rec": None, "carrier_rec": None, "active_missions": {},
         }
         if not self._journal_dir:
@@ -262,6 +263,10 @@ class _StartupHistoryScanWorker(QObject):
             result["active_bounties"] = scan_active_bounties(path)
         except Exception:
             log.exception("Failed to scan journal history for active bounties")
+        try:
+            result["active_fines"] = scan_active_fines(path)
+        except Exception:
+            log.exception("Failed to scan journal history for active fines")
         try:
             result["combat_unsold_total"] = scan_unredeemed_combat_total(path)
         except Exception:
@@ -1100,6 +1105,7 @@ class MainWindow(QMainWindow):
         # see its kickoff further down for the same _refresh_hud() call
         # that normally follows a state change.
         self.state.active_bounties = {}
+        self.state.active_fines = {}
         self.state.combat_unsold_total = int(ledger.get("combat_unsold_total", 0) or 0)
 
         # Same reasoning as active_bounties: the live bootstrap only re-reads
@@ -1732,6 +1738,7 @@ class MainWindow(QMainWindow):
         __init__ before active bounties/combat bonds/squadron/carrier/
         missions moved to _StartupHistoryScanWorker."""
         self.state.active_bounties = result["active_bounties"]
+        self.state.active_fines = result["active_fines"]
 
         combat_unsold_total = result["combat_unsold_total"]
         if combat_unsold_total is not None:
@@ -4138,6 +4145,7 @@ class MainWindow(QMainWindow):
         self._refresh_exobiology()
         self._refresh_powerplay()
         self._refresh_bounty_status()
+        self._refresh_fine_status()
         self._refresh_squadron_station()
         self._refresh_combat()
         self._refresh_squadron()
@@ -4220,6 +4228,30 @@ class MainWindow(QMainWindow):
             )
         except Exception:
             log.exception("Failed to find closest Interstellar Factors station")
+
+    def _refresh_fine_status(self):
+        """
+        Fines are the opposite of bounties: paid at ANY station the issuing
+        faction controls, no danger, no need to avoid it (confirmed against
+        the Elite Dangerous wiki -- unlike a bounty, there's no "turn
+        yourself in" risk or Interstellar Factors markup). So this looks
+        for the closest station controlled BY each fine-issuing faction,
+        not one excluding it.
+        """
+        active = getattr(self.state, "active_fines", None) or {}
+        if not active:
+            self.state.closest_fine_stations = {}
+            return
+        x, y, z = self.state.system_x, self.state.system_y, self.state.system_z
+        if not all(isinstance(v, (int, float)) for v in (x, y, z)):
+            return
+        stations = {}
+        for faction in active:
+            try:
+                stations[faction] = self.repo.find_closest_station_for_faction(x, y, z, faction)
+            except Exception:
+                log.exception("Failed to find closest station for fine-issuing faction %s", faction)
+        self.state.closest_fine_stations = stations
 
     def _on_market_flush_tick(self) -> None:
         """

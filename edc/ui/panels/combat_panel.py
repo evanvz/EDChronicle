@@ -67,7 +67,7 @@ class CombatPanel(QWidget):
         # be paid off, only decays with active play) ───────────────────────
         self.notoriety_card = QFrame()
         self.notoriety_card.setStyleSheet(
-            "QFrame { background: #201a0d; border: 1px solid #4a3a1e;"
+            "QFrame { background: #2a2200; border: 1px solid #4a4010;"
             "border-radius: 5px; }"
         )
         notoriety_l = QVBoxLayout(self.notoriety_card)
@@ -76,7 +76,10 @@ class CombatPanel(QWidget):
 
         notoriety_hdr = QLabel("NOTORIETY")
         notoriety_hdr.setStyleSheet(
-            "color: #d0a060; font-size:12px; font-weight: bold; "
+            # This app's established yellow (#FFD93D, used everywhere else
+            # for the same "yellow" meaning) -- kept distinct from Fine
+            # Clearance's orange now that both cards sit next to each other.
+            "color: #FFD93D; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         notoriety_l.addWidget(notoriety_hdr)
@@ -84,7 +87,7 @@ class CombatPanel(QWidget):
         self.notoriety_summary = QLabel("")
         self.notoriety_summary.setWordWrap(True)
         self.notoriety_summary.setStyleSheet(
-            "color: #cccccc; font-size: 12px; background: transparent; border: none;"
+            "color: #fff3b8; font-size: 12px; background: transparent; border: none;"
         )
         notoriety_l.addWidget(self.notoriety_summary)
 
@@ -123,6 +126,44 @@ class CombatPanel(QWidget):
 
         content_l.addWidget(self.bounty_card)
         self.bounty_card.setVisible(False)
+
+        # ── Fine clearance card (hidden unless a fine is active) ──────────
+        # Fines are the opposite of bounties: paid at ANY station the
+        # issuing faction controls, no danger, no Interstellar Factors
+        # markup -- so this points at the closest station that faction
+        # controls, not one excluding it.
+        self.fine_card = QFrame()
+        self.fine_card.setStyleSheet(
+            "QFrame { background: #2a220a; border: 1px solid #4a3e1e;"
+            "border-radius: 5px; }"
+        )
+        fine_l = QVBoxLayout(self.fine_card)
+        fine_l.setContentsMargins(8, 6, 8, 6)
+        fine_l.setSpacing(4)
+
+        fine_hdr = QLabel("FINE CLEARANCE")
+        fine_hdr.setStyleSheet(
+            "color: #d0a060; font-size:12px; font-weight: bold; "
+            "letter-spacing: 1px; background: transparent; border: none;"
+        )
+        fine_l.addWidget(fine_hdr)
+
+        self.fine_summary = QLabel("")
+        self.fine_summary.setWordWrap(True)
+        self.fine_summary.setStyleSheet(
+            "color: #ffe8cc; font-size: 12px; background: transparent; border: none;"
+        )
+        fine_l.addWidget(self.fine_summary)
+
+        self.fine_stations = QLabel("")
+        self.fine_stations.setWordWrap(True)
+        self.fine_stations.setStyleSheet(
+            "color: #cccccc; font-size:12px; background: transparent; border: none;"
+        )
+        fine_l.addWidget(self.fine_stations)
+
+        content_l.addWidget(self.fine_card)
+        self.fine_card.setVisible(False)
 
         # ── Massacre mission stacking card (hidden if no massacre missions
         # currently active) ────────────────────────────────────────────────
@@ -301,6 +342,11 @@ class CombatPanel(QWidget):
             self._refresh_bounty_card(state)
         except Exception:
             log.exception("CombatPanel._refresh_bounty_card failed")
+
+        try:
+            self._refresh_fine_card(state)
+        except Exception:
+            log.exception("CombatPanel._refresh_fine_card failed")
 
         try:
             self._refresh_massacre_card(state)
@@ -500,6 +546,36 @@ class CombatPanel(QWidget):
             f"controlled by {station.get('station_faction') or 'unknown faction'}. "
             f"Confirmed {visited_txt} — Interstellar Factors availability "
             f"shifts with system security/BGS, so verify on arrival."
+        )
+
+    def _refresh_fine_card(self, state):
+        active = getattr(state, "active_fines", None) or {}
+        if not active:
+            self.fine_card.setVisible(False)
+            return
+
+        self.fine_card.setVisible(True)
+        parts = [f"{faction}: {amount:,} Cr" for faction, amount in active.items()]
+        self.fine_summary.setText("Outstanding: " + "  |  ".join(parts))
+
+        stations = getattr(state, "closest_fine_stations", None) or {}
+        lines = []
+        for faction in active:
+            station = stations.get(faction)
+            if not isinstance(station, dict):
+                lines.append(f"{faction}: no confirmed controlled station known yet.")
+                continue
+            dist = station.get("distance_ly")
+            dist_txt = f"{dist:.1f} ly" if isinstance(dist, (int, float)) else "? ly"
+            visited_txt, _ = fmt.relative_time(station.get("last_visited") or "")
+            lines.append(
+                f"{faction}: {station.get('station_name') or '?'} "
+                f"({station.get('system_name') or '?'}), {dist_txt} — "
+                f"confirmed {visited_txt}."
+            )
+        self.fine_stations.setText(
+            "Pay at any station the issuing faction controls (no risk, no markup) — "
+            + " ".join(lines)
         )
 
     def _refresh_massacre_card(self, state):
