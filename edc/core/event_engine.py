@@ -1599,20 +1599,32 @@ class EventEngine:
                         if rec_body_name and rec_body_name != body_nm:
                             continue
 
-                        # CCR is measured from the most recent sample point only.
-                        # (The game requires each scan to be CCR metres from the previous, not all prior scans.)
-                        last_pt = pts[-1]
-                        if not (isinstance(last_pt, dict) and "lat" in last_pt and "lon" in last_pt):
+                        # CCR must clear every prior sample point, not just the
+                        # most recent one -- confirmed live: sample 3 needs to
+                        # be far enough from BOTH sample 1 and sample 2, not
+                        # just sample 2. Using only the last point let this
+                        # live indicator show "distance reached" while still
+                        # too close to an earlier sample, which the game's own
+                        # scan then rejects. Matches the dmin-over-all-points
+                        # calculation the ScanOrganic "sample" handler below
+                        # already uses at the moment of taking a sample.
+                        dmin = None
+                        for pt in pts:
+                            if not (isinstance(pt, dict) and "lat" in pt and "lon" in pt):
+                                continue
+                            try:
+                                d = self._surface_distance_m(
+                                    lat, lon,
+                                    float(pt["lat"]), float(pt["lon"]),
+                                    R,
+                                )
+                            except Exception:
+                                continue
+                            if dmin is None or d < dmin:
+                                dmin = d
+                        if dmin is None:
                             continue
-                        try:
-                            d = self._surface_distance_m(
-                                lat, lon,
-                                float(last_pt["lat"]), float(last_pt["lon"]),
-                                R,
-                            )
-                        except Exception:
-                            continue
-                        rec["CCRDistanceM"] = int(round(d))
+                        rec["CCRDistanceM"] = int(round(dmin))
                         rec["CCRRemainingM"] = int(max(0, req - rec["CCRDistanceM"]))
                         genus = str(rec.get("Genus") or "").strip()
                         if rec["CCRRemainingM"] == 0:
