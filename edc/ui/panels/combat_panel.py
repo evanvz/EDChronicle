@@ -8,12 +8,14 @@ from PyQt6.QtWidgets import (
     QHeaderView,
     QScrollArea,
     QFrame,
+    QTabWidget,
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 
 from edc.core.bgs_conflicts import find_squadron_war_enemy
 from edc.ui import formatting as fmt
+from edc.ui.panels.combat_bgs_status_panel import CombatBgsStatusPanel
 
 log = logging.getLogger(__name__)
 
@@ -25,12 +27,21 @@ class CombatPanel(QWidget):
     main_window, repo, or any other panel.
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, repo, parent=None):
         super().__init__(parent)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
+
+        inner_tabs = QTabWidget()
+        outer.addWidget(inner_tabs, 1)
+
+        overview_page = QWidget()
+        page_l = QVBoxLayout(overview_page)
+        page_l.setContentsMargins(0, 0, 0, 0)
+        page_l.setSpacing(0)
+        inner_tabs.addTab(overview_page, "Overview")
 
         # ── Header strip ──────────────────────────────────────────────────
         hdr = QWidget()
@@ -44,7 +55,7 @@ class CombatPanel(QWidget):
         )
         self.combat_hint.setWordWrap(True)
         hdr_l.addWidget(self.combat_hint)
-        outer.addWidget(hdr, 0)
+        page_l.addWidget(hdr, 0)
 
         # ── Scroll area ───────────────────────────────────────────────────
         scroll = QScrollArea()
@@ -53,7 +64,7 @@ class CombatPanel(QWidget):
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
-        outer.addWidget(scroll, 1)
+        page_l.addWidget(scroll, 1)
 
         content = QWidget()
         content.setStyleSheet("background: transparent;")
@@ -332,7 +343,15 @@ class CombatPanel(QWidget):
         card_l.addWidget(self.combat_table)
         content_l.addWidget(card)
 
+        self.bgs_status_panel = CombatBgsStatusPanel(repo)
+        inner_tabs.addTab(self.bgs_status_panel, "System Status")
+
     def refresh(self, state):
+        try:
+            self.bgs_status_panel.refresh(state)
+        except Exception:
+            log.exception("CombatPanel.bgs_status_panel.refresh failed")
+
         try:
             self._refresh_notoriety_card(state)
         except Exception:

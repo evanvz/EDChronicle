@@ -1473,7 +1473,7 @@ class MainWindow(QMainWindow):
         self.squadron_panel.eligibility_check_requested.connect(self._on_check_colonisation_eligibility_clicked)
 
         # Combat tab (stub)
-        self.combat_panel = CombatPanel()
+        self.combat_panel = CombatPanel(self.repo)
 
         # Intel tab (external / advisory)
         self.intel_panel = IntelPanel(self.repo)
