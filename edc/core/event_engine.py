@@ -11,6 +11,7 @@ from edc.engine.handlers import exploration, exobio, inventory, powerplay, misc,
 from edc.core.squadron_events import SQUADRON_EVENT_NAMES, apply_squadron_event
 from edc.core.mission_events import MISSION_EVENT_NAMES, apply_mission_event
 from edc.core.bgs_conflicts import find_squadron_war_enemy, squadron_faction_name
+from edc.core.res_signals import res_tier_from_signal_name
 from edc.core.ship_loadout import has_any_weapon
 from edc.core.ring_signals import RING_NAME_RE as _RING_NAME_RE, parse_ring_hotspots
 
@@ -232,6 +233,8 @@ class EventEngine:
                 return "NavBeacon"
             if st == "touristbeacon":
                 return "TouristBeacon"
+            if st == "resourceextraction":
+                return "RES"
             if isinstance(is_station, bool) and is_station:
                 return "Station"
             if uss_type == "$USS_Type_NonHuman;":
@@ -1418,6 +1421,7 @@ class EventEngine:
                 "SignalType": sig_type,
                 "USSType": uss,
                 "Category": category,
+                "Tier": res_tier_from_signal_name(sig_name) if category == "RES" else None,
                 "ThreatLevel": threat if isinstance(threat, int) else None,
                 "IsStation": bool(is_station) if isinstance(is_station, bool) else None,
                 "TimeRemaining": time_rem if isinstance(time_rem, (int, float)) else None,
