@@ -467,13 +467,35 @@ class Repository:
             (system_address, name),
         )
 
+    def set_manual_squadron_faction(self, faction_name: str) -> None:
+        """
+        Seeds is_squadron_faction detection without waiting for a live
+        Location/Docked/FSDJump event to report SquadronFaction:true —
+        for when a commander's faction is already known (e.g. after moving
+        to a new PC with no journal history yet) but they haven't visited
+        one of its systems this session. Stored under the reserved
+        system_address=0 sentinel, which get_player_faction_overview
+        excludes from the actual systems list.
+        """
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        self.save_faction_snapshot(
+            system_address=0,
+            faction={"Name": faction_name, "SquadronFaction": True},
+            snapshot_date=now[:10],
+            is_controlling=False,
+            data_timestamp=now,
+            source="manual",
+        )
+
     def get_player_faction_overview(self) -> Optional[dict]:
         """
         Detects the player's squadron-aligned minor faction (if any, from
-        SquadronFaction:true in the journal) and returns its most recent
-        recorded status in every system it's ever been seen in — not just
-        the current system. Returns None if no squadron faction has ever
-        been recorded.
+        SquadronFaction:true in the journal, or a manually-set placeholder
+        at system_address=0 — see set_manual_squadron_faction) and returns
+        its most recent recorded status in every system it's ever been seen
+        in — not just the current system. The placeholder row itself is
+        excluded from the systems list (system_address=0 isn't a real
+        system). Returns None if no squadron faction has ever been recorded.
         """
         row = self.db.conn.execute(
             """
@@ -495,6 +517,7 @@ class Repository:
             FROM faction_snapshots fs
             LEFT JOIN systems s ON s.system_address = fs.system_address
             WHERE fs.faction_name = ?
+              AND fs.system_address != 0
               AND fs.snapshot_date = (
                   SELECT MAX(snapshot_date) FROM faction_snapshots fs2
                   WHERE fs2.system_address = fs.system_address

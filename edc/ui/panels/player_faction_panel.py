@@ -20,7 +20,7 @@ from PyQt6.QtGui import QColor, QFontMetrics
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QFrame, QFileDialog, QDialog,
-    QApplication, QCompleter, QSizePolicy,
+    QApplication, QCompleter, QSizePolicy, QInputDialog,
 )
 from PyQt6.QtCharts import QChart, QChartView, QLineSeries, QDateTimeAxis, QValueAxis
 
@@ -625,6 +625,15 @@ class PlayerFactionPanel(QWidget):
         self._summary_label.setStyleSheet("background:transparent; border:none; color:#c8c8c8;")
         frame_l.addWidget(self._summary_label)
 
+        self._set_faction_btn = QPushButton("Set faction manually…")
+        self._set_faction_btn.setToolTip(
+            "No squadron-aligned faction detected yet this session — set it "
+            "by name instead of waiting to visit one of its systems."
+        )
+        self._set_faction_btn.setVisible(False)
+        self._set_faction_btn.clicked.connect(self._on_set_faction_manually_clicked)
+        frame_l.addWidget(self._set_faction_btn)
+
         self._bgs_contribution_label = QLabel("")
         self._bgs_contribution_label.setWordWrap(True)
         self._bgs_contribution_label.setStyleSheet("background:transparent; border:none; color:#9BE68C;")
@@ -970,6 +979,7 @@ class PlayerFactionPanel(QWidget):
                 "You're not currently aligned with a squadron-supported minor faction — "
                 "this tab activates automatically once your squadron adopts one."
             )
+            self._set_faction_btn.setVisible(True)
             self._rebuild_buckets([])
             self._missions_status_label.setText("")
             self._missions_table.setRowCount(0)
@@ -977,6 +987,7 @@ class PlayerFactionPanel(QWidget):
             self._clear_stations_grid()
             return
 
+        self._set_faction_btn.setVisible(False)
         self._faction_name = overview["faction_name"]
         systems = overview.get("systems") or []
         controlling_count = sum(1 for s in systems if s.get("is_controlling"))
@@ -1515,6 +1526,22 @@ class PlayerFactionPanel(QWidget):
 
         self._add_system_status.setText(f"Added {result['system_name']}.")
         self._add_system_edit.clear()
+        self.refresh(self._last_state)
+
+    def _on_set_faction_manually_clicked(self):
+        name, ok = QInputDialog.getText(
+            self, "Set faction manually",
+            "Squadron-aligned minor faction name (must match in-game exactly):",
+        )
+        name = (name or "").strip()
+        if not ok or not name:
+            return
+        try:
+            self._repo.set_manual_squadron_faction(name)
+        except Exception:
+            log.exception("Failed to save manual squadron faction")
+            self._summary_label.setText("Couldn't save that — see log.")
+            return
         self.refresh(self._last_state)
 
     # ── Bulk CSV import ──────────────────────────────────────────────────
