@@ -237,6 +237,8 @@ class EddnPowerPlayWorker(QObject):
                     self.codex_entry_seen.emit(msg)
                 continue
 
+            self._maybe_emit_bgs_status(msg, msg.get("timestamp") or "")
+
             power = msg.get("ControllingPower")
             power_state = msg.get("PowerplayState")
             id64 = msg.get("SystemAddress")
@@ -252,8 +254,6 @@ class EddnPowerPlayWorker(QObject):
 
             if self._watched_factions:
                 self._maybe_emit_faction_seen(msg, timestamp)
-
-            self._maybe_emit_bgs_status(msg, timestamp)
 
     def _maybe_emit_faction_seen(self, msg: dict, timestamp: str) -> None:
         factions = msg.get("Factions")
