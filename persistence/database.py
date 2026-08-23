@@ -248,6 +248,31 @@ class Database:
             # an ordinary pending Codex hint so a revisit can restore
             # "already confirmed" instead of "still needs scanning".
             "ALTER TABLE codex_entries ADD COLUMN is_phenomena INTEGER DEFAULT 0",
+            # War/CivilWar conflicts + multi-state factions -- "latest known
+            # per system" (not daily history like faction_snapshots), only
+            # ever written when there's something combat/BGS-relevant to
+            # show. Fed live going forward only (own journal + EDDN), never
+            # backfilled from old journal files -- a war recorded weeks ago
+            # is very likely already resolved, so backfilling it would be
+            # actively misleading rather than merely stale.
+            """CREATE TABLE IF NOT EXISTS system_bgs_status (
+                system_address INTEGER PRIMARY KEY,
+                system_name    TEXT,
+                conflicts      TEXT,
+                faction_states TEXT,
+                data_timestamp TEXT,
+                source         TEXT
+            )""",
+            # RES/Low RES/High RES/Hazardous RES presence, system-level only
+            # (FSSSignalDiscovered carries no ring/body granularity). Same
+            # "latest known, forward-only" reasoning as system_bgs_status.
+            """CREATE TABLE IF NOT EXISTS system_res_sites (
+                system_address INTEGER PRIMARY KEY,
+                system_name    TEXT,
+                tiers          TEXT,
+                data_timestamp TEXT,
+                source         TEXT
+            )""",
         ]
         for sql in migrations:
             try:
