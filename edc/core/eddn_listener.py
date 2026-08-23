@@ -45,6 +45,39 @@ _STALE_CONNECTION_TIMEOUT_S = 300
 # is generous headroom while still rejecting anything that isn't legitimate.
 _MAX_DECOMPRESSED_BYTES = 10 * 1024 * 1024
 
+_FSSSIGNALS_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/fsssignaldiscovered/"
+
+
+def _extract_bgs_status(msg: dict) -> tuple[list, list]:
+    """War/CivilWar conflicts and multi-state factions from a journal
+    message's Conflicts/Factions arrays -- unconditional (any system, not
+    just a squadron-watched faction), unlike _maybe_emit_faction_seen."""
+    conflicts = [
+        c for c in (msg.get("Conflicts") or [])
+        if isinstance(c, dict) and str(c.get("WarType", "")).lower() in ("war", "civilwar")
+    ]
+    factions = [
+        f for f in (msg.get("Factions") or [])
+        if isinstance(f, dict) and (f.get("ActiveStates") or f.get("PendingStates") or f.get("RecoveringStates"))
+    ]
+    return conflicts, factions
+
+
+def _extract_res_tiers(msg: dict) -> list:
+    """Sorted, deduped RES tiers from an fsssignaldiscovered message's
+    signals array."""
+    from edc.core.res_signals import res_tier_from_signal_name
+
+    tiers = set()
+    for sig in (msg.get("signals") or []):
+        if not isinstance(sig, dict):
+            continue
+        if sig.get("SignalType") != "ResourceExtraction":
+            continue
+        name = sig.get("SignalName_Localised") or sig.get("SignalName") or ""
+        tiers.add(res_tier_from_signal_name(name))
+    return sorted(tiers)
+
 
 def _safe_decompress(raw: bytes) -> bytes | None:
     """Returns the decompressed bytes, or None if decompression failed or
@@ -83,6 +116,13 @@ class EddnPowerPlayWorker(QObject):
     # emitted for factions in watched_factions, so this stays rare rather than
     # firing on every journal/1 message network-wide.
     faction_seen = pyqtSignal(object, str, dict, bool, str)
+    # id64, StarSystem, war conflicts (list), multi-state factions (list),
+    # timestamp -- unconditional (any system), unlike faction_seen which is
+    # gated to watched_factions. Feeds system_bgs_status.
+    bgs_status_seen = pyqtSignal(object, str, list, list, str)
+    # id64, StarSystem, RES tiers present (list), timestamp. Feeds
+    # system_res_sites.
+    res_signal_seen = pyqtSignal(object, str, list, str)
     finished = pyqtSignal()
 
     def __init__(self, watched_factions=None):
@@ -158,6 +198,12 @@ class EddnPowerPlayWorker(QObject):
                     self.fcmaterials_seen.emit(msg)
                 continue
 
+            if schema.startswith(_FSSSIGNALS_SCHEMA_PREFIX):
+                msg = data.get("message")
+                if isinstance(msg, dict):
+                    self._maybe_emit_res_signal(msg)
+                continue
+
             if not schema.startswith(_JOURNAL_SCHEMA_PREFIX):
                 continue
 
@@ -207,6 +253,8 @@ class EddnPowerPlayWorker(QObject):
             if self._watched_factions:
                 self._maybe_emit_faction_seen(msg, timestamp)
 
+            self._maybe_emit_bgs_status(msg, timestamp)
+
     def _maybe_emit_faction_seen(self, msg: dict, timestamp: str) -> None:
         factions = msg.get("Factions")
         system_address = msg.get("SystemAddress")
@@ -237,3 +285,26 @@ class EddnPowerPlayWorker(QObject):
         # message is used as an is_controlling heuristic instead.
         is_controlling = bool(best_name and target.get("Name") == best_name)
         self.faction_seen.emit(system_address, star_system, dict(target), is_controlling, timestamp)
+
+    def _maybe_emit_bgs_status(self, msg: dict, timestamp: str) -> None:
+        system_address = msg.get("SystemAddress")
+        star_system = msg.get("StarSystem")
+        if not (isinstance(system_address, int) and system_address > 0
+                and isinstance(star_system, str) and star_system):
+            return
+        conflicts, factions = _extract_bgs_status(msg)
+        if not conflicts and not factions:
+            return
+        self.bgs_status_seen.emit(system_address, star_system, conflicts, factions, timestamp)
+
+    def _maybe_emit_res_signal(self, msg: dict) -> None:
+        system_address = msg.get("SystemAddress")
+        star_system = msg.get("StarSystem")
+        if not (isinstance(system_address, int) and system_address > 0
+                and isinstance(star_system, str) and star_system):
+            return
+        tiers = _extract_res_tiers(msg)
+        if not tiers:
+            return
+        timestamp = msg.get("timestamp") or ""
+        self.res_signal_seen.emit(system_address, star_system, tiers, timestamp)
