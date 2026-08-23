@@ -37,6 +37,7 @@ Inspired by [EDCoPilot](https://www.razzafrag.com/) by CMDR RazzaFrag.
 - Notoriety tracking with decay info, separate from active bounties
 - Interstellar Factors bounty clearance: tracks outstanding `CommitCrime` bounties per issuing faction and finds the closest known station offering Interstellar Factors — galaxy-wide via EDDN `Docked` sightings, not just your own visits (excluding stations owned by the issuing faction, which can't clear it)
 - Massacre mission stacking: active kill-count missions grouped by target faction and system, showing kills credited so far and stack size — one kill correctly credits every stacked mission simultaneously, matching real game behavior, and flags a mission as ready to turn in once its count is met
+- Combat > System Status: War/CivilWar conflicts, multi-state factions (e.g. War+Outbreak), and RES/Low RES/High RES/Hazardous RES presence for every tracked system within a configurable radius — sourced from both the player's own journal and a live EDDN subscription, same radius-search shape as the Market tab. RES signal detection is system-level only (no ring/body granularity); status reflects the most recently confirmed sighting, not full history, and results older than 14 days are excluded from search rather than shown as possibly-stale current state.
 
 ### PowerPlay
 - Live system type detection on every jump: reinforcement, undermining, or acquisition
@@ -351,6 +352,8 @@ Notable files:
 | `dismissed_faction_systems` | Systems manually hidden from the Player Faction tab |
 | `station_info` | Landing pad counts, station services, and (for Fleet Carriers) self-reported docking access — from `Docked` events, yours and every commander's via EDDN |
 | `market_prices` | Galaxy-wide commodity prices from the EDDN commodity feed, keyed by market + commodity |
+| `system_bgs_status` | Latest known War/CivilWar conflicts and multi-state factions per system, from journal visits and EDDN — one row per system, not daily history |
+| `system_res_sites` | Latest known RES/Low RES/High RES/Hazardous RES tier presence per system, from journal visits and EDDN |
 | `fleet_carrier_materials` | Galaxy-wide Fleet Carrier engineering material listings from EDDN, keyed by market + material |
 | `system_coords` | System coordinates harvested passively from EDDN journal messages, used for Market tab distance filtering |
 | `commodity_names` | Internal-name → display-name mapping, seeded from your own `Market.json` visits |
