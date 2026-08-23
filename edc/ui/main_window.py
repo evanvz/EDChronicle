@@ -471,6 +471,35 @@ class MainWindow(QMainWindow):
         except Exception:
             log.exception("Failed to save faction snapshots")
 
+    def _save_system_bgs_status(self):
+        system_address = getattr(self.state, "system_address", None)
+        if not isinstance(system_address, int):
+            return
+        system_name = getattr(self.state, "system", None) or ""
+        factions = getattr(self.state, "factions", None) or []
+        conflicts = getattr(self.state, "system_conflicts", None) or []
+        timestamp = getattr(self.state, "factions_timestamp", "") or ""
+        try:
+            self.repo.save_system_bgs_status(
+                system_address, system_name, conflicts, factions, timestamp, "journal",
+            )
+        except Exception:
+            log.exception("Failed to save system BGS status")
+
+    def _save_system_res_tiers(self, event_timestamp: str = ""):
+        system_address = getattr(self.state, "system_address", None)
+        if not isinstance(system_address, int):
+            return
+        system_name = getattr(self.state, "system", None) or ""
+        signals = getattr(self.state, "system_signals", None) or []
+        tiers = [s.get("Tier") for s in signals if isinstance(s, dict) and s.get("Category") == "RES" and s.get("Tier")]
+        try:
+            self.repo.save_system_res_tiers(
+                system_address, system_name, tiers, event_timestamp, "journal",
+            )
+        except Exception:
+            log.exception("Failed to save system RES tiers")
+
     def _save_ring_data(self):
         system_address = getattr(self.state, "system_address", None)
         rings = getattr(self.state, "rings", None) or {}
@@ -2238,6 +2267,10 @@ class MainWindow(QMainWindow):
 
         if name in ("Docked", "FSDJump", "Location"):
             self._save_faction_snapshots(self.state.factions_timestamp)
+            self._save_system_bgs_status()
+
+        if name == "FSSSignalDiscovered":
+            self._save_system_res_tiers(evt.get("timestamp") or "")
 
         if name in ("FSDJump", "Location"):
             self._maybe_refresh_colonisation_candidates()
