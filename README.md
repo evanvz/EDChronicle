@@ -411,6 +411,8 @@ Double-click `launch.bat` from anywhere — it always resolves paths relative to
 
 > **First launch note:** On first run, EDChronicle will import all your existing journal files into its local database. This can take a minute or two depending on how many journals you have. Progress is shown on the startup screen. Subsequent launches are fast — only new journals are processed.
 
+> **Fresh database note:** Journal import only rebuilds what's in *your* journal files (visited systems, missions, bounties, etc). Galaxy-wide data — Market tab commodity prices, station services/pad sizes, and network-wide squadron faction presence — comes from the live EDDN feed (see [EDDN cross-check, publish & network-wide tracking path](#4-eddn-cross-check-publish--network-wide-tracking-path)) and only accumulates while the app is running and connected. A new database (fresh install, moved to a new PC without carrying over the old database file) starts empty on that data and rebuilds gradually — leave the app running to let it collect EDDN traffic, or dock at stations in person to log their markets directly.
+
 ## Updating
 
 ```
