@@ -487,6 +487,163 @@ class Repository:
             source="manual",
         )
 
+    def save_system_bgs_status(
+        self, system_address: int, system_name: str, conflicts: list, factions: list,
+        data_timestamp: str, source: str,
+    ) -> None:
+        """
+        Upserts current War/CivilWar conflicts and multi-state factions for
+        a system -- skipped entirely if there's nothing combat/BGS-relevant
+        to show. Freshness-guarded like save_faction_snapshot: whichever
+        pipeline (own journal vs EDDN) has the more recent underlying data
+        wins regardless of write order.
+        """
+        war_conflicts = []
+        for c in (conflicts or []):
+            if not isinstance(c, dict):
+                continue
+            war_type = str(c.get("WarType", "")).lower()
+            if war_type not in ("war", "civilwar"):
+                continue
+            f1 = c.get("Faction1") or {}
+            f2 = c.get("Faction2") or {}
+            war_conflicts.append({
+                "faction1": f1.get("Name"), "faction2": f2.get("Name"),
+                "war_type": war_type, "status": c.get("Status"),
+                "won_days1": f1.get("WonDays"), "won_days2": f2.get("WonDays"),
+            })
+
+        multistate_factions = []
+        for f in (factions or []):
+            if not isinstance(f, dict):
+                continue
+            if f.get("ActiveStates") or f.get("PendingStates") or f.get("RecoveringStates"):
+                multistate_factions.append({
+                    "name": f.get("Name"), "faction_state": f.get("FactionState"),
+                    "active_states": f.get("ActiveStates"), "pending_states": f.get("PendingStates"),
+                    "recovering_states": f.get("RecoveringStates"),
+                })
+
+        if not war_conflicts and not multistate_factions:
+            return
+
+        normalized_timestamp = _normalize_data_timestamp(data_timestamp)
+        self.db.execute(
+            """
+            INSERT INTO system_bgs_status (
+                system_address, system_name, conflicts, faction_states, data_timestamp, source
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(system_address) DO UPDATE SET
+                system_name    = excluded.system_name,
+                conflicts      = excluded.conflicts,
+                faction_states = excluded.faction_states,
+                data_timestamp = excluded.data_timestamp,
+                source         = excluded.source
+            WHERE system_bgs_status.data_timestamp IS NULL
+               OR excluded.data_timestamp >= system_bgs_status.data_timestamp
+            """,
+            (
+                system_address, system_name,
+                json.dumps(war_conflicts), json.dumps(multistate_factions),
+                normalized_timestamp, source,
+            ),
+        )
+
+    def save_system_res_tiers(
+        self, system_address: int, system_name: str, tiers: list, data_timestamp: str, source: str,
+    ) -> None:
+        """Upserts the RES tiers currently known present in a system --
+        same freshness-guarded upsert as save_system_bgs_status. Skipped if
+        tiers is empty (nothing to show)."""
+        clean_tiers = sorted({t for t in (tiers or []) if isinstance(t, str) and t})
+        if not clean_tiers:
+            return
+
+        normalized_timestamp = _normalize_data_timestamp(data_timestamp)
+        self.db.execute(
+            """
+            INSERT INTO system_res_sites (
+                system_address, system_name, tiers, data_timestamp, source
+            )
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(system_address) DO UPDATE SET
+                system_name    = excluded.system_name,
+                tiers          = excluded.tiers,
+                data_timestamp = excluded.data_timestamp,
+                source         = excluded.source
+            WHERE system_res_sites.data_timestamp IS NULL
+               OR excluded.data_timestamp >= system_res_sites.data_timestamp
+            """,
+            (system_address, system_name, json.dumps(clean_tiers), normalized_timestamp, source),
+        )
+
+    def search_bgs_status_near(self, x: float, y: float, z: float, radius_ly: float) -> list[dict]:
+        """War/CivilWar + multi-state faction status for every tracked
+        system within radius_ly, closest-first. Same bounding-box-then-
+        Euclidean-filter pattern as search_market_prices (system_coords is
+        galaxy-wide and unbounded, fed continuously by the EDDN listener).
+        Rows older than _MARKET_DATA_MAX_AGE_DAYS are excluded -- a two-
+        week-old "War" entry is more likely wrong than right."""
+        cutoff = _market_data_cutoff()
+        rows = self.db.conn.execute(
+            """
+            SELECT b.system_address, b.system_name, b.conflicts, b.faction_states,
+                   b.data_timestamp, sc.x, sc.y, sc.z
+            FROM system_bgs_status b
+            INNER JOIN system_coords sc ON sc.system_name = b.system_name
+            WHERE b.data_timestamp >= ?
+                  AND sc.x BETWEEN ? AND ? AND sc.y BETWEEN ? AND ? AND sc.z BETWEEN ? AND ?
+            """,
+            (cutoff, x - radius_ly, x + radius_ly, y - radius_ly, y + radius_ly, z - radius_ly, z + radius_ly),
+        ).fetchall()
+
+        results = []
+        for r in rows:
+            dist = ((r["x"] - x) ** 2 + (r["y"] - y) ** 2 + (r["z"] - z) ** 2) ** 0.5
+            if dist > radius_ly:
+                continue
+            results.append({
+                "system_address": r["system_address"],
+                "system_name": r["system_name"],
+                "distance_ly": dist,
+                "conflicts": json.loads(r["conflicts"]) if r["conflicts"] else [],
+                "faction_states": json.loads(r["faction_states"]) if r["faction_states"] else [],
+                "data_timestamp": r["data_timestamp"],
+            })
+        results.sort(key=lambda r: r["distance_ly"])
+        return results
+
+    def search_res_sites_near(self, x: float, y: float, z: float, radius_ly: float) -> list[dict]:
+        """RES tier presence for every tracked system within radius_ly,
+        closest-first. Same pattern/cutoff as search_bgs_status_near."""
+        cutoff = _market_data_cutoff()
+        rows = self.db.conn.execute(
+            """
+            SELECT r.system_address, r.system_name, r.tiers, r.data_timestamp, sc.x, sc.y, sc.z
+            FROM system_res_sites r
+            INNER JOIN system_coords sc ON sc.system_name = r.system_name
+            WHERE r.data_timestamp >= ?
+                  AND sc.x BETWEEN ? AND ? AND sc.y BETWEEN ? AND ? AND sc.z BETWEEN ? AND ?
+            """,
+            (cutoff, x - radius_ly, x + radius_ly, y - radius_ly, y + radius_ly, z - radius_ly, z + radius_ly),
+        ).fetchall()
+
+        results = []
+        for r in rows:
+            dist = ((r["x"] - x) ** 2 + (r["y"] - y) ** 2 + (r["z"] - z) ** 2) ** 0.5
+            if dist > radius_ly:
+                continue
+            results.append({
+                "system_address": r["system_address"],
+                "system_name": r["system_name"],
+                "distance_ly": dist,
+                "tiers": json.loads(r["tiers"]) if r["tiers"] else [],
+                "data_timestamp": r["data_timestamp"],
+            })
+        results.sort(key=lambda r: r["distance_ly"])
+        return results
+
     def get_player_faction_overview(self) -> Optional[dict]:
         """
         Detects the player's squadron-aligned minor faction (if any, from
