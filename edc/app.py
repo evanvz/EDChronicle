@@ -256,6 +256,28 @@ def run():
         background: none;
     }
 
+    QTabWidget::pane {
+        background-color: #0A0A0A;
+        border: 1px solid #2A2A2A;
+    }
+
+    QTabBar::tab {
+        background-color: #111111;
+        color: #E6E6E6;
+        padding: 6px 14px;
+        border: 1px solid #2A2A2A;
+        border-bottom: none;
+    }
+
+    QTabBar::tab:selected {
+        background-color: #FF8C00;
+        color: #000000;
+    }
+
+    QTabBar::tab:hover:!selected {
+        background-color: #1F1F1F;
+    }
+
     QLabel {
         font-size: 12px;
     }

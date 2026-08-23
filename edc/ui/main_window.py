@@ -1753,6 +1753,7 @@ class MainWindow(QMainWindow):
         self._tts_fss_complete_systems: set = set()  # system_address values already announced "FSS complete"
         self._tts_phenomena_announced: set = set()  # signal names already announced this system
         self._tts_ship_cooldown_until: float = 0.0  # monotonic timestamp
+        self._tts_under_attack_cooldown_until: float = 0.0
         self._commander_quip_cooldown_until: float = 0.0
         self._replaying: bool = False  # True during journal bootstrap; suppresses all TTS
         self._enrich_thread: QThread | None = None
@@ -2802,6 +2803,14 @@ class MainWindow(QMainWindow):
                 return ExplorationPhrases.first_footfall(body)
 
             if event_type == "UnderAttack":
+                # Frontier fires this repeatedly while taking damage (confirmed
+                # live: on-foot rapid-fire weapons produced a callout loop) --
+                # same cooldown-gate pattern as ShipTargeted below, just a
+                # longer window since this event repeats far more often.
+                now = time.monotonic()
+                if now < self._tts_under_attack_cooldown_until:
+                    return ""
+                self._tts_under_attack_cooldown_until = now + 8.0
                 return CombatPhrases.under_attack()
 
             if event_type == "ShipTargeted":
