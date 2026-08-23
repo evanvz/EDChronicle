@@ -52,6 +52,13 @@ class EddnMarketCache:
         # context in this task's design spec) -- coverage is necessarily
         # incomplete since the field is optional.
         self._carrier_access_buffer: Dict[int, Tuple[int, str, str]] = {}
+        # Keyed by system_address -- War/CivilWar conflicts + multi-state
+        # factions from any commander's journal/1 message, deduped so
+        # re-sightings between flushes cost one write, not one per sighting.
+        self._bgs_status_buffer: Dict[int, Tuple[str, list, list, str]] = {}
+        # Keyed by system_address -- RES tiers present, from any
+        # commander's fsssignaldiscovered/1 message.
+        self._res_sites_buffer: Dict[int, Tuple[str, list, str]] = {}
 
     def on_coords_seen(self, system_name: str, x: float, y: float, z: float) -> None:
         if not system_name:
@@ -109,6 +116,16 @@ class EddnMarketCache:
             return
         self._faction_buffer[system_address] = (system_name, faction, is_controlling, timestamp)
 
+    def on_bgs_status_seen(self, system_address: int, system_name: str, conflicts: list, factions: list, timestamp: str) -> None:
+        if not (isinstance(system_address, int) and system_name):
+            return
+        self._bgs_status_buffer[system_address] = (system_name, conflicts, factions, timestamp)
+
+    def on_res_signal_seen(self, system_address: int, system_name: str, tiers: list, timestamp: str) -> None:
+        if not (isinstance(system_address, int) and system_name):
+            return
+        self._res_sites_buffer[system_address] = (system_name, tiers, timestamp)
+
     def on_fcmaterials_message(self, msg: Dict[str, Any]) -> None:
         market_id = msg.get("MarketID")
         if not isinstance(market_id, int):
@@ -130,17 +147,21 @@ class EddnMarketCache:
                 timestamp,
             )
 
-    def buffered_counts(self) -> Tuple[int, int, int, int, int, int]:
-        """Returns (coord_count, market_row_count, faction_count, station_count, fcmaterials_count, carrier_access_count) currently buffered — for status/logging."""
+    def buffered_counts(self) -> Tuple[int, int, int, int, int, int, int, int]:
+        """Returns (coord_count, market_row_count, faction_count,
+        station_count, fcmaterials_count, carrier_access_count,
+        bgs_status_count, res_sites_count) currently buffered -- for
+        status/logging."""
         return (
             len(self._coord_buffer), len(self._market_buffer), len(self._faction_buffer),
             len(self._station_buffer), len(self._fcmaterials_buffer), len(self._carrier_access_buffer),
+            len(self._bgs_status_buffer), len(self._res_sites_buffer),
         )
 
     def pop_buffers(self):
         """
-        Snapshots and clears all seven buffers, returning their contents as
-        plain lists/tuples — for handing off to a background worker with
+        Snapshots and clears all nine buffers, returning their contents as
+        plain lists/tuples -- for handing off to a background worker with
         its own DB connection (see main_window.py's _EddnFlushWorker).
         Cheap, main-thread-only dict operations; the actual DB writes are
         the expensive part, deliberately not done here.
@@ -152,6 +173,8 @@ class EddnMarketCache:
         codex = list(self._codex_buffer.values())
         fcmaterials = list(self._fcmaterials_buffer.values())
         carrier_access = list(self._carrier_access_buffer.values())
+        bgs_status = list(self._bgs_status_buffer.items())
+        res_sites = list(self._res_sites_buffer.items())
         self._coord_buffer.clear()
         self._market_buffer.clear()
         self._faction_buffer.clear()
@@ -159,7 +182,9 @@ class EddnMarketCache:
         self._codex_buffer.clear()
         self._fcmaterials_buffer.clear()
         self._carrier_access_buffer.clear()
-        return coords, market, factions, stations, codex, fcmaterials, carrier_access
+        self._bgs_status_buffer.clear()
+        self._res_sites_buffer.clear()
+        return coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites
 
     def flush(self) -> None:
         """Synchronous flush on the caller's own thread/connection — only
@@ -171,11 +196,11 @@ class EddnMarketCache:
         the main thread every 45s, which froze the UI for however long a
         big buffered batch took to write (confirmed live, worse right
         after docking at a busy station's market)."""
-        coords, market, factions, stations, codex, fcmaterials, carrier_access = self.pop_buffers()
-        write_buffers(self._repo, coords, market, factions, stations, codex, fcmaterials, carrier_access)
+        coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites = self.pop_buffers()
+        write_buffers(self._repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites)
 
 
-def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, carrier_access) -> None:
+def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites) -> None:
     """The actual writes — factored out so both the main-thread flush()
     (shutdown) and a background worker (periodic, see main_window.py) can
     use the identical logic against whichever Repository they're given."""
@@ -225,3 +250,17 @@ def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, 
             repo.save_carrier_docking_access_batch(carrier_access)
         except Exception:
             log.exception("Failed to flush carrier_docking_access batch")
+
+    if bgs_status:
+        for system_address, (system_name, conflicts, factions_list, timestamp) in bgs_status:
+            try:
+                repo.save_system_bgs_status(system_address, system_name, conflicts, factions_list, timestamp, "eddn")
+            except Exception:
+                log.exception("Failed to flush BGS status for system_address=%s", system_address)
+
+    if res_sites:
+        for system_address, (system_name, tiers, timestamp) in res_sites:
+            try:
+                repo.save_system_res_tiers(system_address, system_name, tiers, timestamp, "eddn")
+            except Exception:
+                log.exception("Failed to flush RES sites for system_address=%s", system_address)
