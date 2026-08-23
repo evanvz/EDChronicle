@@ -26,6 +26,20 @@ def _fleet_carrier_cutoff() -> str:
     return (datetime.now(timezone.utc) - timedelta(days=_FLEET_CARRIER_MAX_AGE_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+# War/CivilWar conflicts run a fixed 7-day cycle before Frontier resolves
+# them (whichever faction won more days wins outright) -- a War/CivilWar
+# entry older than that is guaranteed already over, not just possibly
+# stale, so this is tighter than _MARKET_DATA_MAX_AGE_DAYS rather than
+# reusing it. Multi-state factions (the other half of system_bgs_status)
+# aren't tied to that cycle, but sharing one cutoff for the whole row is
+# simpler than tracking per-field freshness for a single upsert row.
+_BGS_STATUS_MAX_AGE_DAYS = 7
+
+
+def _bgs_status_cutoff() -> str:
+    return (datetime.now(timezone.utc) - timedelta(days=_BGS_STATUS_MAX_AGE_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def _normalize_data_timestamp(value) -> str:
     """Normalizes an EDSM Unix epoch (int/float) or an ISO8601 string
     (with a 'Z' or '+00:00' suffix) into one consistent
@@ -584,9 +598,10 @@ class Repository:
         system within radius_ly, closest-first. Same bounding-box-then-
         Euclidean-filter pattern as search_market_prices (system_coords is
         galaxy-wide and unbounded, fed continuously by the EDDN listener).
-        Rows older than _MARKET_DATA_MAX_AGE_DAYS are excluded -- a two-
-        week-old "War" entry is more likely wrong than right."""
-        cutoff = _market_data_cutoff()
+        Rows older than _BGS_STATUS_MAX_AGE_DAYS are excluded -- wars/civil
+        wars resolve within a fixed 7-day cycle, so anything older is
+        guaranteed already over, not just possibly stale."""
+        cutoff = _bgs_status_cutoff()
         rows = self.db.conn.execute(
             """
             SELECT b.system_address, b.system_name, b.conflicts, b.faction_states,
@@ -1217,14 +1232,14 @@ class Repository:
     def prune_stale_system_bgs_status(self, batch_size: int = 20_000) -> int:
         """
         Deletes rows already excluded from search results by
-        _market_data_cutoff() -- same reasoning/cutoff as
-        prune_stale_market_prices() (search_bgs_status_near uses the same
-        14-day cutoff), so this doesn't change what search can find, only
-        what's still sitting on disk. system_bgs_status is fed
-        unconditionally by EDDN network-wide, so it's genuinely unbounded
-        without this. Batched the same way and for the same reason as
-        prune_stale_market_prices()."""
-        cutoff = _market_data_cutoff()
+        _bgs_status_cutoff() -- same reasoning as prune_stale_market_prices(),
+        matching search_bgs_status_near's own 7-day cutoff (wars/civil wars
+        resolve within a fixed 7-day cycle), so this doesn't change what
+        search can find, only what's still sitting on disk. system_bgs_status
+        is fed unconditionally by EDDN network-wide, so it's genuinely
+        unbounded without this. Batched the same way and for the same
+        reason as prune_stale_market_prices()."""
+        cutoff = _bgs_status_cutoff()
         total_deleted = 0
         while True:
             cur = self.db.conn.execute(

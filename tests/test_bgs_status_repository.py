@@ -2,6 +2,8 @@
 real SQLite (temp file), same fixture shape as
 test_faction_snapshot_freshness.py."""
 import json
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 from persistence.database import Database
@@ -155,3 +157,32 @@ def test_search_res_sites_near_returns_tiers(repo):
     results = repo.search_res_sites_near(0.0, 0.0, 0.0, radius_ly=50.0)
     assert results[0]["tiers"] == ["Hazardous"]
     assert results[0]["distance_ly"] == 0.0
+
+
+def _ts_days_ago(days: float) -> str:
+    return (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def test_search_bgs_status_near_excludes_rows_past_7_day_war_cycle(repo):
+    # War/CivilWar conflicts resolve within a fixed 7-day cycle -- a
+    # War/CivilWar row older than that is guaranteed already over, unlike
+    # market_prices' looser 14-day cutoff which this table deliberately
+    # does not reuse.
+    _seed_coords(repo, "Fresh", 0.0, 0.0, 0.0)
+    _seed_coords(repo, "Stale", 1.0, 0.0, 0.0)
+    repo.save_system_bgs_status(1, "Fresh", conflicts=[{"WarType": "war", "Faction1": {"Name": "A"}, "Faction2": {"Name": "B"}}],
+                                 factions=[], data_timestamp=_ts_days_ago(2), source="journal")
+    repo.save_system_bgs_status(2, "Stale", conflicts=[{"WarType": "war", "Faction1": {"Name": "C"}, "Faction2": {"Name": "D"}}],
+                                 factions=[], data_timestamp=_ts_days_ago(10), source="journal")
+    results = repo.search_bgs_status_near(0.0, 0.0, 0.0, radius_ly=50.0)
+    assert [r["system_name"] for r in results] == ["Fresh"]
+
+
+def test_search_res_sites_near_keeps_rows_past_the_7_day_war_cutoff(repo):
+    # RES tier presence isn't tied to the BGS war cycle -- confirms the two
+    # search methods use their own independent cutoffs, not one shared
+    # constant, so a future refactor can't silently unify them.
+    _seed_coords(repo, "Near", 0.0, 0.0, 0.0)
+    repo.save_system_res_tiers(1, "Near", tiers=["Hazardous"], data_timestamp=_ts_days_ago(10), source="journal")
+    results = repo.search_res_sites_near(0.0, 0.0, 0.0, radius_ly=50.0)
+    assert [r["system_name"] for r in results] == ["Near"]
