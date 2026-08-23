@@ -7,6 +7,21 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 
+def is_multistate_faction(faction: dict) -> bool:
+    """True if a faction is in 2+ simultaneous states, counted across
+    ActiveStates/PendingStates/RecoveringStates combined -- e.g. a single
+    ActiveStates bucket with both War and Outbreak already qualifies, as
+    does one state in each of two different buckets. A faction with just
+    one state total (the common case -- nearly every faction has at least
+    one active state at any given time) does not qualify."""
+    total = (
+        len(faction.get("ActiveStates") or [])
+        + len(faction.get("PendingStates") or [])
+        + len(faction.get("RecoveringStates") or [])
+    )
+    return total >= 2
+
+
 def squadron_faction_name(factions: List[dict]) -> Optional[str]:
     """Name of the squadron-aligned faction (SquadronFaction:true in the
     journal's Factions[] array), or None if not currently known."""

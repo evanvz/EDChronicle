@@ -251,6 +251,19 @@ def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, 
         except Exception:
             log.exception("Failed to flush carrier_docking_access batch")
 
+    # bgs_status/res_sites, unlike the `factions` loop above (rare -- gated
+    # behind a squadron watch-list), are unconditional and network-wide, so
+    # a single flush tick can mean many individual commits here. Each
+    # save_system_bgs_status()/save_system_res_tiers() call commits
+    # internally via Database.execute() (unconditional self.conn.commit(),
+    # no way to opt out without changing that shared method's signature --
+    # confirmed by inspection, see persistence/database.py), and those two
+    # save methods have real per-row skip logic that a naive executemany()
+    # batch can't replicate, so batching this loop's commits is out of
+    # scope for this fix wave. One-commit-per-system here is intentionally
+    # accepted as consistent with the existing `factions` loop's risk
+    # profile above -- flagged as a follow-up if this proves to starve
+    # concurrent writers at real EDDN volume.
     if bgs_status:
         for system_address, (system_name, conflicts, factions_list, timestamp) in bgs_status:
             try:

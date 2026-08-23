@@ -6,12 +6,19 @@ from __future__ import annotations
 import re
 
 _TIER_RE = re.compile(r"\[(Low|High|Hazardous)\]", re.IGNORECASE)
+_UNRESOLVED_TOKEN_RE = re.compile(r"^\$.*;$")
 
 
 def res_tier_from_signal_name(signal_name: str) -> str:
     """'Resource Extraction Site [Hazardous]' -> 'Hazardous'.
-    A plain 'Resource Extraction Site' (no bracket) -> 'Nominal'."""
+    A plain 'Resource Extraction Site' (no bracket) -> 'Nominal'.
+    A raw unresolved internal token like '$MULTIPLAYER_SCENARIO14_TITLE;'
+    (starts with '$', ends with ';') -> 'Unknown', not 'Nominal' --
+    otherwise a missing localized name would be silently recorded as
+    genuinely nominal, indistinguishable from the real thing."""
     if not isinstance(signal_name, str):
         return "Nominal"
+    if _UNRESOLVED_TOKEN_RE.match(signal_name):
+        return "Unknown"
     m = _TIER_RE.search(signal_name)
     return m.group(1).title() if m else "Nominal"

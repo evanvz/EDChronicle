@@ -5,6 +5,7 @@ from typing import List, Optional
 
 from .database import Database
 from edc.core.station_pads import effective_pad_size
+from edc.core.bgs_conflicts import is_multistate_faction
 
 # A commodity price this old is excluded from buy/sell search results
 # entirely — a BGS state change (war outcome, boom/bust, faction takeover)
@@ -517,7 +518,7 @@ class Repository:
         for f in (factions or []):
             if not isinstance(f, dict):
                 continue
-            if f.get("ActiveStates") or f.get("PendingStates") or f.get("RecoveringStates"):
+            if is_multistate_faction(f):
                 multistate_factions.append({
                     "name": f.get("Name"), "faction_state": f.get("FactionState"),
                     "active_states": f.get("ActiveStates"), "pending_states": f.get("PendingStates"),
@@ -1203,6 +1204,51 @@ class Repository:
             cur = self.db.conn.execute(
                 "DELETE FROM fleet_carrier_materials WHERE rowid IN "
                 "(SELECT rowid FROM fleet_carrier_materials WHERE last_updated < ? LIMIT ?)",
+                (cutoff, batch_size),
+            )
+            self.db.conn.commit()
+            deleted = cur.rowcount
+            total_deleted += deleted
+            if deleted < batch_size:
+                break
+            time.sleep(0.05)
+        return total_deleted
+
+    def prune_stale_system_bgs_status(self, batch_size: int = 20_000) -> int:
+        """
+        Deletes rows already excluded from search results by
+        _market_data_cutoff() -- same reasoning/cutoff as
+        prune_stale_market_prices() (search_bgs_status_near uses the same
+        14-day cutoff), so this doesn't change what search can find, only
+        what's still sitting on disk. system_bgs_status is fed
+        unconditionally by EDDN network-wide, so it's genuinely unbounded
+        without this. Batched the same way and for the same reason as
+        prune_stale_market_prices()."""
+        cutoff = _market_data_cutoff()
+        total_deleted = 0
+        while True:
+            cur = self.db.conn.execute(
+                "DELETE FROM system_bgs_status WHERE rowid IN "
+                "(SELECT rowid FROM system_bgs_status WHERE data_timestamp < ? LIMIT ?)",
+                (cutoff, batch_size),
+            )
+            self.db.conn.commit()
+            deleted = cur.rowcount
+            total_deleted += deleted
+            if deleted < batch_size:
+                break
+            time.sleep(0.05)
+        return total_deleted
+
+    def prune_stale_system_res_sites(self, batch_size: int = 20_000) -> int:
+        """Same reasoning/cutoff/batching as prune_stale_system_bgs_status(),
+        for system_res_sites."""
+        cutoff = _market_data_cutoff()
+        total_deleted = 0
+        while True:
+            cur = self.db.conn.execute(
+                "DELETE FROM system_res_sites WHERE rowid IN "
+                "(SELECT rowid FROM system_res_sites WHERE data_timestamp < ? LIMIT ?)",
                 (cutoff, batch_size),
             )
             self.db.conn.commit()

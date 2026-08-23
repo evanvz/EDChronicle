@@ -12,12 +12,39 @@ def test_extract_bgs_status_returns_war_conflicts_and_multistate_factions():
             {"WarType": "election", "Faction1": {"Name": "X"}, "Faction2": {"Name": "Y"}},
         ],
         "Factions": [
-            {"Name": "A", "ActiveStates": [{"State": "War"}]},
+            {"Name": "A", "ActiveStates": [{"State": "War"}, {"State": "Outbreak"}]},
             {"Name": "Z", "ActiveStates": [], "PendingStates": [], "RecoveringStates": []},
         ],
     }
     conflicts, factions = _extract_bgs_status(msg)
     assert len(conflicts) == 1 and conflicts[0]["WarType"] == "war"
+    assert len(factions) == 1 and factions[0]["Name"] == "A"
+
+
+def test_extract_bgs_status_excludes_faction_with_only_one_state_total():
+    msg = {
+        "SystemAddress": 1, "StarSystem": "Sol", "Conflicts": [],
+        "Factions": [{"Name": "A", "ActiveStates": [{"State": "Boom"}]}],
+    }
+    _, factions = _extract_bgs_status(msg)
+    assert factions == []
+
+
+def test_extract_bgs_status_includes_faction_with_two_states_same_bucket():
+    msg = {
+        "SystemAddress": 1, "StarSystem": "Sol", "Conflicts": [],
+        "Factions": [{"Name": "A", "ActiveStates": [{"State": "War"}, {"State": "Outbreak"}]}],
+    }
+    _, factions = _extract_bgs_status(msg)
+    assert len(factions) == 1 and factions[0]["Name"] == "A"
+
+
+def test_extract_bgs_status_includes_faction_with_one_state_in_each_of_two_buckets():
+    msg = {
+        "SystemAddress": 1, "StarSystem": "Sol", "Conflicts": [],
+        "Factions": [{"Name": "A", "ActiveStates": [{"State": "War"}], "PendingStates": [{"State": "Election"}]}],
+    }
+    _, factions = _extract_bgs_status(msg)
     assert len(factions) == 1 and factions[0]["Name"] == "A"
 
 

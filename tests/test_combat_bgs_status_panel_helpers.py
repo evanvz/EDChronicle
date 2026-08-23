@@ -74,6 +74,11 @@ def test_conflicts_text_civil_war_and_joins_multiple():
     assert _conflicts_text(conflicts) == "Civil War: A (0) vs B (3) | War: C (1) vs D (1)"
 
 
+def test_conflicts_text_guards_missing_won_days():
+    conflicts = [{"war_type": "war", "faction1": "A", "won_days1": None, "faction2": "B", "won_days2": None}]
+    assert _conflicts_text(conflicts) == "War: A (?) vs B (?)"
+
+
 # --- _faction_states_text ---
 
 def test_faction_states_text_empty():
@@ -96,3 +101,23 @@ def test_faction_states_text_joins_multiple_factions():
         {"name": "B", "active_states": [{"State": "Famine"}]},
     ]
     assert _faction_states_text(factions) == "A: Boom | B: Famine"
+
+
+def test_faction_states_text_renders_recovering_states_with_no_active():
+    factions = [{"name": "A", "active_states": [], "recovering_states": [{"State": "Outbreak"}]}]
+    assert _faction_states_text(factions) == "A: Outbreak (recovering)"
+
+
+def test_faction_states_text_renders_pending_states_with_no_active():
+    factions = [{"name": "A", "active_states": [], "pending_states": [{"State": "War"}]}]
+    assert _faction_states_text(factions) == "A: War (pending)"
+
+
+def test_faction_states_text_mixes_active_pending_and_recovering():
+    factions = [{
+        "name": "A",
+        "active_states": [{"State": "War"}],
+        "pending_states": [{"State": "Election"}],
+        "recovering_states": [{"State": "Outbreak"}],
+    }]
+    assert _faction_states_text(factions) == "A: War, Election (pending), Outbreak (recovering)"

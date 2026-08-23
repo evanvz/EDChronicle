@@ -153,8 +153,9 @@ class _EdsmPowerPlayRefreshWorker(QObject):
 
 class _MarketPruneWorker(QObject):
     """
-    Deletes stale market_prices rows (>14d) and stale fleet_carrier_materials
-    rows (>7d) — potentially slow at galaxy-wide scale (millions of rows),
+    Deletes stale market_prices rows (>14d), stale fleet_carrier_materials
+    rows (>7d), and stale system_bgs_status/system_res_sites rows (>14d) —
+    potentially slow at galaxy-wide scale (millions of rows),
     so this must never run on the UI thread. Opens its own connection per
     the project's cross-thread SQLite rule.
 
@@ -180,6 +181,8 @@ class _MarketPruneWorker(QObject):
         db = Database(self._db_path)
         deleted_market_prices = 0
         deleted_fleet_carrier_materials = 0
+        deleted_bgs_status = 0
+        deleted_res_sites = 0
         try:
             repo = Repository(db)
             try:
@@ -192,9 +195,22 @@ class _MarketPruneWorker(QObject):
                 log.info("Pruned %d stale fleet_carrier_materials rows", deleted_fleet_carrier_materials)
             except Exception:
                 log.exception("Fleet carrier materials prune failed")
+            try:
+                deleted_bgs_status = repo.prune_stale_system_bgs_status()
+                log.info("Pruned %d stale system_bgs_status rows", deleted_bgs_status)
+            except Exception:
+                log.exception("System BGS status prune failed")
+            try:
+                deleted_res_sites = repo.prune_stale_system_res_sites()
+                log.info("Pruned %d stale system_res_sites rows", deleted_res_sites)
+            except Exception:
+                log.exception("System RES sites prune failed")
         finally:
             db.close()
-        self.finished.emit(deleted_market_prices + deleted_fleet_carrier_materials)
+        self.finished.emit(
+            deleted_market_prices + deleted_fleet_carrier_materials
+            + deleted_bgs_status + deleted_res_sites
+        )
 
 
 class _MarketVacuumWorker(QObject):
@@ -473,6 +489,24 @@ class MainWindow(QMainWindow):
         except Exception:
             log.exception("Failed to save faction snapshots")
 
+    def _save_system_coords_from_state(self, system_name: str, timestamp: str) -> None:
+        """system_coords is fed live only by the EDDN listener's
+        on_coords_seen path -- own-journal BGS/RES saves need to write it
+        too, or a system captured purely from the player's own journal
+        never becomes searchable via search_bgs_status_near/
+        search_res_sites_near (both INNER JOIN system_coords)."""
+        x = getattr(self.state, "system_x", None)
+        y = getattr(self.state, "system_y", None)
+        z = getattr(self.state, "system_z", None)
+        if not (isinstance(x, (int, float)) and isinstance(y, (int, float)) and isinstance(z, (int, float))):
+            return
+        from datetime import datetime, timezone
+        last_seen = timestamp or datetime.now(timezone.utc).isoformat()
+        try:
+            self.repo.save_system_coords_batch([(system_name, x, y, z, last_seen)])
+        except Exception:
+            log.exception("Failed to save system coords")
+
     def _save_system_bgs_status(self):
         system_address = getattr(self.state, "system_address", None)
         if not isinstance(system_address, int):
@@ -487,6 +521,8 @@ class MainWindow(QMainWindow):
             )
         except Exception:
             log.exception("Failed to save system BGS status")
+            return
+        self._save_system_coords_from_state(system_name, timestamp)
 
     def _save_system_res_tiers(self, event_timestamp: str = ""):
         system_address = getattr(self.state, "system_address", None)
@@ -501,6 +537,8 @@ class MainWindow(QMainWindow):
             )
         except Exception:
             log.exception("Failed to save system RES tiers")
+            return
+        self._save_system_coords_from_state(system_name, event_timestamp)
 
     def _save_ring_data(self):
         system_address = getattr(self.state, "system_address", None)
@@ -2273,7 +2311,7 @@ class MainWindow(QMainWindow):
             self._save_faction_snapshots(self.state.factions_timestamp)
             self._save_system_bgs_status()
 
-        if name == "FSSSignalDiscovered":
+        if name == "FSSSignalDiscovered" and evt.get("SignalType") == "ResourceExtraction":
             self._save_system_res_tiers(evt.get("timestamp") or "")
 
         if name in ("FSDJump", "Location"):

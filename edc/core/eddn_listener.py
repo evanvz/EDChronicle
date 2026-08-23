@@ -52,13 +52,15 @@ def _extract_bgs_status(msg: dict) -> tuple[list, list]:
     """War/CivilWar conflicts and multi-state factions from a journal
     message's Conflicts/Factions arrays -- unconditional (any system, not
     just a squadron-watched faction), unlike _maybe_emit_faction_seen."""
+    from edc.core.bgs_conflicts import is_multistate_faction
+
     conflicts = [
         c for c in (msg.get("Conflicts") or [])
         if isinstance(c, dict) and str(c.get("WarType", "")).lower() in ("war", "civilwar")
     ]
     factions = [
         f for f in (msg.get("Factions") or [])
-        if isinstance(f, dict) and (f.get("ActiveStates") or f.get("PendingStates") or f.get("RecoveringStates"))
+        if isinstance(f, dict) and is_multistate_faction(f)
     ]
     return conflicts, factions
 

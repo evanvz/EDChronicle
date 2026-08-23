@@ -24,3 +24,7 @@ def test_non_res_signal_name_defaults_nominal():
 
 def test_non_string_input_defaults_nominal():
     assert res_tier_from_signal_name(None) == "Nominal"
+
+
+def test_unresolved_raw_token_returns_unknown():
+    assert res_tier_from_signal_name("$MULTIPLAYER_SCENARIO14_TITLE;") == "Unknown"

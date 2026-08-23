@@ -70,13 +70,20 @@ def _merge_results(bgs_results: List[dict], res_results: List[dict]) -> List[Dic
     return sorted(merged.values(), key=lambda r: r["distance_ly"])
 
 
+def _won_days_text(won_days) -> str:
+    return str(won_days) if isinstance(won_days, int) else "?"
+
+
 def _conflicts_text(conflicts: List[dict]) -> str:
     if not conflicts:
         return ""
     parts = []
     for c in conflicts:
         label = "War" if c.get("war_type") == "war" else "Civil War"
-        parts.append(f"{label}: {c.get('faction1')} ({c.get('won_days1')}) vs {c.get('faction2')} ({c.get('won_days2')})")
+        parts.append(
+            f"{label}: {c.get('faction1')} ({_won_days_text(c.get('won_days1'))}) "
+            f"vs {c.get('faction2')} ({_won_days_text(c.get('won_days2'))})"
+        )
     return " | ".join(parts)
 
 
@@ -85,9 +92,16 @@ def _faction_states_text(faction_states: List[dict]) -> str:
         return ""
     parts = []
     for f in faction_states:
-        states = [s.get("State") for s in (f.get("active_states") or []) if isinstance(s, dict) and s.get("State")]
-        if states:
-            parts.append(f"{f.get('name')}: {', '.join(states)}")
+        state_bits = []
+        for s in (f.get("active_states") or []):
+            if isinstance(s, dict) and s.get("State"):
+                state_bits.append(s["State"])
+        for bucket, label in (("pending_states", "pending"), ("recovering_states", "recovering")):
+            for s in (f.get(bucket) or []):
+                if isinstance(s, dict) and s.get("State"):
+                    state_bits.append(f"{s['State']} ({label})")
+        if state_bits:
+            parts.append(f"{f.get('name')}: {', '.join(state_bits)}")
     return " | ".join(parts)
 
 
@@ -206,10 +220,11 @@ class CombatBgsStatusPanel(QWidget):
 
         self._table.setRowCount(len(rows))
         for r, row in enumerate(rows):
+            relevant_names = {n for n in (self._squadron_faction, self._pp_power) if n}
             is_squadron_relevant = bool(
-                self._squadron_faction and (
-                    any(f.get("name") == self._squadron_faction for f in row["faction_states"])
-                    or any(c.get("faction1") == self._squadron_faction or c.get("faction2") == self._squadron_faction for c in row["conflicts"])
+                relevant_names and (
+                    any(f.get("name") in relevant_names for f in row["faction_states"])
+                    or any(c.get("faction1") in relevant_names or c.get("faction2") in relevant_names for c in row["conflicts"])
                 )
             )
             age_txt, _ = fmt.relative_time(row.get("data_timestamp") or "")

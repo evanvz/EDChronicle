@@ -60,6 +60,57 @@ def test_save_stores_multistate_factions_only(repo):
     assert stored[0]["name"] == "B"
 
 
+def test_save_excludes_faction_with_only_one_state_total(repo):
+    # Single state in a single bucket -- was previously (buggily) included
+    # because "any bucket non-empty" is true for nearly every faction; the
+    # fix requires >=2 states total across all three buckets.
+    factions = [{"Name": "A", "ActiveStates": [{"State": "Boom"}], "PendingStates": [], "RecoveringStates": []}]
+    repo.save_system_bgs_status(1, "Sol", conflicts=[], factions=factions,
+                                 data_timestamp="2026-08-23T00:00:00Z", source="journal")
+    row = repo.db.conn.execute("SELECT * FROM system_bgs_status WHERE system_address = 1").fetchone()
+    assert row is None
+
+
+def test_save_includes_faction_with_two_states_in_same_bucket(repo):
+    factions = [{"Name": "A", "ActiveStates": [{"State": "War"}, {"State": "Outbreak"}], "PendingStates": [], "RecoveringStates": []}]
+    repo.save_system_bgs_status(1, "Sol", conflicts=[], factions=factions,
+                                 data_timestamp="2026-08-23T00:00:00Z", source="journal")
+    row = repo.db.conn.execute("SELECT * FROM system_bgs_status WHERE system_address = 1").fetchone()
+    stored = json.loads(row["faction_states"])
+    assert len(stored) == 1 and stored[0]["name"] == "A"
+
+
+def test_save_includes_faction_with_one_state_in_each_of_two_buckets(repo):
+    factions = [{"Name": "A", "ActiveStates": [{"State": "War"}], "PendingStates": [{"State": "Election"}], "RecoveringStates": []}]
+    repo.save_system_bgs_status(1, "Sol", conflicts=[], factions=factions,
+                                 data_timestamp="2026-08-23T00:00:00Z", source="journal")
+    row = repo.db.conn.execute("SELECT * FROM system_bgs_status WHERE system_address = 1").fetchone()
+    stored = json.loads(row["faction_states"])
+    assert len(stored) == 1 and stored[0]["name"] == "A"
+
+
+# --- prune_stale_system_bgs_status / prune_stale_system_res_sites ---
+
+def test_prune_stale_system_bgs_status_deletes_old_keeps_fresh(repo):
+    repo.save_system_bgs_status(1, "Old", conflicts=[{"WarType": "war", "Faction1": {"Name": "A"}, "Faction2": {"Name": "B"}}],
+                                 factions=[], data_timestamp="2000-01-01T00:00:00Z", source="journal")
+    repo.save_system_bgs_status(2, "Fresh", conflicts=[{"WarType": "war", "Faction1": {"Name": "C"}, "Faction2": {"Name": "D"}}],
+                                 factions=[], data_timestamp="2099-01-01T00:00:00Z", source="journal")
+    deleted = repo.prune_stale_system_bgs_status()
+    assert deleted == 1
+    remaining = repo.db.conn.execute("SELECT system_name FROM system_bgs_status").fetchall()
+    assert [r["system_name"] for r in remaining] == ["Fresh"]
+
+
+def test_prune_stale_system_res_sites_deletes_old_keeps_fresh(repo):
+    repo.save_system_res_tiers(1, "Old", tiers=["High"], data_timestamp="2000-01-01T00:00:00Z", source="journal")
+    repo.save_system_res_tiers(2, "Fresh", tiers=["Low"], data_timestamp="2099-01-01T00:00:00Z", source="journal")
+    deleted = repo.prune_stale_system_res_sites()
+    assert deleted == 1
+    remaining = repo.db.conn.execute("SELECT system_name FROM system_res_sites").fetchall()
+    assert [r["system_name"] for r in remaining] == ["Fresh"]
+
+
 def test_save_older_data_does_not_overwrite_newer(repo):
     repo.save_system_bgs_status(1, "Sol", conflicts=[{"WarType": "war", "Faction1": {"Name": "A"}, "Faction2": {"Name": "B"}}],
                                  factions=[], data_timestamp="2026-08-23T10:00:00Z", source="eddn")
