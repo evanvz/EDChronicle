@@ -1464,9 +1464,14 @@ class Repository:
     ) -> Optional[dict]:
         """
         Closest known station (from our own past Docked visits) confirmed to
-        offer Interstellar Factors ("Facilitator" in StationServices), whose
-        controlling faction is not one of exclude_factions — a bounty can't
-        be cleared at a station owned by the faction that issued it.
+        offer Interstellar Factors ("Facilitator" in StationServices), in a
+        SYSTEM where none of exclude_factions has any presence at all —
+        confirmed against Elite Dangerous's actual rule (cross-checked
+        multiple sources): Interstellar Factors refuses to clear a bounty
+        or fine if the issuing faction is present anywhere in that system,
+        not merely if it controls the specific station. A non-controlling
+        5%-influence minor presence still blocks it, so this checks every
+        faction_snapshots row for the system, not just station_faction.
         Distance computed in Python against system_coords, same pattern as
         search_market_prices — dataset is bounded to stations we've visited.
 
@@ -1475,25 +1480,55 @@ class Repository:
         or controlling faction changes), so this is only as fresh as our
         last recorded visit — last_visited is returned so the caller can
         surface that caveat rather than presenting it as guaranteed-current.
+        The system-presence exclusion carries the same freshness caveat:
+        a system with no faction_snapshots history for an excluded faction
+        looks clear here even if that faction is quietly present but never
+        personally observed or EDDN-reported there.
         """
-        excluded = {f.strip().lower() for f in (exclude_factions or []) if f}
+        excluded = [f.strip() for f in (exclude_factions or []) if f]
+        excluded_lower = {f.lower() for f in excluded}
+
+        if excluded:
+            placeholders = ",".join("?" for _ in excluded)
+            exclusion_clause = f"""
+                AND NOT EXISTS (
+                    SELECT 1 FROM systems sy
+                    JOIN faction_snapshots fs ON fs.system_address = sy.system_address
+                    WHERE sy.system_name = si.system_name
+                      AND fs.faction_name IN ({placeholders})
+                      AND fs.snapshot_date = (
+                          SELECT MAX(snapshot_date) FROM faction_snapshots fs2
+                          WHERE fs2.system_address = fs.system_address AND fs2.faction_name = fs.faction_name
+                      )
+                )
+            """
+            params: tuple = tuple(excluded)
+        else:
+            exclusion_clause = ""
+            params = ()
 
         rows = self.db.conn.execute(
-            """
+            f"""
             SELECT si.market_id, si.station_name, si.system_name, si.station_faction,
                    si.station_type, si.pads_small, si.pads_medium, si.pads_large,
                    si.last_visited, c.x, c.y, c.z
             FROM station_info si
             JOIN system_coords c ON c.system_name = si.system_name
             WHERE si.station_services LIKE '%Facilitator%'
-            """
+            {exclusion_clause}
+            """,
+            params,
         ).fetchall()
 
         best = None
         best_dist = None
         for r in rows:
-            faction = (r["station_faction"] or "").strip().lower()
-            if faction and faction in excluded:
+            # Belt-and-suspenders alongside the SQL system-presence
+            # exclusion above: covers a station whose own station_faction
+            # we know (from a personal Docked visit) even in a system
+            # faction_snapshots has no history for at all.
+            station_faction = (r["station_faction"] or "").strip().lower()
+            if station_faction and station_faction in excluded_lower:
                 continue
             rx, ry, rz = r["x"], r["y"], r["z"]
             if rx is None or ry is None or rz is None:
