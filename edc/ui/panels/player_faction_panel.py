@@ -2053,29 +2053,51 @@ class _FactionHistoryDialog(QDialog):
             log.exception("Failed to load BGS status for system %s", self._system_address)
             bgs_status = None
 
-        if bgs_status is None:
-            self._bgs_status_label.setVisible(False)
-        else:
-            parts = []
+        try:
+            history = self._panel._repo.get_faction_history(self._system_address)
+        except Exception:
+            log.exception("Failed to load faction history for system %s", self._system_address)
+            history = []
+
+        # Latest recorded state for the tracked squadron faction specifically
+        # (not any faction in the system) -- used below to tell "no war is
+        # happening" apart from "a war is happening but EDSM (which only
+        # reports state, not a Conflicts/WonDays breakdown) is the only
+        # source that's seen it yet."
+        tracked_name = getattr(self._panel, "_faction_name", None)
+        tracked_rows = [h for h in history if h.get("faction_name") == tracked_name]
+        latest_tracked = max(tracked_rows, key=lambda h: h.get("snapshot_date") or "", default=None)
+        tracked_state = (latest_tracked.get("faction_state") or "").strip().lower() if latest_tracked else ""
+        tracked_active = {s.lower() for s in _parse_states(latest_tracked.get("active_states"))} if latest_tracked else set()
+        state_suggests_war = tracked_state in ("war", "civilwar") or bool(tracked_active & {"war", "civilwar"})
+
+        parts = []
+        if bgs_status is not None:
             conflicts_txt = _conflicts_text(bgs_status["conflicts"])
             if conflicts_txt:
                 parts.append(f"⚔ {conflicts_txt}")
             states_txt = _faction_states_text(bgs_status["faction_states"])
             if states_txt:
                 parts.append(states_txt)
-            if parts:
-                age_txt, _ = fmt.relative_time(bgs_status.get("data_timestamp") or "")
-                self._bgs_status_label.setText(" | ".join(parts))
-                self._bgs_status_label.setToolTip(f"Last confirmed {age_txt}")
-                self._bgs_status_label.setVisible(True)
-            else:
-                self._bgs_status_label.setVisible(False)
 
-        try:
-            history = self._panel._repo.get_faction_history(self._system_address)
-        except Exception:
-            log.exception("Failed to load faction history for system %s", self._system_address)
-            history = []
+        if parts:
+            age_txt, _ = fmt.relative_time(bgs_status.get("data_timestamp") or "")
+            self._bgs_status_label.setText(" | ".join(parts))
+            self._bgs_status_label.setToolTip(f"Last confirmed {age_txt}")
+            self._bgs_status_label.setVisible(True)
+        elif state_suggests_war:
+            # A War/CivilWar state was reported (e.g. via EDSM), but nobody's
+            # personally visited or had an EDDN sighting of this system's
+            # Conflicts array yet -- that's the only source with day-by-day
+            # win counts, so there's a real state to report but no score.
+            self._bgs_status_label.setText(
+                "⚔ War/Civil War reported for this faction — win-day score not yet "
+                "confirmed (needs a personal visit or an EDDN sighting of this system)."
+            )
+            self._bgs_status_label.setToolTip("")
+            self._bgs_status_label.setVisible(True)
+        else:
+            self._bgs_status_label.setVisible(False)
 
         by_faction: Dict[str, list] = {}
         for h in history:
