@@ -186,3 +186,22 @@ def test_search_res_sites_near_keeps_rows_past_the_7_day_war_cutoff(repo):
     repo.save_system_res_tiers(1, "Near", tiers=["Hazardous"], data_timestamp=_ts_days_ago(10), source="journal")
     results = repo.search_res_sites_near(0.0, 0.0, 0.0, radius_ly=50.0)
     assert [r["system_name"] for r in results] == ["Near"]
+
+
+# --- get_bgs_status_for_system ---
+
+def test_get_bgs_status_for_system_returns_none_when_untracked(repo):
+    assert repo.get_bgs_status_for_system(999) is None
+
+
+def test_get_bgs_status_for_system_returns_saved_data_regardless_of_age(repo):
+    # Unlike search_bgs_status_near, this is a targeted single-system
+    # lookup with no freshness cutoff -- a stale-but-known row should
+    # still come back, not be silently hidden.
+    ts = _ts_days_ago(30)
+    repo.save_system_bgs_status(1, "Sol", conflicts=[{"WarType": "war", "Faction1": {"Name": "A"}, "Faction2": {"Name": "B"}}],
+                                 factions=[], data_timestamp=ts, source="journal")
+    result = repo.get_bgs_status_for_system(1)
+    assert result is not None
+    assert result["conflicts"][0]["faction1"] == "A"
+    assert result["data_timestamp"] == ts

@@ -29,6 +29,7 @@ from edc.core.edsm_faction_lookup import (
 )
 from edc.core.inara_faction_csv import parse_inara_faction_csv
 from edc.ui import formatting as fmt
+from edc.ui.panels.combat_bgs_status_panel import _conflicts_text, _faction_states_text
 
 log = logging.getLogger(__name__)
 
@@ -1966,6 +1967,18 @@ class _FactionHistoryDialog(QDialog):
         self._forecast_label.setStyleSheet("background:transparent; border:none; padding:4px;")
         layout.addWidget(self._forecast_label)
 
+        # War/Civil War + multi-state status for this system, from the
+        # Combat > System Status tab's own data (system_bgs_status) --
+        # same red accent already used for the "War/Civil War active"
+        # bucket elsewhere in this panel.
+        self._bgs_status_label = QLabel("")
+        self._bgs_status_label.setWordWrap(True)
+        self._bgs_status_label.setStyleSheet(
+            "background:transparent; border:none; padding:0 4px 4px 4px; color:#FF6B6B;"
+        )
+        self._bgs_status_label.setVisible(False)
+        layout.addWidget(self._bgs_status_label)
+
         self._chart = QChart()
         self._chart.setBackgroundBrush(QColor("#080f18"))
         self._chart.setTitleBrush(QColor("#c8c8c8"))
@@ -2033,6 +2046,30 @@ class _FactionHistoryDialog(QDialog):
             "".join(forecast_lines) if forecast_lines else
             '<span style="color:#444444;">No factions tracked in this system yet.</span>'
         )
+
+        try:
+            bgs_status = self._panel._repo.get_bgs_status_for_system(self._system_address)
+        except Exception:
+            log.exception("Failed to load BGS status for system %s", self._system_address)
+            bgs_status = None
+
+        if bgs_status is None:
+            self._bgs_status_label.setVisible(False)
+        else:
+            parts = []
+            conflicts_txt = _conflicts_text(bgs_status["conflicts"])
+            if conflicts_txt:
+                parts.append(f"⚔ {conflicts_txt}")
+            states_txt = _faction_states_text(bgs_status["faction_states"])
+            if states_txt:
+                parts.append(states_txt)
+            if parts:
+                age_txt, _ = fmt.relative_time(bgs_status.get("data_timestamp") or "")
+                self._bgs_status_label.setText(" | ".join(parts))
+                self._bgs_status_label.setToolTip(f"Last confirmed {age_txt}")
+                self._bgs_status_label.setVisible(True)
+            else:
+                self._bgs_status_label.setVisible(False)
 
         try:
             history = self._panel._repo.get_faction_history(self._system_address)
