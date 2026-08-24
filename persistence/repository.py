@@ -660,6 +660,26 @@ class Repository:
         results.sort(key=lambda r: r["distance_ly"])
         return results
 
+    def get_bgs_status_for_system(self, system_address: int) -> Optional[dict]:
+        """Current War/CivilWar conflicts + multi-state factions for one
+        system, if any is on record -- same shape as one entry of
+        search_bgs_status_near()'s results, minus distance. Unlike the
+        radius search, this has no freshness cutoff: it's a targeted
+        single-system lookup the caller already chose to open, so showing
+        stale-but-known data alongside its own timestamp is more useful
+        than showing nothing."""
+        row = self.db.conn.execute(
+            "SELECT conflicts, faction_states, data_timestamp FROM system_bgs_status WHERE system_address = ?",
+            (system_address,),
+        ).fetchone()
+        if not row:
+            return None
+        return {
+            "conflicts": json.loads(row["conflicts"]) if row["conflicts"] else [],
+            "faction_states": json.loads(row["faction_states"]) if row["faction_states"] else [],
+            "data_timestamp": row["data_timestamp"],
+        }
+
     def get_player_faction_overview(self) -> Optional[dict]:
         """
         Detects the player's squadron-aligned minor faction (if any, from
@@ -669,12 +689,21 @@ class Repository:
         in — not just the current system. The placeholder row itself is
         excluded from the systems list (system_address=0 isn't a real
         system). Returns None if no squadron faction has ever been recorded.
+
+        Tiebroken by data_timestamp, not just snapshot_date -- confirmed
+        live: a same-day manual entry (e.g. typed in different case/
+        spelling than the game's own exact string) and a same-day real
+        journal detection tie on snapshot_date alone, and SQLite's tie
+        order for that is unspecified rather than "whichever is actually
+        more recent." A mismatched faction_name string silently breaks
+        every downstream case-sensitive comparison against the real
+        journal Factions[] name.
         """
         row = self.db.conn.execute(
             """
             SELECT faction_name FROM faction_snapshots
             WHERE is_squadron_faction = 1
-            ORDER BY snapshot_date DESC
+            ORDER BY snapshot_date DESC, data_timestamp DESC
             LIMIT 1
             """
         ).fetchone()
