@@ -26,6 +26,7 @@ from PyQt6.QtCharts import QChart, QChartView, QLineSeries, QDateTimeAxis, QValu
 
 from edc.core.edsm_faction_lookup import (
     fetch_system_factions, fetch_system_coords, fetch_system_stations, ERROR_BLOCKED, ERROR_NOT_FOUND,
+    derive_conflicts_from_factions_states,
 )
 from edc.core.inara_faction_csv import parse_inara_faction_csv
 from edc.ui import formatting as fmt
@@ -525,6 +526,25 @@ class _FactionRefreshWorker(QObject):
                         name = (faction.get("Name") or "").strip().lower()
                         if name:
                             present_names.add(name)
+
+                    # Catch-up layer for the Combat > System Status tab,
+                    # which otherwise only ever sees War/CivilWar status
+                    # for systems personally visited or reported live via
+                    # EDDN while this app happened to be running -- the
+                    # data being fetched here for the faction-influence
+                    # refresh already covers every faction's own state, so
+                    # this piggybacks on it at zero extra EDSM requests
+                    # rather than needing its own separate lookup pass.
+                    # save_system_bgs_status no-ops internally if there's
+                    # nothing relevant (no war, no multi-state faction).
+                    try:
+                        conflicts = derive_conflicts_from_factions_states(result["factions"])
+                        repo.save_system_bgs_status(
+                            result["system_address"], result["system_name"], conflicts, result["factions"],
+                            datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "edsm",
+                        )
+                    except Exception:
+                        log.exception("Failed to save EDSM-derived BGS status for %r", system_name)
 
                     if target and target not in present_names:
                         repo.dismiss_faction_system(self._squadron_faction_name, result["system_address"])

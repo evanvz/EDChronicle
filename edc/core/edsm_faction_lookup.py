@@ -266,3 +266,39 @@ def _states_to_journal_shape(states: Any) -> List[Dict[str, str]]:
         if isinstance(s, dict) and s.get("state"):
             out.append({"State": s["state"]})
     return out
+
+
+def derive_conflicts_from_factions_states(factions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    EDSM's factions endpoint has no Conflicts/WonDays data at all
+    (confirmed live: HIP 22052's response lists both combatant factions'
+    own FactionState as "Civil war" with no separate conflicts array) --
+    only each faction's own FactionState. Synthesizes a Conflicts-shaped
+    entry (same keys Repository.save_system_bgs_status expects) from any
+    factions sharing a War/CivilWar FactionState, so a system can still be
+    recorded as "at war, between these factions" without EDDN/journal
+    coverage -- WonDays is left unset (None) rather than guessed, which
+    the Combat System Status panel already renders as "?" for exactly
+    this case. Grouped by war type rather than assumed to be a single
+    pair, since a system can in principle have a War and a separate
+    CivilWar running at once.
+    """
+    by_type: Dict[str, List[Dict[str, Any]]] = {}
+    for f in factions:
+        if not isinstance(f, dict):
+            continue
+        state = str(f.get("FactionState", "")).strip().lower().replace(" ", "")
+        if state in ("war", "civilwar"):
+            by_type.setdefault(state, []).append(f)
+
+    conflicts = []
+    for war_type, combatants in by_type.items():
+        if len(combatants) < 2:
+            continue
+        conflicts.append({
+            "WarType": war_type,
+            "Status": "",
+            "Faction1": {"Name": combatants[0].get("Name")},
+            "Faction2": {"Name": combatants[1].get("Name")},
+        })
+    return conflicts
