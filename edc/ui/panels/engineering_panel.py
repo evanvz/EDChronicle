@@ -23,6 +23,16 @@ from edc.core.odyssey_engineering import OdysseyEngineeringTable
 from edc.core.odyssey_material_source import is_bartender_tradeable
 from edc.core.odyssey_wishlist import OdysseyWishlist
 from edc.ui.formatting import relative_time
+from edc.ui.style import (
+    CARD_STYLE as _CARD_STYLE,
+    HDR_STYLE as _HDR_STYLE,
+    LABEL_STYLE as _LABEL_STYLE,
+    COMBO_STYLE as _COMBO_STYLE,
+    TABLE_STYLE as _TABLE_STYLE,
+    PRIMARY_BUTTON_STYLE as _PRIMARY_BUTTON_STYLE,
+    DANGER_BUTTON_STYLE as _DANGER_BUTTON_STYLE,
+    make_card,
+)
 
 log = logging.getLogger(__name__)
 
@@ -31,18 +41,6 @@ _CATEGORY_STATE_ATTR = {
     "manufactured": "materials_manufactured",
     "encoded": "materials_encoded",
 }
-
-_CARD_STYLE = "QFrame { background:#0d1a2a; border:1px solid #1e3a5a; border-radius:5px; }"
-_HDR_STYLE = "color:#7a7a7a; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
-_LABEL_STYLE = "background:transparent; border:none; color:#c8c8c8;"
-_COMBO_STYLE = "background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;"
-_TABLE_STYLE = (
-    "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
-    " gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
-    "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
-    " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
-    "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
-)
 
 
 def _format_age(last_updated: str, last_visited: str) -> tuple[str, float]:
@@ -205,11 +203,7 @@ class _ShipEngineeringTab(QWidget):
         self._grade_spin.setRange(1, 5)
         self._grade_spin.setStyleSheet(_COMBO_STYLE)
         add_btn = QPushButton("Add")
-        add_btn.setStyleSheet(
-            "QPushButton { background:#1a3a5a; color:#FFB347; border:1px solid #2a5a8a;"
-            " border-radius:3px; padding:3px 12px; font-weight:bold; }"
-            "QPushButton:hover { background:#2a5a8a; }"
-        )
+        add_btn.setStyleSheet(_PRIMARY_BUTTON_STYLE)
         add_btn.clicked.connect(self._add_to_wishlist)
         grade_row.addWidget(grade_label)
         grade_row.addWidget(self._grade_spin, 1)
@@ -253,11 +247,7 @@ class _ShipEngineeringTab(QWidget):
         wl_hdr_row.addWidget(wl_hdr)
         wl_hdr_row.addStretch()
         remove_btn = QPushButton("Remove")
-        remove_btn.setStyleSheet(
-            "QPushButton { background:#2a1010; color:#FF8080; border:1px solid #5a2a2a;"
-            " border-radius:3px; padding:2px 10px; }"
-            "QPushButton:hover { background:#3a1818; }"
-        )
+        remove_btn.setStyleSheet(_DANGER_BUTTON_STYLE)
         remove_btn.clicked.connect(self._remove_selected)
         wl_hdr_row.addWidget(remove_btn)
         left.addLayout(wl_hdr_row)
@@ -276,29 +266,24 @@ class _ShipEngineeringTab(QWidget):
         right = QVBoxLayout()
         right.setSpacing(6)
 
-        detail_hdr = QLabel("MATERIALS REQUIRED")
-        detail_hdr.setStyleSheet(_HDR_STYLE)
-        right.addWidget(detail_hdr)
-
+        detail_card, detail_layout = make_card("MATERIALS REQUIRED")
         self._detail_table = _make_table(["Material", "Type", "Held", "Required"])
         dh = self._detail_table.horizontalHeader()
         dh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         dh.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         dh.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         dh.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        right.addWidget(self._detail_table, 1)
+        detail_layout.addWidget(self._detail_table, 1)
+        right.addWidget(detail_card, 1)
 
-        eng_hdr = QLabel("AVAILABLE FROM — CLOSEST FIRST")
-        eng_hdr.setStyleSheet(_HDR_STYLE)
-        right.addWidget(eng_hdr)
-
+        eng_card, eng_layout = make_card("AVAILABLE FROM — CLOSEST FIRST")
         self._engineer_table = _make_table(["Engineer", "System", "Dist (ly)", "Unlock Status"])
         eh = self._engineer_table.horizontalHeader()
         eh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         eh.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         eh.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         eh.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        right.addWidget(self._engineer_table, 1)
+        eng_layout.addWidget(self._engineer_table, 1)
 
         self._engineer_note = QLabel(
             "Coverage of which engineer offers which blueprint is community-sourced "
@@ -306,12 +291,10 @@ class _ShipEngineeringTab(QWidget):
         )
         self._engineer_note.setWordWrap(True)
         self._engineer_note.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
-        right.addWidget(self._engineer_note)
+        eng_layout.addWidget(self._engineer_note)
+        right.addWidget(eng_card, 1)
 
-        carrier_hdr = QLabel("SOLD BY CARRIERS — CLOSEST FIRST")
-        carrier_hdr.setStyleSheet(_HDR_STYLE)
-        right.addWidget(carrier_hdr)
-
+        carrier_card, carrier_layout = make_card("SOLD BY CARRIERS — CLOSEST FIRST")
         self._carrier_table = _make_table(["Material", "Carrier", "System", "Dist (ly)", "Price", "Stock", "Age", "Access"])
         ch = self._carrier_table.horizontalHeader()
         ch.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
@@ -322,22 +305,21 @@ class _ShipEngineeringTab(QWidget):
         ch.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
         ch.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
         ch.setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)
-        right.addWidget(self._carrier_table, 1)
+        carrier_layout.addWidget(self._carrier_table, 1)
 
         self._carrier_note = QLabel("")
         self._carrier_note.setWordWrap(True)
         self._carrier_note.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
-        right.addWidget(self._carrier_note)
+        carrier_layout.addWidget(self._carrier_note)
+        right.addWidget(carrier_card, 1)
 
-        trade_hdr = QLabel("MATERIAL TRADER SUGGESTIONS")
-        trade_hdr.setStyleSheet(_HDR_STYLE)
-        right.addWidget(trade_hdr)
-
+        trade_card, trade_layout = make_card("MATERIAL TRADER SUGGESTIONS")
         self._trade_table = _make_table(["Short On", "Suggested Trade"])
         tth = self._trade_table.horizontalHeader()
         tth.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         tth.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        right.addWidget(self._trade_table, 1)
+        trade_layout.addWidget(self._trade_table, 1)
+        right.addWidget(trade_card, 1)
 
         root.addLayout(right, 3)
 
@@ -799,11 +781,7 @@ class _OdysseyEngineeringTab(QWidget):
         self._grade_spin.setRange(2, 5)
         self._grade_spin.setStyleSheet(_COMBO_STYLE)
         add_btn = QPushButton("Add")
-        add_btn.setStyleSheet(
-            "QPushButton { background:#1a3a5a; color:#FFB347; border:1px solid #2a5a8a;"
-            " border-radius:3px; padding:3px 12px; font-weight:bold; }"
-            "QPushButton:hover { background:#2a5a8a; }"
-        )
+        add_btn.setStyleSheet(_PRIMARY_BUTTON_STYLE)
         add_btn.clicked.connect(self._add_to_wishlist)
         grade_row.addWidget(self._grade_label)
         grade_row.addWidget(self._grade_spin, 1)
@@ -819,11 +797,7 @@ class _OdysseyEngineeringTab(QWidget):
         wl_hdr_row.addWidget(wl_hdr)
         wl_hdr_row.addStretch()
         remove_btn = QPushButton("Remove")
-        remove_btn.setStyleSheet(
-            "QPushButton { background:#2a1010; color:#FF8080; border:1px solid #5a2a2a;"
-            " border-radius:3px; padding:2px 10px; }"
-            "QPushButton:hover { background:#3a1818; }"
-        )
+        remove_btn.setStyleSheet(_DANGER_BUTTON_STYLE)
         remove_btn.clicked.connect(self._remove_selected)
         wl_hdr_row.addWidget(remove_btn)
         left.addLayout(wl_hdr_row)
@@ -842,38 +816,31 @@ class _OdysseyEngineeringTab(QWidget):
         right = QVBoxLayout()
         right.setSpacing(6)
 
-        detail_hdr = QLabel("MATERIALS REQUIRED")
-        detail_hdr.setStyleSheet(_HDR_STYLE)
-        right.addWidget(detail_hdr)
-
+        detail_card, detail_layout = make_card("MATERIALS REQUIRED")
         self._detail_table = _make_table(["Material", "Held", "Required", "Source"])
         dh = self._detail_table.horizontalHeader()
         dh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         dh.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         dh.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         dh.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        right.addWidget(self._detail_table, 1)
+        detail_layout.addWidget(self._detail_table, 1)
+        right.addWidget(detail_card, 1)
 
-        eng_hdr = QLabel("AVAILABLE FROM — CLOSEST FIRST")
-        eng_hdr.setStyleSheet(_HDR_STYLE)
-        right.addWidget(eng_hdr)
-
+        eng_card, eng_layout = make_card("AVAILABLE FROM — CLOSEST FIRST")
         self._engineer_table = _make_table(["Engineer", "System", "Dist (ly)"])
         eh = self._engineer_table.horizontalHeader()
         eh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         eh.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         eh.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        right.addWidget(self._engineer_table, 1)
+        eng_layout.addWidget(self._engineer_table, 1)
 
         self._engineer_note = QLabel("")
         self._engineer_note.setWordWrap(True)
         self._engineer_note.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
-        right.addWidget(self._engineer_note)
+        eng_layout.addWidget(self._engineer_note)
+        right.addWidget(eng_card, 1)
 
-        carrier_hdr = QLabel("SOLD BY CARRIERS — CLOSEST FIRST")
-        carrier_hdr.setStyleSheet(_HDR_STYLE)
-        right.addWidget(carrier_hdr)
-
+        carrier_card, carrier_layout = make_card("SOLD BY CARRIERS — CLOSEST FIRST")
         self._carrier_table = _make_table(["Material", "Carrier", "System", "Dist (ly)", "Price", "Stock", "Age", "Access"])
         ch = self._carrier_table.horizontalHeader()
         ch.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
@@ -884,12 +851,13 @@ class _OdysseyEngineeringTab(QWidget):
         ch.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
         ch.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
         ch.setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)
-        right.addWidget(self._carrier_table, 1)
+        carrier_layout.addWidget(self._carrier_table, 1)
 
         self._carrier_note = QLabel("")
         self._carrier_note.setWordWrap(True)
         self._carrier_note.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
-        right.addWidget(self._carrier_note)
+        carrier_layout.addWidget(self._carrier_note)
+        right.addWidget(carrier_card, 1)
 
         root.addLayout(right, 3)
 

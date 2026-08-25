@@ -17,12 +17,9 @@ from PyQt6.QtWidgets import (
 from edc.core.station_pads import pad_size_hint
 from edc.ui import formatting as fmt
 from edc.ui.busy_spinner import BusySpinner
+from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, LABEL_STYLE as _LABEL_STYLE
 
 log = logging.getLogger(__name__)
-
-_CARD_STYLE = "QFrame { background:#0d1a2a; border:1px solid #1e3a5a; border-radius:5px; }"
-_HDR_STYLE = "color:#7a7a7a; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
-_LABEL_STYLE = "background:transparent; border:none; color:#c8c8c8;"
 
 # (required StationServices tags, button label, (bg, text) accent) —
 # Pioneer Supplies needs Black Market too for contraband items like

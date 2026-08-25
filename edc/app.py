@@ -109,27 +109,46 @@ def run():
 
     QListWidget::item {
         padding: 12px;
+        padding-left: 10px;
+        border-left: 3px solid transparent;
         border-radius: 0px;
     }
 
     QListWidget::item:selected {
-        background-color: #FF8C00;
-        color: #000000;
+        background-color: #241505;
+        border-left: 3px solid #FF8C00;
+        color: #FFA733;
+        font-weight: 600;
     }
 
-    QListWidget::item:hover {
-        background-color: #1F1F1F;
+    QListWidget::item:hover:!selected {
+        background-color: #1A1A1A;
+        border-left: 3px solid #4A3419;
     }
 
     QPushButton {
         background-color: #FF8C00;
+        border: 1px solid #FFA733;
         border-radius: 6px;
         padding: 6px 12px;
         color: #000000;
+        font-weight: 600;
     }
 
     QPushButton:hover {
         background-color: #FFA733;
+        border-color: #FFC266;
+    }
+
+    QPushButton:pressed {
+        background-color: #E67E00;
+        border-color: #FF8C00;
+    }
+
+    QPushButton:disabled {
+        background-color: #2A2A2A;
+        border-color: #333333;
+        color: #6A6A6A;
     }
 
     QTableWidget {
@@ -257,25 +276,33 @@ def run():
     }
 
     QTabWidget::pane {
-        background-color: #0A0A0A;
-        border: 1px solid #2A2A2A;
+        background-color: #0d1a2a;
+        border: 1px solid #1e3a5a;
+        border-radius: 4px;
+        top: -1px;
     }
 
     QTabBar::tab {
-        background-color: #111111;
-        color: #E6E6E6;
-        padding: 6px 14px;
-        border: 1px solid #2A2A2A;
+        background-color: #0a1520;
+        color: #888888;
+        padding: 6px 16px;
+        border: 1px solid #1e3a5a;
         border-bottom: none;
+        border-top-left-radius: 4px;
+        border-top-right-radius: 4px;
+        margin-right: 2px;
     }
 
     QTabBar::tab:selected {
-        background-color: #FF8C00;
-        color: #000000;
+        background-color: #0d1a2a;
+        color: #FFB347;
+        font-weight: 600;
+        border-bottom: 1px solid #0d1a2a;
     }
 
     QTabBar::tab:hover:!selected {
-        background-color: #1F1F1F;
+        background-color: #142438;
+        color: #c8c8c8;
     }
 
     QLabel {

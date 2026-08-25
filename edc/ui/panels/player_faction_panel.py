@@ -30,6 +30,7 @@ from edc.core.edsm_faction_lookup import (
 from edc.core.inara_faction_csv import parse_inara_faction_csv
 from edc.ui import formatting as fmt
 from edc.ui.panels.combat_bgs_status_panel import _conflicts_text, _faction_states_text
+from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE
 
 log = logging.getLogger(__name__)
 
@@ -57,9 +58,6 @@ def _should_start_tick_refresh(
     if tick_iso is None or not faction_name or refresh_already_running:
         return False
     return tick_iso != last_refreshed_tick
-
-_CARD_STYLE = "QFrame { background:#0d1a2a; border:1px solid #1e3a5a; border-radius:5px; }"
-_HDR_STYLE = "color:#7a7a7a; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
 
 # EDSM's per-system faction check can confirm a tracked system is still
 # present or has retreated, but has no bulk "every system for this faction"

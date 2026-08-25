@@ -16,15 +16,9 @@ from PyQt6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHeaderView, QFrame, QDialog, QApplication,
 )
 
-log = logging.getLogger(__name__)
+from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, PRIMARY_BUTTON_STYLE as _BTN_STYLE
 
-_CARD_STYLE = "QFrame { background:#0d1a2a; border:1px solid #1e3a5a; border-radius:5px; }"
-_HDR_STYLE = "color:#7a7a7a; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;"
-_BTN_STYLE = (
-    "QPushButton { background:#1a3a5a; color:#FFB347; border:1px solid #2a5a8a;"
-    " border-radius:3px; padding:3px 12px; font-weight:bold; }"
-    "QPushButton:hover { background:#2a5a8a; }"
-)
+log = logging.getLogger(__name__)
 
 
 class _ColonisationDetailDialog(QDialog):

@@ -16,10 +16,9 @@ from PyQt6.QtWidgets import (
 )
 
 from edc.ui import formatting as fmt
+from edc.ui.style import LABEL_STYLE as _LABEL_STYLE
 
 log = logging.getLogger(__name__)
-
-_LABEL_STYLE = "color:#c8c8c8; background:transparent; border:none;"
 _ACCENT_BG = QColor(26, 58, 90)   # squadron-relevant row highlight
 _ACCENT_FG = QColor(255, 179, 71)
 

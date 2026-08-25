@@ -17,11 +17,10 @@ from PyQt6.QtWidgets import (
 from edc.core.trade_routes import find_trade_loops, find_point_to_point_trades
 from edc.ui.busy_spinner import BusySpinner
 from edc.ui.panels.market_panel import _NumericTableWidgetItem
+from edc.ui.style import CARD_STYLE as _CARD_STYLE, LABEL_STYLE as _LABEL_STYLE
 
 log = logging.getLogger(__name__)
 
-_CARD_STYLE = "QFrame { background:#0d1a2a; border:1px solid #1e3a5a; border-radius:5px; }"
-_LABEL_STYLE = "background:transparent; border:none; color:#c8c8c8;"
 _PAD_RANK = {"S": 1, "M": 2, "L": 3}
 
 
