@@ -2149,6 +2149,38 @@ class _FactionHistoryDialog(QDialog):
                 series.attachAxis(self._axis_x)
                 series.attachAxis(self._axis_y)
 
+        # Auto-scale the Y axis to the influence values actually in view --
+        # a fixed 0-100% range flattens every faction into a thin band near
+        # the bottom whenever influence stays under ~40%, which is the
+        # common case and made close-but-distinct factions unreadable.
+        # Falls back to the full 0-100% range when there's too little
+        # spread to make padding meaningful (e.g. a single flat value),
+        # so a genuinely tight race still reads as tight rather than being
+        # artificially zoomed into noise.
+        all_influences = [
+            h.get("influence") * 100
+            for h in history
+            if isinstance(h.get("influence"), (int, float))
+        ]
+        if all_influences:
+            lo, hi = min(all_influences), max(all_influences)
+            spread = hi - lo
+            if spread < 10:
+                # Tight/flat data -- pad generously so lines aren't glued
+                # to the chart edges, but keep it well short of 0-100%.
+                pad = max(5.0, spread)
+                lo, hi = lo - pad, hi + pad
+            else:
+                pad = spread * 0.15
+                lo, hi = lo - pad, hi + pad
+            lo = max(0.0, lo)
+            hi = min(100.0, hi)
+            if hi - lo < 1:
+                lo, hi = 0.0, 100.0
+            self._axis_y.setRange(lo, hi)
+        else:
+            self._axis_y.setRange(0, 100)
+
         self._table.setRowCount(len(history))
         for row, h in enumerate(history):
             fname = h.get("faction_name") or "Unknown"

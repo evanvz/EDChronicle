@@ -160,9 +160,11 @@ def run():
         selection-color: #000000;
     }
 
-    QTableWidget::item {
-        color: #E6E6E6;
-    }
+    /* QTableWidget::item deliberately has no color rule here -- a stylesheet
+       color always wins over QTableWidgetItem.setForeground(), which broke
+       every per-item colored cell app-wide (faction identity colors, status
+       colors, red/green highlights, ...). QWidget's color rule above already
+       supplies the same #E6E6E6 default for un-colored cells. */
 
     QTableView {
         background-color: #101010;
