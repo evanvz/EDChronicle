@@ -16,7 +16,10 @@ from PyQt6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHeaderView, QFrame, QDialog, QApplication,
 )
 
-from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, PRIMARY_BUTTON_STYLE as _BTN_STYLE
+from edc.ui.style import (
+    CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, PRIMARY_BUTTON_STYLE as _BTN_STYLE,
+    card_style as _card_style, hdr_style as _hdr_style,
+)
 
 log = logging.getLogger(__name__)
 
@@ -215,12 +218,14 @@ class SquadronPanel(QWidget):
         # a checklist of squadron construction projects before you've been.
         colon_card = QFrame()
         colon_card.setStyleSheet(_CARD_STYLE)
+        self._colon_card = colon_card
         colon_l = QVBoxLayout(colon_card)
         colon_l.setContentsMargins(8, 6, 8, 6)
         colon_l.setSpacing(4)
 
         colon_hdr = QLabel("COLONISATION CONSTRUCTION — TRACKED SITES")
         colon_hdr.setStyleSheet(_HDR_STYLE)
+        self._colon_hdr = colon_hdr
         colon_l.addWidget(colon_hdr)
 
         colon_note = QLabel(
@@ -430,12 +435,16 @@ class SquadronPanel(QWidget):
                 log.exception("Failed to load system coords for colonisation depots")
 
         self._depot_table.setRowCount(len(self._depots))
+        any_in_progress = False
+        any_complete = False
         for row, d in enumerate(self._depots):
             progress = d.get("progress")
             if d.get("complete"):
                 status_text, status_color = "Complete", "#6BCB77"
+                any_complete = True
             elif isinstance(progress, (int, float)):
                 status_text, status_color = "In Progress", "#FFD93D"
+                any_in_progress = True
             else:
                 status_text, status_color = "Not yet visited", "#888888"
             progress_text = f"{progress * 100:.1f}%" if isinstance(progress, (int, float)) else "—"
@@ -468,6 +477,20 @@ class SquadronPanel(QWidget):
         row_h = self._depot_table.verticalHeader().defaultSectionSize()
         content_h = self._depot_table.horizontalHeader().height() + len(self._depots) * row_h + 4
         self._depot_table.setMaximumHeight(min(content_h, 160) if self._depots else 60)
+
+        # Card reads as "in progress" (yellow) while any site is actively
+        # under construction, "done" (green) once everything tracked is
+        # complete and nothing is still building, and stays the neutral
+        # default when there's nothing tracked yet or every site is
+        # untouched — no status to call out either way.
+        if any_in_progress:
+            variant = "yellow"
+        elif any_complete and self._depots:
+            variant = "green"
+        else:
+            variant = "blue"
+        self._colon_card.setStyleSheet(_card_style(variant))
+        self._colon_hdr.setStyleSheet(_hdr_style(variant))
 
     def _on_add_depot_clicked(self) -> None:
         system_name = self._depot_system_edit.text().strip()

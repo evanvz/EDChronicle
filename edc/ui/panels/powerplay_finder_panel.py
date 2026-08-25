@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
 from edc.core.spansh_client import SpanshClient, SpanshSystem
 from edc.core.powerplay_activities import PowerPlayActivityTable
 from edc.ui.busy_spinner import BusySpinner
-from edc.ui.style import CARD_STYLE, HDR_STYLE, LABEL_STYLE
+from edc.ui.style import CARD_STYLE, HDR_STYLE, LABEL_STYLE, card_style, hdr_style
 
 log = logging.getLogger(__name__)
 
@@ -168,14 +168,19 @@ class PowerplayFinderPanel(QWidget):
         root.setSpacing(6)
 
         # ── Controls card ────────────────────────────────────────────────
-        ctrl_frame = QFrame()
-        ctrl_frame.setStyleSheet(self._CARD_STYLE)
+        # Variant flips to "red" when Undermining targets is selected — this
+        # card is now steering you at enemy-vulnerable systems, the same
+        # danger/offense meaning EDPowerPlay's own site uses red for.
+        self._ctrl_frame = QFrame()
+        self._ctrl_frame.setStyleSheet(self._CARD_STYLE)
+        ctrl_frame = self._ctrl_frame
         ctrl_layout = QVBoxLayout(ctrl_frame)
         ctrl_layout.setContentsMargins(8, 6, 8, 8)
         ctrl_layout.setSpacing(6)
 
-        hdr = QLabel("POWERPLAY TARGET FINDER")
-        hdr.setStyleSheet(self._HDR_STYLE)
+        self._ctrl_hdr = QLabel("POWERPLAY TARGET FINDER")
+        self._ctrl_hdr.setStyleSheet(self._HDR_STYLE)
+        hdr = self._ctrl_hdr
         ctrl_layout.addWidget(hdr)
 
         # Row 1: power + system
@@ -321,6 +326,14 @@ class PowerplayFinderPanel(QWidget):
 
     def _update_scope_hint(self):
         mission = self._mission_key()
+
+        # Card reads as "danger/offense" only for the undermining workflow —
+        # everything else (reinforcement, acquisition, browse-all) stays the
+        # neutral default so red isn't diluted into meaninglessness.
+        variant = "red" if mission == "undermining" else "blue"
+        self._ctrl_frame.setStyleSheet(card_style(variant))
+        self._ctrl_hdr.setStyleSheet(hdr_style(variant))
+
         states, desc = _SCOPE_HINTS.get(mission, ([], ""))
         if not states:
             self._scope_label.setText(

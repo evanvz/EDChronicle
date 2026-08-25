@@ -11,6 +11,16 @@ Buttons: three variants by intent, not just one flat orange rectangle —
 PRIMARY_BUTTON_STYLE (affirmative actions: Add, Search, Save),
 SECONDARY_BUTTON_STYLE (neutral actions inside a card, e.g. Refresh),
 DANGER_BUTTON_STYLE (destructive actions: Remove, Delete, Clear).
+
+Cards: CARD_VARIANTS below is the single palette every panel should draw
+semantic (non-default) card colors from, instead of each panel hand-rolling
+its own hex pair (which is how Combat/Intel/Exploration ended up with a
+dozen near-duplicate one-off colors). "blue" is the neutral default used
+for plain data/search-result cards; the others carry meaning and should
+only be reached for when the card's content actually warrants it — a
+rainbow of cards with no meaning behind the color is worse than the flat
+look this replaces. Use CARD_STYLE/HDR_STYLE directly for the default, or
+make_card(title, variant=...) for a semantic one.
 """
 from __future__ import annotations
 
@@ -65,20 +75,63 @@ DANGER_BUTTON_STYLE = (
     "QPushButton:disabled { background:#151010; color:#4a3a3a; border-color:#251818; }"
 )
 
+# ── Semantic card palette ───────────────────────────────────────────────────
+# (card_bg, card_border, header_fg) per meaning. Pulled together from the
+# colors already in use ad-hoc across combat_panel/intel_panel/exploration_
+# panel/exobiology_panel/fleet_carrier_panel, so existing "personality"
+# cards (Notoriety, Bounty Clearance, Exobiology, squadron carrier, ...)
+# and any future card can draw from one consistent set instead of each
+# panel inventing its own hex pair.
+_VARIANT_COLORS = {
+    # Neutral/default — plain data, search results, no status implied.
+    "blue":   ("#0d1a2a", "#1e3a5a", "#7a7a7a"),
+    # Positive / success / gaining ground.
+    "green":  ("#0d1a12", "#2a5a3a", "#6BCB77"),
+    # Caution / stale data / needs attention soon, not yet urgent.
+    "yellow": ("#2a2200", "#4a4010", "#FFD93D"),
+    # Danger / urgent / losing ground / destructive context.
+    "red":    ("#2a0a0a", "#4a1e1e", "#FF8080"),
+    # Secondary entity / not-exclusively-yours (e.g. squadron vs. own carrier).
+    "purple": ("#1a0d1f", "#4a1e5a", "#b380d9"),
+    # Resources / materials / mining.
+    "teal":   ("#0d1a1a", "#1e3a3a", "#6BE6D9"),
+}
 
-def make_card(title: str = "") -> tuple[QFrame, QVBoxLayout]:
+
+def card_style(variant: str = "blue") -> str:
+    """QFrame stylesheet for one semantic card variant. Falls back to the
+    default blue for an unrecognised variant name rather than raising —
+    a typo'd variant should degrade to "looks normal", not crash a panel."""
+    bg, border, _ = _VARIANT_COLORS.get(variant, _VARIANT_COLORS["blue"])
+    return f"QFrame {{ background:{bg}; border:1px solid {border}; border-radius:5px; }}"
+
+
+def hdr_style(variant: str = "blue") -> str:
+    """Header QLabel stylesheet matching card_style's variant."""
+    _, _, fg = _VARIANT_COLORS.get(variant, _VARIANT_COLORS["blue"])
+    return (
+        f"color:{fg}; font-size:12px; font-weight:bold; letter-spacing:1px;"
+        " background:transparent; border:none;"
+    )
+
+
+def make_card(title: str = "", variant: str = "blue") -> tuple[QFrame, QVBoxLayout]:
     """Build a standard card QFrame (with an optional bold header label
     already inserted) and return (frame, content_layout) so callers can
     keep adding widgets/layouts to content_layout. Saves every panel from
     re-typing the same four setup lines with a slightly different margin
-    each time."""
+    each time.
+
+    variant picks a semantic color from CARD_VARIANTS (see module docstring)
+    — leave it as "blue" for plain/neutral cards; only reach for a colored
+    variant when the card's content actually carries that meaning."""
     frame = QFrame()
-    frame.setStyleSheet(CARD_STYLE)
+    frame.setStyleSheet(card_style(variant))
     layout = QVBoxLayout(frame)
     layout.setContentsMargins(8, 6, 8, 8)
     layout.setSpacing(6)
     if title:
         hdr = QLabel(title)
-        hdr.setStyleSheet(HDR_STYLE)
+        hdr.setStyleSheet(hdr_style(variant))
         layout.addWidget(hdr)
     return frame, layout
