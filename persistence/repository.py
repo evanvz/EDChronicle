@@ -1038,6 +1038,30 @@ class Repository:
         ).fetchall()
         return {r["system_name"].strip().lower() for r in rows if r["system_name"]}
 
+    def get_faction_system_names_missing_coords(self, faction_name: str, limit: int = 10) -> list[str]:
+        """
+        Tracked systems for this faction that never got a system_coords
+        row — confirmed live: EDSM's coords endpoint used to be one-shot
+        with no retry, so a bulk CSV import hitting even a single
+        transient rate-limit blip could leave a system permanently
+        coordinate-less until someone manually clicked "Recheck via
+        EDSM". This is what a periodic background backfill sweep queries
+        to find its next batch. limit bounds one sweep tick's EDSM
+        request cost, not the total gap — repeated ticks work through it.
+        """
+        rows = self.db.conn.execute(
+            """
+            SELECT DISTINCT s.system_name
+            FROM faction_snapshots fs
+            JOIN systems s ON s.system_address = fs.system_address
+            LEFT JOIN system_coords sc ON sc.system_name = s.system_name
+            WHERE fs.faction_name = ? AND s.system_name IS NOT NULL AND sc.system_name IS NULL
+            LIMIT ?
+            """,
+            (faction_name, limit),
+        ).fetchall()
+        return [r["system_name"] for r in rows if r["system_name"]]
+
     def get_stale_faction_systems(self, faction_name: str, current_names: set[str]) -> list[dict]:
         """
         Currently-visible systems (see get_player_faction_overview — already

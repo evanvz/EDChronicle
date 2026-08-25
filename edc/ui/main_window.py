@@ -355,6 +355,50 @@ class _BgsTickCheckWorker(QObject):
         self.finished.emit(result)
 
 
+class _CoordsBackfillWorker(QObject):
+    """Periodic safety net: finds a small batch of the squadron's tracked
+    systems that never got a system_coords row, and retries EDSM for
+    them -- independent of the manual "Recheck via EDSM" button, so a
+    transient EDSM blip at CSV-import time (or an EDDN sighting with a
+    malformed StarPos) doesn't leave a gap forever. Opens its own
+    connection per the project's cross-thread SQLite rule."""
+    finished = pyqtSignal(int)  # systems_backfilled
+
+    def __init__(self, db_path, faction_name: str, batch_size: int = 10):
+        super().__init__()
+        self._db_path = db_path
+        self._faction_name = faction_name
+        self._batch_size = batch_size
+
+    def run(self):
+        from datetime import datetime, timezone
+        from persistence.database import Database
+        from persistence.repository import Repository
+        from edc.core.edsm_faction_lookup import fetch_system_coords
+
+        db = Database(self._db_path)
+        backfilled = 0
+        try:
+            repo = Repository(db)
+            names = repo.get_faction_system_names_missing_coords(self._faction_name, self._batch_size)
+            for name in names:
+                try:
+                    coords = fetch_system_coords(name)
+                except Exception:
+                    log.exception("Coords backfill: lookup failed for %r", name)
+                    continue
+                if coords is None:
+                    continue
+                now = datetime.now(timezone.utc).isoformat()
+                repo.save_system_coords_batch([(name, coords[0], coords[1], coords[2], now)])
+                backfilled += 1
+        except Exception:
+            log.exception("Coords backfill sweep failed")
+        finally:
+            db.close()
+        self.finished.emit(backfilled)
+
+
 class _ColonisationCandidatesWorker(QObject):
     """One-shot background fetch of nearby colonisation candidates -- a
     fresh instance is created only when the player's current system
@@ -1273,7 +1317,17 @@ class MainWindow(QMainWindow):
         self._eddn_save_timer.setInterval(2 * 60 * 1000)  # persist periodically, not on every sighting
         self._eddn_save_timer.timeout.connect(self.eddn_powerplay.save)
         self._edsm_powerplay_retry_timer = QTimer(self)
-        self._edsm_powerplay_retry_timer.setInterval(10 * 60 * 1000)  # retry every 10 min until fresh
+        # Runs continuously for the app's whole lifetime, not just "until
+        # fresh" -- confirmed live: a session left running across midnight
+        # never re-checked staleness at all, since _maybe_start_edsm_
+        # powerplay_refresh() was previously only ever called once at
+        # startup plus this timer (which used to stop itself on a
+        # successful refresh). date.today() inside is_stale() moves at
+        # midnight regardless of how long the app's been open, so this
+        # needs to keep polling for the rest of the session -- the 10 min
+        # cadence is cheap since is_stale()/the in-flight guard make a
+        # not-actually-stale tick a no-op.
+        self._edsm_powerplay_retry_timer.setInterval(10 * 60 * 1000)
         self._edsm_powerplay_retry_timer.timeout.connect(self._maybe_start_edsm_powerplay_refresh)
 
         self.eddn_market_cache = EddnMarketCache(self.repo)
@@ -1291,6 +1345,21 @@ class MainWindow(QMainWindow):
         self._player_faction_refresh_timer.setInterval(20 * 60 * 1000)
         self._player_faction_refresh_timer.timeout.connect(self._refresh_player_faction)
         self._player_faction_refresh_timer.start()
+
+        self._coords_backfill_timer = QTimer(self)
+        # Standing safety net for tracked systems whose coordinates never
+        # resolved on their original attempt (bulk CSV import, an EDDN
+        # sighting with a malformed StarPos, etc.) -- previously only
+        # ever fixed by manually clicking "Recheck via EDSM" in a bucket
+        # dialog. 30 min is plenty for a low-priority background catch-up;
+        # each tick is capped to a small batch (see
+        # get_faction_system_names_missing_coords) so it can't dominate
+        # the shared EDSM request budget other lookups also draw from.
+        self._coords_backfill_timer.setInterval(30 * 60 * 1000)
+        self._coords_backfill_timer.timeout.connect(self._on_coords_backfill_tick)
+        self._coords_backfill_timer.start()
+        self._coords_backfill_thread: QThread | None = None
+        self._coords_backfill_worker: "_CoordsBackfillWorker | None" = None
 
         self._bgs_tick_timer = QTimer(self)
         # tick.edcd.io detects real BGS ticks (once or twice a day, no
@@ -1735,8 +1804,11 @@ class MainWindow(QMainWindow):
         self._maybe_start_edsm_powerplay_refresh()
         self._maybe_start_market_prune()
         self._start_eddn_listener()
-        if self.edsm_powerplay.is_stale():
-            self._edsm_powerplay_retry_timer.start()
+        # Always running, not just when today's initial check found the
+        # cache stale -- see the timer's own comment: date.today() moves
+        # at midnight regardless of session length, so this needs to keep
+        # polling for the rest of the app's lifetime, not stop once fresh.
+        self._edsm_powerplay_retry_timer.start()
         if auto_start:
             self._auto_start_if_configured()
 
@@ -1920,11 +1992,11 @@ class MainWindow(QMainWindow):
     def _on_edsm_powerplay_refreshed(self, ok: bool):
         if ok:
             log.info("EDSM PowerPlay cache refresh complete")
-            self._edsm_powerplay_retry_timer.stop()
         else:
             log.warning("EDSM PowerPlay cache refresh failed — will retry later")
-            if not self._edsm_powerplay_retry_timer.isActive():
-                self._edsm_powerplay_retry_timer.start()
+        # Timer keeps running either way -- see its own comment: it's now
+        # a continuous "did the calendar day roll over" poll for the rest
+        # of the app's lifetime, not a one-shot retry-until-fresh loop.
 
     def _maybe_start_market_prune(self):
         """Once/day is plenty — the prune thresholds are 14 days for
@@ -4358,6 +4430,30 @@ class MainWindow(QMainWindow):
         self._flush_thread.started.connect(self._flush_worker.run)
         self._flush_worker.finished.connect(self._flush_thread.quit)
         self._flush_thread.start()
+
+    def _on_coords_backfill_tick(self) -> None:
+        if self._coords_backfill_thread and self._coords_backfill_thread.isRunning():
+            return
+        try:
+            overview = self.repo.get_player_faction_overview()
+            faction_name = overview["faction_name"] if overview else None
+        except Exception:
+            log.exception("Failed to load squadron faction name for coords backfill")
+            return
+        if not faction_name:
+            return
+
+        self._coords_backfill_worker = _CoordsBackfillWorker(self.repo.db.db_path, faction_name)
+        self._coords_backfill_thread = QThread()
+        self._coords_backfill_worker.moveToThread(self._coords_backfill_thread)
+        self._coords_backfill_thread.started.connect(self._coords_backfill_worker.run)
+        self._coords_backfill_worker.finished.connect(self._on_coords_backfill_finished)
+        self._coords_backfill_worker.finished.connect(self._coords_backfill_thread.quit)
+        self._coords_backfill_thread.start()
+
+    def _on_coords_backfill_finished(self, backfilled: int) -> None:
+        if backfilled:
+            log.info("Coords backfill sweep: filled in %d missing system(s)", backfilled)
 
     def _on_service_health_tick(self) -> None:
         for name, lbl in self._service_health_labels.items():

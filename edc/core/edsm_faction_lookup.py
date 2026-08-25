@@ -165,9 +165,24 @@ def fetch_system_coords(system_name: str) -> Optional[Tuple[float, float, float]
     EDSM's faction endpoint has no coordinate data (confirmed via live
     testing) — this is EDSM's separate system endpoint, used to backfill
     system_coords for tracked systems EDDN has never happened to see live
-    (needed for Player Faction distance sorting). One-shot, no retry —
-    coords are a nice-to-have here, not worth doubling request volume for.
+    (needed for Player Faction distance sorting and the Market tab's
+    "Near" field). Retries on a blocked/failed request the same way
+    fetch_system_factions does, not on a genuine "not found" — confirmed
+    live: a real, resolvable system ("Ekono") failed a single one-shot
+    attempt during what was presumably a transient EDSM rate-limit/
+    Cloudflare blip (this codebase's own known failure mode for EDSM at
+    scale), which the old one-shot version had no defense against at all.
     """
+    attempt = 0
+    while True:
+        result, error = _fetch_system_coords_once(system_name)
+        if result is not None or error != ERROR_BLOCKED or attempt >= len(_RETRY_DELAYS_S):
+            return result
+        time.sleep(_RETRY_DELAYS_S[attempt])
+        attempt += 1
+
+
+def _fetch_system_coords_once(system_name: str) -> Tuple[Optional[Tuple[float, float, float]], Optional[str]]:
     try:
         _throttle()
         resp = requests.get(
@@ -178,14 +193,14 @@ def fetch_system_coords(system_name: str) -> Optional[Tuple[float, float, float]
         data = resp.json()
     except Exception as exc:
         log.error("EDSM system-coords lookup failed for %r: %s", system_name, exc)
-        return None
+        return None, ERROR_BLOCKED
     coords = data.get("coords") if isinstance(data, dict) else None
     if not isinstance(coords, dict):
-        return None
+        return None, ERROR_NOT_FOUND
     x, y, z = coords.get("x"), coords.get("y"), coords.get("z")
     if all(isinstance(v, (int, float)) for v in (x, y, z)):
-        return (x, y, z)
-    return None
+        return (x, y, z), None
+    return None, ERROR_NOT_FOUND
 
 
 def _fetch_once(system_name: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
