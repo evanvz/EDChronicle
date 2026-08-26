@@ -101,9 +101,17 @@ def handle(engine, name: str | None, event: Dict[str, Any], msgs: List[str]) -> 
         engine.state.system_controlling_power = event.get("ControllingPower") or engine.state.system_controlling_power
         engine.state.system_powerplay_state = event.get("PowerplayState") or engine.state.system_powerplay_state
         engine.state.system_powers = event.get("Powers") if isinstance(event.get("Powers"), list) else engine.state.system_powers
-        engine.state.system_powerplay_conflict_progress = (
-            event.get("PowerplayConflictProgress") if isinstance(event.get("PowerplayConflictProgress"), dict) else engine.state.system_powerplay_conflict_progress
-        )
+        # Journal emits PowerplayConflictProgress as a list of
+        # {Power, ConflictProgress} records — parse into a {name: pct} dict,
+        # same as the Location/FSDJump handlers in event_engine.py.
+        prog = {}
+        for rec in (event.get("PowerplayConflictProgress") or []):
+            if isinstance(rec, dict) and isinstance(rec.get("Power"), str):
+                cp = rec.get("ConflictProgress")
+                if isinstance(cp, (int, float)):
+                    prog[rec["Power"]] = float(cp)
+        if prog:
+            engine.state.system_powerplay_conflict_progress = prog
 
         # Advisory-only external intel
         engine._apply_external_intel(engine.state.system, engine.state.system_address)

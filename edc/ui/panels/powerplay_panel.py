@@ -103,6 +103,36 @@ class PowerplayPanel(QWidget):
 
         layout.addWidget(pp_frame)
 
+        # ── Local faction BGS card ─────────────────────────────────────────
+        # A system's Power control is ultimately backed by its local minor
+        # faction's BGS standing — losing that faction's war/election here
+        # can threaten Power control even if PP-specific metrics look fine.
+        # Sits directly under the PP Status card and uses a distinct dark
+        # green tint so it reads as "local faction" rather than PP data.
+        bgs_frame = QFrame()
+        bgs_frame.setStyleSheet(
+            "QFrame { background: #0e241c; border: 1px solid #2a5c46;"
+            "border-radius: 5px; }"
+        )
+        bgs_frame_l = QVBoxLayout(bgs_frame)
+        bgs_frame_l.setContentsMargins(8, 6, 8, 6)
+        bgs_frame_l.setSpacing(4)
+
+        bgs_hdr = QLabel("LOCAL FACTION BGS")
+        bgs_hdr.setStyleSheet(
+            "color: #7a7a7a; font-size:12px; font-weight: bold; "
+            "letter-spacing: 1px; background: transparent; border: none;"
+        )
+        bgs_frame_l.addWidget(bgs_hdr)
+
+        self.bgs_summary = QLabel("")
+        self.bgs_summary.setWordWrap(True)
+        self.bgs_summary.setTextFormat(Qt.TextFormat.RichText)
+        self.bgs_summary.setStyleSheet("background: transparent; border: none;")
+        bgs_frame_l.addWidget(self.bgs_summary)
+
+        layout.addWidget(bgs_frame)
+
         # ── Activities card ───────────────────────────────────────────────
         act_frame = QFrame()
         act_frame.setStyleSheet(
@@ -128,34 +158,6 @@ class PowerplayPanel(QWidget):
         act_frame_l.addWidget(self.pp_actions)
 
         layout.addWidget(act_frame)
-
-        # ── Local faction BGS card ─────────────────────────────────────────
-        # A system's Power control is ultimately backed by its local minor
-        # faction's BGS standing — losing that faction's war/election here
-        # can threaten Power control even if PP-specific metrics look fine.
-        bgs_frame = QFrame()
-        bgs_frame.setStyleSheet(
-            "QFrame { background: #0d1a2a; border: 1px solid #1e3a5a;"
-            "border-radius: 5px; }"
-        )
-        bgs_frame_l = QVBoxLayout(bgs_frame)
-        bgs_frame_l.setContentsMargins(8, 6, 8, 6)
-        bgs_frame_l.setSpacing(4)
-
-        bgs_hdr = QLabel("LOCAL FACTION BGS")
-        bgs_hdr.setStyleSheet(
-            "color: #7a7a7a; font-size:12px; font-weight: bold; "
-            "letter-spacing: 1px; background: transparent; border: none;"
-        )
-        bgs_frame_l.addWidget(bgs_hdr)
-
-        self.bgs_summary = QLabel("")
-        self.bgs_summary.setWordWrap(True)
-        self.bgs_summary.setTextFormat(Qt.TextFormat.RichText)
-        self.bgs_summary.setStyleSheet("background: transparent; border: none;")
-        bgs_frame_l.addWidget(self.bgs_summary)
-
-        layout.addWidget(bgs_frame)
 
         # ── Conflict progress card ────────────────────────────────────────
         prog_frame = QFrame()
