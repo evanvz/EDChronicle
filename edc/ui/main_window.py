@@ -1964,7 +1964,20 @@ class MainWindow(QMainWindow):
         self._eddn_save_timer.stop()
         self.eddn_powerplay.save()
         self._market_flush_timer.stop()
-        self.eddn_market_cache.flush()
+        # Wait for any in-flight background flush to finish before the
+        # synchronous flush below, so the two never write to the DB
+        # concurrently (separate connections → SQLite lock contention).
+        if self._flush_thread and self._flush_thread.isRunning():
+            self._flush_thread.wait(5000)
+        # Drain whatever the timer hasn't written yet (up to 45s of buffered
+        # EDDN sightings) — without this, closing the app silently drops
+        # them. Synchronous, main-thread, own-repo-connection flush is
+        # exactly what EddnMarketCache.flush() exists for (see its
+        # docstring); blocking briefly at shutdown is acceptable.
+        try:
+            self.eddn_market_cache.flush()
+        except Exception:
+            log.exception("Failed to flush EDDN market cache at shutdown")
         log.info("EDDN PowerPlay listener stopped")
 
     def _on_eddn_system_seen(self, id64: int, power: str, power_state: str, timestamp: str):
