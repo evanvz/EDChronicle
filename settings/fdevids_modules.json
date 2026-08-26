@@ -1,0 +1,4802 @@
+{
+ "source": "EDCD/FDevIDs outfitting.csv",
+ "count": 1199,
+ "symbols": {
+  "sidewinder_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "sidewinder_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "sidewinder_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "sidewinder_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "sidewinder_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "eagle_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "eagle_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "eagle_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "eagle_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "eagle_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "hauler_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "hauler_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "hauler_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "hauler_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "hauler_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "adder_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "adder_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "adder_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "adder_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "adder_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "viper_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "viper_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "viper_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "viper_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "viper_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "cobramkiii_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "cobramkiii_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "cobramkiii_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "cobramkiii_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "cobramkiii_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "type6_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "type6_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "type6_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "type6_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "type6_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "dolphin_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "dolphin_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "dolphin_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "dolphin_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "dolphin_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "type7_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "type7_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "type7_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "type7_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "type7_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "asp_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "asp_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "asp_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "asp_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "asp_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "vulture_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "vulture_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "vulture_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "vulture_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "vulture_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "empire_trader_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "empire_trader_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "empire_trader_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "empire_trader_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "empire_trader_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "federation_dropship_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "federation_dropship_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "federation_dropship_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "federation_dropship_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "federation_dropship_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "orca_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "orca_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "orca_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "orca_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "orca_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "type9_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "type9_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "type9_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "type9_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "type9_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "python_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "python_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "python_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "python_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "python_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "belugaliner_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "belugaliner_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "belugaliner_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "belugaliner_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "belugaliner_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "ferdelance_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "ferdelance_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "ferdelance_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "ferdelance_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "ferdelance_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "anaconda_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "anaconda_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "anaconda_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "anaconda_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "anaconda_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "federation_corvette_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "federation_corvette_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "federation_corvette_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "federation_corvette_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "federation_corvette_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "cutter_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "cutter_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "cutter_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "cutter_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "cutter_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "hpt_pulselaser_fixed_small": {
+   "name": "Pulse Laser",
+   "category": "hardpoint"
+  },
+  "hpt_pulselaser_fixed_medium": {
+   "name": "Pulse Laser",
+   "category": "hardpoint"
+  },
+  "hpt_pulselaser_fixed_large": {
+   "name": "Pulse Laser",
+   "category": "hardpoint"
+  },
+  "hpt_pulselaser_fixed_huge": {
+   "name": "Pulse Laser",
+   "category": "hardpoint"
+  },
+  "hpt_pulselaser_gimbal_small": {
+   "name": "Pulse Laser",
+   "category": "hardpoint"
+  },
+  "hpt_pulselaser_gimbal_medium": {
+   "name": "Pulse Laser",
+   "category": "hardpoint"
+  },
+  "hpt_pulselaser_gimbal_large": {
+   "name": "Pulse Laser",
+   "category": "hardpoint"
+  },
+  "hpt_pulselaser_turret_small": {
+   "name": "Pulse Laser",
+   "category": "hardpoint"
+  },
+  "hpt_pulselaser_turret_medium": {
+   "name": "Pulse Laser",
+   "category": "hardpoint"
+  },
+  "hpt_pulselaser_turret_large": {
+   "name": "Pulse Laser",
+   "category": "hardpoint"
+  },
+  "hpt_pulselaserburst_fixed_small": {
+   "name": "Burst Laser",
+   "category": "hardpoint"
+  },
+  "hpt_pulselaserburst_fixed_medium": {
+   "name": "Burst Laser",
+   "category": "hardpoint"
+  },
+  "hpt_pulselaserburst_fixed_large": {
+   "name": "Burst Laser",
+   "category": "hardpoint"
+  },
+  "hpt_pulselaserburst_fixed_huge": {
+   "name": "Burst Laser",
+   "category": "hardpoint"
+  },
+  "hpt_pulselaserburst_gimbal_small": {
+   "name": "Burst Laser",
+   "category": "hardpoint"
+  },
+  "hpt_pulselaserburst_gimbal_medium": {
+   "name": "Burst Laser",
+   "category": "hardpoint"
+  },
+  "hpt_pulselaserburst_gimbal_large": {
+   "name": "Burst Laser",
+   "category": "hardpoint"
+  },
+  "hpt_pulselaserburst_turret_small": {
+   "name": "Burst Laser",
+   "category": "hardpoint"
+  },
+  "hpt_pulselaserburst_turret_medium": {
+   "name": "Burst Laser",
+   "category": "hardpoint"
+  },
+  "hpt_pulselaserburst_turret_large": {
+   "name": "Burst Laser",
+   "category": "hardpoint"
+  },
+  "hpt_beamlaser_fixed_small": {
+   "name": "Beam Laser",
+   "category": "hardpoint"
+  },
+  "hpt_beamlaser_fixed_medium": {
+   "name": "Beam Laser",
+   "category": "hardpoint"
+  },
+  "hpt_beamlaser_fixed_large": {
+   "name": "Beam Laser",
+   "category": "hardpoint"
+  },
+  "hpt_beamlaser_fixed_huge": {
+   "name": "Beam Laser",
+   "category": "hardpoint"
+  },
+  "hpt_beamlaser_gimbal_small": {
+   "name": "Beam Laser",
+   "category": "hardpoint"
+  },
+  "hpt_beamlaser_gimbal_medium": {
+   "name": "Beam Laser",
+   "category": "hardpoint"
+  },
+  "hpt_beamlaser_gimbal_large": {
+   "name": "Beam Laser",
+   "category": "hardpoint"
+  },
+  "hpt_beamlaser_turret_small": {
+   "name": "Beam Laser",
+   "category": "hardpoint"
+  },
+  "hpt_beamlaser_turret_medium": {
+   "name": "Beam Laser",
+   "category": "hardpoint"
+  },
+  "hpt_beamlaser_turret_large": {
+   "name": "Beam Laser",
+   "category": "hardpoint"
+  },
+  "hpt_cannon_fixed_small": {
+   "name": "Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_cannon_fixed_medium": {
+   "name": "Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_cannon_fixed_large": {
+   "name": "Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_cannon_fixed_huge": {
+   "name": "Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_cannon_gimbal_small": {
+   "name": "Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_cannon_gimbal_medium": {
+   "name": "Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_cannon_gimbal_huge": {
+   "name": "Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_cannon_turret_small": {
+   "name": "Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_cannon_turret_medium": {
+   "name": "Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_cannon_turret_large": {
+   "name": "Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_slugshot_fixed_small": {
+   "name": "Fragment Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_slugshot_fixed_medium": {
+   "name": "Fragment Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_slugshot_fixed_large": {
+   "name": "Fragment Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_slugshot_gimbal_small": {
+   "name": "Double Screaming Fragment Cannon",
+   "category": "mercgear"
+  },
+  "hpt_slugshot_gimbal_medium": {
+   "name": "Fragment Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_slugshot_turret_small": {
+   "name": "Fragment Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_slugshot_turret_medium": {
+   "name": "Fragment Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_multicannon_fixed_small": {
+   "name": "Multi-Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_multicannon_fixed_medium": {
+   "name": "Rapid Phase Multi-Cannon",
+   "category": "mercgear"
+  },
+  "hpt_multicannon_fixed_large": {
+   "name": "Multi-Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_multicannon_fixed_huge": {
+   "name": "Multi-Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_multicannon_gimbal_small": {
+   "name": "Multi-Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_multicannon_gimbal_medium": {
+   "name": "Multi-Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_multicannon_gimbal_large": {
+   "name": "Multi-Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_multicannon_turret_small": {
+   "name": "Multi-Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_multicannon_turret_medium": {
+   "name": "Multi-Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_multicannon_turret_large": {
+   "name": "Multi-Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_plasmaaccelerator_fixed_medium": {
+   "name": "Plasma Accelerator",
+   "category": "hardpoint"
+  },
+  "hpt_plasmaaccelerator_fixed_large": {
+   "name": "Plasma Accelerator",
+   "category": "hardpoint"
+  },
+  "hpt_plasmaaccelerator_fixed_huge": {
+   "name": "Plasma Accelerator",
+   "category": "hardpoint"
+  },
+  "hpt_railgun_fixed_small": {
+   "name": "Rail Gun",
+   "category": "hardpoint"
+  },
+  "hpt_railgun_fixed_medium": {
+   "name": "Enduring Feedback Rail Gun",
+   "category": "mercgear"
+  },
+  "hpt_basicmissilerack_fixed_small": {
+   "name": "Seeker Missile Rack",
+   "category": "hardpoint"
+  },
+  "hpt_basicmissilerack_fixed_medium": {
+   "name": "Lockdown Seeker Missile Rack",
+   "category": "mercgear"
+  },
+  "hpt_basicmissilerack_fixed_large": {
+   "name": "Lockdown Seeker Missile Rack",
+   "category": "mercgear"
+  },
+  "hpt_minelauncher_fixed_small": {
+   "name": "Mine Launcher",
+   "category": "hardpoint"
+  },
+  "hpt_minelauncher_fixed_medium": {
+   "name": "Mine Launcher",
+   "category": "hardpoint"
+  },
+  "hpt_advancedtorppylon_fixed_small": {
+   "name": "Torpedo Pylon",
+   "category": "hardpoint"
+  },
+  "hpt_advancedtorppylon_fixed_medium": {
+   "name": "Torpedo Pylon",
+   "category": "hardpoint"
+  },
+  "hpt_advancedtorppylon_fixed_large": {
+   "name": "Torpedo Pylon",
+   "category": "hardpoint"
+  },
+  "hpt_chafflauncher_tiny": {
+   "name": "Chaff Launcher",
+   "category": "utility"
+  },
+  "hpt_electroniccountermeasure_tiny": {
+   "name": "Electronic Countermeasure",
+   "category": "utility"
+  },
+  "hpt_heatsinklauncher_turret_tiny": {
+   "name": "Heat Sink Launcher",
+   "category": "utility"
+  },
+  "hpt_plasmapointdefence_turret_tiny": {
+   "name": "Point Defence",
+   "category": "utility"
+  },
+  "hpt_mininglaser_fixed_small": {
+   "name": "Long Range Mining Laser",
+   "category": "mercgear"
+  },
+  "hpt_mininglaser_fixed_medium": {
+   "name": "Mining Laser",
+   "category": "hardpoint"
+  },
+  "int_dockingcomputer_standard": {
+   "name": "Standard Docking Computer",
+   "category": "internal"
+  },
+  "int_powerplant_size2_class1": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size2_class2": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size2_class3": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size2_class4": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size2_class5": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size3_class1": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size3_class2": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size3_class3": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size3_class4": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size3_class5": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size4_class1": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size4_class2": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size4_class3": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size4_class4": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size4_class5": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size5_class1": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size5_class2": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size5_class3": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size5_class4": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size5_class5": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size6_class1": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size6_class2": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size6_class3": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size6_class4": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size6_class5": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size7_class1": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size7_class2": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size7_class3": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size7_class4": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size7_class5": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size8_class1": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size8_class2": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size8_class3": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size8_class4": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_powerplant_size8_class5": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_engine_size2_class1": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size2_class2": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size2_class3": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size2_class4": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size2_class5": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size3_class1": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size3_class2": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size3_class3": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size3_class4": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size3_class5": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size4_class1": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size4_class2": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size4_class3": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size4_class4": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size4_class5": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size5_class1": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size5_class2": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size5_class3": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size5_class4": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size5_class5": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size6_class1": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size6_class2": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size6_class3": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size6_class4": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size6_class5": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size7_class1": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size7_class2": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size7_class3": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size7_class4": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size7_class5": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size8_class1": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size8_class2": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size8_class3": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size8_class4": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size8_class5": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_hyperdrive_size2_class1": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size2_class2": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size2_class3": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size2_class4": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size2_class5": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size3_class1": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size3_class2": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size3_class3": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size3_class4": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size3_class5": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size4_class1": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size4_class2": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size4_class3": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size4_class4": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size4_class5": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size5_class1": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size5_class2": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size5_class3": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size5_class4": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size5_class5": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size6_class1": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size6_class2": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size6_class3": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size6_class4": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size6_class5": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size7_class1": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size7_class2": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size7_class3": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size7_class4": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size7_class5": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size8_class1": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size8_class2": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size8_class3": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size8_class4": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_hyperdrive_size8_class5": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_lifesupport_size1_class1": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size1_class2": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size1_class3": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size1_class4": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size1_class5": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size2_class1": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size2_class2": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size2_class3": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size2_class4": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size2_class5": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size3_class1": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size3_class2": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size3_class3": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size3_class4": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size3_class5": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size4_class1": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size4_class2": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size4_class3": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size4_class4": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size4_class5": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size5_class1": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size5_class2": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size5_class3": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size5_class4": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size5_class5": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size6_class1": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size6_class2": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size6_class3": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size6_class4": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size6_class5": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size7_class1": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size7_class2": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size7_class3": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size7_class4": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size7_class5": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size8_class1": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size8_class2": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size8_class3": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size8_class4": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_lifesupport_size8_class5": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_powerdistributor_size1_class1": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size1_class2": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size1_class3": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size1_class4": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size1_class5": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size2_class1": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size2_class2": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size2_class3": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size2_class4": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size2_class5": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size3_class1": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size3_class2": {
+   "name": "Support Focused Power Distributor",
+   "category": "mercgear"
+  },
+  "int_powerdistributor_size3_class3": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size3_class4": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size3_class5": {
+   "name": "Support Focused Power Distributor",
+   "category": "mercgear"
+  },
+  "int_powerdistributor_size4_class1": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size4_class2": {
+   "name": "Support Focused Power Distributor",
+   "category": "mercgear"
+  },
+  "int_powerdistributor_size4_class3": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size4_class4": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size4_class5": {
+   "name": "Support Focused Power Distributor",
+   "category": "mercgear"
+  },
+  "int_powerdistributor_size5_class1": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size5_class2": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size5_class3": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size5_class4": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size5_class5": {
+   "name": "Balanced Power Distributor",
+   "category": "mercgear"
+  },
+  "int_powerdistributor_size6_class1": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size6_class2": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size6_class3": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size6_class4": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size6_class5": {
+   "name": "Support Focused Power Distributor",
+   "category": "mercgear"
+  },
+  "int_powerdistributor_size7_class1": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size7_class2": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size7_class3": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size7_class4": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size7_class5": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size8_class1": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size8_class2": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size8_class3": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size8_class4": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_powerdistributor_size8_class5": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_sensors_size1_class1": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size1_class2": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size1_class3": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size1_class4": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size1_class5": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size2_class1": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size2_class2": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size2_class3": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size2_class4": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size2_class5": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size3_class1": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size3_class2": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size3_class3": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size3_class4": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size3_class5": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size4_class1": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size4_class2": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size4_class3": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size4_class4": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size4_class5": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size5_class1": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size5_class2": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size5_class3": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size5_class4": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size5_class5": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size6_class1": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size6_class2": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size6_class3": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size6_class4": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size6_class5": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size7_class1": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size7_class2": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size7_class3": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size7_class4": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size7_class5": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size8_class1": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size8_class2": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size8_class3": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size8_class4": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_sensors_size8_class5": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_shieldgenerator_size1_class1": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size1_class2": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size1_class3": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size1_class5": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size2_class1": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size2_class2": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size2_class3": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size2_class4": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size2_class5": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size3_class1": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size3_class2": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size3_class3": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size3_class4": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size3_class5": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size4_class1": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size4_class2": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size4_class3": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size4_class4": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size4_class5": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size5_class1": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size5_class2": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size5_class3": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size5_class4": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size5_class5": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size6_class1": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size6_class2": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size6_class3": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size6_class4": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size6_class5": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size7_class1": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size7_class2": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size7_class3": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size7_class4": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size7_class5": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size8_class1": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size8_class2": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size8_class3": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size8_class4": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size8_class5": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size1_class1": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size1_class2": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size1_class3": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size1_class4": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size1_class5": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size2_class1": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size2_class2": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size2_class3": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size2_class4": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size2_class5": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size3_class1": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size3_class2": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size3_class3": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size3_class4": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size3_class5": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size4_class1": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size4_class2": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size4_class3": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size4_class4": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size4_class5": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size5_class1": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size5_class2": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size5_class3": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size5_class4": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size5_class5": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size6_class1": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size6_class2": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size6_class3": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size6_class4": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size6_class5": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size7_class1": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size7_class2": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size7_class3": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size7_class4": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size7_class5": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size8_class1": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size8_class2": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size8_class3": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size8_class4": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_shieldcellbank_size8_class5": {
+   "name": "Shield Cell Bank",
+   "category": "internal"
+  },
+  "int_cargorack_size1_class1": {
+   "name": "Cargo Rack",
+   "category": "internal"
+  },
+  "int_cargorack_size2_class1": {
+   "name": "Cargo Rack",
+   "category": "internal"
+  },
+  "int_cargorack_size3_class1": {
+   "name": "Cargo Rack",
+   "category": "internal"
+  },
+  "int_cargorack_size4_class1": {
+   "name": "Cargo Rack",
+   "category": "internal"
+  },
+  "int_cargorack_size5_class1": {
+   "name": "Extended Cargo Rack",
+   "category": "mercgear"
+  },
+  "int_cargorack_size6_class1": {
+   "name": "Extended Cargo Rack",
+   "category": "mercgear"
+  },
+  "int_cargorack_size7_class1": {
+   "name": "Cargo Rack",
+   "category": "internal"
+  },
+  "int_cargorack_size8_class1": {
+   "name": "Cargo Rack",
+   "category": "internal"
+  },
+  "int_fueltank_size1_class3": {
+   "name": "Fuel Tank",
+   "category": "standard"
+  },
+  "int_fueltank_size2_class3": {
+   "name": "Fuel Tank",
+   "category": "standard"
+  },
+  "int_fueltank_size3_class3": {
+   "name": "Fuel Tank",
+   "category": "standard"
+  },
+  "int_fueltank_size4_class3": {
+   "name": "Fuel Tank",
+   "category": "standard"
+  },
+  "int_fueltank_size5_class3": {
+   "name": "Fuel Tank",
+   "category": "standard"
+  },
+  "int_fueltank_size6_class3": {
+   "name": "Fuel Tank",
+   "category": "standard"
+  },
+  "int_fueltank_size7_class3": {
+   "name": "Fuel Tank",
+   "category": "standard"
+  },
+  "int_fueltank_size8_class3": {
+   "name": "Fuel Tank",
+   "category": "standard"
+  },
+  "int_dronecontrol_resourcesiphon": {
+   "name": "Hatch Breaker Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_resourcesiphon_size1_class1": {
+   "name": "Hatch Breaker Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_resourcesiphon_size1_class2": {
+   "name": "Hatch Breaker Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_resourcesiphon_size1_class3": {
+   "name": "Hatch Breaker Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_resourcesiphon_size1_class4": {
+   "name": "Hatch Breaker Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_resourcesiphon_size1_class5": {
+   "name": "Hatch Breaker Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_resourcesiphon_size3_class1": {
+   "name": "Hatch Breaker Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_resourcesiphon_size3_class2": {
+   "name": "Hatch Breaker Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_resourcesiphon_size3_class3": {
+   "name": "Hatch Breaker Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_resourcesiphon_size3_class4": {
+   "name": "Hatch Breaker Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_resourcesiphon_size3_class5": {
+   "name": "Hatch Breaker Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_resourcesiphon_size5_class1": {
+   "name": "Hatch Breaker Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_resourcesiphon_size5_class2": {
+   "name": "Hatch Breaker Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_resourcesiphon_size5_class3": {
+   "name": "Hatch Breaker Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_resourcesiphon_size5_class4": {
+   "name": "Hatch Breaker Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_resourcesiphon_size5_class5": {
+   "name": "Hatch Breaker Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_resourcesiphon_size7_class1": {
+   "name": "Hatch Breaker Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_resourcesiphon_size7_class2": {
+   "name": "Hatch Breaker Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_resourcesiphon_size7_class3": {
+   "name": "Hatch Breaker Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_resourcesiphon_size7_class4": {
+   "name": "Hatch Breaker Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_resourcesiphon_size7_class5": {
+   "name": "Hatch Breaker Limpet Controller",
+   "category": "internal"
+  },
+  "hpt_cargoscanner_size0_class1": {
+   "name": "Cargo Scanner",
+   "category": "utility"
+  },
+  "hpt_cargoscanner_size0_class2": {
+   "name": "Cargo Scanner",
+   "category": "utility"
+  },
+  "hpt_cargoscanner_size0_class3": {
+   "name": "Cargo Scanner",
+   "category": "utility"
+  },
+  "hpt_cargoscanner_size0_class4": {
+   "name": "Cargo Scanner",
+   "category": "utility"
+  },
+  "hpt_cargoscanner_size0_class5": {
+   "name": "Cargo Scanner",
+   "category": "utility"
+  },
+  "hpt_cloudscanner_size0_class1": {
+   "name": "Frame Shift Wake Scanner",
+   "category": "utility"
+  },
+  "hpt_cloudscanner_size0_class2": {
+   "name": "Frame Shift Wake Scanner",
+   "category": "utility"
+  },
+  "hpt_cloudscanner_size0_class3": {
+   "name": "Frame Shift Wake Scanner",
+   "category": "utility"
+  },
+  "hpt_cloudscanner_size0_class4": {
+   "name": "Frame Shift Wake Scanner",
+   "category": "utility"
+  },
+  "hpt_cloudscanner_size0_class5": {
+   "name": "Frame Shift Wake Scanner",
+   "category": "utility"
+  },
+  "hpt_crimescanner_size0_class1": {
+   "name": "Kill Warrant Scanner",
+   "category": "utility"
+  },
+  "hpt_crimescanner_size0_class2": {
+   "name": "Kill Warrant Scanner",
+   "category": "utility"
+  },
+  "hpt_crimescanner_size0_class3": {
+   "name": "Kill Warrant Scanner",
+   "category": "utility"
+  },
+  "hpt_crimescanner_size0_class4": {
+   "name": "Kill Warrant Scanner",
+   "category": "utility"
+  },
+  "hpt_crimescanner_size0_class5": {
+   "name": "Kill Warrant Scanner",
+   "category": "utility"
+  },
+  "int_stellarbodydiscoveryscanner_standard": {
+   "name": "Basic Discovery Scanner",
+   "category": "internal"
+  },
+  "int_stellarbodydiscoveryscanner_intermediate": {
+   "name": "Intermediate Discovery Scanner",
+   "category": "internal"
+  },
+  "int_stellarbodydiscoveryscanner_advanced": {
+   "name": "Advanced Discovery Scanner",
+   "category": "internal"
+  },
+  "int_detailedsurfacescanner_tiny": {
+   "name": "Long Range Detailed Surface Scanner",
+   "category": "mercgear"
+  },
+  "int_powerplant_size2_class1_free": {
+   "name": "Power Plant",
+   "category": "standard"
+  },
+  "int_engine_size2_class1_free": {
+   "name": "Thrusters",
+   "category": "standard"
+  },
+  "int_hyperdrive_size2_class1_free": {
+   "name": "Frame Shift Drive",
+   "category": "standard"
+  },
+  "int_lifesupport_size1_class1_free": {
+   "name": "Life Support",
+   "category": "standard"
+  },
+  "int_powerdistributor_size1_class1_free": {
+   "name": "Power Distributor",
+   "category": "standard"
+  },
+  "int_sensors_size1_class1_free": {
+   "name": "Sensors",
+   "category": "standard"
+  },
+  "int_shieldgenerator_size2_class1_free": {
+   "name": "Shield Generator",
+   "category": "internal"
+  },
+  "int_stellarbodydiscoveryscanner_standard_free": {
+   "name": "Basic Discovery Scanner",
+   "category": "internal"
+  },
+  "int_cargorack_size2_class1_free": {
+   "name": "Cargo Rack",
+   "category": "internal"
+  },
+  "int_fuelscoop_size1_class1": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size2_class1": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size3_class1": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size4_class1": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size5_class1": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size6_class1": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size7_class1": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size8_class1": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size1_class2": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size2_class2": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size3_class2": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size4_class2": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size5_class2": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size6_class2": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size7_class2": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size8_class2": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size1_class3": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size2_class3": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size3_class3": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size4_class3": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size5_class3": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size6_class3": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size7_class3": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size8_class3": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size1_class4": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size2_class4": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size3_class4": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size4_class4": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size5_class4": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size6_class4": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size7_class4": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size8_class4": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size1_class5": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size2_class5": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size3_class5": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size4_class5": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size5_class5": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size6_class5": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size7_class5": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_fuelscoop_size8_class5": {
+   "name": "Fuel Scoop",
+   "category": "internal"
+  },
+  "int_refinery_size1_class1": {
+   "name": "Refinery",
+   "category": "internal"
+  },
+  "int_refinery_size2_class1": {
+   "name": "Refinery",
+   "category": "internal"
+  },
+  "int_refinery_size3_class1": {
+   "name": "Refinery",
+   "category": "internal"
+  },
+  "int_refinery_size4_class1": {
+   "name": "Refinery",
+   "category": "internal"
+  },
+  "int_refinery_size1_class2": {
+   "name": "Refinery",
+   "category": "internal"
+  },
+  "int_refinery_size2_class2": {
+   "name": "Refinery",
+   "category": "internal"
+  },
+  "int_refinery_size3_class2": {
+   "name": "Refinery",
+   "category": "internal"
+  },
+  "int_refinery_size4_class2": {
+   "name": "Refinery",
+   "category": "internal"
+  },
+  "int_refinery_size1_class3": {
+   "name": "Refinery",
+   "category": "internal"
+  },
+  "int_refinery_size2_class3": {
+   "name": "Refinery",
+   "category": "internal"
+  },
+  "int_refinery_size3_class3": {
+   "name": "Refinery",
+   "category": "internal"
+  },
+  "int_refinery_size4_class3": {
+   "name": "Refinery",
+   "category": "internal"
+  },
+  "int_refinery_size1_class4": {
+   "name": "Refinery",
+   "category": "internal"
+  },
+  "int_refinery_size2_class4": {
+   "name": "Refinery",
+   "category": "internal"
+  },
+  "int_refinery_size3_class4": {
+   "name": "Refinery",
+   "category": "internal"
+  },
+  "int_refinery_size4_class4": {
+   "name": "Refinery",
+   "category": "internal"
+  },
+  "int_refinery_size1_class5": {
+   "name": "Refinery",
+   "category": "internal"
+  },
+  "int_refinery_size2_class5": {
+   "name": "Refinery",
+   "category": "internal"
+  },
+  "int_refinery_size3_class5": {
+   "name": "Refinery",
+   "category": "internal"
+  },
+  "int_refinery_size4_class5": {
+   "name": "Refinery",
+   "category": "internal"
+  },
+  "int_fsdinterdictor_size1_class1": {
+   "name": "Frame Shift Drive Interdictor",
+   "category": "internal"
+  },
+  "int_fsdinterdictor_size2_class1": {
+   "name": "Frame Shift Drive Interdictor",
+   "category": "internal"
+  },
+  "int_fsdinterdictor_size3_class1": {
+   "name": "Frame Shift Drive Interdictor",
+   "category": "internal"
+  },
+  "int_fsdinterdictor_size4_class1": {
+   "name": "Frame Shift Drive Interdictor",
+   "category": "internal"
+  },
+  "int_fsdinterdictor_size1_class2": {
+   "name": "Frame Shift Drive Interdictor",
+   "category": "internal"
+  },
+  "int_fsdinterdictor_size2_class2": {
+   "name": "Frame Shift Drive Interdictor",
+   "category": "internal"
+  },
+  "int_fsdinterdictor_size3_class2": {
+   "name": "Frame Shift Drive Interdictor",
+   "category": "internal"
+  },
+  "int_fsdinterdictor_size4_class2": {
+   "name": "Frame Shift Drive Interdictor",
+   "category": "internal"
+  },
+  "int_fsdinterdictor_size1_class3": {
+   "name": "Frame Shift Drive Interdictor",
+   "category": "internal"
+  },
+  "int_fsdinterdictor_size2_class3": {
+   "name": "Frame Shift Drive Interdictor",
+   "category": "internal"
+  },
+  "int_fsdinterdictor_size3_class3": {
+   "name": "Frame Shift Drive Interdictor",
+   "category": "internal"
+  },
+  "int_fsdinterdictor_size4_class3": {
+   "name": "Frame Shift Drive Interdictor",
+   "category": "internal"
+  },
+  "int_fsdinterdictor_size1_class4": {
+   "name": "Frame Shift Drive Interdictor",
+   "category": "internal"
+  },
+  "int_fsdinterdictor_size2_class4": {
+   "name": "Frame Shift Drive Interdictor",
+   "category": "internal"
+  },
+  "int_fsdinterdictor_size3_class4": {
+   "name": "Frame Shift Drive Interdictor",
+   "category": "internal"
+  },
+  "int_fsdinterdictor_size4_class4": {
+   "name": "Frame Shift Drive Interdictor",
+   "category": "internal"
+  },
+  "int_fsdinterdictor_size1_class5": {
+   "name": "Frame Shift Drive Interdictor",
+   "category": "internal"
+  },
+  "int_fsdinterdictor_size2_class5": {
+   "name": "Frame Shift Drive Interdictor",
+   "category": "internal"
+  },
+  "int_fsdinterdictor_size3_class5": {
+   "name": "Frame Shift Drive Interdictor",
+   "category": "internal"
+  },
+  "int_fsdinterdictor_size4_class5": {
+   "name": "Frame Shift Drive Interdictor",
+   "category": "internal"
+  },
+  "hpt_dumbfiremissilerack_fixed_small": {
+   "name": "Missile Rack",
+   "category": "hardpoint"
+  },
+  "hpt_dumbfiremissilerack_fixed_medium": {
+   "name": "Missile Rack",
+   "category": "hardpoint"
+  },
+  "int_fueltank_size1_class3_free": {
+   "name": "Fuel Tank",
+   "category": "standard"
+  },
+  "int_repairer_size1_class1": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size2_class1": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size3_class1": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size4_class1": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size5_class1": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size6_class1": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size7_class1": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size8_class1": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size1_class2": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size2_class2": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size3_class2": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size4_class2": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size5_class2": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size6_class2": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size7_class2": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size8_class2": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size1_class3": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size2_class3": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size3_class3": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size4_class3": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size5_class3": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size6_class3": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size7_class3": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size8_class3": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size1_class4": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size2_class4": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size3_class4": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size4_class4": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size5_class4": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size6_class4": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size7_class4": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size8_class4": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size1_class5": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size2_class5": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size3_class5": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size4_class5": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size5_class5": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size6_class5": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size7_class5": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "int_repairer_size8_class5": {
+   "name": "Auto Field-Maintenance Unit",
+   "category": "internal"
+  },
+  "hpt_shieldbooster_size0_class1": {
+   "name": "Shield Booster",
+   "category": "utility"
+  },
+  "hpt_shieldbooster_size0_class2": {
+   "name": "Shield Booster",
+   "category": "utility"
+  },
+  "hpt_shieldbooster_size0_class3": {
+   "name": "Shield Booster",
+   "category": "utility"
+  },
+  "hpt_shieldbooster_size0_class4": {
+   "name": "Shield Booster",
+   "category": "utility"
+  },
+  "hpt_shieldbooster_size0_class5": {
+   "name": "Shield Booster",
+   "category": "utility"
+  },
+  "int_hullreinforcement_size1_class1": {
+   "name": "Hull Reinforcement Package",
+   "category": "internal"
+  },
+  "int_hullreinforcement_size1_class2": {
+   "name": "Hull Reinforcement Package",
+   "category": "internal"
+  },
+  "int_hullreinforcement_size2_class1": {
+   "name": "Hull Reinforcement Package",
+   "category": "internal"
+  },
+  "int_hullreinforcement_size2_class2": {
+   "name": "Hull Reinforcement Package",
+   "category": "internal"
+  },
+  "int_hullreinforcement_size3_class1": {
+   "name": "Hull Reinforcement Package",
+   "category": "internal"
+  },
+  "int_hullreinforcement_size3_class2": {
+   "name": "Hull Reinforcement Package",
+   "category": "internal"
+  },
+  "int_hullreinforcement_size4_class1": {
+   "name": "Hull Reinforcement Package",
+   "category": "internal"
+  },
+  "int_hullreinforcement_size4_class2": {
+   "name": "Hull Reinforcement Package",
+   "category": "internal"
+  },
+  "int_hullreinforcement_size5_class1": {
+   "name": "Hull Reinforcement Package",
+   "category": "internal"
+  },
+  "int_hullreinforcement_size5_class2": {
+   "name": "Hull Reinforcement Package",
+   "category": "internal"
+  },
+  "hpt_cannon_gimbal_large": {
+   "name": "Cannon",
+   "category": "hardpoint"
+  },
+  "diamondback_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "diamondback_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "diamondback_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "diamondback_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "diamondback_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "empire_courier_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "empire_courier_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "empire_courier_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "empire_courier_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "empire_courier_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "int_dronecontrol_collection_size1_class1": {
+   "name": "Collector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_collection_size1_class2": {
+   "name": "Collector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_collection_size1_class3": {
+   "name": "Collector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_collection_size1_class4": {
+   "name": "Collector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_collection_size1_class5": {
+   "name": "Collector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_collection_size3_class1": {
+   "name": "Collector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_collection_size3_class2": {
+   "name": "Collector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_collection_size3_class3": {
+   "name": "Collector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_collection_size3_class4": {
+   "name": "Collector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_collection_size3_class5": {
+   "name": "Collector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_collection_size5_class1": {
+   "name": "Collector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_collection_size5_class2": {
+   "name": "Collector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_collection_size5_class3": {
+   "name": "Collector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_collection_size5_class4": {
+   "name": "Collector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_collection_size5_class5": {
+   "name": "Collector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_collection_size7_class1": {
+   "name": "Collector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_collection_size7_class2": {
+   "name": "Collector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_collection_size7_class3": {
+   "name": "Collector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_collection_size7_class4": {
+   "name": "Collector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_collection_size7_class5": {
+   "name": "Collector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_fueltransfer_size1_class1": {
+   "name": "Fuel Transfer Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_fueltransfer_size1_class2": {
+   "name": "Fuel Transfer Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_fueltransfer_size1_class3": {
+   "name": "Fuel Transfer Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_fueltransfer_size1_class4": {
+   "name": "Fuel Transfer Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_fueltransfer_size1_class5": {
+   "name": "Fuel Transfer Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_fueltransfer_size3_class1": {
+   "name": "Fuel Transfer Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_fueltransfer_size3_class2": {
+   "name": "Fuel Transfer Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_fueltransfer_size3_class3": {
+   "name": "Fuel Transfer Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_fueltransfer_size3_class4": {
+   "name": "Fuel Transfer Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_fueltransfer_size3_class5": {
+   "name": "Fuel Transfer Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_fueltransfer_size5_class1": {
+   "name": "Fuel Transfer Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_fueltransfer_size5_class2": {
+   "name": "Fuel Transfer Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_fueltransfer_size5_class3": {
+   "name": "Fuel Transfer Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_fueltransfer_size5_class4": {
+   "name": "Fuel Transfer Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_fueltransfer_size5_class5": {
+   "name": "Fuel Transfer Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_fueltransfer_size7_class1": {
+   "name": "Fuel Transfer Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_fueltransfer_size7_class2": {
+   "name": "Fuel Transfer Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_fueltransfer_size7_class3": {
+   "name": "Fuel Transfer Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_fueltransfer_size7_class4": {
+   "name": "Fuel Transfer Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_fueltransfer_size7_class5": {
+   "name": "Fuel Transfer Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_prospector_size1_class1": {
+   "name": "Prospector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_prospector_size1_class2": {
+   "name": "Prospector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_prospector_size1_class3": {
+   "name": "Prospector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_prospector_size1_class4": {
+   "name": "Prospector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_prospector_size1_class5": {
+   "name": "Prospector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_prospector_size3_class1": {
+   "name": "Prospector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_prospector_size3_class2": {
+   "name": "Prospector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_prospector_size3_class3": {
+   "name": "Prospector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_prospector_size3_class4": {
+   "name": "Prospector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_prospector_size3_class5": {
+   "name": "Prospector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_prospector_size5_class1": {
+   "name": "Prospector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_prospector_size5_class2": {
+   "name": "Prospector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_prospector_size5_class3": {
+   "name": "Prospector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_prospector_size5_class4": {
+   "name": "Prospector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_prospector_size5_class5": {
+   "name": "Prospector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_prospector_size7_class1": {
+   "name": "Prospector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_prospector_size7_class2": {
+   "name": "Prospector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_prospector_size7_class3": {
+   "name": "Prospector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_prospector_size7_class4": {
+   "name": "Prospector Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_prospector_size7_class5": {
+   "name": "Prospector Limpet Controller",
+   "category": "internal"
+  },
+  "hpt_slugshot_gimbal_large": {
+   "name": "Double Screaming Fragment Cannon",
+   "category": "mercgear"
+  },
+  "hpt_slugshot_turret_large": {
+   "name": "Fragment Cannon",
+   "category": "hardpoint"
+  },
+  "int_shieldgenerator_size1_class5_strong": {
+   "name": "Prismatic Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size2_class5_strong": {
+   "name": "Prismatic Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size3_class5_strong": {
+   "name": "Prismatic Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size4_class5_strong": {
+   "name": "Prismatic Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size5_class5_strong": {
+   "name": "Prismatic Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size6_class5_strong": {
+   "name": "Prismatic Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size7_class5_strong": {
+   "name": "Prismatic Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size8_class5_strong": {
+   "name": "Prismatic Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size1_class3_fast": {
+   "name": "Bi-Weave Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size2_class3_fast": {
+   "name": "Bi-Weave Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size3_class3_fast": {
+   "name": "Bi-Weave Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size4_class3_fast": {
+   "name": "Bi-Weave Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size5_class3_fast": {
+   "name": "Bi-Weave Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size6_class3_fast": {
+   "name": "Bi-Weave Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size7_class3_fast": {
+   "name": "Bi-Weave Shield Generator",
+   "category": "internal"
+  },
+  "int_shieldgenerator_size8_class3_fast": {
+   "name": "Bi-Weave Shield Generator",
+   "category": "internal"
+  },
+  "hpt_plasmaaccelerator_fixed_large_advanced": {
+   "name": "Advanced Plasma Accelerator",
+   "category": "hardpoint"
+  },
+  "hpt_mininglaser_fixed_small_advanced": {
+   "name": "Mining Lance",
+   "category": "hardpoint"
+  },
+  "hpt_railgun_fixed_medium_burst": {
+   "name": "Imperial Hammer Rail Gun",
+   "category": "hardpoint"
+  },
+  "hpt_pulselaser_fixed_medium_disruptor": {
+   "name": "Pulse Disruptor Laser",
+   "category": "hardpoint"
+  },
+  "hpt_slugshot_fixed_large_range": {
+   "name": "Pacifier Frag-Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_drunkmissilerack_fixed_medium": {
+   "name": "Pack-Hound Missile Rack",
+   "category": "hardpoint"
+  },
+  "hpt_multicannon_fixed_small_strong": {
+   "name": "Enforcer Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_beamlaser_fixed_small_heat": {
+   "name": "Retributor Beam Laser",
+   "category": "hardpoint"
+  },
+  "hpt_minelauncher_fixed_small_impulse": {
+   "name": "Shock Mine Launcher",
+   "category": "hardpoint"
+  },
+  "hpt_pulselaserburst_fixed_small_scatter": {
+   "name": "Cytoscrambler Burst Laser",
+   "category": "hardpoint"
+  },
+  "diamondbackxl_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "diamondbackxl_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "diamondbackxl_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "diamondbackxl_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "diamondbackxl_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "empire_eagle_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "empire_eagle_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "empire_eagle_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "empire_eagle_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "empire_eagle_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "federation_dropship_mkii_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "federation_dropship_mkii_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "federation_dropship_mkii_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "federation_dropship_mkii_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "federation_dropship_mkii_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "federation_gunship_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "federation_gunship_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "federation_gunship_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "federation_gunship_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "federation_gunship_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "viper_mkiv_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "viper_mkiv_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "viper_mkiv_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "viper_mkiv_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "viper_mkiv_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "cobramkiv_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "cobramkiv_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "cobramkiv_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "cobramkiv_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "cobramkiv_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "independant_trader_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "independant_trader_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "independant_trader_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "independant_trader_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "independant_trader_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "asp_scout_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "asp_scout_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "asp_scout_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "asp_scout_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "asp_scout_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "int_buggybay_size2_class1": {
+   "name": "Planetary Vehicle Hangar",
+   "category": "internal"
+  },
+  "int_buggybay_size2_class2": {
+   "name": "Planetary Vehicle Hangar",
+   "category": "internal"
+  },
+  "int_buggybay_size4_class1": {
+   "name": "Planetary Vehicle Hangar",
+   "category": "internal"
+  },
+  "int_buggybay_size4_class2": {
+   "name": "Planetary Vehicle Hangar",
+   "category": "internal"
+  },
+  "int_buggybay_size6_class1": {
+   "name": "Planetary Vehicle Hangar",
+   "category": "internal"
+  },
+  "int_buggybay_size6_class2": {
+   "name": "Planetary Vehicle Hangar",
+   "category": "internal"
+  },
+  "int_planetapproachsuite": {
+   "name": "Planetary Approach Suite",
+   "category": "internal"
+  },
+  "int_corrosionproofcargorack_size1_class1": {
+   "name": "Corrosion Resistant Cargo Rack",
+   "category": "internal"
+  },
+  "int_corrosionproofcargorack_size1_class2": {
+   "name": "Corrosion Resistant Cargo Rack",
+   "category": "internal"
+  },
+  "hpt_beamlaser_gimbal_huge": {
+   "name": "Beam Laser",
+   "category": "hardpoint"
+  },
+  "hpt_pulselaser_gimbal_huge": {
+   "name": "Pulse Laser",
+   "category": "hardpoint"
+  },
+  "hpt_multicannon_gimbal_huge": {
+   "name": "Multi-Cannon",
+   "category": "hardpoint"
+  },
+  "int_engine_size3_class5_fast": {
+   "name": "Enhanced Performance Thrusters",
+   "category": "standard"
+  },
+  "int_engine_size2_class5_fast": {
+   "name": "Enhanced Performance Thrusters",
+   "category": "standard"
+  },
+  "hpt_pulselaserburst_gimbal_huge": {
+   "name": "Burst Laser",
+   "category": "hardpoint"
+  },
+  "int_passengercabin_size4_class1": {
+   "name": "Economy Class Passenger Cabin",
+   "category": "internal"
+  },
+  "int_passengercabin_size4_class2": {
+   "name": "Business Class Passenger Cabin",
+   "category": "internal"
+  },
+  "int_passengercabin_size4_class3": {
+   "name": "First Class Passenger Cabin",
+   "category": "internal"
+  },
+  "int_passengercabin_size5_class4": {
+   "name": "Luxury Class Passenger Cabin",
+   "category": "internal"
+  },
+  "int_passengercabin_size6_class1": {
+   "name": "Economy Class Passenger Cabin",
+   "category": "internal"
+  },
+  "int_passengercabin_size6_class2": {
+   "name": "Business Class Passenger Cabin",
+   "category": "internal"
+  },
+  "int_passengercabin_size6_class3": {
+   "name": "First Class Passenger Cabin",
+   "category": "internal"
+  },
+  "int_passengercabin_size6_class4": {
+   "name": "Luxury Class Passenger Cabin",
+   "category": "internal"
+  },
+  "int_fighterbay_size5_class1": {
+   "name": "Vessel Hangar",
+   "category": "internal"
+  },
+  "int_fighterbay_size6_class1": {
+   "name": "Vessel Hangar",
+   "category": "internal"
+  },
+  "int_fighterbay_size7_class1": {
+   "name": "Vessel Hangar",
+   "category": "internal"
+  },
+  "hpt_dumbfiremissilerack_fixed_medium_lasso": {
+   "name": "Rocket Propelled FSD Disruptor",
+   "category": "hardpoint"
+  },
+  "int_passengercabin_size2_class1": {
+   "name": "Economy Class Passenger Cabin",
+   "category": "internal"
+  },
+  "int_passengercabin_size3_class1": {
+   "name": "Economy Class Passenger Cabin",
+   "category": "internal"
+  },
+  "int_passengercabin_size3_class2": {
+   "name": "Business Class Passenger Cabin",
+   "category": "internal"
+  },
+  "int_passengercabin_size5_class1": {
+   "name": "Economy Class Passenger Cabin",
+   "category": "internal"
+  },
+  "int_passengercabin_size5_class2": {
+   "name": "Business Class Passenger Cabin",
+   "category": "internal"
+  },
+  "int_passengercabin_size5_class3": {
+   "name": "First Class Passenger Cabin",
+   "category": "internal"
+  },
+  "int_modulereinforcement_size1_class1": {
+   "name": "Module Reinforcement Package",
+   "category": "internal"
+  },
+  "int_modulereinforcement_size1_class2": {
+   "name": "Module Reinforcement Package",
+   "category": "internal"
+  },
+  "int_modulereinforcement_size2_class1": {
+   "name": "Module Reinforcement Package",
+   "category": "internal"
+  },
+  "int_modulereinforcement_size2_class2": {
+   "name": "Module Reinforcement Package",
+   "category": "internal"
+  },
+  "int_modulereinforcement_size3_class1": {
+   "name": "Module Reinforcement Package",
+   "category": "internal"
+  },
+  "int_modulereinforcement_size3_class2": {
+   "name": "Module Reinforcement Package",
+   "category": "internal"
+  },
+  "int_modulereinforcement_size4_class1": {
+   "name": "Module Reinforcement Package",
+   "category": "internal"
+  },
+  "int_modulereinforcement_size4_class2": {
+   "name": "Module Reinforcement Package",
+   "category": "internal"
+  },
+  "int_modulereinforcement_size5_class1": {
+   "name": "Module Reinforcement Package",
+   "category": "internal"
+  },
+  "int_modulereinforcement_size5_class2": {
+   "name": "Heavy Duty Module Reinforcement Package",
+   "category": "mercgear"
+  },
+  "hpt_mininglaser_turret_small": {
+   "name": "Mining Laser",
+   "category": "hardpoint"
+  },
+  "hpt_mininglaser_turret_medium": {
+   "name": "Mining Laser",
+   "category": "hardpoint"
+  },
+  "hpt_antiunknownshutdown_tiny": {
+   "name": "Shutdown Field Neutraliser",
+   "category": "utility"
+  },
+  "int_dronecontrol_repair_size1_class1": {
+   "name": "Repair Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_repair_size1_class2": {
+   "name": "Repair Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_repair_size1_class3": {
+   "name": "Repair Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_repair_size1_class4": {
+   "name": "Repair Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_repair_size1_class5": {
+   "name": "Repair Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_repair_size3_class1": {
+   "name": "Repair Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_repair_size3_class2": {
+   "name": "Repair Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_repair_size3_class3": {
+   "name": "Repair Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_repair_size3_class4": {
+   "name": "Repair Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_repair_size3_class5": {
+   "name": "Repair Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_repair_size5_class1": {
+   "name": "Repair Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_repair_size5_class2": {
+   "name": "Repair Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_repair_size5_class3": {
+   "name": "Repair Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_repair_size5_class4": {
+   "name": "Repair Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_repair_size5_class5": {
+   "name": "Repair Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_repair_size7_class1": {
+   "name": "Repair Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_repair_size7_class2": {
+   "name": "Repair Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_repair_size7_class3": {
+   "name": "Repair Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_repair_size7_class4": {
+   "name": "Repair Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_repair_size7_class5": {
+   "name": "Repair Limpet Controller",
+   "category": "internal"
+  },
+  "type9_military_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "type9_military_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "type9_military_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "type9_military_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "type9_military_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "hpt_flakmortar_fixed_medium": {
+   "name": "Remote Release Flak Launcher",
+   "category": "hardpoint"
+  },
+  "hpt_atdumbfiremissile_fixed_medium": {
+   "name": "AX Missile Rack",
+   "category": "hardpoint"
+  },
+  "hpt_atdumbfiremissile_fixed_large": {
+   "name": "AX Missile Rack",
+   "category": "hardpoint"
+  },
+  "hpt_atmulticannon_fixed_medium": {
+   "name": "AX Multi-Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_atmulticannon_fixed_large": {
+   "name": "AX Multi-Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_atdumbfiremissile_turret_medium": {
+   "name": "AX Missile Rack",
+   "category": "hardpoint"
+  },
+  "hpt_atdumbfiremissile_turret_large": {
+   "name": "AX Missile Rack",
+   "category": "hardpoint"
+  },
+  "hpt_flakmortar_turret_medium": {
+   "name": "Remote Release Flak Launcher",
+   "category": "hardpoint"
+  },
+  "hpt_atmulticannon_turret_medium": {
+   "name": "AX Multi-Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_atmulticannon_turret_large": {
+   "name": "AX Multi-Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_xenoscanner_basic_tiny": {
+   "name": "Xeno Scanner",
+   "category": "utility"
+  },
+  "int_dronecontrol_unkvesselresearch": {
+   "name": "Research Limpet Controller",
+   "category": "internal"
+  },
+  "int_metaalloyhullreinforcement_size1_class1": {
+   "name": "Meta Alloy Hull Reinforcement",
+   "category": "internal"
+  },
+  "int_metaalloyhullreinforcement_size1_class2": {
+   "name": "Meta Alloy Hull Reinforcement",
+   "category": "internal"
+  },
+  "int_metaalloyhullreinforcement_size2_class1": {
+   "name": "Meta Alloy Hull Reinforcement",
+   "category": "internal"
+  },
+  "int_metaalloyhullreinforcement_size2_class2": {
+   "name": "Meta Alloy Hull Reinforcement",
+   "category": "internal"
+  },
+  "int_metaalloyhullreinforcement_size3_class1": {
+   "name": "Meta Alloy Hull Reinforcement",
+   "category": "internal"
+  },
+  "int_metaalloyhullreinforcement_size3_class2": {
+   "name": "Meta Alloy Hull Reinforcement",
+   "category": "internal"
+  },
+  "int_metaalloyhullreinforcement_size4_class1": {
+   "name": "Meta Alloy Hull Reinforcement",
+   "category": "internal"
+  },
+  "int_metaalloyhullreinforcement_size4_class2": {
+   "name": "Meta Alloy Hull Reinforcement",
+   "category": "internal"
+  },
+  "int_metaalloyhullreinforcement_size5_class1": {
+   "name": "Meta Alloy Hull Reinforcement",
+   "category": "internal"
+  },
+  "int_metaalloyhullreinforcement_size5_class2": {
+   "name": "Meta Alloy Hull Reinforcement",
+   "category": "internal"
+  },
+  "int_dronecontrol_decontamination_size1_class1": {
+   "name": "Decontamination Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_decontamination_size3_class1": {
+   "name": "Decontamination Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_decontamination_size5_class1": {
+   "name": "Decontamination Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_decontamination_size7_class1": {
+   "name": "Decontamination Limpet Controller",
+   "category": "internal"
+  },
+  "hpt_xenoscannermk2_basic_tiny": {
+   "name": "Enhanced Xeno Scanner",
+   "category": "utility"
+  },
+  "krait_mkii_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "krait_mkii_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "krait_mkii_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "krait_mkii_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "krait_mkii_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "typex_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "typex_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "typex_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "typex_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "typex_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "typex_2_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "typex_2_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "typex_2_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "typex_2_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "typex_2_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "typex_3_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "typex_3_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "typex_3_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "typex_3_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "typex_3_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "hpt_guardian_gausscannon_fixed_medium": {
+   "name": "Guardian Gauss Cannon",
+   "category": "hardpoint"
+  },
+  "int_corrosionproofcargorack_size4_class1": {
+   "name": "Corrosion Resistant Cargo Rack",
+   "category": "internal"
+  },
+  "int_guardianhullreinforcement_size1_class1": {
+   "name": "Guardian Hull Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianhullreinforcement_size1_class2": {
+   "name": "Guardian Hull Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianhullreinforcement_size2_class1": {
+   "name": "Guardian Hull Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianhullreinforcement_size2_class2": {
+   "name": "Guardian Hull Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianhullreinforcement_size3_class1": {
+   "name": "Guardian Hull Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianhullreinforcement_size3_class2": {
+   "name": "Guardian Hull Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianhullreinforcement_size4_class1": {
+   "name": "Guardian Hull Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianhullreinforcement_size4_class2": {
+   "name": "Guardian Hull Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianhullreinforcement_size5_class1": {
+   "name": "Guardian Hull Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianhullreinforcement_size5_class2": {
+   "name": "Guardian Hull Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianmodulereinforcement_size1_class1": {
+   "name": "Guardian Module Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianmodulereinforcement_size1_class2": {
+   "name": "Guardian Module Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianmodulereinforcement_size2_class1": {
+   "name": "Guardian Module Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianmodulereinforcement_size2_class2": {
+   "name": "Guardian Module Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianmodulereinforcement_size3_class1": {
+   "name": "Guardian Module Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianmodulereinforcement_size3_class2": {
+   "name": "Guardian Module Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianmodulereinforcement_size4_class1": {
+   "name": "Guardian Module Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianmodulereinforcement_size4_class2": {
+   "name": "Guardian Module Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianmodulereinforcement_size5_class1": {
+   "name": "Guardian Module Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianmodulereinforcement_size5_class2": {
+   "name": "Guardian Module Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianshieldreinforcement_size1_class1": {
+   "name": "Guardian Shield Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianshieldreinforcement_size1_class2": {
+   "name": "Guardian Shield Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianshieldreinforcement_size2_class1": {
+   "name": "Guardian Shield Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianshieldreinforcement_size2_class2": {
+   "name": "Guardian Shield Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianshieldreinforcement_size3_class1": {
+   "name": "Guardian Shield Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianshieldreinforcement_size3_class2": {
+   "name": "Guardian Shield Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianshieldreinforcement_size4_class1": {
+   "name": "Guardian Shield Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianshieldreinforcement_size4_class2": {
+   "name": "Guardian Shield Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianshieldreinforcement_size5_class1": {
+   "name": "Guardian Shield Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianshieldreinforcement_size5_class2": {
+   "name": "Guardian Shield Reinforcement",
+   "category": "internal"
+  },
+  "int_guardianfsdbooster_size1": {
+   "name": "Guardian FSD Booster",
+   "category": "internal"
+  },
+  "int_guardianfsdbooster_size2": {
+   "name": "Guardian FSD Booster",
+   "category": "internal"
+  },
+  "int_guardianfsdbooster_size3": {
+   "name": "Guardian FSD Booster",
+   "category": "internal"
+  },
+  "int_guardianfsdbooster_size4": {
+   "name": "Guardian FSD Booster",
+   "category": "internal"
+  },
+  "int_guardianfsdbooster_size5": {
+   "name": "Guardian FSD Booster",
+   "category": "internal"
+  },
+  "int_guardianpowerdistributor_size1": {
+   "name": "Guardian Hybrid Power Distributor",
+   "category": "internal"
+  },
+  "int_guardianpowerdistributor_size2": {
+   "name": "Guardian Hybrid Power Distributor",
+   "category": "internal"
+  },
+  "int_guardianpowerdistributor_size3": {
+   "name": "Guardian Hybrid Power Distributor",
+   "category": "internal"
+  },
+  "int_guardianpowerdistributor_size4": {
+   "name": "Guardian Hybrid Power Distributor",
+   "category": "internal"
+  },
+  "int_guardianpowerdistributor_size5": {
+   "name": "Guardian Hybrid Power Distributor",
+   "category": "internal"
+  },
+  "int_guardianpowerdistributor_size6": {
+   "name": "Guardian Hybrid Power Distributor",
+   "category": "internal"
+  },
+  "int_guardianpowerdistributor_size7": {
+   "name": "Guardian Hybrid Power Distributor",
+   "category": "internal"
+  },
+  "int_guardianpowerdistributor_size8": {
+   "name": "Guardian Hybrid Power Distributor",
+   "category": "internal"
+  },
+  "int_guardianpowerplant_size2": {
+   "name": "Guardian Hybrid Power Plant",
+   "category": "internal"
+  },
+  "int_guardianpowerplant_size3": {
+   "name": "Guardian Hybrid Power Plant",
+   "category": "internal"
+  },
+  "int_guardianpowerplant_size4": {
+   "name": "Guardian Hybrid Power Plant",
+   "category": "internal"
+  },
+  "int_guardianpowerplant_size5": {
+   "name": "Guardian Hybrid Power Plant",
+   "category": "internal"
+  },
+  "int_guardianpowerplant_size6": {
+   "name": "Guardian Hybrid Power Plant",
+   "category": "internal"
+  },
+  "int_guardianpowerplant_size7": {
+   "name": "Guardian Hybrid Power Plant",
+   "category": "internal"
+  },
+  "int_guardianpowerplant_size8": {
+   "name": "Guardian Hybrid Power Plant",
+   "category": "internal"
+  },
+  "hpt_causticmissile_fixed_medium": {
+   "name": "High-Yield Enzyme Missile Rack",
+   "category": "mercgear"
+  },
+  "hpt_flechettelauncher_fixed_medium": {
+   "name": "Remote Release Flechette Launcher",
+   "category": "hardpoint"
+  },
+  "hpt_flechettelauncher_turret_medium": {
+   "name": "Remote Release Flechette Launcher",
+   "category": "hardpoint"
+  },
+  "hpt_guardian_plasmalauncher_fixed_medium": {
+   "name": "Guardian Plasma Charger",
+   "category": "hardpoint"
+  },
+  "hpt_guardian_plasmalauncher_turret_medium": {
+   "name": "Guardian Plasma Charger",
+   "category": "hardpoint"
+  },
+  "hpt_guardian_shardcannon_fixed_medium": {
+   "name": "Guardian Shard Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_guardian_shardcannon_turret_medium": {
+   "name": "Guardian Shard Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_plasmashockcannon_fixed_medium": {
+   "name": "Shock Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_plasmashockcannon_gimbal_medium": {
+   "name": "Shock Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_plasmashockcannon_turret_medium": {
+   "name": "Shock Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_guardian_shardcannon_fixed_large": {
+   "name": "Guardian Shard Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_guardian_shardcannon_turret_large": {
+   "name": "Guardian Shard Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_plasmashockcannon_fixed_large": {
+   "name": "Shock Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_plasmashockcannon_gimbal_large": {
+   "name": "Shock Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_plasmashockcannon_turret_large": {
+   "name": "Shock Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_guardian_plasmalauncher_fixed_large": {
+   "name": "Guardian Plasma Charger",
+   "category": "hardpoint"
+  },
+  "hpt_guardian_plasmalauncher_turret_large": {
+   "name": "Guardian Plasma Charger",
+   "category": "hardpoint"
+  },
+  "int_dronecontrol_recon_size1_class1": {
+   "name": "Recon Limpet Controller",
+   "category": "internal"
+  },
+  "krait_light_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "krait_light_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "krait_light_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "krait_light_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "krait_light_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "int_dronecontrol_recon_size3_class1": {
+   "name": "Recon Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_recon_size5_class1": {
+   "name": "Recon Limpet Controller",
+   "category": "internal"
+  },
+  "int_dronecontrol_recon_size7_class1": {
+   "name": "Recon Limpet Controller",
+   "category": "internal"
+  },
+  "hpt_dumbfiremissilerack_fixed_large": {
+   "name": "Missile Rack",
+   "category": "hardpoint"
+  },
+  "hpt_plasmashockcannon_turret_small": {
+   "name": "Shock Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_plasmashockcannon_gimbal_small": {
+   "name": "Shock Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_plasmashockcannon_fixed_small": {
+   "name": "Shock Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_guardian_plasmalauncher_turret_small": {
+   "name": "Guardian Plasma Charger",
+   "category": "hardpoint"
+  },
+  "hpt_guardian_plasmalauncher_fixed_small": {
+   "name": "Guardian Plasma Charger",
+   "category": "hardpoint"
+  },
+  "hpt_guardian_shardcannon_turret_small": {
+   "name": "Guardian Shard Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_guardian_shardcannon_fixed_small": {
+   "name": "Guardian Shard Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_guardian_gausscannon_fixed_small": {
+   "name": "Guardian Gauss Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_mining_subsurfdispmisle_fixed_small": {
+   "name": "Sub-Surface Displacement Missile",
+   "category": "hardpoint"
+  },
+  "hpt_mining_subsurfdispmisle_turret_small": {
+   "name": "Sub-Surface Displacement Missile",
+   "category": "hardpoint"
+  },
+  "hpt_mining_subsurfdispmisle_fixed_medium": {
+   "name": "Sub-Surface Displacement Missile",
+   "category": "hardpoint"
+  },
+  "hpt_mining_subsurfdispmisle_turret_medium": {
+   "name": "Sub-Surface Displacement Missile",
+   "category": "hardpoint"
+  },
+  "hpt_mining_abrblstr_fixed_small": {
+   "name": "Far-Reaching Abrasion Blaster",
+   "category": "mercgear"
+  },
+  "hpt_mining_abrblstr_turret_small": {
+   "name": "Abrasion Blaster",
+   "category": "hardpoint"
+  },
+  "hpt_mining_seismchrgwarhd_fixed_medium": {
+   "name": "Seismic Charge Launcher",
+   "category": "hardpoint"
+  },
+  "hpt_mining_seismchrgwarhd_turret_medium": {
+   "name": "Seismic Charge Launcher",
+   "category": "hardpoint"
+  },
+  "hpt_mrascanner_size0_class1": {
+   "name": "Pulse Wave Analyser",
+   "category": "utility"
+  },
+  "hpt_mrascanner_size0_class2": {
+   "name": "Pulse Wave Analyser",
+   "category": "utility"
+  },
+  "hpt_mrascanner_size0_class3": {
+   "name": "Pulse Wave Analyser",
+   "category": "utility"
+  },
+  "hpt_mrascanner_size0_class4": {
+   "name": "Pulse Wave Analyser",
+   "category": "utility"
+  },
+  "hpt_mrascanner_size0_class5": {
+   "name": "Pulse Wave Analyser",
+   "category": "utility"
+  },
+  "mamba_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "mamba_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "mamba_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "mamba_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "mamba_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "int_supercruiseassist": {
+   "name": "Supercruise Assist",
+   "category": "internal"
+  },
+  "int_dockingcomputer_advanced": {
+   "name": "Advanced Docking Computer",
+   "category": "internal"
+  },
+  "hpt_multicannon_fixed_medium_advanced": {
+   "name": "Advanced Multi-Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_multicannon_fixed_small_advanced": {
+   "name": "Advanced Multi-Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_dumbfiremissilerack_fixed_small_advanced": {
+   "name": "Advanced Missile Rack",
+   "category": "hardpoint"
+  },
+  "hpt_dumbfiremissilerack_fixed_medium_advanced": {
+   "name": "Advanced Missile Rack",
+   "category": "hardpoint"
+  },
+  "int_planetapproachsuite_advanced": {
+   "name": "Advanced Planetary Approach Suite",
+   "category": "internal"
+  },
+  "int_multidronecontrol_mining_size3_class1": {
+   "name": "Mining Multi Limpet Controller",
+   "category": "internal"
+  },
+  "int_multidronecontrol_mining_size3_class3": {
+   "name": "Mining Multi Limpet Controller",
+   "category": "internal"
+  },
+  "int_multidronecontrol_operations_size3_class3": {
+   "name": "Operations Multi Limpet Controller",
+   "category": "internal"
+  },
+  "int_multidronecontrol_operations_size3_class4": {
+   "name": "Operations Multi Limpet Controller",
+   "category": "internal"
+  },
+  "int_multidronecontrol_rescue_size3_class2": {
+   "name": "Rescue Multi Limpet Controller",
+   "category": "internal"
+  },
+  "int_multidronecontrol_rescue_size3_class3": {
+   "name": "Rescue Multi Limpet Controller",
+   "category": "internal"
+  },
+  "int_multidronecontrol_xeno_size3_class3": {
+   "name": "Xeno Multi Limpet Controller",
+   "category": "internal"
+  },
+  "int_multidronecontrol_xeno_size3_class4": {
+   "name": "Xeno Multi Limpet Controller",
+   "category": "internal"
+  },
+  "int_multidronecontrol_universal_size7_class3": {
+   "name": "Universal Multi Limpet Controller",
+   "category": "internal"
+  },
+  "int_multidronecontrol_universal_size7_class5": {
+   "name": "Universal Multi Limpet Controller",
+   "category": "internal"
+  },
+  "int_expmodulestabiliser_size3_class3": {
+   "name": "Experimental Weapon Stabiliser",
+   "category": "internal"
+  },
+  "int_expmodulestabiliser_size5_class3": {
+   "name": "Experimental Weapon Stabiliser",
+   "category": "internal"
+  },
+  "hpt_causticsinklauncher_turret_tiny": {
+   "name": "Caustic Sink Launcher",
+   "category": "utility"
+  },
+  "hpt_atdumbfiremissile_fixed_large_v2": {
+   "name": "Enhanced AX Missile Rack",
+   "category": "hardpoint"
+  },
+  "hpt_atmulticannon_fixed_medium_v2": {
+   "name": "Enhanced AX Multi-Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_atdumbfiremissile_fixed_medium_v2": {
+   "name": "Enhanced AX Missile Rack",
+   "category": "hardpoint"
+  },
+  "hpt_atdumbfiremissile_turret_large_v2": {
+   "name": "Enhanced AX Missile Rack",
+   "category": "hardpoint"
+  },
+  "hpt_atdumbfiremissile_turret_medium_v2": {
+   "name": "Enhanced AX Missile Rack",
+   "category": "hardpoint"
+  },
+  "hpt_atmulticannon_fixed_large_v2": {
+   "name": "Enhanced AX Multi-Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_atmulticannon_turret_large_v2": {
+   "name": "Enhanced AX Multi-Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_atmulticannon_turret_medium_v2": {
+   "name": "Enhanced AX Multi-Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_atmulticannon_gimbal_large": {
+   "name": "Enhanced AX Multi-Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_atmulticannon_gimbal_medium": {
+   "name": "Enhanced AX Multi-Cannon",
+   "category": "hardpoint"
+  },
+  "hpt_antiunknownshutdown_tiny_v2": {
+   "name": "Thargoid Pulse Neutraliser",
+   "category": "utility"
+  },
+  "hpt_xenoscanner_advanced_tiny": {
+   "name": "Pulse Wave Xeno Scanner",
+   "category": "utility"
+  },
+  "hpt_human_extraction_fixed_medium": {
+   "name": "Sub-Surface Extraction Missile",
+   "category": "hardpoint"
+  },
+  "hpt_atventdisruptorpylon_fixed_medium": {
+   "name": "Guardian Nanite Torpedo Pylon",
+   "category": "hardpoint"
+  },
+  "hpt_atventdisruptorpylon_fixed_large": {
+   "name": "Guardian Nanite Torpedo Pylon",
+   "category": "hardpoint"
+  },
+  "hpt_cannon_gimbal_medium_burst": {
+   "name": "Concord Cannon",
+   "category": "hardpoint"
+  },
+  "python_nx_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "python_nx_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "python_nx_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "python_nx_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "python_nx_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size5_class3": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size7_class3": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size6_class3": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size4_class3": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size3_class3": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size2_class3": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "type8_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "type8_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "type8_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "type8_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "type8_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size2_class1": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size2_class2": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size2_class4": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size2_class5": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size3_class1": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size3_class2": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size3_class4": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size3_class5": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size4_class1": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size4_class2": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size4_class4": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size4_class5": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size5_class1": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size5_class2": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size5_class4": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size5_class5": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size6_class1": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size6_class2": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size6_class4": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size6_class5": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size7_class1": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size7_class2": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size7_class4": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size7_class5": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "mandalay_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "mandalay_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "mandalay_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "mandalay_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "mandalay_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "cobramkv_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "cobramkv_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "cobramkv_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "cobramkv_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "cobramkv_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "corsair_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "corsair_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "corsair_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "corsair_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "corsair_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "panthermkii_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "panthermkii_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "panthermkii_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "panthermkii_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "panthermkii_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "int_largecargorack_size7_class1": {
+   "name": "Mk II Cargo Rack",
+   "category": "internal"
+  },
+  "int_largecargorack_size8_class1": {
+   "name": "Mk II Cargo Rack",
+   "category": "internal"
+  },
+  "lakonminer_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "lakonminer_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "lakonminer_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "lakonminer_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "lakonminer_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "hpt_miningtoolv2_fixed_large": {
+   "name": "Mining Volley Repeater",
+   "category": "hardpoint"
+  },
+  "int_multidronecontrol_miningv2_size5_class5": {
+   "name": "Mk II Mining Multi-Limpet Controller",
+   "category": "internal"
+  },
+  "explorer_nx_armour_grade1": {
+   "name": "Mk II Ablative Lightweight Alloys",
+   "category": "standard"
+  },
+  "explorer_nx_armour_grade2": {
+   "name": "Mk II Ablative Reinforced Alloys",
+   "category": "standard"
+  },
+  "explorer_nx_armour_grade3": {
+   "name": "Mk II Ablative Military Grade Composite",
+   "category": "standard"
+  },
+  "explorer_nx_armour_mirrored": {
+   "name": "Mk II Ablative Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "explorer_nx_armour_reactive": {
+   "name": "Mk II Ablative Reactive Surface Composite",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size8_class1": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size8_class2": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size8_class3": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size8_class4": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size8_class5": {
+   "name": "Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "explorer_nx_armour_grade1_default": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "int_hyperdrive_overcharge_size8_class5_overchargebooster_mkii": {
+   "name": "Mk II Supercharge Optimised Frame Shift Drive (SCO)",
+   "category": "standard"
+  },
+  "int_engine_size7_class5_gravityoptimised_mkii": {
+   "name": "Mk II Gravity Optimised Thrusters",
+   "category": "standard"
+  },
+  "smallcombat01_nx_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "smallcombat01_nx_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "smallcombat01_nx_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "smallcombat01_nx_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "smallcombat01_nx_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "hpt_mkiiplasmashockautocannon_fixed_large": {
+   "name": "Mk II Plasma Shock Accelerator",
+   "category": "hardpoint"
+  },
+  "int_mkiiagileboost_engine_size5_class5": {
+   "name": "Mk II Agile Boost Thrusters",
+   "category": "standard"
+  },
+  "mediumtransport01_armour_grade1": {
+   "name": "Lightweight Alloy",
+   "category": "standard"
+  },
+  "mediumtransport01_armour_grade2": {
+   "name": "Reinforced Alloy",
+   "category": "standard"
+  },
+  "mediumtransport01_armour_grade3": {
+   "name": "Military Grade Composite",
+   "category": "standard"
+  },
+  "mediumtransport01_armour_mirrored": {
+   "name": "Mirrored Surface Composite",
+   "category": "standard"
+  },
+  "mediumtransport01_armour_reactive": {
+   "name": "Reactive Surface Composite",
+   "category": "standard"
+  },
+  "int_mkii_passengercabin_size2_class1": {
+   "name": "MkII Economy Class Passenger Cabin",
+   "category": "internal"
+  },
+  "int_mkii_passengercabin_size3_class1": {
+   "name": "MkII Economy Class Passenger Cabin",
+   "category": "internal"
+  },
+  "int_mkii_passengercabin_size3_class2": {
+   "name": "MkII Business Class Passenger Cabin",
+   "category": "internal"
+  },
+  "int_mkii_passengercabin_size4_class1": {
+   "name": "MkII Economy Class Passenger Cabin",
+   "category": "internal"
+  },
+  "int_mkii_passengercabin_size4_class2": {
+   "name": "MkII Business Class Passenger Cabin",
+   "category": "internal"
+  },
+  "int_mkii_passengercabin_size5_class1": {
+   "name": "MkII Economy Class Passenger Cabin",
+   "category": "internal"
+  },
+  "int_mkii_passengercabin_size5_class2": {
+   "name": "MkII Business Class Passenger Cabin",
+   "category": "internal"
+  },
+  "int_mkii_passengercabin_size6_class1": {
+   "name": "MkII Economy Class Passenger Cabin",
+   "category": "internal"
+  },
+  "int_mkii_passengercabin_size6_class2": {
+   "name": "MkII Business Class Passenger Cabin",
+   "category": "internal"
+  },
+  "int_fighterbaymk2_size6_class1": {
+   "name": "Mk II Vessel Hangar",
+   "category": "internal"
+  },
+  "int_fighterbaymk2_size5_class1": {
+   "name": "Mk II Vessel Hangar",
+   "category": "internal"
+  },
+  "int_fighterbaymk2_size7_class1": {
+   "name": "Mk II Vessel Hangar",
+   "category": "internal"
+  },
+  "int_fighterbaymk2_size5_class1_free": {
+   "name": "Mk II Vessel Hangar",
+   "category": "internal"
+  },
+  "int_fighterbaymk2_size6_class1_free": {
+   "name": "Mk II Vessel Hangar",
+   "category": "internal"
+  },
+  "int_fighterbaymk2_size7_class1_free": {
+   "name": "Mk II Vessel Hangar",
+   "category": "internal"
+  },
+  "int_fighterbay_size5_class1_free": {
+   "name": "Vessel Hangar",
+   "category": "internal"
+  },
+  "int_fighterbay_size6_class1_free": {
+   "name": "Vessel Hangar",
+   "category": "internal"
+  },
+  "int_fighterbay_size7_class1_free": {
+   "name": "Vessel Hangar",
+   "category": "internal"
+  }
+ }
+}

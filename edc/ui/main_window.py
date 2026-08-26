@@ -77,6 +77,7 @@ from edc.core.eddn_listener import EddnPowerPlayWorker
 from edc.core.eddn_market import EddnMarketCache, write_buffers
 from edc.core.station_pads import extract_station_info
 from edc.core.rare_commodities import RareCommodityTable
+from edc.core.fdevids_names import ModuleNameTable, ShipNameTable
 from edc.core.bounty_scanner import scan_active_bounties
 from edc.core.fine_scanner import scan_active_fines
 from edc.core.bgs_conflicts import squadron_faction_name
@@ -1306,6 +1307,8 @@ class MainWindow(QMainWindow):
         self.engineering_blueprints = EngineeringBlueprintTable(settings_base)
         self.experimental_effects = ExperimentalEffectsTable(settings_base)
         self.rare_commodities = RareCommodityTable(settings_base)
+        self.module_names = ModuleNameTable(settings_base)
+        self.ship_names = ShipNameTable(settings_base)
         self.engineering_wishlist_store = EngineeringWishlist(data_dir / "engineering_wishlist.json")
         self.odyssey_engineering = OdysseyEngineeringTable(settings_base)
         self.odyssey_wishlist_store = OdysseyWishlist(data_dir / "odyssey_engineering_wishlist.json")
@@ -1577,7 +1580,8 @@ class MainWindow(QMainWindow):
         self.mining_panel = MiningPanel(self.repo)
 
         # Market tab
-        self.market_panel = MarketPanel(self.repo, self.rare_commodities, edsm_powerplay=self.edsm_powerplay)
+        self.market_panel = MarketPanel(self.repo, self.rare_commodities, edsm_powerplay=self.edsm_powerplay,
+                                        module_names=self.module_names, ship_names=self.ship_names)
         self.trade_route_panel = TradeRoutePanel(self.repo, edsm_powerplay=self.edsm_powerplay)
         self.mining_panel.sell_search_requested.connect(self._on_mining_sell_search_requested)
         self.market_panel.destination_selected.connect(self._on_market_destination_selected)

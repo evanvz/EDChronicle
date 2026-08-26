@@ -254,11 +254,13 @@ class MarketPanel(QWidget):
     # until they actually reach it.
     destination_selected = pyqtSignal(str, str, str, str)
 
-    def __init__(self, repo, rare_table=None, edsm_powerplay=None, parent=None):
+    def __init__(self, repo, rare_table=None, edsm_powerplay=None, module_names=None, ship_names=None, parent=None):
         super().__init__(parent)
         self._repo = repo
         self._rare_table = rare_table
         self._edsm_powerplay = edsm_powerplay
+        self._module_names = module_names
+        self._ship_names = ship_names
         self._my_power: Optional[str] = None
         self._rare_dialog: Optional["_RareGoodsDialog"] = None
         self._system: str = ""
@@ -1420,8 +1422,8 @@ class _StationOfferingsDialog(QDialog):
         search_row.addWidget(QLabel("Search:"))
         self._search_edit = QLineEdit()
         self._search_edit.setPlaceholderText(
-            "Module name (e.g. shieldgenerator, hpt_pulselaser…)" if offering == "module"
-            else "Ship type (e.g. krait, python, sidewinder…)"
+            "Module (e.g. Shield Generator, Beam Laser…) or internal symbol" if offering == "module"
+            else "Ship (e.g. Krait MkII, Python…) or internal symbol"
         )
         self._search_edit.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
         self._search_edit.textChanged.connect(self._on_search_changed)
@@ -1487,16 +1489,42 @@ class _StationOfferingsDialog(QDialog):
     def refresh_results(self) -> None:
         query = self._search_edit.text().strip().lower()
         radius = self._range_spin.value()
-        if not query:
-            self._all_rows = []
-        elif self._offering == "module":
-            self._all_rows = self._panel._repo.find_stations_selling_module(
-                query, self._panel._ref_x, self._panel._ref_y, self._panel._ref_z, radius,
-            )
-        else:
-            self._all_rows = self._panel._repo.find_stations_selling_ship(
-                query, self._panel._ref_x, self._panel._ref_y, self._panel._ref_z, radius,
-            )
+        # Pretty-name search: the FDevIDs table translates the user's typed
+        # display name ("Shield Generator") into the internal symbols the
+        # DB stores, and ALSO passes the raw query through so symbol
+        # fragments ("shieldgenerator", "hpt_pulselaser") still match.
+        table = self._panel._module_names if self._offering == "module" else self._panel._ship_names
+        self._all_rows = []
+        if query:
+            symbols: list[str] = []
+            if table is not None:
+                symbols = [s for s, _disp in table.search_display(query)]
+            if query not in symbols:
+                symbols.append(query)
+            for sym in symbols:
+                try:
+                    if self._offering == "module":
+                        rows = self._panel._repo.find_stations_selling_module(
+                            sym, self._panel._ref_x, self._panel._ref_y, self._panel._ref_z, radius,
+                        )
+                    else:
+                        rows = self._panel._repo.find_stations_selling_ship(
+                            sym, self._panel._ref_x, self._panel._ref_y, self._panel._ref_z, radius,
+                        )
+                except Exception:
+                    log.exception("Offerings search failed for %r", sym)
+                    continue
+                self._all_rows.extend(rows)
+            # The same station can sell several modules matching the query —
+            # dedupe on (market_id, item symbol) but keep every distinct item.
+            seen = set()
+            deduped = []
+            for r in self._all_rows:
+                key = (r.get("market_id"), r.get("module_name") or r.get("ship_type"))
+                if key not in seen:
+                    seen.add(key)
+                    deduped.append(r)
+            self._all_rows = deduped
         self._apply_filter()
 
     def _apply_filter(self) -> None:
@@ -1512,8 +1540,18 @@ class _StationOfferingsDialog(QDialog):
         self._table.setSortingEnabled(False)
         self._table.setRowCount(len(rows))
         name_key = "module_name" if self._offering == "module" else "ship_type"
+        _names = self._panel._module_names if self._offering == "module" else self._panel._ship_names
         for row, r in enumerate(rows):
-            name_item = QTableWidgetItem(r.get(name_key) or "—")
+            raw_name = r.get(name_key) or "—"
+            display = raw_name
+            if _names is not None:
+                pretty = _names.display_name(raw_name)
+                if pretty and pretty.lower() != raw_name.lower():
+                    display = f"{pretty} ({raw_name})"
+                elif pretty:
+                    display = pretty
+            name_item = QTableWidgetItem(display)
+            name_item.setToolTip(raw_name)
             station_item = QTableWidgetItem(r.get("station_name") or "—")
             pad_item = QTableWidgetItem(r.get("pad_size") or pad_size_hint(r.get("station_type")))
             system_item = QTableWidgetItem(r.get("system_name") or "—")

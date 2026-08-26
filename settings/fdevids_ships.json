@@ -1,0 +1,150 @@
+{
+ "source": "EDCD/FDevIDs shipyard.csv",
+ "count": 48,
+ "symbols": {
+  "sidewinder": {
+   "name": "Sidewinder"
+  },
+  "eagle": {
+   "name": "Eagle"
+  },
+  "hauler": {
+   "name": "Hauler"
+  },
+  "adder": {
+   "name": "Adder"
+  },
+  "viper": {
+   "name": "Viper MkIII"
+  },
+  "cobramkiii": {
+   "name": "Cobra MkIII"
+  },
+  "type6": {
+   "name": "Type-6 Transporter"
+  },
+  "dolphin": {
+   "name": "Dolphin"
+  },
+  "type7": {
+   "name": "Type-7 Transporter"
+  },
+  "asp": {
+   "name": "Asp Explorer"
+  },
+  "vulture": {
+   "name": "Vulture"
+  },
+  "empire_trader": {
+   "name": "Imperial Clipper"
+  },
+  "federation_dropship": {
+   "name": "Federal Dropship"
+  },
+  "orca": {
+   "name": "Orca"
+  },
+  "type9": {
+   "name": "Type-9 Heavy"
+  },
+  "python": {
+   "name": "Python"
+  },
+  "belugaliner": {
+   "name": "Beluga Liner"
+  },
+  "ferdelance": {
+   "name": "Fer-de-Lance"
+  },
+  "anaconda": {
+   "name": "Anaconda"
+  },
+  "federation_corvette": {
+   "name": "Federal Corvette"
+  },
+  "cutter": {
+   "name": "Imperial Cutter"
+  },
+  "diamondback": {
+   "name": "Diamondback Scout"
+  },
+  "empire_courier": {
+   "name": "Imperial Courier"
+  },
+  "diamondbackxl": {
+   "name": "Diamondback Explorer"
+  },
+  "empire_eagle": {
+   "name": "Imperial Eagle"
+  },
+  "federation_dropship_mkii": {
+   "name": "Federal Assault Ship"
+  },
+  "federation_gunship": {
+   "name": "Federal Gunship"
+  },
+  "viper_mkiv": {
+   "name": "Viper MkIV"
+  },
+  "cobramkiv": {
+   "name": "Cobra MkIV"
+  },
+  "independant_trader": {
+   "name": "Keelback"
+  },
+  "asp_scout": {
+   "name": "Asp Scout"
+  },
+  "type9_military": {
+   "name": "Type-10 Defender"
+  },
+  "krait_mkii": {
+   "name": "Krait MkII"
+  },
+  "typex": {
+   "name": "Alliance Chieftain"
+  },
+  "typex_2": {
+   "name": "Alliance Crusader"
+  },
+  "typex_3": {
+   "name": "Alliance Challenger"
+  },
+  "krait_light": {
+   "name": "Krait Phantom"
+  },
+  "mamba": {
+   "name": "Mamba"
+  },
+  "python_nx": {
+   "name": "Python MkII"
+  },
+  "type8": {
+   "name": "Type-8 Transporter"
+  },
+  "mandalay": {
+   "name": "Mandalay"
+  },
+  "cobramkv": {
+   "name": "Cobra MkV"
+  },
+  "corsair": {
+   "name": "Corsair"
+  },
+  "panthermkii": {
+   "name": "Panther Clipper MkII"
+  },
+  "lakonminer": {
+   "name": "Type-11 Prospector"
+  },
+  "explorer_nx": {
+   "name": "Caspian Explorer"
+  },
+  "smallcombat01_nx": {
+   "name": "Kestrel Mk II"
+  },
+  "mediumtransport01": {
+   "name": "Lynx Highliner"
+  }
+ }
+}
