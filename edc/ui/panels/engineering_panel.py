@@ -32,6 +32,7 @@ from edc.ui.style import (
     PRIMARY_BUTTON_STYLE as _PRIMARY_BUTTON_STYLE,
     DANGER_BUTTON_STYLE as _DANGER_BUTTON_STYLE,
     make_card,
+    set_table_empty_message as _empty,
 )
 
 log = logging.getLogger(__name__)
@@ -441,6 +442,11 @@ class _ShipEngineeringTab(QWidget):
     def _refresh_wishlist_table(self):
         selected_entry = self._selected_wishlist_entry()
         self._wl_table.setSortingEnabled(False)
+        if not self._wishlist:
+            _empty(self._wl_table, "No blueprints tracked yet — add one above.")
+            self._wl_table.setSortingEnabled(True)
+            self._refresh_detail_table()
+            return
         self._wl_table.setRowCount(len(self._wishlist))
         for r, entry in enumerate(self._wishlist):
             fdname = entry["fdname"]
@@ -491,7 +497,7 @@ class _ShipEngineeringTab(QWidget):
     def _refresh_detail_table(self):
         entry = self._selected_wishlist_entry()
         if entry is None:
-            self._detail_table.setRowCount(0)
+            _empty(self._detail_table, "Select a tracked build to see materials required.")
             self._refresh_engineer_table()
             self._refresh_carrier_table()
             return
@@ -525,7 +531,7 @@ class _ShipEngineeringTab(QWidget):
     def _refresh_engineer_table(self):
         entry = self._selected_wishlist_entry()
         if entry is None:
-            self._engineer_table.setRowCount(0)
+            _empty(self._engineer_table, "Select a tracked build to see engineers.")
             return
         engineers = self._blueprints.engineers_for(entry["fdname"], entry["grade"])
 
@@ -589,13 +595,13 @@ class _ShipEngineeringTab(QWidget):
     def _refresh_carrier_table(self):
         entry = self._selected_wishlist_entry()
         if entry is None:
-            self._carrier_table.setRowCount(0)
+            _empty(self._carrier_table, "Select a tracked build to see carrier listings.")
             self._carrier_note.setText("")
             return
         reqs = self._combined_requirements(entry)
         missing_symbols = [sym for sym, qty in reqs.items() if self._held_count(sym) < qty]
         if not missing_symbols:
-            self._carrier_table.setRowCount(0)
+            _empty(self._carrier_table, "All required materials already held.")
             self._carrier_note.setText("All required materials already held.")
             return
 
@@ -603,7 +609,7 @@ class _ShipEngineeringTab(QWidget):
         ref_y = getattr(self._state, "system_y", None) if self._state else None
         ref_z = getattr(self._state, "system_z", None) if self._state else None
         if ref_x is None or ref_y is None or ref_z is None:
-            self._carrier_table.setRowCount(0)
+            _empty(self._carrier_table, "Current position unknown.")
             self._carrier_note.setText("Current position unknown.")
             return
 
@@ -623,7 +629,7 @@ class _ShipEngineeringTab(QWidget):
             )
         except Exception:
             log.exception("Failed to search fleet carrier materials")
-            self._carrier_table.setRowCount(0)
+            _empty(self._carrier_table, "Carrier search failed — see log.")
             self._carrier_note.setText("Carrier search failed — see log.")
             return
 
@@ -678,6 +684,8 @@ class _ShipEngineeringTab(QWidget):
             staleness_note if rows else
             f"No carriers found selling these materials within {radius:.0f} ly. {staleness_note}"
         )
+        if not rows:
+            _empty(self._carrier_table, f"No carriers found within {radius:.0f} ly.")
 
     def _refresh_trade_suggestions(self) -> None:
         owned: Dict[str, int] = {}
@@ -688,6 +696,10 @@ class _ShipEngineeringTab(QWidget):
 
         rows = sorted(suggestions.items(), key=lambda kv: self._blueprints.material_name(kv[0]))
         self._trade_table.setSortingEnabled(False)
+        if not rows:
+            _empty(self._trade_table, "No material-trade suggestions — nothing short, or no viable trade found.")
+            self._trade_table.setSortingEnabled(True)
+            return
         self._trade_table.setRowCount(len(rows))
         for r, (sym, sugg) in enumerate(rows):
             need_item = QTableWidgetItem(f"{self._blueprints.material_name(sym)} (short {shortfalls[sym]})")
@@ -968,6 +980,11 @@ class _OdysseyEngineeringTab(QWidget):
     def _refresh_wishlist_table(self):
         selected_entry = self._selected_wishlist_entry()
         self._wl_table.setSortingEnabled(False)
+        if not self._wishlist:
+            _empty(self._wl_table, "No targets tracked yet — add one above.")
+            self._wl_table.setSortingEnabled(True)
+            self._refresh_detail_table()
+            return
         self._wl_table.setRowCount(len(self._wishlist))
         for r, entry in enumerate(self._wishlist):
             name_item = QTableWidgetItem(self._display_name(entry))
@@ -1007,7 +1024,7 @@ class _OdysseyEngineeringTab(QWidget):
     def _refresh_detail_table(self):
         entry = self._selected_wishlist_entry()
         if entry is None:
-            self._detail_table.setRowCount(0)
+            _empty(self._detail_table, "Select a tracked target to see materials required.")
             self._refresh_engineer_table()
             self._refresh_carrier_table()
             return
@@ -1048,13 +1065,13 @@ class _OdysseyEngineeringTab(QWidget):
         if entry is None:
             entry = self._selected_wishlist_entry()
             if entry is None:
-                self._engineer_table.setRowCount(0)
+                _empty(self._engineer_table, "Select a tracked target to see engineers.")
                 self._engineer_note.setText("")
                 return
 
         kind = entry["kind"]
         if kind in ("suit_grade", "weapon_grade"):
-            self._engineer_table.setRowCount(0)
+            _empty(self._engineer_table, "Any on-foot Engineer terminal — not gated to a specific Engineer.")
             self._engineer_note.setText(
                 "Grade upgrades can be performed at any on-foot Engineer terminal — "
                 "not gated to a specific Engineer."
@@ -1104,13 +1121,13 @@ class _OdysseyEngineeringTab(QWidget):
     def _refresh_carrier_table(self):
         entry = self._selected_wishlist_entry()
         if entry is None:
-            self._carrier_table.setRowCount(0)
+            _empty(self._carrier_table, "Select a tracked target to see carrier listings.")
             self._carrier_note.setText("")
             return
         reqs = self._requirements_for(entry)
         missing_symbols = [sym for sym, qty in reqs.items() if self._held_count(sym) < qty]
         if not missing_symbols:
-            self._carrier_table.setRowCount(0)
+            _empty(self._carrier_table, "All required materials already held.")
             self._carrier_note.setText("All required materials already held.")
             return
 
@@ -1118,7 +1135,7 @@ class _OdysseyEngineeringTab(QWidget):
         ref_y = getattr(self._state, "system_y", None) if self._state else None
         ref_z = getattr(self._state, "system_z", None) if self._state else None
         if ref_x is None or ref_y is None or ref_z is None:
-            self._carrier_table.setRowCount(0)
+            _empty(self._carrier_table, "Current position unknown.")
             self._carrier_note.setText("Current position unknown.")
             return
 
@@ -1138,7 +1155,7 @@ class _OdysseyEngineeringTab(QWidget):
             )
         except Exception:
             log.exception("Failed to search fleet carrier materials")
-            self._carrier_table.setRowCount(0)
+            _empty(self._carrier_table, "Carrier search failed — see log.")
             self._carrier_note.setText("Carrier search failed — see log.")
             return
 
@@ -1193,6 +1210,8 @@ class _OdysseyEngineeringTab(QWidget):
             staleness_note if rows else
             f"No carriers found selling these materials within {radius:.0f} ly. {staleness_note}"
         )
+        if not rows:
+            _empty(self._carrier_table, f"No carriers found within {radius:.0f} ly.")
 
     def refresh(self, state) -> None:
         self._state = state

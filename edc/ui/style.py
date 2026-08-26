@@ -24,6 +24,7 @@ make_card(title, variant=...) for a semantic one.
 """
 from __future__ import annotations
 
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QFrame, QLabel, QVBoxLayout
 
 # ── Card container (the "box" a section of related widgets sits in) ───────
@@ -74,6 +75,9 @@ DANGER_BUTTON_STYLE = (
     "QPushButton:pressed { background:#200c0c; }"
     "QPushButton:disabled { background:#151010; color:#4a3a3a; border-color:#251818; }"
 )
+
+# ── Empty-state placeholder text inside an otherwise-empty table/card ──────
+EMPTY_STATE_STYLE = "color:#4a4a4a; font-style:italic; background:transparent; border:none;"
 
 # ── Semantic card palette ───────────────────────────────────────────────────
 # (card_bg, card_border, header_fg) per meaning. Pulled together from the
@@ -135,3 +139,30 @@ def make_card(title: str = "", variant: str = "blue") -> tuple[QFrame, QVBoxLayo
         hdr.setStyleSheet(hdr_style(variant))
         layout.addWidget(hdr)
     return frame, layout
+
+
+def set_table_empty_message(table, message: str) -> None:
+    """Put a single centered, italic placeholder row spanning every column
+    into an otherwise-empty QTableWidget, instead of leaving a large blank
+    card body with nothing to explain why. Call this INSTEAD of
+    table.setRowCount(0) when there's genuinely nothing to show yet (no
+    data fetched, nothing tracked, filters matched nothing) — call
+    table.setRowCount(n) as normal once there's real data, which clears
+    the placeholder along with everything else.
+
+    Safe to call repeatedly (e.g. on every refresh() while still empty) —
+    it always rebuilds the single placeholder row from scratch."""
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtWidgets import QTableWidgetItem
+
+    table.setRowCount(1)
+    cols = table.columnCount() or 1
+    table.setSpan(0, 0, 1, cols)
+    item = QTableWidgetItem(message)
+    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+    item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+    item.setForeground(QColor("#4a4a4a"))
+    font = item.font()
+    font.setItalic(True)
+    item.setFont(font)
+    table.setItem(0, 0, item)

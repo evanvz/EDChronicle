@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
 from edc.core.station_pads import pad_size_hint
 from edc.ui import formatting as fmt
 from edc.ui.busy_spinner import BusySpinner
-from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, LABEL_STYLE as _LABEL_STYLE
+from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, LABEL_STYLE as _LABEL_STYLE, set_table_empty_message as _empty
 
 log = logging.getLogger(__name__)
 
@@ -593,6 +593,7 @@ class MarketPanel(QWidget):
         h.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
         self._table.setToolTip("Click a Station or System cell to copy its name to the clipboard.")
         self._table.cellClicked.connect(self._on_results_cell_clicked)
+        _empty(self._table, "Enter a commodity above and press Search.")
         root.addWidget(self._table, 1)
 
         self._search_loading_spinner = BusySpinner(self)
@@ -810,7 +811,13 @@ class MarketPanel(QWidget):
         self._trade_table.setVisible(True)
 
         self._trade_table.setSortingEnabled(False)
-        self._trade_table.setRowCount(len(opportunities))
+        if not opportunities:
+            _empty(
+                self._trade_table,
+                "No profitable destinations found for this cargo within range.",
+            )
+        else:
+            self._trade_table.setRowCount(len(opportunities))
         for row, o in enumerate(opportunities):
             name_item = QTableWidgetItem(o["name"])
             buy_item = _NumericTableWidgetItem(f"{o['buy_price']:,}", float(o["buy_price"]))
@@ -1072,7 +1079,14 @@ class MarketPanel(QWidget):
         cargo_qty = self._cargo_qty_of(normalize_commodity_name(raw)) if not buy_mode else 0
 
         self._table.setSortingEnabled(False)
-        self._table.setRowCount(len(results))
+        if not results:
+            _empty(
+                self._table,
+                "No stations found — try a wider range, a different pad-size filter, or check the "
+                "commodity spelling.",
+            )
+        else:
+            self._table.setRowCount(len(results))
         for row, r in enumerate(results):
             station_item = QTableWidgetItem(r.get("station_name") or "—")
             pad_item = QTableWidgetItem(r.get("pad_size") or pad_size_hint(r.get("station_type")))

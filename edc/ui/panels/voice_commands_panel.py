@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import (
 )
 
 from edc.core.binds_reader import ActionBinding, load_bindings
+from edc.ui.style import DANGER_BUTTON_STYLE as _DANGER_BUTTON_STYLE
 
 log = logging.getLogger(__name__)
 
@@ -334,6 +335,7 @@ class VoiceCommandsPanel(QWidget):
         btn_edit = QPushButton("Edit")
         btn_edit.clicked.connect(self._edit_command)
         btn_delete = QPushButton("Delete")
+        btn_delete.setStyleSheet(_DANGER_BUTTON_STYLE)
         btn_delete.clicked.connect(self._delete_command)
         btn_reload = QPushButton("Reload Binds")
         btn_reload.clicked.connect(self._reload_bindings)
