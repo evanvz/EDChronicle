@@ -1077,6 +1077,9 @@ class EventEngine:
                     active = dict(getattr(self.state, "active_bounties", None) or {})
                     active[faction] = active.get(faction, 0) + bounty
                     self.state.active_bounties = active
+                    last = dict(getattr(self.state, "bounty_last_commit", None) or {})
+                    last[faction] = event.get("timestamp") or ""
+                    self.state.bounty_last_commit = last
                 except Exception:
                     pass
 
@@ -1088,7 +1091,20 @@ class EventEngine:
                 except Exception:
                     pass
 
-            if event.get("CrimeType") == "murder":
+            crime_type = event.get("CrimeType") or ""
+            if crime_type == "murder" or crime_type.endswith("_murder"):
+                # Both ship murder and onFoot_murder grant notoriety, which
+                # BLOCKS paying bounties/fines at Interstellar Factors until
+                # it decays to 0. The journal never reports the increment,
+                # only the Statistics event does — so count pending murders
+                # since the last authoritative reading and surface an
+                # estimate in the UI (see combat_panel's notoriety card).
+                try:
+                    self.state.notoriety_est_pending_murders = (
+                        getattr(self.state, "notoriety_est_pending_murders", 0) + 1
+                    )
+                except Exception:
+                    pass
                 ts = event.get("timestamp") or ""
                 cur_key = (getattr(self.state, "combat_current_key", "") or
                            getattr(self.state, "combat_last_key", "")) or ""
@@ -1134,6 +1150,8 @@ class EventEngine:
             if isinstance(crime, dict) and isinstance(crime.get("Notoriety"), int):
                 self.state.notoriety = crime["Notoriety"]
                 self.state.notoriety_timestamp = event.get("timestamp")
+                # Authoritative reading supersedes any pending murder count.
+                self.state.notoriety_est_pending_murders = 0
 
         elif name == "PayBounties":
             try:
@@ -1144,6 +1162,12 @@ class EventEngine:
                 else:
                     active.clear()
                 self.state.active_bounties = active
+                last = dict(getattr(self.state, "bounty_last_commit", None) or {})
+                if isinstance(faction, str) and faction:
+                    last.pop(faction, None)
+                else:
+                    last.clear()
+                self.state.bounty_last_commit = last
             except Exception:
                 pass
 

@@ -116,6 +116,11 @@ class GameState:
     # across restarts (loaded/saved via SessionLedger) since a real bounty
     # doesn't go away just because the app restarted.
     active_bounties: Dict[str, int] = field(default_factory=dict)
+    # Timestamp of the most recent CommitCrime per bounty faction — a bounty
+    # older than 7 days goes DORMANT (hidden from scans; only payable at a
+    # station controlled by the issuing faction, per Frontier's Crime &
+    # Punishment rules), so the age matters as much as the amount.
+    bounty_last_commit: Dict[str, str] = field(default_factory=dict)
     # Closest known station offering Interstellar Factors, not owned by any
     # currently-bounty-issuing faction — see main_window._refresh_bounty_status.
     closest_interstellar_factors: Optional[Dict[str, Any]] = None
@@ -134,6 +139,12 @@ class GameState:
     # clearable by paying. notoriety_timestamp is when this reading was taken.
     notoriety: Optional[int] = None
     notoriety_timestamp: Optional[str] = None
+    # Estimated notoriety is only used when the authoritative Statistics
+    # reading is missing/stale: CommitCrime murder events never report the
+    # increment (journal silent on the number), so we estimate max 1 point
+    # per murder event since the last authoritative reading. 0 = no murders
+    # since the last authoritative reading.
+    notoriety_est_pending_murders: int = 0
 
     # Squadron (journal-exposed data only: name/rank/membership transitions —
     # no member roster, chat, or wing-mission data is available from the game).

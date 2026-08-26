@@ -1,4 +1,5 @@
 import logging
+import time
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -526,20 +527,32 @@ class CombatPanel(QWidget):
     def _refresh_notoriety_card(self, state):
         notoriety = getattr(state, "notoriety", None)
         ts = getattr(state, "notoriety_timestamp", None) or "unknown"
+        pending = getattr(state, "notoriety_est_pending_murders", 0) or 0
 
-        if notoriety is None:
+        # Notoriety blocks paying bounties/fines at Interstellar Factors
+        # until it decays to 0 — the journal only reports the number via the
+        # Statistics event, which fires when the in-game stats panel is
+        # opened. Between readings, estimate from murders since.
+        estimate = pending if notoriety is None else notoriety + pending
+
+        if notoriety is None and not pending:
             self.notoriety_summary.setText("No reading yet — open the in-game Statistics panel once to record it.")
             return
 
-        if notoriety <= 0:
+        if estimate <= 0:
             self.notoriety_summary.setText(f"Clean (as of {ts}).")
             return
 
-        min_hours = notoriety * 2
+        min_hours = estimate * 2
+        est_note = (f" Includes an estimated {pending} point{'s' if pending != 1 else ''} from "
+                    f"recent murder{'' if pending == 1 else 's'} (journal reports murders, "
+                    f"not the notoriety number — open the in-game Statistics panel for an exact "
+                    f"reading).") if pending else ""
         self.notoriety_summary.setText(
-            f"Level {notoriety} (as of {ts}). Decays 1 point per 2 hours of active "
+            f"Level {estimate} (reading {ts}). Decays 1 point per 2 hours of active "
             f"in-game time (paused at the main menu) — at least {min_hours}h of "
-            f"continuous play from that reading to fully clear. Can't be paid off."
+            f"continuous play to fully clear. Can't be paid off — and blocks "
+            f"paying bounties/fines at Interstellar Factors while non-zero.{est_note}"
         )
 
     def _refresh_bounty_card(self, state):
@@ -549,7 +562,24 @@ class CombatPanel(QWidget):
             return
 
         self.bounty_card.setVisible(True)
-        parts = [f"{faction}: {amount:,} Cr" for faction, amount in active.items()]
+        last_commit = getattr(state, "bounty_last_commit", None) or {}
+        parts = []
+        now = time.time()
+        for faction, amount in active.items():
+            part = f"{faction}: {amount:,} Cr"
+            ts = last_commit.get(faction) or ""
+            if ts:
+                try:
+                    # Journal timestamps are ISO-8601 UTC ("2026-08-23T18:01:51Z")
+                    age_days = (now - time.mktime(time.strptime(ts, "%Y-%m-%dT%H:%M:%SZ"))) / 86400.0
+                except ValueError:
+                    age_days = None
+                if age_days is not None:
+                    if age_days >= 7:
+                        part += f" — DORMANT ({age_days:.0f}d old: hidden from scans, only payable at a station this faction controls)"
+                    else:
+                        part += f" ({6 - int(age_days)}d until dormant)"
+            parts.append(part)
         self.bounty_summary.setText("Outstanding: " + "  |  ".join(parts))
 
         station = getattr(state, "closest_interstellar_factors", None)

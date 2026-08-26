@@ -78,7 +78,7 @@ from edc.core.eddn_market import EddnMarketCache, write_buffers
 from edc.core.station_pads import extract_station_info
 from edc.core.rare_commodities import RareCommodityTable
 from edc.core.fdevids_names import ModuleNameTable, ShipNameTable
-from edc.core.bounty_scanner import scan_active_bounties
+from edc.core.bounty_scanner import scan_active_bounties_with_dates
 from edc.core.fine_scanner import scan_active_fines
 from edc.core.bgs_conflicts import squadron_faction_name
 from edc.core.combat_bond_scanner import scan_unredeemed_combat_total
@@ -277,6 +277,7 @@ class _StartupHistoryScanWorker(QObject):
         result = {
             "active_bounties": {}, "active_fines": {}, "combat_unsold_total": None,
             "squadron_rec": None, "carrier_rec": None, "active_missions": {},
+            "bounty_last_commit": {},
         }
         if not self._journal_dir:
             self.finished.emit(result)
@@ -284,7 +285,7 @@ class _StartupHistoryScanWorker(QObject):
 
         path = Path(self._journal_dir)
         try:
-            result["active_bounties"] = scan_active_bounties(path)
+            result["active_bounties"], result["bounty_last_commit"] = scan_active_bounties_with_dates(path)
         except Exception:
             log.exception("Failed to scan journal history for active bounties")
         try:
@@ -1892,6 +1893,7 @@ class MainWindow(QMainWindow):
         __init__ before active bounties/combat bonds/squadron/carrier/
         missions moved to _StartupHistoryScanWorker."""
         self.state.active_bounties = result["active_bounties"]
+        self.state.bounty_last_commit = result.get("bounty_last_commit") or {}
         self.state.active_fines = result["active_fines"]
 
         combat_unsold_total = result["combat_unsold_total"]
