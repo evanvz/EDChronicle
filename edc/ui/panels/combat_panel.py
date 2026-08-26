@@ -279,7 +279,7 @@ class CombatPanel(QWidget):
 
         card_hdr = QLabel("COMBAT CONTACTS")
         card_hdr.setStyleSheet(
-            "color: #7a7a7a; font-size:12px; font-weight: bold; "
+            "color: #4da3ff; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         card_l.addWidget(card_hdr)

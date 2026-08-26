@@ -291,7 +291,7 @@ class _ShipEngineeringTab(QWidget):
             "and not 100% complete — an empty list means unknown, not unavailable."
         )
         self._engineer_note.setWordWrap(True)
-        self._engineer_note.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
+        self._engineer_note.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
         eng_layout.addWidget(self._engineer_note)
         right.addWidget(eng_card, 1)
 
@@ -310,7 +310,7 @@ class _ShipEngineeringTab(QWidget):
 
         self._carrier_note = QLabel("")
         self._carrier_note.setWordWrap(True)
-        self._carrier_note.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
+        self._carrier_note.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
         carrier_layout.addWidget(self._carrier_note)
         right.addWidget(carrier_card, 1)
 
@@ -848,7 +848,7 @@ class _OdysseyEngineeringTab(QWidget):
 
         self._engineer_note = QLabel("")
         self._engineer_note.setWordWrap(True)
-        self._engineer_note.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
+        self._engineer_note.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
         eng_layout.addWidget(self._engineer_note)
         right.addWidget(eng_card, 1)
 
@@ -867,7 +867,7 @@ class _OdysseyEngineeringTab(QWidget):
 
         self._carrier_note = QLabel("")
         self._carrier_note.setWordWrap(True)
-        self._carrier_note.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
+        self._carrier_note.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
         carrier_layout.addWidget(self._carrier_note)
         right.addWidget(carrier_card, 1)
 

@@ -233,7 +233,7 @@ class SquadronPanel(QWidget):
             "visiting to keep a checklist, or it appears automatically once you dock there."
         )
         colon_note.setWordWrap(True)
-        colon_note.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
+        colon_note.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
         colon_l.addWidget(colon_note)
 
         add_row = QHBoxLayout()
@@ -290,7 +290,7 @@ class SquadronPanel(QWidget):
 
         self._candidates_status_label = QLabel("Waiting for current system…")
         self._candidates_status_label.setWordWrap(True)
-        self._candidates_status_label.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
+        self._candidates_status_label.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
         cand_l.addWidget(self._candidates_status_label)
 
         self._candidates_table = QTableWidget()
@@ -334,7 +334,7 @@ class SquadronPanel(QWidget):
             "valid Colonisation Contact."
         )
         cand_caveat.setWordWrap(True)
-        cand_caveat.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
+        cand_caveat.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
         cand_l.addWidget(cand_caveat)
 
         root.addWidget(cand_card)

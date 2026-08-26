@@ -32,7 +32,7 @@ CARD_STYLE = "QFrame { background:#0d1a2a; border:1px solid #1e3a5a; border-radi
 
 # ── Section header label sitting at the top of a card ──────────────────────
 HDR_STYLE = (
-    "color:#7a7a7a; font-size:12px; font-weight:bold; letter-spacing:1px;"
+    "color:#4da3ff; font-size:12px; font-weight:bold; letter-spacing:1px;"
     " background:transparent; border:none;"
 )
 
@@ -88,7 +88,7 @@ EMPTY_STATE_STYLE = "color:#4a4a4a; font-style:italic; background:transparent; b
 # panel inventing its own hex pair.
 _VARIANT_COLORS = {
     # Neutral/default — plain data, search results, no status implied.
-    "blue":   ("#0d1a2a", "#1e3a5a", "#7a7a7a"),
+    "blue":   ("#0d1a2a", "#1e3a5a", "#9aa4b0"),
     # Positive / success / gaining ground.
     "green":  ("#0d1a12", "#2a5a3a", "#6BCB77"),
     # Caution / stale data / needs attention soon, not yet urgent.

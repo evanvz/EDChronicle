@@ -353,7 +353,7 @@ class IntelPanel(QWidget):
         poi_l.setSpacing(4)
         poi_hdr = QLabel("EXTERNAL POINTS OF INTEREST")
         poi_hdr.setStyleSheet(
-            "color: #7a7a7a; font-size:12px; font-weight: bold; "
+            "color: #4da3ff; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         poi_l.addWidget(poi_hdr)
@@ -376,7 +376,7 @@ class IntelPanel(QWidget):
         farm_l.setSpacing(4)
         farm_hdr = QLabel("FARMING LOCATIONS — THIS SYSTEM")
         farm_hdr.setStyleSheet(
-            "color: #7a7a7a; font-size:12px; font-weight: bold; "
+            "color: #4da3ff; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         farm_l.addWidget(farm_hdr)
@@ -399,7 +399,7 @@ class IntelPanel(QWidget):
         body_farm_l.setSpacing(4)
         body_farm_hdr = QLabel("SURFACE SCAN — FARMING MATCHES")
         body_farm_hdr.setStyleSheet(
-            "color: #7a7a7a; font-size:12px; font-weight: bold; "
+            "color: #4da3ff; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         body_farm_l.addWidget(body_farm_hdr)
@@ -422,7 +422,7 @@ class IntelPanel(QWidget):
         nearby_l.setSpacing(4)
         nearby_hdr = QLabel("NEAREST FARMING OPPORTUNITIES")
         nearby_hdr.setStyleSheet(
-            "color: #7a7a7a; font-size:12px; font-weight: bold; "
+            "color: #4da3ff; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         nearby_l.addWidget(nearby_hdr)
@@ -472,7 +472,7 @@ class IntelPanel(QWidget):
         odyssey_l.setSpacing(4)
         odyssey_hdr = QLabel("ODYSSEY FARMING CANDIDATES")
         odyssey_hdr.setStyleSheet(
-            "color: #7a7a7a; font-size:12px; font-weight: bold; "
+            "color: #4da3ff; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         odyssey_l.addWidget(odyssey_hdr)
@@ -497,7 +497,7 @@ class IntelPanel(QWidget):
         guide_l.setSpacing(4)
         guide_hdr = QLabel("FARMING GUIDE — ALL CATEGORIES")
         guide_hdr.setStyleSheet(
-            "color: #7a7a7a; font-size:12px; font-weight: bold; "
+            "color: #4da3ff; font-size:12px; font-weight: bold; "
             "letter-spacing: 1px; background: transparent; border: none;"
         )
         guide_l.addWidget(guide_hdr)
@@ -610,7 +610,7 @@ class IntelPanel(QWidget):
         sites = loc.get("sites") or []
         if isinstance(sites, list) and sites:
             line += (
-                '<br><span style="color:#7a7a7a;font-size:12px;">'
+                '<br><span style="color:#9aa4b0;font-size:12px;">'
                 '&nbsp;&nbsp;Sites:</span>'
             )
             for site in sites[:8]:
@@ -634,7 +634,7 @@ class IntelPanel(QWidget):
                     )
                 if s_coords:
                     site_line += (
-                        f' <span style="color:#7a7a7a;font-size:12px;">'
+                        f' <span style="color:#9aa4b0;font-size:12px;">'
                         f'({self._esc(s_coords)})</span>'
                     )
                 if isinstance(s_mats, list) and s_mats:
@@ -684,7 +684,7 @@ class IntelPanel(QWidget):
                 f'{self._esc(system_name)}</a> '
                 f'{badges}'
                 + (
-                    f'<br><span style="color:#7a7a7a;font-size:12px;">'
+                    f'<br><span style="color:#9aa4b0;font-size:12px;">'
                     f'&nbsp;&nbsp;{self._esc(age_txt)}</span>'
                     if age_txt else ""
                 )
@@ -806,7 +806,7 @@ class IntelPanel(QWidget):
                 )
             if source:
                 line += (
-                    f'<br><span style="color:#7a7a7a;font-size:12px;">'
+                    f'<br><span style="color:#9aa4b0;font-size:12px;">'
                     f'&nbsp;&nbsp;src: {self._esc(source)}</span>'
                 )
             line += '</div>'
@@ -1032,7 +1032,7 @@ class IntelPanel(QWidget):
                         f'<span style="color:{fg};font-weight:700;'
                         f'font-size:12px;letter-spacing:1px;">'
                         f'{self._esc(label)}</span>'
-                        f'<span style="color:#7a7a7a;font-size:12px;">'
+                        f'<span style="color:#9aa4b0;font-size:12px;">'
                         f' ({len(entries)} entries)</span>'
                         f'</div>'
                     )

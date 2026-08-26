@@ -302,7 +302,7 @@ class PowerplayFinderPanel(QWidget):
         self._loading_spinner = BusySpinner(self)
 
         copy_hint = QLabel("Double-click a row to copy system name to clipboard.")
-        copy_hint.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent;")
+        copy_hint.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent;")
         root.addWidget(copy_hint)
 
     # ── Public API ────────────────────────────────────────────────────────
@@ -337,7 +337,7 @@ class PowerplayFinderPanel(QWidget):
         states, desc = _SCOPE_HINTS.get(mission, ([], ""))
         if not states:
             self._scope_label.setText(
-                f'<span style="color:#7a7a7a;font-size:12px;">{desc}</span>'
+                f'<span style="color:#9aa4b0;font-size:12px;">{desc}</span>'
             )
             return
         tags = []
@@ -347,7 +347,7 @@ class PowerplayFinderPanel(QWidget):
         joined = ' <span style="color:#444444;">·</span> '.join(tags)
         self._scope_label.setText(
             f'{joined}'
-            f'<span style="color:#7a7a7a;font-size:12px;"> — {desc}</span>'
+            f'<span style="color:#9aa4b0;font-size:12px;"> — {desc}</span>'
         )
 
     # ── Ethos hint ───────────────────────────────────────────────────────
@@ -518,7 +518,7 @@ class PowerplayFinderPanel(QWidget):
                 html    = ' <span style="color:#3a3a3a;">/</span> '.join(parts)
                 tooltip = "\n".join(tip_lines)
             else:
-                html    = '<span style="color:#7a7a7a;">—</span>'
+                html    = '<span style="color:#9aa4b0;">—</span>'
                 tooltip = ""
 
             power_label = QLabel()

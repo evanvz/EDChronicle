@@ -482,7 +482,7 @@ class MarketPanel(QWidget):
             "check \"Updated\" before flying somewhere."
         )
         note.setWordWrap(True)
-        note.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
+        note.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
         search_layout.addWidget(note)
 
         root.addWidget(search_frame)
@@ -1194,7 +1194,7 @@ class _RareGoodsDialog(QDialog):
             "station are listed here — no data yet means no row, not a guess."
         )
         note.setWordWrap(True)
-        note.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
+        note.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
         layout.addWidget(note)
 
     def refresh_results(self) -> None:
@@ -1307,7 +1307,7 @@ class _StationServiceDialog(QDialog):
             "over time (BGS/security/faction shifts) — check \"Last Visited\" before flying somewhere."
         )
         note.setWordWrap(True)
-        note.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
+        note.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
         layout.addWidget(note)
 
     def refresh_results(self) -> None:

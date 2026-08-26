@@ -172,7 +172,7 @@ class TradeRoutePanel(QWidget):
         fl.setSpacing(6)
 
         hdr = QLabel("TRADE ROUTE LOOP PLANNER")
-        hdr.setStyleSheet("color:#7a7a7a; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;")
+        hdr.setStyleSheet("color:#4da3ff; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;")
         fl.addWidget(hdr)
 
         note = QLabel(
@@ -180,7 +180,7 @@ class TradeRoutePanel(QWidget):
             "sell it at Station B, buy a different commodity at B, sell it back at A."
         )
         note.setWordWrap(True)
-        note.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
+        note.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
         fl.addWidget(note)
 
         self._location_label = QLabel("Location: —")
@@ -298,7 +298,7 @@ class TradeRoutePanel(QWidget):
         p2p_l.setSpacing(6)
 
         p2p_hdr = QLabel("POINT-TO-POINT TRADE FINDER")
-        p2p_hdr.setStyleSheet("color:#7a7a7a; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;")
+        p2p_hdr.setStyleSheet("color:#4da3ff; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;")
         p2p_l.addWidget(p2p_hdr)
 
         p2p_note = QLabel(
@@ -306,7 +306,7 @@ class TradeRoutePanel(QWidget):
             "auto-fills from your plotted route if one exists, or type a system name."
         )
         p2p_note.setWordWrap(True)
-        p2p_note.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
+        p2p_note.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
         p2p_l.addWidget(p2p_note)
 
         self._p2p_origin_label = QLabel("Origin: —")

@@ -216,7 +216,7 @@ def _format_forecast(prediction: Optional[Dict[str, Any]]) -> Tuple[str, str]:
     are "impending event" signals from the real BGS thresholds) > plain
     trend > "not enough history yet"."""
     if not prediction:
-        return ("—", "#7a7a7a")
+        return ("—", "#9aa4b0")
 
     active_war = prediction.get("active_war")
     if active_war:
@@ -251,7 +251,7 @@ def _format_forecast(prediction: Optional[Dict[str, Any]]) -> Tuple[str, str]:
         return ("↓ Falling", "#FF8C00")
     if trend == "flat":
         return ("→ Stable", "#4D96FF")
-    return ("Not enough history yet", "#7a7a7a")
+    return ("Not enough history yet", "#9aa4b0")
 
 
 # (bucket key, tile label, tile bg color) — order is display order. A system

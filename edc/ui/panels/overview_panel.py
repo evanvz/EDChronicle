@@ -591,7 +591,7 @@ class OverviewPanel(QWidget):
     def _esc(self, t):
         return str(t or "").replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
 
-    def _meta_row(self, label, value, label_color="#7a7a7a", value_color="#CCCCCC"):
+    def _meta_row(self, label, value, label_color="#9aa4b0", value_color="#CCCCCC"):
         esc = self._esc
         return (
             f'<span style="color:{label_color};font-size:12px;">{esc(label)}</span>'

@@ -144,7 +144,7 @@ class MiningPanel(QWidget):
         stats_layout.addWidget(self._last_prospect_label)
 
         self._sell_hdr = QLabel("Where to sell:")
-        self._sell_hdr.setStyleSheet("color:#7a7a7a; font-size:12px; background:transparent; border:none;")
+        self._sell_hdr.setStyleSheet("color:#9aa4b0; font-size:12px; background:transparent; border:none;")
         self._sell_hdr.setVisible(False)
         stats_layout.addWidget(self._sell_hdr)
 
@@ -297,7 +297,7 @@ class MiningPanel(QWidget):
             "match — very rare materials near the edge of a large range may not surface."
         )
         note.setWordWrap(True)
-        note.setStyleSheet("color:#7a7a7a; font-size:11px; background:transparent; border:none;")
+        note.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
         finder_layout.addWidget(note)
 
         root.addWidget(finder_frame)
