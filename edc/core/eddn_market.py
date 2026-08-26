@@ -25,6 +25,23 @@ from edc.core.station_pads import extract_station_info
 log = logging.getLogger(__name__)
 
 
+def _normalize_ts(ts: Any) -> str:
+    """Normalise an EDDN/journal timestamp to the same '%Y-%m-%dT%H:%M:%SZ'
+    format the cutoffs (_market_data_cutoff() etc.) and last_updated
+    comparisons use. EDDN (and the journal) write ISO-8601 with optional
+    milliseconds ('2026-08-26T18:03:12.123Z'); mixing that with the
+    millisecond-less cutoff format makes string comparison subtly wrong on
+    the boundary second ('.' sorts before 'Z'). Falls back to now(UTC) for
+    empty/invalid input, matching the previous default behaviour."""
+    if isinstance(ts, str) and ts:
+        try:
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        except ValueError:
+            return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 class EddnMarketCache:
 
     def __init__(self, repo):
@@ -64,7 +81,7 @@ class EddnMarketCache:
         if not system_name:
             return
         self._coord_buffer[system_name] = (
-            system_name, x, y, z, datetime.now(timezone.utc).isoformat()
+            system_name, x, y, z, _normalize_ts(None)
         )
 
     def on_commodity_message(self, msg: Dict[str, Any]) -> None:
@@ -74,7 +91,7 @@ class EddnMarketCache:
         station_name = msg.get("stationName") or ""
         station_type = msg.get("stationType") or ""
         system_name = msg.get("systemName") or ""
-        timestamp = msg.get("timestamp") or ""
+        timestamp = _normalize_ts(msg.get("timestamp"))
 
         docking_access = msg.get("carrierDockingAccess")
         if isinstance(docking_access, str) and docking_access:
@@ -108,22 +125,25 @@ class EddnMarketCache:
             return
         self._codex_buffer[(system_address, body_id)] = (
             system_address, body_id, str(name_localised), str(msg.get("Name") or ""),
-            msg.get("timestamp") or datetime.now(timezone.utc).isoformat(),
+            _normalize_ts(msg.get("timestamp")),
         )
 
     def on_faction_seen(self, system_address: int, system_name: str, faction: Dict[str, Any], is_controlling: bool, timestamp: str) -> None:
         if not (isinstance(system_address, int) and system_name):
             return
+        timestamp = _normalize_ts(timestamp)
         self._faction_buffer[system_address] = (system_name, faction, is_controlling, timestamp)
 
     def on_bgs_status_seen(self, system_address: int, system_name: str, conflicts: list, factions: list, timestamp: str) -> None:
         if not (isinstance(system_address, int) and system_name):
             return
+        timestamp = _normalize_ts(timestamp)
         self._bgs_status_buffer[system_address] = (system_name, conflicts, factions, timestamp)
 
     def on_res_signal_seen(self, system_address: int, system_name: str, tiers: list, timestamp: str) -> None:
         if not (isinstance(system_address, int) and system_name):
             return
+        timestamp = _normalize_ts(timestamp)
         self._res_sites_buffer[system_address] = (system_name, tiers, timestamp)
 
     def on_fcmaterials_message(self, msg: Dict[str, Any]) -> None:
@@ -132,7 +152,7 @@ class EddnMarketCache:
             return
         carrier_name = msg.get("CarrierName") or ""
         carrier_id = msg.get("CarrierID") or ""
-        timestamp = msg.get("timestamp") or datetime.now(timezone.utc).isoformat()
+        timestamp = _normalize_ts(msg.get("timestamp"))
 
         for item in (msg.get("Items") or []):
             if not isinstance(item, dict):
