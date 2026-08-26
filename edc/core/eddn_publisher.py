@@ -52,6 +52,7 @@ _SOFTWARE_NAME = "EDChronicle"
 _SOFTWARE_VERSION = "1.0.0"
 
 _RETRY_DELAY_SECONDS = 60
+_RETRY_MAX_ATTEMPTS = 5  # a poisoned message must not cycle the queue forever
 _QUEUE_MAX = 200
 _POST_TIMEOUT = 15
 
@@ -325,6 +326,10 @@ class EddnPublisher:
 
     def stop(self) -> None:
         self._stop.set()
+        # Join briefly so an in-flight POST can finish; the worker loop
+        # drains whatever remains in the queue before it exits.
+        if self._thread and self._thread is not threading.current_thread():
+            self._thread.join(timeout=5)
 
     def observe(self, event: Dict[str, Any]) -> None:
         """Keep session header fields current — call for every raw journal event."""
@@ -466,10 +471,21 @@ class EddnPublisher:
             except queue.Empty:
                 continue
             self._send_with_retry(payload)
+        # Stop requested — drain anything still queued (best-effort, one
+        # pass; failed sends requeue via Timer only if attempts remain,
+        # but those timers are daemon so they can't hang process exit).
+        while True:
+            try:
+                payload = self._queue.get_nowait()
+            except queue.Empty:
+                return
+            self._send_with_retry(payload)
 
     def _send_with_retry(self, payload: Dict[str, Any]) -> None:
+        # _retry_attempts is bookkeeping, never part of the wire payload.
+        body = {k: v for k, v in payload.items() if k != "_retry_attempts"}
         try:
-            resp = requests.post(_GATEWAY_URL, json=payload, timeout=_POST_TIMEOUT)
+            resp = requests.post(_GATEWAY_URL, json=body, timeout=_POST_TIMEOUT)
         except requests.RequestException as exc:
             log.warning("EDDN publish failed: %s", exc)
         else:
@@ -482,8 +498,19 @@ class EddnPublisher:
                 return
 
         # Per EDDN dev docs: wait >= 60s before retrying a failed message,
-        # and don't block other queued messages meanwhile.
-        threading.Timer(_RETRY_DELAY_SECONDS, self._requeue, args=(payload,)).start()
+        # and don't block other queued messages meanwhile. Daemon timer —
+        # a pending retry must never keep the process alive after shutdown.
+        attempts = int(payload.get("_retry_attempts", 0)) + 1
+        if attempts >= _RETRY_MAX_ATTEMPTS:
+            log.warning(
+                "EDDN publish gave up after %d attempts — dropping message",
+                attempts,
+            )
+            return
+        payload["_retry_attempts"] = attempts
+        timer = threading.Timer(_RETRY_DELAY_SECONDS, self._requeue, args=(payload,))
+        timer.daemon = True
+        timer.start()
 
     def _requeue(self, payload: Dict[str, Any]) -> None:
         try:

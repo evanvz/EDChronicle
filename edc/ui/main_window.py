@@ -1964,6 +1964,13 @@ class MainWindow(QMainWindow):
         self._eddn_save_timer.stop()
         self.eddn_powerplay.save()
         self._market_flush_timer.stop()
+        # Stop the outbound publisher too — drain its queue and join, so
+        # neither queued messages nor a pending 60s retry timer outlive
+        # app close (timers are daemon, so exit can't hang either way).
+        try:
+            self.eddn_publisher.stop()
+        except Exception:
+            log.exception("Failed to stop EDDN publisher")
         # Wait for any in-flight background flush to finish before the
         # synchronous flush below, so the two never write to the DB
         # concurrently (separate connections → SQLite lock contention).
