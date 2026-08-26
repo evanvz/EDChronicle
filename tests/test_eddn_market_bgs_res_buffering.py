@@ -23,7 +23,7 @@ def repo(tmp_path):
     return Repository(db)
 
 
-def test_pop_buffers_returns_bgs_status_and_res_sites_in_9_tuple_and_clears_them():
+def test_pop_buffers_returns_bgs_status_and_res_sites_in_11_tuple_and_clears_them():
     cache = EddnMarketCache(repo=None)
     conflicts = [{"WarType": "war", "Status": "active", "Faction1": {"Name": "A", "WonDays": 1}, "Faction2": {"Name": "B", "WonDays": 0}}]
     factions = [{"Name": "B", "FactionState": "War", "ActiveStates": [{"State": "War"}], "PendingStates": [], "RecoveringStates": []}]
@@ -31,8 +31,8 @@ def test_pop_buffers_returns_bgs_status_and_res_sites_in_9_tuple_and_clears_them
     cache.on_res_signal_seen(1, "Sol", ["Hazardous", "High"], "2026-08-23T10:00:00Z")
 
     result = cache.pop_buffers()
-    assert len(result) == 9
-    coords, market, ftns, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites = result
+    assert len(result) == 11
+    coords, market, ftns, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, outfitting, shipyard = result
 
     assert bgs_status == [(1, ("Sol", conflicts, factions, "2026-08-23T10:00:00Z"))]
     assert res_sites == [(1, ("Sol", ["Hazardous", "High"], "2026-08-23T10:00:00Z"))]
@@ -47,7 +47,7 @@ def test_on_bgs_status_seen_ignores_malformed_input():
     cache.on_bgs_status_seen(None, "Sol", [], [], "2026-08-23T10:00:00Z")
     cache.on_bgs_status_seen(1, "", [], [], "2026-08-23T10:00:00Z")
 
-    _, _, _, _, _, _, _, bgs_status, _ = cache.pop_buffers()
+    _, _, _, _, _, _, _, bgs_status, _, _, _ = cache.pop_buffers()
     assert bgs_status == []
 
 
@@ -56,7 +56,7 @@ def test_on_res_signal_seen_ignores_malformed_input():
     cache.on_res_signal_seen(None, "Sol", ["High"], "2026-08-23T10:00:00Z")
     cache.on_res_signal_seen(1, "", ["High"], "2026-08-23T10:00:00Z")
 
-    _, _, _, _, _, _, _, _, res_sites = cache.pop_buffers()
+    _, _, _, _, _, _, _, _, res_sites, _, _ = cache.pop_buffers()
     assert res_sites == []
 
 
@@ -91,8 +91,8 @@ def test_cache_pop_buffers_then_write_buffers_end_to_end(repo):
     cache.on_bgs_status_seen(42, "Deciat", conflicts, [], "2026-08-23T12:00:00Z")
     cache.on_res_signal_seen(42, "Deciat", ["Nominal"], "2026-08-23T12:00:00Z")
 
-    coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites = cache.pop_buffers()
-    write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites)
+    coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, outfitting, shipyard = cache.pop_buffers()
+    write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, outfitting, shipyard)
 
     bgs_row = repo.db.conn.execute(
         "SELECT * FROM system_bgs_status WHERE system_address = 42"

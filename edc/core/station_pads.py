@@ -98,6 +98,25 @@ def extract_station_info(event: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     services = event.get("StationServices")
     services = services if isinstance(services, list) else None
 
+    # Economies arrive as [{"Name": ..., "Proportion": ...}, ...] — stored as
+    # a compact "Name:proportion|Name:proportion" string for display/filter
+    # without a join table.
+    economies = None
+    econ_list = event.get("StationEconomies")
+    if isinstance(econ_list, list) and econ_list:
+        parts = []
+        for e in econ_list:
+            if isinstance(e, dict) and e.get("Name"):
+                try:
+                    parts.append(f"{e['Name']}:{float(e.get('Proportion', 0))}")
+                except (TypeError, ValueError):
+                    parts.append(str(e["Name"]))
+        if parts:
+            economies = "|".join(parts)
+
+    dist = event.get("DistFromStarLS")
+    dist_from_star_ls = float(dist) if isinstance(dist, (int, float)) else None
+
     return {
         "market_id": market_id,
         "station_name": event.get("StationName"),
@@ -108,5 +127,9 @@ def extract_station_info(event: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         "pads_large": pads_large if isinstance(pads_large, int) else None,
         "station_faction": faction_name,
         "station_services": services,
+        "economies": economies,
+        "dist_from_star_ls": dist_from_star_ls,
+        "station_government": event.get("StationGovernment"),
+        "station_allegiance": event.get("StationAllegiance"),
         "timestamp": event.get("timestamp"),
     }

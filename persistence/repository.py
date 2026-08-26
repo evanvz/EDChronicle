@@ -1419,7 +1419,8 @@ class Repository:
                 r["market_id"], r.get("station_name"), r.get("system_name"), r.get("station_type"),
                 r.get("pads_small"), r.get("pads_medium"), r.get("pads_large"), r.get("timestamp"),
                 json.dumps(r["station_services"]) if r.get("station_services") else None,
-                r.get("station_faction"),
+                r.get("station_faction"), r.get("economies"), r.get("dist_from_star_ls"),
+                r.get("station_government"), r.get("station_allegiance"),
             )
             for r in records
         ]
@@ -1429,19 +1430,24 @@ class Repository:
             INSERT INTO station_info (
                 market_id, station_name, system_name, station_type,
                 pads_small, pads_medium, pads_large, last_visited,
-                station_services, station_faction
+                station_services, station_faction, economies,
+                dist_from_star_ls, station_government, station_allegiance
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(market_id) DO UPDATE SET
-                station_name     = excluded.station_name,
-                system_name      = excluded.system_name,
-                station_type     = excluded.station_type,
-                pads_small       = excluded.pads_small,
-                pads_medium      = excluded.pads_medium,
-                pads_large       = excluded.pads_large,
-                last_visited     = excluded.last_visited,
-                station_services = excluded.station_services,
-                station_faction  = excluded.station_faction
+                station_name       = excluded.station_name,
+                system_name        = excluded.system_name,
+                station_type       = excluded.station_type,
+                pads_small         = excluded.pads_small,
+                pads_medium        = excluded.pads_medium,
+                pads_large         = excluded.pads_large,
+                last_visited       = excluded.last_visited,
+                station_services   = excluded.station_services,
+                station_faction    = excluded.station_faction,
+                economies          = excluded.economies,
+                dist_from_star_ls  = excluded.dist_from_star_ls,
+                station_government = excluded.station_government,
+                station_allegiance = excluded.station_allegiance
             """,
             rows,
         )
@@ -1668,6 +1674,114 @@ class Repository:
             )
             out.append(d)
         return out
+
+    def get_station_info(self, market_id: int) -> dict | None:
+        """Full station_info row (as a dict) for a market_id, or None."""
+        row = self.db.conn.execute(
+            "SELECT * FROM station_info WHERE market_id = ?", (market_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+    # ---- outfitting/shipyard offerings (EDDN outfitting/1 + shipyard/1) ----
+
+    _STALE_OFFERINGS_DAYS = 14
+
+    def save_station_module_listings(self, market_id: int, station_name: str | None,
+                                     system_name: str | None, module_names: list[str],
+                                     timestamp: str | None) -> None:
+        """A full outfitting snapshot for a station REPLACES its previous
+        module set — offerings change, so stale entries must go. Single
+        transaction: delete + bulk insert."""
+        if not isinstance(market_id, int):
+            return
+        cur = self.db.conn.cursor()
+        cur.execute("BEGIN")
+        try:
+            cur.execute("DELETE FROM station_modules WHERE market_id = ?", (market_id,))
+            cur.executemany(
+                """
+                INSERT INTO station_modules (market_id, module_name, station_name, system_name, last_seen)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                [(market_id, m, station_name, system_name, timestamp) for m in module_names],
+            )
+            self.db.conn.commit()
+        except Exception:
+            self.db.conn.rollback()
+            raise
+
+    def save_station_ship_listings(self, market_id: int, station_name: str | None,
+                                   system_name: str | None, ship_types: list[str],
+                                   timestamp: str | None) -> None:
+        """Same replace-semantics as save_station_module_listings."""
+        if not isinstance(market_id, int):
+            return
+        cur = self.db.conn.cursor()
+        cur.execute("BEGIN")
+        try:
+            cur.execute("DELETE FROM station_ships WHERE market_id = ?", (market_id,))
+            cur.executemany(
+                """
+                INSERT INTO station_ships (market_id, ship_type, station_name, system_name, last_seen)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                [(market_id, s, station_name, system_name, timestamp) for s in ship_types],
+            )
+            self.db.conn.commit()
+        except Exception:
+            self.db.conn.rollback()
+            raise
+
+    def _find_stations_selling(self, table: str, column: str, value: str,
+                               x: float, y: float, z: float) -> list[dict]:
+        rows = self.db.conn.execute(
+            f"""
+            SELECT t.market_id, t.station_name, t.system_name, t.last_seen,
+                   c.x, c.y, c.z
+            FROM {table} t
+            JOIN system_coords c ON c.system_name = t.system_name
+            WHERE t.{column} = ?
+              AND t.last_seen >= ?
+            """,
+            (value, _market_data_cutoff()),
+        ).fetchall()
+        results = []
+        for r in rows:
+            rx, ry, rz = r["x"], r["y"], r["z"]
+            if rx is None or ry is None or rz is None:
+                continue
+            rec = dict(r)
+            rec["distance_ly"] = ((rx - x) ** 2 + (ry - y) ** 2 + (rz - z) ** 2) ** 0.5
+            results.append(rec)
+        results.sort(key=lambda r: r["distance_ly"])
+        return results
+
+    def find_stations_selling_module(self, module_name: str,
+                                     x: float, y: float, z: float) -> list[dict]:
+        return self._find_stations_selling("station_modules", "module_name", module_name, x, y, z)
+
+    def find_stations_selling_ship(self, ship_type: str,
+                                   x: float, y: float, z: float) -> list[dict]:
+        return self._find_stations_selling("station_ships", "ship_type", ship_type, x, y, z)
+
+    def prune_stale_station_offerings(self, batch_size: int = 20_000) -> int:
+        """Same reasoning as prune_stale_market_prices(): station offerings
+        go stale (stations restock/retool), and rows older than the cutoff
+        are dead weight in the search path."""
+        cutoff = _market_data_cutoff()
+        deleted = 0
+        for table in ("station_modules", "station_ships"):
+            while True:
+                cur = self.db.conn.execute(
+                    f"DELETE FROM {table} WHERE rowid IN "
+                    f"(SELECT rowid FROM {table} WHERE last_seen < ? LIMIT ?)",
+                    (cutoff, batch_size),
+                )
+                deleted += cur.rowcount if cur.rowcount > 0 else 0
+                self.db.conn.commit()
+                if not cur.rowcount or cur.rowcount < batch_size:
+                    break
+        return deleted
 
     def find_stations_with_service(
         self, x: float, y: float, z: float, service_tags: list[str],

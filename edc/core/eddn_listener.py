@@ -46,6 +46,8 @@ _STALE_CONNECTION_TIMEOUT_S = 300
 _MAX_DECOMPRESSED_BYTES = 10 * 1024 * 1024
 
 _FSSSIGNALS_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/fsssignaldiscovered/"
+_OUTFITTING_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/outfitting/"
+_SHIPYARD_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/shipyard/"
 
 
 def _extract_bgs_status(msg: dict) -> tuple[list, list]:
@@ -105,6 +107,8 @@ class EddnPowerPlayWorker(QObject):
     system_coords_seen = pyqtSignal(str, float, float, float)  # StarSystem, x, y, z
     commodity_seen = pyqtSignal(dict)  # raw commodity/3 message body
     fcmaterials_seen = pyqtSignal(dict)  # raw fcmaterials_journal/1 message body
+    outfitting_seen = pyqtSignal(dict)  # raw outfitting/1 message body
+    shipyard_seen = pyqtSignal(dict)  # raw shipyard/1 message body
     # Raw journal/1 Docked message body — same shape extract_station_info()
     # already parses for our own dockings, just sourced from other
     # commanders' visits too (the same crowdsourcing model Inara/EDSM use
@@ -134,7 +138,30 @@ class EddnPowerPlayWorker(QObject):
         # a set of faction names to watch for in EDDN's Factions array, so
         # we can build presence data for systems the player never personally
         # visits, the same way Inara/EDSM's own BGS tools do.
-        self._watched_factions = set(watched_factions or ())
+        self._watched_factions = set(watched_factions or [])
+        # Diagnostics: per-schema message counts since listener start.
+        # Mutated only on the listener thread; read from the UI thread via
+        # get_stats() (dict read of ints — GIL makes this safe).
+        self._stats = {
+            "total": 0,
+            "commodity": 0,
+            "journal": 0,
+            "fcmaterials": 0,
+            "fsssignaldiscovered": 0,
+            "outfitting": 0,
+            "shipyard": 0,
+            "other": 0,
+            "invalid": 0,
+        }
+        self._stats_start = time.monotonic()
+
+    def get_stats(self) -> dict:
+        """Snapshot of per-schema counters plus msgs/sec — for the status
+        display. Safe to call from any thread."""
+        stats = dict(self._stats)
+        elapsed = max(time.monotonic() - self._stats_start, 1.0)
+        stats["msgs_per_sec"] = round(stats["total"] / elapsed, 1)
+        return stats
 
     def stop(self):
         self._stop = True
@@ -183,17 +210,21 @@ class EddnPowerPlayWorker(QObject):
             try:
                 data = json.loads(decompressed)
             except Exception:
+                self._stats["invalid"] += 1
                 continue
 
             schema = data.get("$schemaRef") or ""
+            self._stats["total"] += 1
 
             if schema.startswith(_COMMODITY_SCHEMA_PREFIX):
+                self._stats["commodity"] += 1
                 msg = data.get("message")
                 if isinstance(msg, dict) and isinstance(msg.get("commodities"), list):
                     self.commodity_seen.emit(msg)
                 continue
 
             if schema.startswith(_FCMATERIALS_SCHEMA_PREFIX):
+                self._stats["fcmaterials"] += 1
                 msg = data.get("message")
                 if (isinstance(msg, dict) and isinstance(msg.get("MarketID"), int)
                         and isinstance(msg.get("Items"), list)):
@@ -201,13 +232,32 @@ class EddnPowerPlayWorker(QObject):
                 continue
 
             if schema.startswith(_FSSSIGNALS_SCHEMA_PREFIX):
+                self._stats["fsssignaldiscovered"] += 1
                 msg = data.get("message")
                 if isinstance(msg, dict):
                     self._maybe_emit_res_signal(msg)
                 continue
 
-            if not schema.startswith(_JOURNAL_SCHEMA_PREFIX):
+            if schema.startswith(_OUTFITTING_SCHEMA_PREFIX):
+                self._stats["outfitting"] += 1
+                msg = data.get("message")
+                if (isinstance(msg, dict) and isinstance(msg.get("marketId"), int)
+                        and isinstance(msg.get("modules"), list)):
+                    self.outfitting_seen.emit(msg)
                 continue
+
+            if schema.startswith(_SHIPYARD_SCHEMA_PREFIX):
+                self._stats["shipyard"] += 1
+                msg = data.get("message")
+                if (isinstance(msg, dict) and isinstance(msg.get("marketId"), int)
+                        and isinstance(msg.get("ships"), list)):
+                    self.shipyard_seen.emit(msg)
+                continue
+
+            if not schema.startswith(_JOURNAL_SCHEMA_PREFIX):
+                self._stats["other"] += 1
+                continue
+            self._stats["journal"] += 1
 
             msg = data.get("message")
             if not isinstance(msg, dict) or msg.get("event") not in _RELEVANT_EVENTS:
