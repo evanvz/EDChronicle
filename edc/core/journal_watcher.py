@@ -118,8 +118,6 @@ class JournalWatcher(QObject):
                     evt = json.loads(line)
                     if isinstance(evt, dict):
                         events.append(evt)
-                        if len(events) >= max_events:
-                            break
                 except Exception:
                     # Don't spam UI errors during bootstrap
                     log.exception("Bad JSON during bootstrap")
@@ -127,6 +125,16 @@ class JournalWatcher(QObject):
 
             if not events:
                 return
+
+            # Trim to the newest max_events. The cap bounds how much state
+            # catch-up gets replayed — but note it is applied AFTER reading
+            # the whole window above: breaking the read early (as this once
+            # did) leaves the file pointer mid-file, so the run loop's
+            # readline() would then deliver the remaining HISTORICAL lines
+            # as live events — with full TTS call-outs — while the game is
+            # not even running. Reading to EOF keeps the pointer at the
+            # true end of the file, so nothing old can leak into the tail.
+            events = events[-max_events:]
 
             # Find last system anchor in this chunk
             anchor = 0

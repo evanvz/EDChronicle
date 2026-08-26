@@ -1849,14 +1849,10 @@ class MainWindow(QMainWindow):
         if bool(getattr(self.cfg, "voice_commands_enabled", False)):
             self._start_voice_commands()
 
-        # Elite Dangerous writes a Shutdown journal event on clean exit —
-        # treated as "the app can probably close too", but delayed rather
-        # than immediate: the app is normally launched before the game (so
-        # "game not running yet" is a completely normal state, not a signal
-        # to close), and a quick game relaunch shouldn't kill the app out
-        # from under the user. Any further live event cancels the countdown.
-        self._APP_SHUTDOWN_DELAY_S = 20
-        self._shutdown_countdown_timer: QTimer | None = None
+        # Elite Dangerous writes a Shutdown journal event on clean exit.
+        # The app intentionally stays open afterwards (the user may still
+        # want it for reviewing data or improvements) — all TTS channels
+        # are silenced instead; see _on_journal_shutdown.
 
         # Populate voice combo now that TTS engine is ready
         self._populate_voice_combo()
@@ -2575,11 +2571,7 @@ class MainWindow(QMainWindow):
             return
 
         if name == "Shutdown":
-            self._start_app_shutdown_countdown()
-        elif self._shutdown_countdown_timer is not None:
-            # Any other live event means the game is active again — the
-            # earlier Shutdown wasn't the end of the session after all.
-            self._cancel_app_shutdown_countdown()
+            self._on_journal_shutdown()
 
         tts_text = self._tts_router(name, evt, self.state)
 
@@ -3339,34 +3331,22 @@ class MainWindow(QMainWindow):
         self._online_announced = True
         self.tts.speak("All systems online.", priority=5, volume_scale=self._feedback_tts_scale())
 
-    def _start_app_shutdown_countdown(self):
-        if self._shutdown_countdown_timer is not None:
-            return  # already counting down
-        log.info(
-            "Elite Dangerous closed — app will follow in %ds unless it restarts",
-            self._APP_SHUTDOWN_DELAY_S,
-        )
-        self._shutdown_countdown_timer = QTimer(self)
-        self._shutdown_countdown_timer.setSingleShot(True)
-        self._shutdown_countdown_timer.timeout.connect(self._say_goodbye_and_close)
-        self._shutdown_countdown_timer.start(self._APP_SHUTDOWN_DELAY_S * 1000)
-
-    def _cancel_app_shutdown_countdown(self):
-        if self._shutdown_countdown_timer is None:
-            return
-        log.info("Elite Dangerous appears active again — cancelling app shutdown countdown")
-        self._shutdown_countdown_timer.stop()
-        self._shutdown_countdown_timer = None
-
-    def _say_goodbye_and_close(self):
-        self._shutdown_countdown_timer = None
-        self.tts.speak(
-            "Elite Dangerous has closed. Goodbye, Commander — fly safe.",
-            priority=5, volume_scale=self._feedback_tts_scale(),
-        )
-        # Give the phrase time to actually play before the app (and its
-        # audio device) tears down.
-        QTimer.singleShot(6000, self.close)
+    def _on_journal_shutdown(self):
+        """Game closed cleanly (journal Shutdown event). The app stays
+        open — the user may still want it for reviewing data or making
+        improvements. All speech stops immediately and completely
+        silently: drain + interrupt the main Commander Assist channel
+        (clear()) and the NPC comms channel (stop_comms()). No spoken
+        notice — game shutdown should be inaudible."""
+        log.info("Elite Dangerous closed — app staying open; silencing all TTS")
+        try:
+            self.tts.clear()
+        except Exception:
+            log.exception("Failed to clear main TTS channel on game shutdown")
+        try:
+            self.tts.stop_comms()
+        except Exception:
+            log.exception("Failed to stop comms TTS channel on game shutdown")
 
     def _on_voice_trigger_heard(self):
         """Trigger word heard. No audio cue — removed per user request: the
