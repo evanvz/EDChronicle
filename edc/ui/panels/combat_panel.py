@@ -27,8 +27,9 @@ class CombatPanel(QWidget):
     main_window, repo, or any other panel.
     """
 
-    def __init__(self, repo, parent=None):
+    def __init__(self, repo, ship_names=None, parent=None):
         super().__init__(parent)
+        self._ship_names = ship_names
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -408,6 +409,11 @@ class CombatPanel(QWidget):
 
                 rank       = rec.get("Rank") or ""
                 ship       = rec.get("Ship") or ""
+                # ShipTargeted normally localises the ship, but the raw
+                # internal symbol ('krait_mkii') leaks through when the
+                # journal omits Ship_Localised — prettify on display.
+                if self._ship_names is not None and ship:
+                    ship = self._ship_names.display_name(ship) or ship
                 faction    = rec.get("Faction") or ""
                 power      = rec.get("Power") or ""
                 wanted_f   = bool(rec.get("Wanted"))

@@ -1596,7 +1596,7 @@ class MainWindow(QMainWindow):
         self.squadron_panel.eligibility_check_requested.connect(self._on_check_colonisation_eligibility_clicked)
 
         # Combat tab (stub)
-        self.combat_panel = CombatPanel(self.repo)
+        self.combat_panel = CombatPanel(self.repo, ship_names=self.ship_names)
 
         # Intel tab (external / advisory)
         self.intel_panel = IntelPanel(self.repo)
@@ -3824,7 +3824,11 @@ class MainWindow(QMainWindow):
         ):
             parts.append(f"CMDR {self.state.commander or '?'}")
         if self.state.ship:
-            parts.append(f"Ship: {self.state.ship}")
+            # state.ship stores the internal symbol ('krait_mkii') — the
+            # journal's Commander/LoadGame events never localise it. Pretty
+            # display via the FDevIDs ship table; raw symbol as fallback.
+            ship_display = self.ship_names.display_name(self.state.ship) or self.state.ship
+            parts.append(f"Ship: {ship_display}")
         if self.state.credits is not None:
             parts.append(f"Credits: {fmt.credits(self.state.credits, default='?')}")
         if self.state.system:
