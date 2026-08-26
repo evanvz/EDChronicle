@@ -343,6 +343,20 @@ class OverviewPanel(QWidget):
 
         layout.addWidget(self.system_card)
 
+        # ── NEXT UP: prioritized "do this next" distillation ──────────────
+        # One card that answers "what should I do next?" from existing
+        # state — no new data, just surfacing. Hidden when there's nothing
+        # actionable, so a fully clean commander sees nothing here.
+        self.next_up = QLabel("")
+        self.next_up.setTextFormat(Qt.TextFormat.RichText)
+        self.next_up.setWordWrap(True)
+        self.next_up.setVisible(False)
+        self.next_up.setStyleSheet(
+            "QLabel { background: #1a1206; border: 1px solid #5a4210;"
+            "border-radius: 6px; padding: 8px 10px; color: #E6C96B; }"
+        )
+        layout.addWidget(self.next_up)
+
         # ── Pinned Market destination (persists until Docked there) ────────
         self.pinned_destination_badge = QLabel("")
         self.pinned_destination_badge.setTextFormat(Qt.TextFormat.RichText)
@@ -643,6 +657,104 @@ class OverviewPanel(QWidget):
         self._refresh_squadron_faction_badge(state)
         self._refresh_rank_badge(state)
         self._refresh_trade_profit_badge(state)
+        self._refresh_next_up(state)
+
+    def _refresh_next_up(self, state):
+        """Distill existing state into a prioritized 'do this next' list.
+        Priority: legal trouble > money on the table > unfinished work.
+        Deliberately opinionated but never noisy — only lines a commander
+        can act on, and the whole card hides when there's nothing to say.
+        """
+        import time as _time
+
+        items = []  # (priority, html)
+
+        # ── Legal trouble first ──
+        bounties = getattr(state, "active_bounties", None) or {}
+        if bounties:
+            total = sum(bounties.values())
+            # Dormancy countdown for the freshest outstanding bounty
+            last = getattr(state, "bounty_last_commit", None) or {}
+            dormant_note = ""
+            for faction, amount in bounties.items():
+                ts = last.get(faction) or ""
+                if ts:
+                    try:
+                        age_days = (_time.time() - _time.mktime(
+                            _time.strptime(ts, "%Y-%m-%dT%H:%M:%SZ"))) / 86400.0
+                        if age_days >= 7:
+                            dormant_note = f" — <b>DORMANT</b>: only payable at a station this faction controls"
+                            break
+                        days_left = max(1, 7 - int(age_days))
+                        dormant_note = f" — goes dormant in {days_left}d"
+                        break
+                    except ValueError:
+                        pass
+            items.append((
+                0,
+                f"⚖️ <b>Pay off bounty:</b> {total:,} Cr outstanding{dormant_note}. "
+                f"Notoriety-clean commanders can pay at any Interstellar Factors contact (+25% fee)."
+            ))
+
+        notoriety = getattr(state, "notoriety", None)
+        pending = getattr(state, "notoriety_est_pending_murders", 0) or 0
+        est = pending if notoriety is None else notoriety + pending
+        if est > 0:
+            items.append((
+                0,
+                f"🔥 <b>Notoriety {est}:</b> blocks bounty/fine payments at Interstellar Factors "
+                f"until it decays (~2h play per point). Open the in-game Statistics panel for an exact reading."
+            ))
+
+        fines = getattr(state, "active_fines", None) or {}
+        if fines:
+            total = sum(fines.values())
+            items.append((
+                1,
+                f"⚖️ <b>Pay fines:</b> {total:,} Cr — at any station the issuing faction controls (no fee, no danger)."
+            ))
+
+        # ── Money on the table ──
+        combat_unsold = int(getattr(state, "combat_unsold_total", 0) or 0)
+        expl_unsold = int(getattr(state, "exploration_unsold_total_est", 0) or 0)
+        exo_unsold = int(getattr(state, "exobiology_unsold_total_est", 0) or 0)
+        money = []
+        if combat_unsold >= 100_000:
+            money.append(f"{combat_unsold:,} Cr combat bonds")
+        if expl_unsold >= 100_000:
+            money.append(f"{expl_unsold:,} Cr exploration data")
+        if exo_unsold >= 100_000:
+            money.append(f"{exo_unsold:,} Cr exobio data")
+        if money:
+            items.append((
+                2,
+                "💰 <b>Sell your data:</b> " + ", ".join(money) + " — redeem at any station contact."
+            ))
+
+        # ── Unfinished work ──
+        exo_hv = getattr(state, "exo", None) or {}
+        incomplete = sum(
+            1 for rec in exo_hv.values()
+            if isinstance(rec, dict) and int(rec.get("Samples") or 0) < 3
+        )
+        if incomplete:
+            items.append((
+                3,
+                f"🧬 <b>{incomplete} exobio sample{'s' if incomplete != 1 else ''} incomplete</b> "
+                f"(< 3 of 3) — finish before selling."
+            ))
+
+        if not items:
+            self.next_up.setVisible(False)
+            return
+
+        items.sort(key=lambda t: t[0])
+        # Keep it scannable: max 4 lines
+        lines = [html for _p, html in items[:4]]
+        self.next_up.setText(
+            "<b>⚡ NEXT UP</b><br>" + "<br>".join(lines)
+        )
+        self.next_up.setVisible(True)
 
     def _refresh_rank_badge(self, state):
         ranks = getattr(state, "ranks", None) or {}
