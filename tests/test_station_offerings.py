@@ -61,12 +61,13 @@ def test_outfitting_roundtrip(tmp_path):
     repo.save_station_module_listings(3700448576, "Abraham Lincoln", "Sol",
                                       ["hpt_pulselaser_fixed_small", "int_shieldgenerator_size3_class3"],
                                       "2026-08-26T19:00:00Z")
-    rows = repo.find_stations_selling_module("hpt_pulselaser_fixed_small", 0.0, 0.0, 0.0)
+    rows = repo.find_stations_selling_module("pulselaser", 0.0, 0.0, 0.0)
     assert len(rows) == 1
     r = rows[0]
     assert r["station_name"] == "Abraham Lincoln"
     assert r["system_name"] == "Sol"
     assert r["market_id"] == 3700448576
+    assert r["module_name"] == "hpt_pulselaser_fixed_small"
 
 
 def test_outfitting_snapshot_replaces(tmp_path):
@@ -83,9 +84,15 @@ def test_shipyard_roundtrip(tmp_path):
     repo = _repo(tmp_path)
     repo.save_system_coords_batch([("SysA", 0.0, 0.0, 0.0, "2026-08-26T19:00:00Z")])
     repo.save_station_ship_listings(1, "A", "SysA", ["sidewinder", "krait_mkii"], "2026-08-26T19:00:00Z")
-    rows = repo.find_stations_selling_ship("krait_mkii", 0, 0, 0)
+    rows = repo.find_stations_selling_ship("krait", 0, 0, 0)
     assert len(rows) == 1
     assert rows[0]["station_name"] == "A"
+    assert rows[0]["ship_type"] == "krait_mkii"
+    # radius filter: a distant second seller is excluded
+    repo.save_system_coords_batch([("FarSys", 500.0, 0.0, 0.0, "2026-08-26T19:00:00Z")])
+    repo.save_station_ship_listings(2, "B", "FarSys", ["krait_mkii"], "2026-08-26T19:00:00Z")
+    near = repo.find_stations_selling_ship("krait", 0, 0, 0, radius_ly=100)
+    assert [r["station_name"] for r in near] == ["A"]
 
 
 def test_pruner_removes_stale_module_rows(tmp_path):

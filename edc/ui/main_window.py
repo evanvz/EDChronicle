@@ -107,7 +107,6 @@ from typing import Any, Dict, List, Optional
 from persistence.database import Database
 from persistence.schema import SCHEMA_SQL
 from persistence.repository import Repository
-from persistence.repository import _market_data_cutoff
 
 from edc.core.session_ledger import SessionLedger
 from edc.core.engineer_progress_store import EngineerProgressStore
@@ -208,23 +207,9 @@ class _MarketPruneWorker(QObject):
                 log.exception("System RES sites prune failed")
             deleted_offerings = 0
             try:
-                for table in ("station_modules", "station_ships"):
-                    cutoff = _market_data_cutoff()
-                    cur = db.conn.cursor()
-                    n = 0
-                    while True:
-                        cur.execute(
-                            f"DELETE FROM {table} WHERE rowid IN "
-                            f"(SELECT rowid FROM {table} WHERE last_seen < ? LIMIT ?)",
-                            (cutoff, 20_000),
-                        )
-                        n += cur.rowcount
-                        db.conn.commit()
-                        if cur.rowcount < 20_000:
-                            break
-                    deleted_offerings += n
-                    if n:
-                        log.info("Pruned %d stale %s rows", n, table)
+                deleted_offerings = repo.prune_stale_station_offerings()
+                if deleted_offerings:
+                    log.info("Pruned %d stale station_modules/station_ships rows", deleted_offerings)
             except Exception:
                 log.exception("Station offerings prune failed")
         finally:

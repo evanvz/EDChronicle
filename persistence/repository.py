@@ -1733,17 +1733,20 @@ class Repository:
             raise
 
     def _find_stations_selling(self, table: str, column: str, value: str,
-                               x: float, y: float, z: float) -> list[dict]:
+                               x: float, y: float, z: float,
+                               radius_ly: float | None = None) -> list[dict]:
         rows = self.db.conn.execute(
             f"""
-            SELECT t.market_id, t.station_name, t.system_name, t.last_seen,
-                   c.x, c.y, c.z
+            SELECT t.market_id, t.station_name, t.system_name, t.{column}, t.last_seen,
+                   c.x, c.y, c.z,
+                   si.station_type, si.pads_small, si.pads_medium, si.pads_large
             FROM {table} t
             JOIN system_coords c ON c.system_name = t.system_name
-            WHERE t.{column} = ?
+            LEFT JOIN station_info si ON si.market_id = t.market_id
+            WHERE t.{column} LIKE ?
               AND t.last_seen >= ?
             """,
-            (value, _market_data_cutoff()),
+            (f"%{value}%", _market_data_cutoff()),
         ).fetchall()
         results = []
         for r in rows:
@@ -1751,18 +1754,27 @@ class Repository:
             if rx is None or ry is None or rz is None:
                 continue
             rec = dict(r)
-            rec["distance_ly"] = ((rx - x) ** 2 + (ry - y) ** 2 + (rz - z) ** 2) ** 0.5
+            dist = ((rx - x) ** 2 + (ry - y) ** 2 + (rz - z) ** 2) ** 0.5
+            if radius_ly is not None and dist > radius_ly:
+                continue
+            rec["distance_ly"] = dist
+            rec["pad_size"] = effective_pad_size(
+                rec.get("station_type"), rec.get("pads_small"),
+                rec.get("pads_medium"), rec.get("pads_large"),
+            )
             results.append(rec)
         results.sort(key=lambda r: r["distance_ly"])
         return results
 
     def find_stations_selling_module(self, module_name: str,
-                                     x: float, y: float, z: float) -> list[dict]:
-        return self._find_stations_selling("station_modules", "module_name", module_name, x, y, z)
+                                     x: float, y: float, z: float,
+                                     radius_ly: float | None = None) -> list[dict]:
+        return self._find_stations_selling("station_modules", "module_name", module_name, x, y, z, radius_ly)
 
     def find_stations_selling_ship(self, ship_type: str,
-                                   x: float, y: float, z: float) -> list[dict]:
-        return self._find_stations_selling("station_ships", "ship_type", ship_type, x, y, z)
+                                   x: float, y: float, z: float,
+                                   radius_ly: float | None = None) -> list[dict]:
+        return self._find_stations_selling("station_ships", "ship_type", ship_type, x, y, z, radius_ly)
 
     def prune_stale_station_offerings(self, batch_size: int = 20_000) -> int:
         """Same reasoning as prune_stale_market_prices(): station offerings
