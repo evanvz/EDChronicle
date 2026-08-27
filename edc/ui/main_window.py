@@ -316,12 +316,21 @@ class _EddnFlushWorker(QObject):
     """
     Writes a snapshot of EddnMarketCache's buffered EDDN data (popped by
     the main thread via pop_buffers(), which is cheap) plus a WAL
-    checkpoint — both used to run directly on the main thread every 45s
-    via QTimer, freezing the UI for however long the batch write took.
-    Confirmed live: noticeably worse right after docking at a busy
-    station's market, since that's exactly when buffered commodity/
-    station/faction data peaks. Opens its own connection per the
-    project's cross-thread SQLite rule.
+    checkpoint. Moving the write itself off the main thread (this class)
+    only fixed half the freeze: PRAGMA wal_checkpoint(TRUNCATE) needs to
+    briefly hold the database's write lock against every OTHER connection
+    to truncate the WAL file to zero bytes, no matter which thread/
+    connection issues it -- so the main thread's own connection (writing
+    live journal data continuously during play) blocked on that lock,
+    silently retrying for however long busy_timeout allows (see
+    database.py). Confirmed live 2026-08-27: a multi-second freeze that
+    lines up exactly with the periodic flush, followed by a visible jump
+    in the .db file's on-disk size (the WAL merge). PASSIVE checkpoints
+    opportunistically and never blocks another connection -- it just
+    doesn't force the WAL back to zero bytes as aggressively, which
+    doesn't matter here since sqlite3's default wal_autocheckpoint
+    already checkpoints incrementally as writes happen.
+    Opens its own connection per the project's cross-thread SQLite rule.
     """
     finished = pyqtSignal()
 
@@ -346,7 +355,14 @@ class _EddnFlushWorker(QObject):
                 self._codex, self._fcmaterials, self._carrier_access,
                 self._bgs_status, self._res_sites, self._outfitting, self._shipyard,
             )
-            db.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            # Diagnostic timing -- confirms/refutes the checkpoint-blocking
+            # hypothesis above. Temporary: remove once the freeze reported
+            # 2026-08-27 is confirmed fixed.
+            _t0 = time.perf_counter()
+            db.conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
+            _elapsed_ms = (time.perf_counter() - _t0) * 1000
+            if _elapsed_ms > 100:
+                log.warning("wal_checkpoint(PASSIVE) took %.0fms", _elapsed_ms)
         except Exception:
             log.exception("Background EDDN flush failed")
         finally:
@@ -1327,7 +1343,7 @@ class MainWindow(QMainWindow):
         self._eddn_thread: QThread | None = None
         self._eddn_save_timer = QTimer(self)
         self._eddn_save_timer.setInterval(2 * 60 * 1000)  # persist periodically, not on every sighting
-        self._eddn_save_timer.timeout.connect(self.eddn_powerplay.save)
+        self._eddn_save_timer.timeout.connect(self._timed_eddn_powerplay_save)
         # Ride the same 2-min cadence to log listener diagnostics — cheap
         # (get_stats is a dict copy) and turns "data seems stale" reports
         # into a five-minute diagnosis instead of a guessing game.
@@ -2185,6 +2201,12 @@ class MainWindow(QMainWindow):
         if current_address != system_address or not bodies:
             log.info("Spansh enrichment discarded: addr mismatch or empty")
             return
+        # Diagnostic timing -- per-body save_spansh_body() + the state
+        # merge/card rebuild below all run synchronously on the main
+        # thread for however many bodies Spansh returned (some systems
+        # have hundreds). Temporary: remove once the freeze reported
+        # 2026-08-27 is diagnosed.
+        _t0 = time.perf_counter()
         saved = 0
         for b in bodies:
             self.repo.save_spansh_body(
@@ -2206,7 +2228,9 @@ class MainWindow(QMainWindow):
                 updated_at=b.get("updated_at"),
             )
             saved += 1
-        log.info("Spansh enrichment saved %d/%d bodies for address %d", saved, len(bodies), system_address)
+        _elapsed_ms = (time.perf_counter() - _t0) * 1000
+        log.info("Spansh enrichment saved %d/%d bodies for address %d (%.0fms)",
+                 saved, len(bodies), system_address, _elapsed_ms)
         self.system_data_loader.merge_new_spansh_bodies(system_address)
 
     def _maybe_start_ring_hotspot_check(self):
@@ -2364,6 +2388,22 @@ class MainWindow(QMainWindow):
         self._stop_eddn_listener()
         self._stop_background_threads(self)
         super().closeEvent(event)
+
+    def _timed_eddn_powerplay_save(self) -> None:
+        """Diagnostic wrapper around eddn_powerplay.save() -- runs
+        synchronously on the main thread (json.dumps + write_text of a
+        cache that only grows across the app's lifetime, currently
+        12k+ systems / ~1.3MB), on the same QTimer.timeout as
+        _log_eddn_listener_stats. Temporary: remove once the freeze
+        reported 2026-08-27 is diagnosed."""
+        _t0 = time.perf_counter()
+        self.eddn_powerplay.save()
+        _elapsed_ms = (time.perf_counter() - _t0) * 1000
+        if _elapsed_ms > 50:
+            log.warning(
+                "eddn_powerplay.save() took %.0fms (%d systems tracked)",
+                _elapsed_ms, self.eddn_powerplay.system_count(),
+            )
 
     def _log_eddn_listener_stats(self) -> None:
         """Diagnostics snapshot of the EDDN listener — see the timer hookup
@@ -4594,9 +4634,20 @@ class MainWindow(QMainWindow):
         spansh_rings = self._spansh_rings_by_system.get(
             getattr(self.state, "system_address", None)
         ) or []
+        # Diagnostic timing -- rebuilding a QFrame card per body runs on the
+        # UI thread, and a system with a large Spansh-backfilled body count
+        # is a plausible source of a felt "short freeze" on arrival/enrichment.
+        # Temporary: remove once the freeze reported 2026-08-27 is diagnosed.
+        _t0 = time.perf_counter()
         self.exploration_panel.refresh(
             self.state, self.cfg, self.planet_values, spansh_rings=spansh_rings
         )
+        _elapsed_ms = (time.perf_counter() - _t0) * 1000
+        if _elapsed_ms > 100:
+            log.warning(
+                "_refresh_exploration took %.0fms for %d bodies",
+                _elapsed_ms, len(self.state.bodies),
+            )
 
     def _refresh_materials_shortlist(self):
         self.exploration_panel._refresh_materials_shortlist(self.state)
