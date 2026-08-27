@@ -295,6 +295,8 @@ class Database:
                 data_timestamp TEXT,
                 source         TEXT
             )""",
+            "ALTER TABLE spansh_bodies ADD COLUMN was_mapped INTEGER",
+            "ALTER TABLE spansh_bodies ADD COLUMN updated_at TEXT",
         ]
         for sql in migrations:
             try:

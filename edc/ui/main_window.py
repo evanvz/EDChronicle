@@ -2202,6 +2202,8 @@ class MainWindow(QMainWindow):
                 atmosphere_type=b.get("atmosphere_type"),
                 volcanism=b.get("volcanism"),
                 tidal_lock=b.get("tidal_lock"),
+                was_mapped=b.get("was_mapped"),
+                updated_at=b.get("updated_at"),
             )
             saved += 1
         log.info("Spansh enrichment saved %d/%d bodies for address %d", saved, len(bodies), system_address)
