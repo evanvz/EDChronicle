@@ -1446,7 +1446,7 @@ class _StationOfferingsDialog(QDialog):
         self._table = QTableWidget()
         self._table.setColumnCount(6)
         self._table.setHorizontalHeaderLabels(
-            ["" if offering == "module" else "Ship", "Station", "Pad", "System", "Dist (ly)", "Updated"]
+            ["Module" if offering == "module" else "Ship", "Station", "Pad", "System", "Dist (ly)", "Updated"]
         )
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)

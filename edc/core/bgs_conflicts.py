@@ -1,6 +1,8 @@
-"""Shared BGS War/CivilWar conflict lookups — used by both the live
-ShipTargeted alert (event_engine.py) and the Combat Contacts table
-(combat_panel.py) so the two don't drift out of sync.
+"""Shared BGS War/CivilWar conflict lookups and other small journal-event
+parsing helpers with no single natural owner — used across event_engine.py
+and its handler modules (edc/engine/handlers/*) so they don't drift out of
+sync with each other. Kept dependency-free of both to avoid circular
+imports (event_engine.py imports the handler modules directly).
 """
 from __future__ import annotations
 
@@ -55,3 +57,24 @@ def find_squadron_war_enemy(factions: List[dict], system_conflicts: List[dict]) 
         if squadron_faction == f2_name:
             return f1_name
     return None
+
+
+def parse_powerplay_conflict_progress(event: Dict[str, Any]) -> Dict[str, float]:
+    """
+    Journal emits PowerplayConflictProgress as a list of
+    {Power, ConflictProgress} records — parses into a {power_name: pct}
+    dict. Previously duplicated three times (event_engine.py's Location
+    and FSDJump branches, plus edc/engine/handlers/exploration.py's own
+    FSDJump handling of the same event) with inconsistent overwrite
+    semantics between copies — always call this and assign its result
+    unconditionally (even when empty), rather than only overwriting when
+    truthy, so leaving a contested system correctly clears stale progress
+    instead of leaving the previous system's numbers on screen.
+    """
+    prog: Dict[str, float] = {}
+    for rec in (event.get("PowerplayConflictProgress") or []):
+        if isinstance(rec, dict) and isinstance(rec.get("Power"), str):
+            cp = rec.get("ConflictProgress")
+            if isinstance(cp, (int, float)):
+                prog[rec["Power"]] = float(cp)
+    return prog

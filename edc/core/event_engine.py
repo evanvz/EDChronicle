@@ -10,7 +10,7 @@ from .external_intel import ExternalIntel
 from edc.engine.handlers import exploration, exobio, inventory, powerplay, misc, fleet_carrier, mining, engineers
 from edc.core.squadron_events import SQUADRON_EVENT_NAMES, apply_squadron_event
 from edc.core.mission_events import MISSION_EVENT_NAMES, apply_mission_event
-from edc.core.bgs_conflicts import find_squadron_war_enemy, squadron_faction_name
+from edc.core.bgs_conflicts import find_squadron_war_enemy, squadron_faction_name, parse_powerplay_conflict_progress
 from edc.core.res_signals import res_tier_from_signal_name
 from edc.core.ship_loadout import has_any_weapon
 from edc.core.ring_signals import RING_NAME_RE as _RING_NAME_RE, parse_ring_hotspots
@@ -510,13 +510,7 @@ class EventEngine:
 
             # Force PowerPlay UI refresh after Location update
             msgs.append("refresh_powerplay")
-            prog = {}
-            for rec in (event.get("PowerplayConflictProgress") or []):
-                if isinstance(rec, dict) and isinstance(rec.get("Power"), str):
-                    cp = rec.get("ConflictProgress")
-                    if isinstance(cp, (int, float)):
-                        prog[rec["Power"]] = float(cp)
-            self.state.system_powerplay_conflict_progress = prog
+            self.state.system_powerplay_conflict_progress = parse_powerplay_conflict_progress(event)
             self._apply_external_intel(self.state.system, event.get("SystemAddress"))
             if self.state.system:
                 msgs.append(f"Location: {self.state.system}")
@@ -564,13 +558,7 @@ class EventEngine:
             pw = event.get("Powers")
             self.state.system_powers = [p for p in pw if isinstance(p, str)] if isinstance(pw, list) else []
 
-            prog = {}
-            for rec in (event.get("PowerplayConflictProgress") or []):
-                if isinstance(rec, dict) and isinstance(rec.get("Power"), str):
-                    cpct = rec.get("ConflictProgress")
-                    if isinstance(cpct, (int, float)):
-                        prog[rec["Power"]] = float(cpct)
-            self.state.system_powerplay_conflict_progress = prog
+            self.state.system_powerplay_conflict_progress = parse_powerplay_conflict_progress(event)
 
             cf = event.get("SystemFaction", {}) or {}
             self.state.controlling_faction = cf.get("Name")

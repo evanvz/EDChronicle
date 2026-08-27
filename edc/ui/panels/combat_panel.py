@@ -1,5 +1,4 @@
 import logging
-import time
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -564,21 +563,14 @@ class CombatPanel(QWidget):
         self.bounty_card.setVisible(True)
         last_commit = getattr(state, "bounty_last_commit", None) or {}
         parts = []
-        now = time.time()
         for faction, amount in active.items():
             part = f"{faction}: {amount:,} Cr"
-            ts = last_commit.get(faction) or ""
-            if ts:
-                try:
-                    # Journal timestamps are ISO-8601 UTC ("2026-08-23T18:01:51Z")
-                    age_days = (now - time.mktime(time.strptime(ts, "%Y-%m-%dT%H:%M:%SZ"))) / 86400.0
-                except ValueError:
-                    age_days = None
-                if age_days is not None:
-                    if age_days >= 7:
-                        part += f" — DORMANT ({age_days:.0f}d old: hidden from scans, only payable at a station this faction controls)"
-                    else:
-                        part += f" ({6 - int(age_days)}d until dormant)"
+            age_days = fmt.bounty_age_days(last_commit.get(faction) or "")
+            if age_days is not None:
+                if age_days >= 7:
+                    part += f" — DORMANT ({age_days:.0f}d old: hidden from scans, only payable at a station this faction controls)"
+                else:
+                    part += f" ({6 - int(age_days)}d until dormant)"
             parts.append(part)
         self.bounty_summary.setText("Outstanding: " + "  |  ".join(parts))
 

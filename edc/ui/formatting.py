@@ -30,6 +30,29 @@ def relative_time(iso_str: str) -> Tuple[str, float]:
         return iso_str, float("inf")
 
 
+def bounty_age_days(commit_ts: str) -> Optional[float]:
+    """Age in days since a bounty/fine's CommitCrime timestamp (ISO-8601
+    UTC, e.g. "2026-08-23T18:01:51Z") — used for the 7-day dormancy cutoff
+    (a dormant bounty is hidden from scans, only payable at a station the
+    issuing faction controls). Same fromisoformat-based UTC parsing as
+    relative_time() above — NOT time.mktime(time.strptime(...)), which
+    misinterprets a naive struct_time as local time rather than UTC and
+    previously gave every non-UTC commander a skewed dormancy countdown
+    (duplicated identically in two panels before both were pointed here)."""
+    if not commit_ts:
+        return None
+    try:
+        ts = commit_ts.strip()
+        if ts.endswith("Z"):
+            ts = ts[:-1] + "+00:00"
+        dt = datetime.fromisoformat(ts)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return max(0.0, (datetime.now(timezone.utc) - dt).total_seconds()) / 86400.0
+    except (ValueError, TypeError):
+        return None
+
+
 def clean_token(value: Any) -> Any:
     """
     Convert Frontier internal tokens like '$economy_Extraction;' into 'Extraction'.

@@ -156,8 +156,14 @@ class EddnMarketCache:
         market_id = msg.get("marketId")
         if not isinstance(market_id, int):
             return
-        modules = [m.get("ModuleName") for m in (msg.get("modules") or [])
-                   if isinstance(m, dict) and isinstance(m.get("ModuleName"), str) and m.get("ModuleName")]
+        # EDDN's outfitting schema sends "modules" as an array of plain
+        # symbol strings (e.g. "Hpt_ChaffLauncher_Tiny"), not objects --
+        # confirmed against EDCD/EDDN's published schema (items.type is
+        # "string"). A prior isinstance(m, dict) check here meant every
+        # real message hit `if not modules: return` silently, so this
+        # buffer never received any real EDDN traffic despite passing
+        # tests written against the wrong assumed shape.
+        modules = [m for m in (msg.get("modules") or []) if isinstance(m, str) and m]
         if not modules:
             return
         self._outfitting_buffer[market_id] = (
@@ -169,8 +175,9 @@ class EddnMarketCache:
         market_id = msg.get("marketId")
         if not isinstance(market_id, int):
             return
-        ships = [s.get("ShipType") for s in (msg.get("ships") or [])
-                 if isinstance(s, dict) and isinstance(s.get("ShipType"), str) and s.get("ShipType")]
+        # Same fix as on_outfitting_message -- EDDN's shipyard schema also
+        # sends "ships" as plain symbol strings, not objects.
+        ships = [s for s in (msg.get("ships") or []) if isinstance(s, str) and s]
         if not ships:
             return
         self._shipyard_buffer[market_id] = (

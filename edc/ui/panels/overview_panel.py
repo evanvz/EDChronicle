@@ -665,31 +665,30 @@ class OverviewPanel(QWidget):
         Deliberately opinionated but never noisy — only lines a commander
         can act on, and the whole card hides when there's nothing to say.
         """
-        import time as _time
-
         items = []  # (priority, html)
 
         # ── Legal trouble first ──
         bounties = getattr(state, "active_bounties", None) or {}
         if bounties:
             total = sum(bounties.values())
-            # Dormancy countdown for the freshest outstanding bounty
+            # Dormancy countdown for whichever outstanding bounty is
+            # closest to (or already past) dormancy, not just whichever
+            # faction happens to iterate first.
             last = getattr(state, "bounty_last_commit", None) or {}
             dormant_note = ""
+            max_age_days = None
             for faction, amount in bounties.items():
-                ts = last.get(faction) or ""
-                if ts:
-                    try:
-                        age_days = (_time.time() - _time.mktime(
-                            _time.strptime(ts, "%Y-%m-%dT%H:%M:%SZ"))) / 86400.0
-                        if age_days >= 7:
-                            dormant_note = f" — <b>DORMANT</b>: only payable at a station this faction controls"
-                            break
-                        days_left = max(1, 7 - int(age_days))
-                        dormant_note = f" — goes dormant in {days_left}d"
-                        break
-                    except ValueError:
-                        pass
+                age_days = fmt.bounty_age_days(last.get(faction) or "")
+                if age_days is None:
+                    continue
+                if max_age_days is None or age_days > max_age_days:
+                    max_age_days = age_days
+            if max_age_days is not None:
+                if max_age_days >= 7:
+                    dormant_note = f" — <b>DORMANT</b>: only payable at a station this faction controls"
+                else:
+                    days_left = max(1, 7 - int(max_age_days))
+                    dormant_note = f" — goes dormant in {days_left}d"
             items.append((
                 0,
                 f"⚖️ <b>Pay off bounty:</b> {total:,} Cr outstanding{dormant_note}. "
