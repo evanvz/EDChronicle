@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHeaderView,
 )
 
-from edc.ui.style import CARD_STYLE, HDR_STYLE, LABEL_STYLE, set_table_empty_message as _empty
+from edc.ui.style import CARD_STYLE, HDR_STYLE, LABEL_STYLE, set_table_empty_message as _empty, set_table_rows as _rows
 
 
 class FleetCarrierPanel(QWidget):
@@ -253,7 +253,7 @@ class FleetCarrierPanel(QWidget):
         if not rows:
             _empty(self._orders_table, "No active buy/sell orders set on this carrier.")
             return
-        self._orders_table.setRowCount(len(rows))
+        _rows(self._orders_table, len(rows))
         for r, order in enumerate(rows):
             name_item = QTableWidgetItem(order.get("commodity_localised") or order.get("commodity") or "")
             buy_item = QTableWidgetItem(str(order.get("purchase_order")) if order.get("purchase_order") is not None else "—")

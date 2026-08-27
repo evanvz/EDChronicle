@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
 from edc.core.station_pads import pad_size_hint
 from edc.ui import formatting as fmt
 from edc.ui.busy_spinner import BusySpinner
-from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, LABEL_STYLE as _LABEL_STYLE, set_table_empty_message as _empty
+from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, LABEL_STYLE as _LABEL_STYLE, set_table_empty_message as _empty, set_table_rows as _rows
 
 log = logging.getLogger(__name__)
 
@@ -719,7 +719,7 @@ class MarketPanel(QWidget):
 
         self._cargo_hdr.setVisible(True)
         self._cargo_table.setVisible(True)
-        self._cargo_table.setRowCount(len(rows))
+        _rows(self._cargo_table, len(rows))
         for row, (name, qty, dest) in enumerate(rows):
             name_item = QTableWidgetItem(name)
             qty_item = QTableWidgetItem(str(qty))
@@ -848,7 +848,7 @@ class MarketPanel(QWidget):
                 "No profitable destinations found for this cargo within range.",
             )
         else:
-            self._trade_table.setRowCount(len(opportunities))
+            _rows(self._trade_table, len(opportunities))
         for row, o in enumerate(opportunities):
             name_item = QTableWidgetItem(o["name"])
             buy_item = _NumericTableWidgetItem(f"{o['buy_price']:,}", float(o["buy_price"]))
@@ -1137,7 +1137,7 @@ class MarketPanel(QWidget):
                 "commodity spelling.",
             )
         else:
-            self._table.setRowCount(len(results))
+            _rows(self._table, len(results))
         for row, r in enumerate(results):
             station_item = QTableWidgetItem(r.get("station_name") or "—")
             pad_item = QTableWidgetItem(r.get("pad_size") or pad_size_hint(r.get("station_type")))
@@ -1269,7 +1269,7 @@ class _RareGoodsDialog(QDialog):
         self._status_label.setText(f"{len(rows)} of {len(self._all_rows)} known rare goods.")
 
         self._table.setSortingEnabled(False)
-        self._table.setRowCount(len(rows))
+        _rows(self._table, len(rows))
         for row, r in enumerate(rows):
             name_item = QTableWidgetItem(r.get("rare_name") or "—")
             station_item = QTableWidgetItem(r.get("station_name") or "—")
@@ -1368,7 +1368,7 @@ class _StationServiceDialog(QDialog):
         self._status_label.setText(f"{len(rows)} known station{'s' if len(rows) != 1 else ''}.")
 
         self._table.setSortingEnabled(False)
-        self._table.setRowCount(len(rows))
+        _rows(self._table, len(rows))
         for row, r in enumerate(rows):
             station_item = QTableWidgetItem(r.get("station_name") or "—")
             pad_item = QTableWidgetItem(r.get("pad_size") or pad_size_hint(r.get("station_type")))
@@ -1538,7 +1538,7 @@ class _StationOfferingsDialog(QDialog):
             self._status_label.setText(f"{len(rows)} station{'s' if len(rows) != 1 else ''} within {self._range_spin.value()} ly.")
 
         self._table.setSortingEnabled(False)
-        self._table.setRowCount(len(rows))
+        _rows(self._table, len(rows))
         name_key = "module_name" if self._offering == "module" else "ship_type"
         _names = self._panel._module_names if self._offering == "module" else self._panel._ship_names
         for row, r in enumerate(rows):

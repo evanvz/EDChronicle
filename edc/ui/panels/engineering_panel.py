@@ -33,6 +33,7 @@ from edc.ui.style import (
     DANGER_BUTTON_STYLE as _DANGER_BUTTON_STYLE,
     make_card,
     set_table_empty_message as _empty,
+    set_table_rows as _rows,
 )
 
 log = logging.getLogger(__name__)
@@ -447,7 +448,7 @@ class _ShipEngineeringTab(QWidget):
             self._wl_table.setSortingEnabled(True)
             self._refresh_detail_table()
             return
-        self._wl_table.setRowCount(len(self._wishlist))
+        _rows(self._wl_table, len(self._wishlist))
         for r, entry in enumerate(self._wishlist):
             fdname = entry["fdname"]
             grade = entry["grade"]
@@ -505,7 +506,7 @@ class _ShipEngineeringTab(QWidget):
         rows = sorted(reqs.items(), key=lambda kv: self._blueprints.material_name(kv[0]))
 
         self._detail_table.setSortingEnabled(False)
-        self._detail_table.setRowCount(len(rows))
+        _rows(self._detail_table, len(rows))
         for r, (sym, qty) in enumerate(rows):
             held = self._held_count(sym)
             name_item = QTableWidgetItem(self._blueprints.material_name(sym))
@@ -575,7 +576,7 @@ class _ShipEngineeringTab(QWidget):
         rows.sort(key=lambda r: (r[0] is None, r[0] if r[0] is not None else 0.0))
 
         self._engineer_table.setSortingEnabled(False)
-        self._engineer_table.setRowCount(len(rows))
+        _rows(self._engineer_table, len(rows))
         for r, (dist, eng_name, system_name, status_text, status_color) in enumerate(rows):
             name_item = QTableWidgetItem(eng_name)
             sys_item = QTableWidgetItem(system_name)
@@ -641,7 +642,7 @@ class _ShipEngineeringTab(QWidget):
         rows.sort(key=lambda r: r[1]["distance_ly"])
 
         self._carrier_table.setSortingEnabled(False)
-        self._carrier_table.setRowCount(len(rows))
+        _rows(self._carrier_table, len(rows))
         for r, (mat_name, listing) in enumerate(rows):
             name_item = QTableWidgetItem(listing['carrier_name'])
             mat_item = QTableWidgetItem(mat_name)
@@ -700,7 +701,7 @@ class _ShipEngineeringTab(QWidget):
             _empty(self._trade_table, "No material-trade suggestions — nothing short, or no viable trade found.")
             self._trade_table.setSortingEnabled(True)
             return
-        self._trade_table.setRowCount(len(rows))
+        _rows(self._trade_table, len(rows))
         for r, (sym, sugg) in enumerate(rows):
             need_item = QTableWidgetItem(f"{self._blueprints.material_name(sym)} (short {shortfalls[sym]})")
             cover = "" if sugg["full_cover"] else f" — covers {sugg['missing_covered']}/{shortfalls[sym]}"
@@ -985,7 +986,7 @@ class _OdysseyEngineeringTab(QWidget):
             self._wl_table.setSortingEnabled(True)
             self._refresh_detail_table()
             return
-        self._wl_table.setRowCount(len(self._wishlist))
+        _rows(self._wl_table, len(self._wishlist))
         for r, entry in enumerate(self._wishlist):
             name_item = QTableWidgetItem(self._display_name(entry))
             name_item.setData(Qt.ItemDataRole.UserRole, entry)
@@ -1032,7 +1033,7 @@ class _OdysseyEngineeringTab(QWidget):
         rows = sorted(reqs.items(), key=lambda kv: self._material_name(kv[0]))
 
         self._detail_table.setSortingEnabled(False)
-        self._detail_table.setRowCount(len(rows))
+        _rows(self._detail_table, len(rows))
         for r, (sym, qty) in enumerate(rows):
             held = self._held_count(sym)
             name_item = QTableWidgetItem(self._material_name(sym))
@@ -1107,7 +1108,7 @@ class _OdysseyEngineeringTab(QWidget):
         rows.sort(key=lambda r: (r[0] is None, r[0] if r[0] is not None else 0.0))
 
         self._engineer_table.setSortingEnabled(False)
-        self._engineer_table.setRowCount(len(rows))
+        _rows(self._engineer_table, len(rows))
         for r, (dist, eng_name, system_name) in enumerate(rows):
             dist_item = _NumericTableWidgetItem(
                 f"{dist:.1f}" if dist is not None else "—", dist if dist is not None else float("inf")
@@ -1167,7 +1168,7 @@ class _OdysseyEngineeringTab(QWidget):
         rows.sort(key=lambda r: r[1]["distance_ly"])
 
         self._carrier_table.setSortingEnabled(False)
-        self._carrier_table.setRowCount(len(rows))
+        _rows(self._carrier_table, len(rows))
         for r, (mat_name, listing) in enumerate(rows):
             name_item = QTableWidgetItem(listing['carrier_name'])
             mat_item = QTableWidgetItem(mat_name)

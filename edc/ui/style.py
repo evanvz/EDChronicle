@@ -155,6 +155,7 @@ def set_table_empty_message(table, message: str) -> None:
     from PyQt6.QtCore import Qt
     from PyQt6.QtWidgets import QTableWidgetItem
 
+    table.clearSpans()  # a stale span from a PRIOR call would otherwise merge with this one
     table.setRowCount(1)
     cols = table.columnCount() or 1
     table.setSpan(0, 0, 1, cols)
@@ -166,3 +167,19 @@ def set_table_empty_message(table, message: str) -> None:
     font.setItalic(True)
     item.setFont(font)
     table.setItem(0, 0, item)
+
+
+def set_table_rows(table, row_count: int) -> None:
+    """Sets a table's row count for real data, clearing any leftover span
+    from a prior set_table_empty_message() call first. QTableWidget.
+    setSpan() persists independently of setRowCount()/setItem() -- without
+    this, a table that showed the empty-state placeholder and later got
+    real data would silently keep row 0's columns merged into column 0
+    (confirmed live: a materials-required table's first row showed only
+    its Material column, Held/Required/Source all invisible, because
+    setItem() was populating cells Qt was still rendering as spanned
+    away). Call this instead of table.setRowCount(n) directly whenever
+    populating a table with real rows, if that table ever shows
+    set_table_empty_message() for its no-data state."""
+    table.clearSpans()
+    table.setRowCount(row_count)
