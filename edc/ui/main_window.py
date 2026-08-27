@@ -315,21 +315,11 @@ class _StartupHistoryScanWorker(QObject):
 class _EddnFlushWorker(QObject):
     """
     Writes a snapshot of EddnMarketCache's buffered EDDN data (popped by
-    the main thread via pop_buffers(), which is cheap) plus a WAL
-    checkpoint. Moving the write itself off the main thread (this class)
-    only fixed half the freeze: PRAGMA wal_checkpoint(TRUNCATE) needs to
-    briefly hold the database's write lock against every OTHER connection
-    to truncate the WAL file to zero bytes, no matter which thread/
-    connection issues it -- so the main thread's own connection (writing
-    live journal data continuously during play) blocked on that lock,
-    silently retrying for however long busy_timeout allows (see
-    database.py). Confirmed live 2026-08-27: a multi-second freeze that
-    lines up exactly with the periodic flush, followed by a visible jump
-    in the .db file's on-disk size (the WAL merge). PASSIVE checkpoints
-    opportunistically and never blocks another connection -- it just
-    doesn't force the WAL back to zero bytes as aggressively, which
-    doesn't matter here since sqlite3's default wal_autocheckpoint
-    already checkpoints incrementally as writes happen.
+    the main thread via pop_buffers(), which is cheap). No WAL checkpoint
+    here -- see _WalCheckpointWorker below for why that's now separate
+    and on a much longer cadence. sqlite3's default wal_autocheckpoint
+    still checkpoints incrementally as writes happen, so the WAL doesn't
+    grow unbounded between _WalCheckpointWorker runs.
     Opens its own connection per the project's cross-thread SQLite rule.
     """
     finished = pyqtSignal()
@@ -355,16 +345,56 @@ class _EddnFlushWorker(QObject):
                 self._codex, self._fcmaterials, self._carrier_access,
                 self._bgs_status, self._res_sites, self._outfitting, self._shipyard,
             )
-            # Diagnostic timing -- confirms/refutes the checkpoint-blocking
-            # hypothesis above. Temporary: remove once the freeze reported
-            # 2026-08-27 is confirmed fixed.
-            _t0 = time.perf_counter()
-            db.conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
-            _elapsed_ms = (time.perf_counter() - _t0) * 1000
-            if _elapsed_ms > 100:
-                log.warning("wal_checkpoint(PASSIVE) took %.0fms", _elapsed_ms)
         except Exception:
             log.exception("Background EDDN flush failed")
+        finally:
+            db.close()
+        self.finished.emit()
+
+
+class _WalCheckpointWorker(QObject):
+    """
+    PRAGMA wal_checkpoint(TRUNCATE) on its own connection and its own
+    (much longer) timer, separate from the 45s EDDN flush.
+
+    Both checkpoint modes were tried on the 45s cadence and both lost:
+    TRUNCATE needs a brief exclusive lock against every other connection
+    to the file to fully drain the WAL and truncate it, so it blocked the
+    main thread's own connection (which writes live journal data
+    continuously during play) for however long busy_timeout allowed --
+    confirmed live 2026-08-27 as a multi-second freeze lined up exactly
+    with the flush cadence. Switching to PASSIVE (which never blocks)
+    just traded that for a worse problem: PASSIVE only checkpoints WAL
+    frames older than the oldest active read snapshot across every
+    connection touching the file (main thread, journal watcher, every
+    panel's own search connection), and under this app's continuous
+    concurrent load there's rarely a clean instant where it can make full
+    progress -- confirmed live: WAL grew unbounded (10MB+, still growing)
+    instead of draining, and every read got slower for it.
+
+    Running TRUNCATE far less often (this class, minutes not seconds)
+    keeps the occasional freeze but cuts how often it happens by roughly
+    the ratio of the two intervals -- a stopgap, not a fix for the
+    underlying contention (see the plan to split high-churn EDDN tables
+    into their own DB file, discussed 2026-08-27).
+    """
+    finished = pyqtSignal()
+
+    def __init__(self, db_path):
+        super().__init__()
+        self._db_path = db_path
+
+    def run(self):
+        from persistence.database import Database
+
+        db = Database(self._db_path)
+        try:
+            _t0 = time.perf_counter()
+            db.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            _elapsed_ms = (time.perf_counter() - _t0) * 1000
+            log.info("wal_checkpoint(TRUNCATE) took %.0fms", _elapsed_ms)
+        except Exception:
+            log.exception("Background WAL checkpoint failed")
         finally:
             db.close()
         self.finished.emit()
@@ -1369,6 +1399,14 @@ class MainWindow(QMainWindow):
         self._flush_thread: QThread | None = None
         self._flush_worker: _EddnFlushWorker | None = None
 
+        # WAL checkpoint on its own, much longer cadence -- see
+        # _WalCheckpointWorker for why this is split off the 45s flush.
+        self._wal_checkpoint_timer = QTimer(self)
+        self._wal_checkpoint_timer.setInterval(5 * 60 * 1000)
+        self._wal_checkpoint_timer.timeout.connect(self._on_wal_checkpoint_tick)
+        self._wal_checkpoint_thread: QThread | None = None
+        self._wal_checkpoint_worker: _WalCheckpointWorker | None = None
+
         self._player_faction_refresh_timer = QTimer(self)
         # BGS ticks server-side once a day — this only needs to be frequent
         # enough to eventually surface EDDN-sourced changes to systems the
@@ -1987,6 +2025,7 @@ class MainWindow(QMainWindow):
         self._eddn_thread.start()
         self._eddn_save_timer.start()
         self._market_flush_timer.start()
+        self._wal_checkpoint_timer.start()
         log.info("EDDN PowerPlay listener started")
 
     def _stop_eddn_listener(self):
@@ -2000,6 +2039,7 @@ class MainWindow(QMainWindow):
         self._eddn_save_timer.stop()
         self.eddn_powerplay.save()
         self._market_flush_timer.stop()
+        self._wal_checkpoint_timer.stop()
         # Stop the outbound publisher too — drain its queue and join, so
         # neither queued messages nor a pending 60s retry timer outlive
         # app close (timers are daemon, so exit can't hang either way).
@@ -2012,6 +2052,8 @@ class MainWindow(QMainWindow):
         # concurrently (separate connections → SQLite lock contention).
         if self._flush_thread and self._flush_thread.isRunning():
             self._flush_thread.wait(5000)
+        if self._wal_checkpoint_thread and self._wal_checkpoint_thread.isRunning():
+            self._wal_checkpoint_thread.wait(5000)
         # Drain whatever the timer hasn't written yet (up to 45s of buffered
         # EDDN sightings) — without this, closing the app silently drops
         # them. Synchronous, main-thread, own-repo-connection flush is
@@ -4498,8 +4540,10 @@ class MainWindow(QMainWindow):
     def _on_market_flush_tick(self) -> None:
         """
         Pops the buffered EDDN data (cheap, main-thread dict ops) and hands
-        it to a background worker for the actual writes + WAL checkpoint —
-        see _EddnFlushWorker for why this moved off the main thread.
+        it to a background worker for the actual writes — see
+        _EddnFlushWorker for why this moved off the main thread. The WAL
+        checkpoint is a separate, much longer-cadence timer — see
+        _on_wal_checkpoint_tick / _WalCheckpointWorker.
         """
         if self._flush_thread and self._flush_thread.isRunning():
             return  # previous flush still running — next tick will catch up
@@ -4516,6 +4560,18 @@ class MainWindow(QMainWindow):
         self._flush_thread.started.connect(self._flush_worker.run)
         self._flush_worker.finished.connect(self._flush_thread.quit)
         self._flush_thread.start()
+
+    def _on_wal_checkpoint_tick(self) -> None:
+        """See _WalCheckpointWorker for why this is split off the 45s
+        market-flush cadence onto its own, much longer timer."""
+        if self._wal_checkpoint_thread and self._wal_checkpoint_thread.isRunning():
+            return  # previous checkpoint still running — next tick will catch up
+        self._wal_checkpoint_worker = _WalCheckpointWorker(self.repo.db.db_path)
+        self._wal_checkpoint_thread = QThread()
+        self._wal_checkpoint_worker.moveToThread(self._wal_checkpoint_thread)
+        self._wal_checkpoint_thread.started.connect(self._wal_checkpoint_worker.run)
+        self._wal_checkpoint_worker.finished.connect(self._wal_checkpoint_thread.quit)
+        self._wal_checkpoint_thread.start()
 
     def _on_coords_backfill_tick(self) -> None:
         if self._coords_backfill_thread and self._coords_backfill_thread.isRunning():
