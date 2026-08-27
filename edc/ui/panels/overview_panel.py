@@ -714,24 +714,10 @@ class OverviewPanel(QWidget):
                 f"⚖️ <b>Pay fines:</b> {total:,} Cr — at any station the issuing faction controls (no fee, no danger)."
             ))
 
-        # ── Money on the table ──
-        combat_unsold = int(getattr(state, "combat_unsold_total", 0) or 0)
-        expl_unsold = int(getattr(state, "exploration_unsold_total_est", 0) or 0)
-        exo_unsold = int(getattr(state, "exobiology_unsold_total_est", 0) or 0)
-        money = []
-        if combat_unsold >= 100_000:
-            money.append(f"{combat_unsold:,} Cr combat bonds")
-        if expl_unsold >= 100_000:
-            money.append(f"{expl_unsold:,} Cr exploration data")
-        if exo_unsold >= 100_000:
-            money.append(f"{exo_unsold:,} Cr exobio data")
-        if money:
-            items.append((
-                2,
-                "💰 <b>Sell your data:</b> " + ", ".join(money) + " — redeem at any station contact."
-            ))
-
         # ── Unfinished work ──
+        # NOTE: unsold combat/exploration/exobio totals are deliberately NOT
+        # here — the top-right session panel already shows them with exact
+        # figures on every refresh. This card only surfaces interpret...[truncated]
         exo_hv = getattr(state, "exo", None) or {}
         incomplete = sum(
             1 for rec in exo_hv.values()
