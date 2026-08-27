@@ -95,6 +95,24 @@ def test_shipyard_roundtrip(tmp_path):
     assert [r["station_name"] for r in near] == ["A"]
 
 
+def test_outfitting_dedupes_repeated_module_in_one_snapshot(tmp_path):
+    """EDDN outfitting/1 messages sometimes list the same module twice
+    (seen live: repeated INSERTs within one flush hit the market_id+
+    module_name UNIQUE constraint, even though the table itself was
+    freshly cleared). Must not raise."""
+    repo = _repo(tmp_path)
+    repo.save_system_coords_batch([("SysA", 0.0, 0.0, 0.0, "2026-08-26T19:00:00Z")])
+    repo.save_station_module_listings(1, "A", "SysA", ["mod1", "mod1", "mod2"], "2026-08-26T19:00:00Z")
+    assert len(repo.find_stations_selling_module("mod1", 0, 0, 0)) == 1
+
+
+def test_shipyard_dedupes_repeated_ship_in_one_snapshot(tmp_path):
+    repo = _repo(tmp_path)
+    repo.save_system_coords_batch([("SysA", 0.0, 0.0, 0.0, "2026-08-26T19:00:00Z")])
+    repo.save_station_ship_listings(1, "A", "SysA", ["sidewinder", "sidewinder"], "2026-08-26T19:00:00Z")
+    assert len(repo.find_stations_selling_ship("sidewinder", 0, 0, 0)) == 1
+
+
 def test_pruner_removes_stale_module_rows(tmp_path):
     repo = _repo(tmp_path)
     repo.save_station_module_listings(1, "A", "SysA", ["mod1"], "2020-01-01T00:00:00Z")

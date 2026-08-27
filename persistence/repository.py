@@ -1703,7 +1703,7 @@ class Repository:
                 INSERT INTO station_modules (market_id, module_name, station_name, system_name, last_seen)
                 VALUES (?, ?, ?, ?, ?)
                 """,
-                [(market_id, m, station_name, system_name, timestamp) for m in module_names],
+                [(market_id, m, station_name, system_name, timestamp) for m in dict.fromkeys(module_names)],
             )
             self.db.conn.commit()
         except Exception:
@@ -1725,7 +1725,7 @@ class Repository:
                 INSERT INTO station_ships (market_id, ship_type, station_name, system_name, last_seen)
                 VALUES (?, ?, ?, ?, ?)
                 """,
-                [(market_id, s, station_name, system_name, timestamp) for s in ship_types],
+                [(market_id, s, station_name, system_name, timestamp) for s in dict.fromkeys(ship_types)],
             )
             self.db.conn.commit()
         except Exception:
