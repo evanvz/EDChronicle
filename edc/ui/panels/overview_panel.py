@@ -717,18 +717,9 @@ class OverviewPanel(QWidget):
         # ── Unfinished work ──
         # NOTE: unsold combat/exploration/exobio totals are deliberately NOT
         # here — the top-right session panel already shows them with exact
-        # figures on every refresh. This card only surfaces interpret...[truncated]
-        exo_hv = getattr(state, "exo", None) or {}
-        incomplete = sum(
-            1 for rec in exo_hv.values()
-            if isinstance(rec, dict) and int(rec.get("Samples") or 0) < 3
-        )
-        if incomplete:
-            items.append((
-                3,
-                f"🧬 <b>{incomplete} exobio sample{'s' if incomplete != 1 else ''} incomplete</b> "
-                f"(< 3 of 3) — finish before selling."
-            ))
+        # figures on every refresh. Incomplete exobio sample counts are
+        # likewise left to the Exobiology tab. This card only surfaces
+        # legal-status interpretation no other view provides.
 
         if not items:
             self.next_up.setVisible(False)
