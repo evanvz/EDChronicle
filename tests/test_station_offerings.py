@@ -113,6 +113,59 @@ def test_shipyard_dedupes_repeated_ship_in_one_snapshot(tmp_path):
     assert len(repo.find_stations_selling_ship("sidewinder", 0, 0, 0)) == 1
 
 
+def test_module_listings_batch_covers_multiple_stations_in_one_transaction(tmp_path):
+    """The periodic EDDN flush buffers outfitting updates for many distinct
+    stations per tick -- save_station_module_listings_batch() must handle
+    all of them (each with its own delete-then-replace) in a single commit,
+    not one commit per station (confirmed live 2026-08-27: one-commit-per-
+    station was a major contributor to felt UI freezes)."""
+    repo = _repo(tmp_path)
+    repo.save_system_coords_batch([
+        ("SysA", 0.0, 0.0, 0.0, "2026-08-26T19:00:00Z"),
+        ("SysB", 10.0, 0.0, 0.0, "2026-08-26T19:00:00Z"),
+    ])
+    repo.save_station_module_listings_batch([
+        (1, "A", "SysA", ["mod1", "mod2"], "2026-08-26T19:00:00Z"),
+        (2, "B", "SysB", ["mod1", "mod3"], "2026-08-26T19:00:00Z"),
+    ])
+    rows = repo.find_stations_selling_module("mod1", 0, 0, 0)
+    assert {r["station_name"] for r in rows} == {"A", "B"}
+    assert len(repo.find_stations_selling_module("mod2", 0, 0, 0)) == 1
+    assert len(repo.find_stations_selling_module("mod3", 0, 0, 0)) == 1
+
+    # A later batch replaces only the stations it mentions -- station B's
+    # listing (not included this time) survives untouched.
+    repo.save_station_module_listings_batch([
+        (1, "A", "SysA", ["mod4"], "2026-08-26T19:30:00Z"),
+    ])
+    assert repo.find_stations_selling_module("mod2", 0, 0, 0) == []
+    assert len(repo.find_stations_selling_module("mod3", 0, 0, 0)) == 1
+    assert len(repo.find_stations_selling_module("mod4", 0, 0, 0)) == 1
+
+
+def test_module_listings_batch_dedupes_within_each_station(tmp_path):
+    repo = _repo(tmp_path)
+    repo.save_system_coords_batch([("SysA", 0.0, 0.0, 0.0, "2026-08-26T19:00:00Z")])
+    repo.save_station_module_listings_batch([
+        (1, "A", "SysA", ["mod1", "mod1"], "2026-08-26T19:00:00Z"),
+    ])
+    assert len(repo.find_stations_selling_module("mod1", 0, 0, 0)) == 1
+
+
+def test_ship_listings_batch_covers_multiple_stations_in_one_transaction(tmp_path):
+    repo = _repo(tmp_path)
+    repo.save_system_coords_batch([
+        ("SysA", 0.0, 0.0, 0.0, "2026-08-26T19:00:00Z"),
+        ("SysB", 10.0, 0.0, 0.0, "2026-08-26T19:00:00Z"),
+    ])
+    repo.save_station_ship_listings_batch([
+        (1, "A", "SysA", ["sidewinder"], "2026-08-26T19:00:00Z"),
+        (2, "B", "SysB", ["krait_mkii"], "2026-08-26T19:00:00Z"),
+    ])
+    assert len(repo.find_stations_selling_ship("sidewinder", 0, 0, 0)) == 1
+    assert len(repo.find_stations_selling_ship("krait", 0, 0, 0)) == 1
+
+
 def test_pruner_removes_stale_module_rows(tmp_path):
     repo = _repo(tmp_path)
     repo.save_station_module_listings(1, "A", "SysA", ["mod1"], "2020-01-01T00:00:00Z")

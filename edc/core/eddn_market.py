@@ -310,18 +310,16 @@ def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, 
             log.exception("Failed to flush fleet_carrier_materials batch")
 
     if outfitting:
-        for market_id, station_name, system_name, modules, timestamp in outfitting:
-            try:
-                repo.save_station_module_listings(market_id, station_name, system_name, modules, timestamp)
-            except Exception:
-                log.exception("Failed to flush station_modules for market_id=%s", market_id)
+        try:
+            repo.save_station_module_listings_batch(outfitting)
+        except Exception:
+            log.exception("Failed to flush station_modules batch")
 
     if shipyard:
-        for market_id, station_name, system_name, ships, timestamp in shipyard:
-            try:
-                repo.save_station_ship_listings(market_id, station_name, system_name, ships, timestamp)
-            except Exception:
-                log.exception("Failed to flush station_ships for market_id=%s", market_id)
+        try:
+            repo.save_station_ship_listings_batch(shipyard)
+        except Exception:
+            log.exception("Failed to flush station_ships batch")
 
     if carrier_access:
         try:

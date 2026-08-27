@@ -1710,6 +1710,37 @@ class Repository:
             self.db.conn.rollback()
             raise
 
+    def save_station_module_listings_batch(self, records: list[tuple]) -> None:
+        """Same replace-per-station semantics as save_station_module_listings,
+        but every station in the batch shares ONE transaction/commit instead
+        of one each. The periodic EDDN flush can buffer outfitting updates
+        for dozens of distinct stations per tick; one commit per station
+        meant dozens of separate WAL-writing transactions per flush --
+        confirmed live 2026-08-27 as a major contributor to felt UI freezes
+        (each commit is a brief write-lock the main thread's own connection
+        can collide with), on top of and independent of the explicit
+        wal_checkpoint cadence. records: [(market_id, station_name,
+        system_name, module_names, timestamp), ...]."""
+        records = [r for r in records if isinstance(r[0], int)]
+        if not records:
+            return
+        cur = self.db.conn.cursor()
+        cur.execute("BEGIN")
+        try:
+            for market_id, station_name, system_name, module_names, timestamp in records:
+                cur.execute("DELETE FROM station_modules WHERE market_id = ?", (market_id,))
+                cur.executemany(
+                    """
+                    INSERT INTO station_modules (market_id, module_name, station_name, system_name, last_seen)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    [(market_id, m, station_name, system_name, timestamp) for m in dict.fromkeys(module_names)],
+                )
+            self.db.conn.commit()
+        except Exception:
+            self.db.conn.rollback()
+            raise
+
     def save_station_ship_listings(self, market_id: int, station_name: str | None,
                                    system_name: str | None, ship_types: list[str],
                                    timestamp: str | None) -> None:
@@ -1727,6 +1758,30 @@ class Repository:
                 """,
                 [(market_id, s, station_name, system_name, timestamp) for s in dict.fromkeys(ship_types)],
             )
+            self.db.conn.commit()
+        except Exception:
+            self.db.conn.rollback()
+            raise
+
+    def save_station_ship_listings_batch(self, records: list[tuple]) -> None:
+        """Batch counterpart to save_station_ship_listings -- see
+        save_station_module_listings_batch's docstring for why this exists.
+        records: [(market_id, station_name, system_name, ship_types, timestamp), ...]."""
+        records = [r for r in records if isinstance(r[0], int)]
+        if not records:
+            return
+        cur = self.db.conn.cursor()
+        cur.execute("BEGIN")
+        try:
+            for market_id, station_name, system_name, ship_types, timestamp in records:
+                cur.execute("DELETE FROM station_ships WHERE market_id = ?", (market_id,))
+                cur.executemany(
+                    """
+                    INSERT INTO station_ships (market_id, ship_type, station_name, system_name, last_seen)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    [(market_id, s, station_name, system_name, timestamp) for s in dict.fromkeys(ship_types)],
+                )
             self.db.conn.commit()
         except Exception:
             self.db.conn.rollback()
