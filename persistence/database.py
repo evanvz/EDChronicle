@@ -154,24 +154,6 @@ class Database:
             "ALTER TABLE station_info ADD COLUMN dist_from_star_ls REAL",
             "ALTER TABLE station_info ADD COLUMN station_government TEXT",
             "ALTER TABLE station_info ADD COLUMN station_allegiance TEXT",
-            """CREATE TABLE IF NOT EXISTS station_modules (
-                market_id      INTEGER NOT NULL,
-                module_name    TEXT    NOT NULL,
-                station_name   TEXT,
-                system_name    TEXT,
-                last_seen      TEXT,
-                PRIMARY KEY (market_id, module_name)
-            )""",
-            """CREATE TABLE IF NOT EXISTS station_ships (
-                market_id      INTEGER NOT NULL,
-                ship_type      TEXT    NOT NULL,
-                station_name   TEXT,
-                system_name    TEXT,
-                last_seen      TEXT,
-                PRIMARY KEY (market_id, ship_type)
-            )""",
-            "CREATE INDEX IF NOT EXISTS idx_station_modules_module ON station_modules (module_name)",
-            "CREATE INDEX IF NOT EXISTS idx_station_ships_ship ON station_ships (ship_type)",
             """CREATE TABLE IF NOT EXISTS commodity_names (
                 internal_name TEXT PRIMARY KEY,
                 display_name  TEXT NOT NULL
@@ -297,6 +279,14 @@ class Database:
             )""",
             "ALTER TABLE spansh_bodies ADD COLUMN was_mapped INTEGER",
             "ALTER TABLE spansh_bodies ADD COLUMN updated_at TEXT",
+            # Outfitting/shipyard tracking (station_modules/station_ships) was
+            # removed 2026-08-27 -- the per-station commit pattern needed for
+            # its delete-then-replace semantics was a major source of felt UI
+            # freezes under live EDDN load, not worth the module/ship finder
+            # feature it powered. Drops any copy of these tables an existing
+            # DB already created; new DBs never create them.
+            "DROP TABLE IF EXISTS station_modules",
+            "DROP TABLE IF EXISTS station_ships",
         ]
         for sql in migrations:
             try:

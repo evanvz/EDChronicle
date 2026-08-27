@@ -77,7 +77,7 @@ from edc.core.eddn_listener import EddnPowerPlayWorker
 from edc.core.eddn_market import EddnMarketCache, write_buffers
 from edc.core.station_pads import extract_station_info
 from edc.core.rare_commodities import RareCommodityTable
-from edc.core.fdevids_names import ModuleNameTable, ShipNameTable
+from edc.core.fdevids_names import ShipNameTable
 from edc.core.bounty_scanner import scan_active_bounties_with_dates
 from edc.core.fine_scanner import scan_active_fines
 from edc.core.bgs_conflicts import squadron_faction_name
@@ -206,18 +206,11 @@ class _MarketPruneWorker(QObject):
                 log.info("Pruned %d stale system_res_sites rows", deleted_res_sites)
             except Exception:
                 log.exception("System RES sites prune failed")
-            deleted_offerings = 0
-            try:
-                deleted_offerings = repo.prune_stale_station_offerings()
-                if deleted_offerings:
-                    log.info("Pruned %d stale station_modules/station_ships rows", deleted_offerings)
-            except Exception:
-                log.exception("Station offerings prune failed")
         finally:
             db.close()
         self.finished.emit(
             deleted_market_prices + deleted_fleet_carrier_materials
-            + deleted_bgs_status + deleted_res_sites + deleted_offerings
+            + deleted_bgs_status + deleted_res_sites
         )
 
 
@@ -324,14 +317,13 @@ class _EddnFlushWorker(QObject):
     """
     finished = pyqtSignal()
 
-    def __init__(self, db_path, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, outfitting, shipyard):
+    def __init__(self, db_path, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites):
         super().__init__()
         self._db_path = db_path
         self._coords, self._market, self._factions = coords, market, factions
         self._stations, self._codex, self._fcmaterials = stations, codex, fcmaterials
         self._carrier_access = carrier_access
         self._bgs_status, self._res_sites = bgs_status, res_sites
-        self._outfitting, self._shipyard = outfitting, shipyard
 
     def run(self):
         from persistence.database import Database
@@ -343,7 +335,7 @@ class _EddnFlushWorker(QObject):
             write_buffers(
                 repo, self._coords, self._market, self._factions, self._stations,
                 self._codex, self._fcmaterials, self._carrier_access,
-                self._bgs_status, self._res_sites, self._outfitting, self._shipyard,
+                self._bgs_status, self._res_sites,
             )
         except Exception:
             log.exception("Background EDDN flush failed")
@@ -1354,7 +1346,6 @@ class MainWindow(QMainWindow):
         self.engineering_blueprints = EngineeringBlueprintTable(settings_base)
         self.experimental_effects = ExperimentalEffectsTable(settings_base)
         self.rare_commodities = RareCommodityTable(settings_base)
-        self.module_names = ModuleNameTable(settings_base)
         self.ship_names = ShipNameTable(settings_base)
         self.engineering_wishlist_store = EngineeringWishlist(data_dir / "engineering_wishlist.json")
         self.odyssey_engineering = OdysseyEngineeringTable(settings_base)
@@ -1635,8 +1626,7 @@ class MainWindow(QMainWindow):
         self.mining_panel = MiningPanel(self.repo)
 
         # Market tab
-        self.market_panel = MarketPanel(self.repo, self.rare_commodities, edsm_powerplay=self.edsm_powerplay,
-                                        module_names=self.module_names, ship_names=self.ship_names)
+        self.market_panel = MarketPanel(self.repo, self.rare_commodities, edsm_powerplay=self.edsm_powerplay)
         self.trade_route_panel = TradeRoutePanel(self.repo, edsm_powerplay=self.edsm_powerplay)
         self.mining_panel.sell_search_requested.connect(self._on_mining_sell_search_requested)
         self.market_panel.destination_selected.connect(self._on_market_destination_selected)
@@ -2020,8 +2010,6 @@ class MainWindow(QMainWindow):
         self._eddn_worker.fcmaterials_seen.connect(self.eddn_market_cache.on_fcmaterials_message)
         self._eddn_worker.bgs_status_seen.connect(self.eddn_market_cache.on_bgs_status_seen)
         self._eddn_worker.res_signal_seen.connect(self.eddn_market_cache.on_res_signal_seen)
-        self._eddn_worker.outfitting_seen.connect(self.eddn_market_cache.on_outfitting_message)
-        self._eddn_worker.shipyard_seen.connect(self.eddn_market_cache.on_shipyard_message)
         self._eddn_thread.start()
         self._eddn_save_timer.start()
         self._market_flush_timer.start()
@@ -2459,11 +2447,10 @@ class MainWindow(QMainWindow):
             return
         log.info(
             "EDDN listener stats: %s msg/s — commodity=%d journal=%d fcmaterials=%d "
-            "outfitting=%d shipyard=%d fsssignals=%d other=%d invalid=%d (total=%d)",
+            "fsssignals=%d other=%d invalid=%d (total=%d)",
             stats.get("msgs_per_sec", 0),
             stats.get("commodity", 0), stats.get("journal", 0),
-            stats.get("fcmaterials", 0), stats.get("outfitting", 0),
-            stats.get("shipyard", 0), stats.get("fsssignaldiscovered", 0),
+            stats.get("fcmaterials", 0), stats.get("fsssignaldiscovered", 0),
             stats.get("other", 0), stats.get("invalid", 0), stats.get("total", 0),
         )
 
@@ -4547,13 +4534,13 @@ class MainWindow(QMainWindow):
         """
         if self._flush_thread and self._flush_thread.isRunning():
             return  # previous flush still running — next tick will catch up
-        coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, outfitting, shipyard = self.eddn_market_cache.pop_buffers()
-        if not (coords or market or factions or stations or codex or fcmaterials or carrier_access or bgs_status or res_sites or outfitting or shipyard):
+        coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites = self.eddn_market_cache.pop_buffers()
+        if not (coords or market or factions or stations or codex or fcmaterials or carrier_access or bgs_status or res_sites):
             return
 
         self._flush_worker = _EddnFlushWorker(
             self.repo.db.db_path, coords, market, factions, stations, codex, fcmaterials, carrier_access,
-            bgs_status, res_sites, outfitting, shipyard,
+            bgs_status, res_sites,
         )
         self._flush_thread = QThread()
         self._flush_worker.moveToThread(self._flush_thread)

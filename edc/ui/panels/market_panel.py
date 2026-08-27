@@ -254,13 +254,11 @@ class MarketPanel(QWidget):
     # until they actually reach it.
     destination_selected = pyqtSignal(str, str, str, str)
 
-    def __init__(self, repo, rare_table=None, edsm_powerplay=None, module_names=None, ship_names=None, parent=None):
+    def __init__(self, repo, rare_table=None, edsm_powerplay=None, parent=None):
         super().__init__(parent)
         self._repo = repo
         self._rare_table = rare_table
         self._edsm_powerplay = edsm_powerplay
-        self._module_names = module_names
-        self._ship_names = ship_names
         self._my_power: Optional[str] = None
         self._rare_dialog: Optional["_RareGoodsDialog"] = None
         self._system: str = ""
@@ -462,35 +460,6 @@ class MarketPanel(QWidget):
         )
         self._rare_goods_btn.clicked.connect(self._open_rare_goods_dialog)
         service_row.addWidget(self._rare_goods_btn)
-
-        # Module/ship availability from live EDDN outfitting/1 + shipyard/1
-        # harvest (any commander's dockings — unlike the Concourse service
-        # buttons, which are bounded to our own past visits).
-        self._modules_btn = QPushButton("Modules…")
-        self._modules_btn.setStyleSheet(
-            "QPushButton { background:#1a3a5a; color:#8CC8FF; border:1px solid #2a5a8a;"
-            " border-radius:3px; padding:3px 10px; font-weight:bold; }"
-            "QPushButton:hover { background:#2a5a8a; }"
-        )
-        self._modules_btn.setToolTip(
-            "Find stations selling a module near your location — sourced from EDDN's "
-            "live outfitting feed (any commander's dockings), not just your own."
-        )
-        self._modules_btn.clicked.connect(self._open_modules_dialog)
-        service_row.addWidget(self._modules_btn)
-
-        self._ships_btn = QPushButton("Ships…")
-        self._ships_btn.setStyleSheet(
-            "QPushButton { background:#1a3a5a; color:#8CC8FF; border:1px solid #2a5a8a;"
-            " border-radius:3px; padding:3px 10px; font-weight:bold; }"
-            "QPushButton:hover { background:#2a5a8a; }"
-        )
-        self._ships_btn.setToolTip(
-            "Find stations selling a ship near your location — sourced from EDDN's "
-            "live shipyard feed (any commander's dockings), not just your own."
-        )
-        self._ships_btn.clicked.connect(self._open_ships_dialog)
-        service_row.addWidget(self._ships_btn)
 
         self._service_dialogs: dict = {}
         for tags, label, (bg, fg) in _CONCOURSE_SERVICES:
@@ -926,26 +895,6 @@ class MarketPanel(QWidget):
         if dlg is None:
             dlg = _StationServiceDialog(self, tags, label)
             self._service_dialogs[key] = dlg
-        dlg.refresh_results()
-        dlg.show()
-        dlg.raise_()
-        dlg.activateWindow()
-
-    def _open_modules_dialog(self) -> None:
-        dlg = getattr(self, "_modules_dialog", None)
-        if dlg is None:
-            dlg = _StationOfferingsDialog(self, "module", "Market — Module Availability")
-            self._modules_dialog = dlg
-        dlg.refresh_results()
-        dlg.show()
-        dlg.raise_()
-        dlg.activateWindow()
-
-    def _open_ships_dialog(self) -> None:
-        dlg = getattr(self, "_ships_dialog", None)
-        if dlg is None:
-            dlg = _StationOfferingsDialog(self, "ship", "Market — Ship Availability")
-            self._ships_dialog = dlg
         dlg.refresh_results()
         dlg.show()
         dlg.raise_()
@@ -1393,189 +1342,6 @@ class _StationServiceDialog(QDialog):
 
     def _on_cell_clicked(self, row: int, column: int) -> None:
         if column not in (0, 2):  # Station, System
-            return
-        item = self._table.item(row, column)
-        if item and item.text():
-            QApplication.clipboard().setText(item.text())
-
-
-class _StationOfferingsDialog(QDialog):
-    """
-    Non-modal window for "where can I buy module X / ship Y near me" —
-    searches the EDDN-harvested station_modules / station_ships tables
-    (any commander's outfitting/shipyard sighting, galaxy-wide), sorted
-    by distance from the current reference position. Same dialog pattern
-    as _RareGoodsDialog / _StationServiceDialog.
-    """
-
-    def __init__(self, panel: "MarketPanel", offering: str, title: str):
-        super().__init__(None)
-        self.setStyleSheet("QDialog { background:#080f18; color:#c8c8c8; }")
-        self._panel = panel
-        self._offering = offering  # "module" | "ship"
-        self.setWindowTitle(title)
-        self.resize(850, 500)
-
-        layout = QVBoxLayout(self)
-
-        search_row = QHBoxLayout()
-        search_row.addWidget(QLabel("Search:"))
-        self._search_edit = QLineEdit()
-        self._search_edit.setPlaceholderText(
-            "Module (e.g. Shield Generator, Beam Laser…) or internal symbol" if offering == "module"
-            else "Ship (e.g. Krait MkII, Python…) or internal symbol"
-        )
-        self._search_edit.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
-        self._search_edit.textChanged.connect(self._on_search_changed)
-        search_row.addWidget(self._search_edit, 1)
-
-        self._range_spin = QSpinBox()
-        self._range_spin.setRange(10, 5000)
-        self._range_spin.setSingleStep(10)
-        self._range_spin.setValue(100)
-        self._range_spin.setSuffix(" ly")
-        self._range_spin.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
-        self._range_spin.valueChanged.connect(self.refresh_results)
-        search_row.addWidget(self._range_spin)
-        layout.addLayout(search_row)
-
-        self._status_label = QLabel("")
-        self._status_label.setStyleSheet("color:#888888; font-size:11px; background:transparent; border:none;")
-        layout.addWidget(self._status_label)
-
-        self._table = QTableWidget()
-        self._table.setColumnCount(6)
-        self._table.setHorizontalHeaderLabels(
-            ["Module" if offering == "module" else "Ship", "Station", "Pad", "System", "Dist (ly)", "Updated"]
-        )
-        self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self._table.verticalHeader().setVisible(False)
-        self._table.setAlternatingRowColors(True)
-        self._table.setStyleSheet(
-            "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
-            " gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
-            "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
-            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
-            "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
-        )
-        h = self._table.horizontalHeader()
-        h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        h.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        h.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        h.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
-        h.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
-        h.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
-        self._table.setToolTip("Click a Station or System cell to copy its name to the clipboard.")
-        self._table.cellClicked.connect(self._on_cell_clicked)
-        layout.addWidget(self._table, 1)
-
-        note = QLabel(
-            "Sourced from EDDN's live outfitting/shipyard feed — other commanders' recent "
-            "dockings, not just your own. Stock changes with BGS shifts; check \"Updated\" "
-            "before flying somewhere."
-        )
-        note.setWordWrap(True)
-        note.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
-        layout.addWidget(note)
-
-    def _on_search_changed(self) -> None:
-        """Re-run the DB search on every keystroke — LIKE over the indexed
-        station_modules/station_ships tables bounded by the 14-day cutoff
-        is fast, and the query only runs while this non-modal dialog is open."""
-        self.refresh_results()
-
-    def refresh_results(self) -> None:
-        query = self._search_edit.text().strip().lower()
-        radius = self._range_spin.value()
-        # Pretty-name search: the FDevIDs table translates the user's typed
-        # display name ("Shield Generator") into the internal symbols the
-        # DB stores, and ALSO passes the raw query through so symbol
-        # fragments ("shieldgenerator", "hpt_pulselaser") still match.
-        table = self._panel._module_names if self._offering == "module" else self._panel._ship_names
-        self._all_rows = []
-        if query:
-            symbols: list[str] = []
-            if table is not None:
-                symbols = [s for s, _disp in table.search_display(query)]
-            if query not in symbols:
-                symbols.append(query)
-            for sym in symbols:
-                try:
-                    if self._offering == "module":
-                        rows = self._panel._repo.find_stations_selling_module(
-                            sym, self._panel._ref_x, self._panel._ref_y, self._panel._ref_z, radius,
-                        )
-                    else:
-                        rows = self._panel._repo.find_stations_selling_ship(
-                            sym, self._panel._ref_x, self._panel._ref_y, self._panel._ref_z, radius,
-                        )
-                except Exception:
-                    log.exception("Offerings search failed for %r", sym)
-                    continue
-                self._all_rows.extend(rows)
-            # The same station can sell several modules matching the query —
-            # dedupe on (market_id, item symbol) but keep every distinct item.
-            seen = set()
-            deduped = []
-            for r in self._all_rows:
-                key = (r.get("market_id"), r.get("module_name") or r.get("ship_type"))
-                if key not in seen:
-                    seen.add(key)
-                    deduped.append(r)
-            self._all_rows = deduped
-        self._apply_filter()
-
-    def _apply_filter(self) -> None:
-        query = self._search_edit.text().strip().lower()
-        rows = list(self._all_rows)
-        rows.sort(key=lambda r: (r.get("distance_ly") is None, r.get("distance_ly") or 0.0))
-
-        if not query:
-            self._status_label.setText("Type a search term to begin.")
-        else:
-            self._status_label.setText(f"{len(rows)} station{'s' if len(rows) != 1 else ''} within {self._range_spin.value()} ly.")
-
-        self._table.setSortingEnabled(False)
-        _rows(self._table, len(rows))
-        name_key = "module_name" if self._offering == "module" else "ship_type"
-        _names = self._panel._module_names if self._offering == "module" else self._panel._ship_names
-        for row, r in enumerate(rows):
-            raw_name = r.get(name_key) or "—"
-            display = raw_name
-            if _names is not None:
-                pretty = _names.display_name(raw_name)
-                if pretty and pretty.lower() != raw_name.lower():
-                    display = f"{pretty} ({raw_name})"
-                elif pretty:
-                    display = pretty
-            name_item = QTableWidgetItem(display)
-            name_item.setToolTip(raw_name)
-            station_item = QTableWidgetItem(r.get("station_name") or "—")
-            pad_item = QTableWidgetItem(r.get("pad_size") or pad_size_hint(r.get("station_type")))
-            system_item = QTableWidgetItem(r.get("system_name") or "—")
-            dist_value = r.get("distance_ly")
-            dist_text = f"{dist_value:.1f}" if isinstance(dist_value, (int, float)) else "—"
-            dist_item = _NumericTableWidgetItem(dist_text, dist_value if isinstance(dist_value, (int, float)) else float("inf"))
-            updated_text, updated_age = _format_relative_time(r.get("last_seen") or "")
-            updated_item = _NumericTableWidgetItem(updated_text, updated_age)
-            if pad_item.text() == "?":
-                pad_item.setForeground(QColor("#888888"))
-                pad_item.setToolTip("Landing pad size unknown for this station type")
-            for it in (pad_item, dist_item, updated_item):
-                it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-
-            self._table.setItem(row, 0, name_item)
-            self._table.setItem(row, 1, station_item)
-            self._table.setItem(row, 2, pad_item)
-            self._table.setItem(row, 3, system_item)
-            self._table.setItem(row, 4, dist_item)
-            self._table.setItem(row, 5, updated_item)
-        self._table.setSortingEnabled(True)
-
-    def _on_cell_clicked(self, row: int, column: int) -> None:
-        if column not in (1, 3):  # Station, System
             return
         item = self._table.item(row, column)
         if item and item.text():

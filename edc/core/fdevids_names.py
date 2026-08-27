@@ -1,11 +1,7 @@
-"""Offline reference tables mapping FDev internal module/ship symbols to
-pretty display names — sourced from EDCD/FDevIDs outfitting.csv and
-shipyard.csv (Frontier game data, no separate license grant; used
-non-commercially under Frontier's community/fan content terms).
-
-EDDN outfitting/1 and shipyard/1 messages carry the raw symbols
-(e.g. 'int_shieldgenerator_size3_class3'); these tables give the display
-name ('Shield Generator') for UI surfaces. Same vendored-JSON pattern as
+"""Offline reference table mapping FDev internal ship symbols to pretty
+display names — sourced from EDCD/FDevIDs shipyard.csv (Frontier game
+data, no separate license grant; used non-commercially under Frontier's
+community/fan content terms). Same vendored-JSON pattern as
 rare_commodities.json.
 """
 from __future__ import annotations
@@ -73,11 +69,6 @@ class _SymbolTable:
             elif q in sym:
                 symbol_hits.append((sym, disp))
         return name_hits + symbol_hits
-
-
-class ModuleNameTable(_SymbolTable):
-    def __init__(self, settings_dir: Path):
-        super().__init__(settings_dir, "fdevids_modules.json")
 
 
 class ShipNameTable(_SymbolTable):

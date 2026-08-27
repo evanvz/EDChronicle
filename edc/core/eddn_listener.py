@@ -46,8 +46,6 @@ _STALE_CONNECTION_TIMEOUT_S = 300
 _MAX_DECOMPRESSED_BYTES = 10 * 1024 * 1024
 
 _FSSSIGNALS_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/fsssignaldiscovered/"
-_OUTFITTING_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/outfitting/"
-_SHIPYARD_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/shipyard/"
 
 
 def _extract_bgs_status(msg: dict) -> tuple[list, list]:
@@ -107,8 +105,6 @@ class EddnPowerPlayWorker(QObject):
     system_coords_seen = pyqtSignal(str, float, float, float)  # StarSystem, x, y, z
     commodity_seen = pyqtSignal(dict)  # raw commodity/3 message body
     fcmaterials_seen = pyqtSignal(dict)  # raw fcmaterials_journal/1 message body
-    outfitting_seen = pyqtSignal(dict)  # raw outfitting/1 message body
-    shipyard_seen = pyqtSignal(dict)  # raw shipyard/1 message body
     # Raw journal/1 Docked message body — same shape extract_station_info()
     # already parses for our own dockings, just sourced from other
     # commanders' visits too (the same crowdsourcing model Inara/EDSM use
@@ -148,8 +144,6 @@ class EddnPowerPlayWorker(QObject):
             "journal": 0,
             "fcmaterials": 0,
             "fsssignaldiscovered": 0,
-            "outfitting": 0,
-            "shipyard": 0,
             "other": 0,
             "invalid": 0,
         }
@@ -236,22 +230,6 @@ class EddnPowerPlayWorker(QObject):
                 msg = data.get("message")
                 if isinstance(msg, dict):
                     self._maybe_emit_res_signal(msg)
-                continue
-
-            if schema.startswith(_OUTFITTING_SCHEMA_PREFIX):
-                self._stats["outfitting"] += 1
-                msg = data.get("message")
-                if (isinstance(msg, dict) and isinstance(msg.get("marketId"), int)
-                        and isinstance(msg.get("modules"), list)):
-                    self.outfitting_seen.emit(msg)
-                continue
-
-            if schema.startswith(_SHIPYARD_SCHEMA_PREFIX):
-                self._stats["shipyard"] += 1
-                msg = data.get("message")
-                if (isinstance(msg, dict) and isinstance(msg.get("marketId"), int)
-                        and isinstance(msg.get("ships"), list)):
-                    self.shipyard_seen.emit(msg)
                 continue
 
             if not schema.startswith(_JOURNAL_SCHEMA_PREFIX):

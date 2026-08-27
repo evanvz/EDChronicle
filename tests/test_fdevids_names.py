@@ -1,44 +1,37 @@
-"""FDevIDs symbol -> display-name tables (modules + ships)."""
-from edc.core.fdevids_names import ModuleNameTable, ShipNameTable
+"""FDevIDs symbol -> display-name table (ships)."""
+from edc.core.fdevids_names import ShipNameTable
 
 
-def _tables(tmp_path):
+def _table(tmp_path):
     import shutil
     from pathlib import Path
     src = Path(__file__).parent.parent / "settings"
     dst = Path(tmp_path) / "settings"
     dst.mkdir(exist_ok=True)
-    for name in ("fdevids_modules.json", "fdevids_ships.json"):
-        shutil.copy(src / name, dst / name)
-    return ModuleNameTable(dst), ShipNameTable(dst)
-
-
-def test_module_display_name(tmp_path):
-    mods, _ = _tables(tmp_path)
-    assert mods.display_name("int_shieldgenerator_size3_class3") == "Shield Generator"
-    assert mods.display_name("HPT_PulseLaser_Fixed_Small") == "Pulse Laser"
-    assert mods.display_name("does_not_exist") is None
-    assert mods.display_name(None) is None
+    shutil.copy(src / "fdevids_ships.json", dst / "fdevids_ships.json")
+    return ShipNameTable(dst)
 
 
 def test_ship_display_name(tmp_path):
-    _, ships = _tables(tmp_path)
+    ships = _table(tmp_path)
     assert ships.display_name("krait_mkii") == "Krait MkII"
     assert ships.display_name("sidewinder") == "Sidewinder"
+    assert ships.display_name("does_not_exist") is None
+    assert ships.display_name(None) is None
 
 
 def test_reverse_lookup_by_display_name(tmp_path):
-    _, ships = _tables(tmp_path)
+    ships = _table(tmp_path)
     assert ships.symbol_for_display("Krait MkII") == "krait_mkii"
     assert ships.symbol_for_display("krait_mkii") == "krait_mkii"
     assert ships.symbol_for_display("No Such Ship") is None
 
 
 def test_search_finds_both_symbol_and_display(tmp_path):
-    mods, _ = _tables(tmp_path)
-    hits = mods.search_display("shield generator")
+    ships = _table(tmp_path)
+    hits = ships.search_display("krait mkii")
     syms = [s for s, _ in hits]
-    assert "int_shieldgenerator_size3_class3" in syms
-    hits2 = mods.search_display("shieldgenerator")
-    assert any(s.startswith("int_shieldgenerator") for s, _ in hits2)
-    assert mods.search_display("") == []
+    assert "krait_mkii" in syms
+    hits2 = ships.search_display("krait_mkii")
+    assert any(s.startswith("krait") for s, _ in hits2)
+    assert ships.search_display("") == []

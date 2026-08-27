@@ -73,12 +73,6 @@ class EddnMarketCache:
         # factions from any commander's journal/1 message, deduped so
         # re-sightings between flushes cost one write, not one per sighting.
         self._bgs_status_buffer: Dict[int, Tuple[str, list, list, str]] = {}
-        # Keyed by market_id — a full outfitting snapshot from EDDN
-        # outfitting/1, any commander's. Snapshot replaces the station's
-        # entire previous module list at flush time.
-        self._outfitting_buffer: Dict[int, tuple] = {}
-        # Keyed by market_id — full shipyard snapshot from shipyard/1.
-        self._shipyard_buffer: Dict[int, tuple] = {}
         # Keyed by system_address -- RES tiers present, from any
         # commander's fsssignaldiscovered/1 message.
         self._res_sites_buffer: Dict[int, Tuple[str, list, str]] = {}
@@ -152,39 +146,6 @@ class EddnMarketCache:
         timestamp = _normalize_ts(timestamp)
         self._res_sites_buffer[system_address] = (system_name, tiers, timestamp)
 
-    def on_outfitting_message(self, msg: Dict[str, Any]) -> None:
-        market_id = msg.get("marketId")
-        if not isinstance(market_id, int):
-            return
-        # EDDN's outfitting schema sends "modules" as an array of plain
-        # symbol strings (e.g. "Hpt_ChaffLauncher_Tiny"), not objects --
-        # confirmed against EDCD/EDDN's published schema (items.type is
-        # "string"). A prior isinstance(m, dict) check here meant every
-        # real message hit `if not modules: return` silently, so this
-        # buffer never received any real EDDN traffic despite passing
-        # tests written against the wrong assumed shape.
-        modules = [m for m in (msg.get("modules") or []) if isinstance(m, str) and m]
-        if not modules:
-            return
-        self._outfitting_buffer[market_id] = (
-            market_id, msg.get("stationName") or "", msg.get("systemName") or "",
-            modules, _normalize_ts(msg.get("timestamp")),
-        )
-
-    def on_shipyard_message(self, msg: Dict[str, Any]) -> None:
-        market_id = msg.get("marketId")
-        if not isinstance(market_id, int):
-            return
-        # Same fix as on_outfitting_message -- EDDN's shipyard schema also
-        # sends "ships" as plain symbol strings, not objects.
-        ships = [s for s in (msg.get("ships") or []) if isinstance(s, str) and s]
-        if not ships:
-            return
-        self._shipyard_buffer[market_id] = (
-            market_id, msg.get("stationName") or "", msg.get("systemName") or "",
-            ships, _normalize_ts(msg.get("timestamp")),
-        )
-
     def on_fcmaterials_message(self, msg: Dict[str, Any]) -> None:
         market_id = msg.get("MarketID")
         if not isinstance(market_id, int):
@@ -219,7 +180,7 @@ class EddnMarketCache:
 
     def pop_buffers(self):
         """
-        Snapshots and clears all nine buffers, returning their contents as
+        Snapshots and clears all seven buffers, returning their contents as
         plain lists/tuples -- for handing off to a background worker with
         its own DB connection (see main_window.py's _EddnFlushWorker).
         Cheap, main-thread-only dict operations; the actual DB writes are
@@ -234,8 +195,6 @@ class EddnMarketCache:
         carrier_access = list(self._carrier_access_buffer.values())
         bgs_status = list(self._bgs_status_buffer.items())
         res_sites = list(self._res_sites_buffer.items())
-        outfitting = list(self._outfitting_buffer.values())
-        shipyard = list(self._shipyard_buffer.values())
         self._coord_buffer.clear()
         self._market_buffer.clear()
         self._faction_buffer.clear()
@@ -245,10 +204,8 @@ class EddnMarketCache:
         self._carrier_access_buffer.clear()
         self._bgs_status_buffer.clear()
         self._res_sites_buffer.clear()
-        self._outfitting_buffer.clear()
-        self._shipyard_buffer.clear()
         return (coords, market, factions, stations, codex, fcmaterials, carrier_access,
-                bgs_status, res_sites, outfitting, shipyard)
+                bgs_status, res_sites)
 
     def flush(self) -> None:
         """Synchronous flush on the caller's own thread/connection — only
@@ -260,11 +217,11 @@ class EddnMarketCache:
         the main thread every 45s, which froze the UI for however long a
         big buffered batch took to write (confirmed live, worse right
         after docking at a busy station's market)."""
-        coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, outfitting, shipyard = self.pop_buffers()
-        write_buffers(self._repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, outfitting, shipyard)
+        coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites = self.pop_buffers()
+        write_buffers(self._repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites)
 
 
-def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, outfitting=None, shipyard=None) -> None:
+def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites) -> None:
     """The actual writes — factored out so both the main-thread flush()
     (shutdown) and a background worker (periodic, see main_window.py) can
     use the identical logic against whichever Repository they're given."""
@@ -308,18 +265,6 @@ def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, 
             repo.save_fleet_carrier_materials_batch(fcmaterials)
         except Exception:
             log.exception("Failed to flush fleet_carrier_materials batch")
-
-    if outfitting:
-        try:
-            repo.save_station_module_listings_batch(outfitting)
-        except Exception:
-            log.exception("Failed to flush station_modules batch")
-
-    if shipyard:
-        try:
-            repo.save_station_ship_listings_batch(shipyard)
-        except Exception:
-            log.exception("Failed to flush station_ships batch")
 
     if carrier_access:
         try:
