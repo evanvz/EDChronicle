@@ -166,7 +166,7 @@ def _ts_days_ago(days: float) -> str:
 def test_search_bgs_status_near_excludes_rows_past_7_day_war_cycle(repo):
     # War/CivilWar conflicts resolve within a fixed 7-day cycle -- a
     # War/CivilWar row older than that is guaranteed already over, unlike
-    # market_prices' looser 14-day cutoff which this table deliberately
+    # market_prices' looser 21-day cutoff which this table deliberately
     # does not reuse.
     _seed_coords(repo, "Fresh", 0.0, 0.0, 0.0)
     _seed_coords(repo, "Stale", 1.0, 0.0, 0.0)

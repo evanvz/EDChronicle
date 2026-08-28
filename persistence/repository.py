@@ -7,12 +7,11 @@ from .database import Database
 from edc.core.station_pads import effective_pad_size
 from edc.core.bgs_conflicts import is_multistate_faction
 
-# A commodity price this old is excluded from buy/sell search results
-# entirely — a BGS state change (war outcome, boom/bust, faction takeover)
-# or a station nobody's visited in a while can make it flatly wrong, and
-# unlike a Fleet Carrier's arbitrary price this isn't visible as an obvious
-# outlier, so it's safer to disallow it than merely flag it.
-_MARKET_DATA_MAX_AGE_DAYS = 14
+# 21 days, not the original 14 -- this data now lives in the disposable
+# cache DB (network_cache.db), not the personal one, so there's no
+# backup-size cost to keeping it a bit longer (requested 2026-08-27, see
+# docs/superpowers/specs/2026-08-27-db-split-design.md).
+_MARKET_DATA_MAX_AGE_DAYS = 21
 
 
 def _market_data_cutoff() -> str:
