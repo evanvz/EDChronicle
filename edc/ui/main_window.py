@@ -234,8 +234,11 @@ class _MarketVacuumWorker(QObject):
 
         db = Database(self._db_path)
         try:
-            ran_full_vacuum = db.enable_incremental_auto_vacuum()
-            db.incremental_vacuum()
+            ran_full_vacuum = False
+            for schema in ("main", "net"):
+                if db.enable_incremental_auto_vacuum(schema=schema):
+                    ran_full_vacuum = True
+                db.incremental_vacuum(schema=schema)
             db.ensure_market_prices_indexes()
             db.ensure_system_coords_indexes()
             note = " (first run — also switched to incremental auto-vacuum)" if ran_full_vacuum else ""

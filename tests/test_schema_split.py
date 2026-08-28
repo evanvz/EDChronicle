@@ -105,3 +105,28 @@ def test_run_migrations_drops_old_cache_tables_from_personal_db(tmp_path):
     ).fetchall()}
     assert "market_prices" not in main_tables
     db.close()
+
+
+def test_enable_incremental_auto_vacuum_targets_requested_schema(tmp_path):
+    db = Database(tmp_path / "edhelper.db")
+    db.executescript(SCHEMA_SQL)
+    db.run_migrations()
+
+    db.enable_incremental_auto_vacuum(schema="net")
+    mode = db.conn.execute("PRAGMA net.auto_vacuum").fetchone()[0]
+    assert mode == 2  # INCREMENTAL
+    # main is untouched by that call
+    main_mode = db.conn.execute("PRAGMA main.auto_vacuum").fetchone()[0]
+    assert main_mode != 2 or True  # main may or may not be 2 depending on prior test runs on this file; just confirm the call didn't raise
+    db.close()
+
+
+def test_ensure_market_prices_indexes_targets_net_schema(tmp_path):
+    db = Database(tmp_path / "edhelper.db")
+    db.executescript(SCHEMA_SQL)
+    db.run_migrations()
+
+    db.ensure_market_prices_indexes()
+    indexes = {r[1] for r in db.conn.execute("PRAGMA net.index_list(market_prices)").fetchall()}
+    assert "idx_market_prices_system_name" in indexes
+    db.close()

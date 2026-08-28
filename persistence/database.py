@@ -64,26 +64,6 @@ class Database:
         self.conn.executescript(sql)
         self.conn.commit()
 
-    def enable_incremental_auto_vacuum(self) -> bool:
-        """SQLite only applies an auto_vacuum mode CHANGE on the next
-        VACUUM — the file was created with the default (NONE), so this is
-        a one-time cost. Returns True if a VACUUM actually ran (only ever
-        happens once per database file, from then on incremental_vacuum()
-        alone reclaims freed space cheaply). Call from a worker thread only
-        — VACUUM rewrites the entire file, slow on a multi-GB database."""
-        mode = self.conn.execute("PRAGMA auto_vacuum").fetchone()[0]
-        if mode == 2:  # already INCREMENTAL
-            return False
-        self.conn.execute("PRAGMA auto_vacuum = INCREMENTAL")
-        self.conn.execute("VACUUM")
-        return True
-
-    def incremental_vacuum(self, pages: int = 2000) -> None:
-        """Reclaims already-freed pages (e.g. from a prior DELETE) a chunk
-        at a time — cheap compared to a full VACUUM. Call from a worker
-        thread only, same reasoning as enable_incremental_auto_vacuum()."""
-        self.conn.execute(f"PRAGMA incremental_vacuum({pages})")
-
     def ensure_market_prices_indexes(self) -> None:
         """market_prices' only index besides its PRIMARY KEY is on
         commodity_name — every "which stations are near (x,y,z)" query
@@ -95,8 +75,35 @@ class Database:
         EXPLAIN QUERY PLAN). IF NOT EXISTS makes every run after the first
         an instant no-op. Building it takes ~2+ minutes on a database this
         size and needs a write lock like any schema change — call from a
-        worker thread only, same reasoning as enable_incremental_auto_vacuum()."""
-        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_market_prices_system_name ON market_prices(system_name)")
+        worker thread only, same reasoning as enable_incremental_auto_vacuum().
+        Targets net.market_prices -- that table lives in the cache DB
+        (see docs/superpowers/specs/2026-08-27-db-split-design.md)."""
+        self.conn.execute("CREATE INDEX IF NOT EXISTS net.idx_market_prices_system_name ON market_prices(system_name)")
+
+    def enable_incremental_auto_vacuum(self, schema: str = "main") -> bool:
+        """SQLite only applies an auto_vacuum mode CHANGE on the next
+        VACUUM — the file was created with the default (NONE), so this is
+        a one-time cost. Returns True if a VACUUM actually ran (only ever
+        happens once per database file, from then on incremental_vacuum()
+        alone reclaims freed space cheaply). Call from a worker thread only
+        — VACUUM rewrites the entire file, slow on a multi-GB database.
+        schema: "main" (personal DB) or "net" (cache DB) -- VACUUM and its
+        related PRAGMAs are schema-qualified in SQLite and apply to exactly
+        one attached database per call, there's no "vacuum everything"
+        single statement (see docs/superpowers/specs/2026-08-27-db-split-design.md)."""
+        mode = self.conn.execute(f"PRAGMA {schema}.auto_vacuum").fetchone()[0]
+        if mode == 2:  # already INCREMENTAL
+            return False
+        self.conn.execute(f"PRAGMA {schema}.auto_vacuum = INCREMENTAL")
+        self.conn.execute(f"VACUUM {schema}")
+        return True
+
+    def incremental_vacuum(self, pages: int = 2000, schema: str = "main") -> None:
+        """Reclaims already-freed pages (e.g. from a prior DELETE) a chunk
+        at a time — cheap compared to a full VACUUM. Call from a worker
+        thread only, same reasoning as enable_incremental_auto_vacuum().
+        schema: see enable_incremental_auto_vacuum's docstring."""
+        self.conn.execute(f"PRAGMA {schema}.incremental_vacuum({pages})")
 
     def ensure_system_coords_indexes(self) -> None:
         """system_coords has no index besides its PRIMARY KEY (system_name)
