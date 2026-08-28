@@ -19,6 +19,41 @@ class Database:
             self.conn.execute("PRAGMA journal_mode=WAL")
             self.conn.execute("PRAGMA busy_timeout=30000")
 
+        # EDDN/Spansh-sourced tables live in a separate file, attached as
+        # `net` -- see docs/superpowers/specs/2026-08-27-db-split-design.md.
+        # Each attached file keeps its own independent WAL/lock even under
+        # one connection, which is what actually removes the contention
+        # between the periodic EDDN flush and this connection's own writes
+        # (2026-08-27: two prior same-file stopgaps -- batching writes,
+        # then a longer checkpoint cadence -- only reduced how often that
+        # contention was felt, this removes it).
+        if str(db_path) == ":memory:":
+            self.cache_db_path = ":memory:"
+        else:
+            self.cache_db_path = Path(db_path).parent / "network_cache.db"
+        self._attach_cache_db()
+
+    def _attach_cache_db(self) -> None:
+        from persistence.schema import CACHE_SCHEMA_SQL
+
+        try:
+            self.conn.execute("ATTACH DATABASE ? AS net", (str(self.cache_db_path),))
+            self.conn.executescript(CACHE_SCHEMA_SQL)
+        except sqlite3.DatabaseError:
+            # Cache data is disposable by design -- a corrupted cache file
+            # (partial write, disk issue, anything) must never take down
+            # the app or risk the personal DB. Detach if partially
+            # attached, delete the bad file, and retry once against a
+            # fresh one.
+            try:
+                self.conn.execute("DETACH DATABASE net")
+            except sqlite3.OperationalError:
+                pass
+            if self.cache_db_path != ":memory:" and Path(self.cache_db_path).exists():
+                Path(self.cache_db_path).unlink()
+            self.conn.execute("ATTACH DATABASE ? AS net", (str(self.cache_db_path),))
+            self.conn.executescript(CACHE_SCHEMA_SQL)
+
     def execute(self, sql: str, params: tuple = ()):
         cur = self.conn.cursor()
         cur.execute(sql, params)
