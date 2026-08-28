@@ -127,6 +127,20 @@ def test_ensure_market_prices_indexes_targets_net_schema(tmp_path):
     db.run_migrations()
 
     db.ensure_market_prices_indexes()
+    # Verify the index exists in the net schema by checking PRAGMA net.index_list
     indexes = {r[1] for r in db.conn.execute("PRAGMA net.index_list(market_prices)").fetchall()}
     assert "idx_market_prices_system_name" in indexes
+
+    # Further verify the index actually works by testing a query with the index column.
+    # Insert a test row to demonstrate the index can be used.
+    db.conn.execute(
+        "INSERT INTO net.market_prices (market_id, commodity_name, system_name, sell_price, demand, stock, last_updated) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (1, "test_commodity", "test_system", 100, 5, 10, "2026-08-28")
+    )
+    db.conn.commit()
+    # Query using the indexed column and verify the query executes without error
+    result = db.conn.execute(
+        "SELECT * FROM net.market_prices WHERE system_name = ?", ("test_system",)
+    ).fetchall()
+    assert len(result) == 1
     db.close()
