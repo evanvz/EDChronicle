@@ -369,9 +369,13 @@ class _WalCheckpointWorker(QObject):
 
     Running TRUNCATE far less often (this class, minutes not seconds)
     keeps the occasional freeze but cuts how often it happens by roughly
-    the ratio of the two intervals -- a stopgap, not a fix for the
-    underlying contention (see the plan to split high-churn EDDN tables
-    into their own DB file, discussed 2026-08-27).
+    the ratio of the two intervals -- a stopgap superseded by the
+    2026-08-27 DB split (see docs/superpowers/specs/2026-08-27-db-split-
+    design.md): with EDDN-sourced tables moved to their own file (`net`),
+    checkpointing `main` and `net` independently means the personal DB's
+    checkpoint no longer has meaningful write volume to contend with at
+    all, and the cache DB's checkpoint no longer has any main-thread
+    personal-data writes to block.
     """
     finished = pyqtSignal()
 
@@ -384,10 +388,11 @@ class _WalCheckpointWorker(QObject):
 
         db = Database(self._db_path)
         try:
-            _t0 = time.perf_counter()
-            db.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-            _elapsed_ms = (time.perf_counter() - _t0) * 1000
-            log.info("wal_checkpoint(TRUNCATE) took %.0fms", _elapsed_ms)
+            for schema in ("main", "net"):
+                _t0 = time.perf_counter()
+                db.conn.execute(f"PRAGMA {schema}.wal_checkpoint(TRUNCATE)")
+                _elapsed_ms = (time.perf_counter() - _t0) * 1000
+                log.info("%s.wal_checkpoint(TRUNCATE) took %.0fms", schema, _elapsed_ms)
         except Exception:
             log.exception("Background WAL checkpoint failed")
         finally:
