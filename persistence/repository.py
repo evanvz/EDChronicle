@@ -1180,7 +1180,7 @@ class Repository:
         cur = self.db.conn.cursor()
         cur.executemany(
             """
-            INSERT INTO fleet_carrier_materials (
+            INSERT INTO net.fleet_carrier_materials (
                 market_id, material_symbol, carrier_name, carrier_id,
                 price, stock, demand, last_updated
             )
@@ -1270,8 +1270,8 @@ class Repository:
         total_deleted = 0
         while True:
             cur = self.db.conn.execute(
-                "DELETE FROM fleet_carrier_materials WHERE rowid IN "
-                "(SELECT rowid FROM fleet_carrier_materials WHERE last_updated < ? LIMIT ?)",
+                "DELETE FROM net.fleet_carrier_materials WHERE rowid IN "
+                "(SELECT rowid FROM net.fleet_carrier_materials WHERE last_updated < ? LIMIT ?)",
                 (cutoff, batch_size),
             )
             self.db.conn.commit()
@@ -1466,7 +1466,7 @@ class Repository:
         cur = self.db.conn.cursor()
         cur.executemany(
             """
-            INSERT INTO codex_species_sightings (
+            INSERT INTO net.codex_species_sightings (
                 system_address, body_id, species_name, species_symbol, last_seen
             )
             VALUES (?, ?, ?, ?, ?)
@@ -1484,7 +1484,7 @@ class Repository:
         in this system another commander (or us, via our own EDDN publish
         loopback) has already logged a biology CodexEntry for."""
         rows = self.db.conn.execute(
-            "SELECT body_id, species_name, last_seen FROM codex_species_sightings WHERE system_address = ?",
+            "SELECT body_id, species_name, last_seen FROM net.codex_species_sightings WHERE system_address = ?",
             (system_address,),
         ).fetchall()
         return {r["body_id"]: {"species_name": r["species_name"], "last_seen": r["last_seen"]} for r in rows}
@@ -1936,7 +1936,7 @@ class Repository:
                    si.market_id, si.system_name, si.last_visited,
                    si.carrier_docking_access AS docking_access,
                    sc.x, sc.y, sc.z
-            FROM fleet_carrier_materials fcm
+            FROM net.fleet_carrier_materials fcm
             INNER JOIN net.station_info si ON si.market_id = fcm.market_id
             INNER JOIN system_coords sc ON sc.system_name = si.system_name
             WHERE fcm.material_symbol IN ({sym_placeholders})
@@ -2581,7 +2581,7 @@ class Repository:
     ):
         self.db.execute(
             """
-            INSERT INTO spansh_bodies (
+            INSERT INTO net.spansh_bodies (
                 system_address, body_name, planet_class, distance_ls, estimated_value, landable,
                 surface_gravity, radius, mass_em, surface_temperature, surface_pressure,
                 atmosphere_type, volcanism, tidal_lock, was_mapped, updated_at
@@ -2592,16 +2592,16 @@ class Repository:
                 distance_ls         = excluded.distance_ls,
                 estimated_value     = excluded.estimated_value,
                 landable            = excluded.landable,
-                surface_gravity     = COALESCE(excluded.surface_gravity,     spansh_bodies.surface_gravity),
-                radius              = COALESCE(excluded.radius,              spansh_bodies.radius),
-                mass_em             = COALESCE(excluded.mass_em,             spansh_bodies.mass_em),
-                surface_temperature = COALESCE(excluded.surface_temperature, spansh_bodies.surface_temperature),
-                surface_pressure    = COALESCE(excluded.surface_pressure,    spansh_bodies.surface_pressure),
-                atmosphere_type     = COALESCE(excluded.atmosphere_type,     spansh_bodies.atmosphere_type),
-                volcanism           = COALESCE(excluded.volcanism,           spansh_bodies.volcanism),
-                tidal_lock          = COALESCE(excluded.tidal_lock,          spansh_bodies.tidal_lock),
-                was_mapped          = COALESCE(excluded.was_mapped,          spansh_bodies.was_mapped),
-                updated_at          = COALESCE(excluded.updated_at,          spansh_bodies.updated_at)
+                surface_gravity     = COALESCE(excluded.surface_gravity,     net.spansh_bodies.surface_gravity),
+                radius              = COALESCE(excluded.radius,              net.spansh_bodies.radius),
+                mass_em             = COALESCE(excluded.mass_em,             net.spansh_bodies.mass_em),
+                surface_temperature = COALESCE(excluded.surface_temperature, net.spansh_bodies.surface_temperature),
+                surface_pressure    = COALESCE(excluded.surface_pressure,    net.spansh_bodies.surface_pressure),
+                atmosphere_type     = COALESCE(excluded.atmosphere_type,     net.spansh_bodies.atmosphere_type),
+                volcanism           = COALESCE(excluded.volcanism,           net.spansh_bodies.volcanism),
+                tidal_lock          = COALESCE(excluded.tidal_lock,          net.spansh_bodies.tidal_lock),
+                was_mapped          = COALESCE(excluded.was_mapped,          net.spansh_bodies.was_mapped),
+                updated_at          = COALESCE(excluded.updated_at,          net.spansh_bodies.updated_at)
             """,
             (
                 system_address, body_name, planet_class, distance_ls, estimated_value, landable,
@@ -2616,7 +2616,7 @@ class Repository:
             SELECT body_name, planet_class, distance_ls, estimated_value, landable,
                    surface_gravity, radius, mass_em, surface_temperature, surface_pressure,
                    atmosphere_type, volcanism, tidal_lock, was_mapped, updated_at
-            FROM spansh_bodies
+            FROM net.spansh_bodies
             WHERE system_address = ?
             ORDER BY distance_ls IS NULL, distance_ls, body_name
             """,
@@ -2625,7 +2625,7 @@ class Repository:
 
     def count_spansh_bodies(self, system_address: int) -> int:
         row = self.db.execute(
-            "SELECT COUNT(*) AS cnt FROM spansh_bodies WHERE system_address = ?",
+            "SELECT COUNT(*) AS cnt FROM net.spansh_bodies WHERE system_address = ?",
             (system_address,),
         ).fetchone()
         return int(row["cnt"] or 0) if row else 0
