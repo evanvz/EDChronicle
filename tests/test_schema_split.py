@@ -61,3 +61,47 @@ def test_corrupted_cache_file_self_heals(tmp_path):
     ).fetchall()}
     assert "spansh_bodies" in tables
     db.close()
+
+
+def test_run_migrations_adds_columns_to_both_schemas(tmp_path):
+    db = Database(tmp_path / "edhelper.db")
+    db.executescript(SCHEMA_SQL)
+    db.run_migrations()
+
+    # A personal-schema migration column (main.bodies)
+    body_cols = {r[1] for r in db.conn.execute("PRAGMA main.table_info(bodies)").fetchall()}
+    assert "mass_em" in body_cols
+
+    # A cache-schema migration column (net.spansh_bodies)
+    spansh_cols = {r[1] for r in db.conn.execute("PRAGMA net.table_info(spansh_bodies)").fetchall()}
+    assert "was_mapped" in spansh_cols
+    assert "updated_at" in spansh_cols
+
+    # Cache-only tables created purely by migrations (no base CREATE in
+    # CACHE_SCHEMA_SQL), e.g. fleet_carrier_materials
+    net_tables = {r[0] for r in db.conn.execute(
+        "SELECT name FROM net.sqlite_master WHERE type='table'"
+    ).fetchall()}
+    assert {"fleet_carrier_materials", "codex_species_sightings",
+            "system_bgs_status", "system_res_sites"} <= net_tables
+    db.close()
+
+
+def test_run_migrations_drops_old_cache_tables_from_personal_db(tmp_path):
+    """Defends an existing un-wiped edhelper.db from the pre-split schema
+    -- these 8 tables must not linger in main once migrations have run,
+    even though nothing writes to them there any more."""
+    db_path = tmp_path / "edhelper.db"
+    db = Database(db_path)
+    db.executescript(SCHEMA_SQL)
+    # Simulate a pre-split DB: create market_prices directly in main.
+    db.conn.execute(
+        "CREATE TABLE IF NOT EXISTS market_prices (market_id INTEGER, commodity_name TEXT)"
+    )
+    db.run_migrations()
+
+    main_tables = {r[0] for r in db.conn.execute(
+        "SELECT name FROM main.sqlite_master WHERE type='table'"
+    ).fetchall()}
+    assert "market_prices" not in main_tables
+    db.close()

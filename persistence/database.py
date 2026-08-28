@@ -113,19 +113,14 @@ class Database:
         self.conn.execute("CREATE INDEX IF NOT EXISTS idx_system_coords_xyz ON system_coords(x, y, z)")
 
     def run_migrations(self):
-        """Add new columns to existing tables without breaking older DBs."""
-        migrations = [
+        """Add new columns to existing tables without breaking older DBs.
+        Two independent lists -- personal tables in `main`, EDDN/Spansh
+        cache tables in `net` (see docs/superpowers/specs/2026-08-27-
+        db-split-design.md). Each entry is idempotent (IF NOT EXISTS /
+        best-effort ALTER), so running this on every startup is safe."""
+        personal_migrations = [
             "ALTER TABLE bodies ADD COLUMN first_footfall INTEGER DEFAULT 0",
             "ALTER TABLE bodies ADD COLUMN has_footfall    INTEGER DEFAULT 0",
-            """CREATE TABLE IF NOT EXISTS spansh_bodies (
-                system_address  INTEGER NOT NULL,
-                body_name       TEXT    NOT NULL,
-                planet_class    TEXT,
-                distance_ls     REAL,
-                estimated_value INTEGER,
-                landable        INTEGER,
-                PRIMARY KEY (system_address, body_name)
-            )""",
             "ALTER TABLE bodies ADD COLUMN mass_em REAL",
             "ALTER TABLE bodies ADD COLUMN radius REAL",
             "ALTER TABLE bodies ADD COLUMN surface_gravity REAL",
@@ -138,14 +133,6 @@ class Database:
             "ALTER TABLE bodies ADD COLUMN tidal_lock INTEGER",
             "ALTER TABLE bodies ADD COLUMN first_discovered INTEGER",
             "ALTER TABLE bodies ADD COLUMN first_mapped INTEGER",
-            "ALTER TABLE spansh_bodies ADD COLUMN surface_gravity REAL",
-            "ALTER TABLE spansh_bodies ADD COLUMN radius REAL",
-            "ALTER TABLE spansh_bodies ADD COLUMN mass_em REAL",
-            "ALTER TABLE spansh_bodies ADD COLUMN surface_temperature REAL",
-            "ALTER TABLE spansh_bodies ADD COLUMN surface_pressure REAL",
-            "ALTER TABLE spansh_bodies ADD COLUMN atmosphere_type TEXT",
-            "ALTER TABLE spansh_bodies ADD COLUMN volcanism TEXT",
-            "ALTER TABLE spansh_bodies ADD COLUMN tidal_lock INTEGER",
             """CREATE TABLE IF NOT EXISTS faction_snapshots (
                 system_address    INTEGER NOT NULL,
                 faction_name      TEXT    NOT NULL,
@@ -172,60 +159,11 @@ class Database:
             "ALTER TABLE faction_snapshots ADD COLUMN is_squadron_faction INTEGER DEFAULT 0",
             "ALTER TABLE faction_snapshots ADD COLUMN data_timestamp TEXT",
             "ALTER TABLE faction_snapshots ADD COLUMN source TEXT",
-            """CREATE TABLE IF NOT EXISTS station_info (
-                market_id     INTEGER PRIMARY KEY,
-                station_name  TEXT,
-                system_name   TEXT,
-                station_type  TEXT,
-                pads_small    INTEGER,
-                pads_medium   INTEGER,
-                pads_large    INTEGER,
-                last_visited  TEXT
-            )""",
-            "ALTER TABLE station_info ADD COLUMN station_services TEXT",
-            "ALTER TABLE station_info ADD COLUMN station_faction TEXT",
-            "ALTER TABLE station_info ADD COLUMN carrier_docking_access TEXT",
-            "ALTER TABLE station_info ADD COLUMN economies TEXT",
-            "ALTER TABLE station_info ADD COLUMN dist_from_star_ls REAL",
-            "ALTER TABLE station_info ADD COLUMN station_government TEXT",
-            "ALTER TABLE station_info ADD COLUMN station_allegiance TEXT",
-            """CREATE TABLE IF NOT EXISTS commodity_names (
-                internal_name TEXT PRIMARY KEY,
-                display_name  TEXT NOT NULL
-            )""",
             """CREATE TABLE IF NOT EXISTS dismissed_faction_systems (
                 faction_name   TEXT NOT NULL,
                 system_address INTEGER NOT NULL,
                 PRIMARY KEY (faction_name, system_address)
             )""",
-            """CREATE TABLE IF NOT EXISTS market_prices (
-                market_id      INTEGER NOT NULL,
-                commodity_name TEXT    NOT NULL,
-                station_name   TEXT,
-                station_type   TEXT,
-                system_name    TEXT,
-                sell_price     INTEGER,
-                buy_price      INTEGER,
-                mean_price     INTEGER,
-                demand         INTEGER,
-                demand_bracket INTEGER,
-                stock          INTEGER,
-                stock_bracket  INTEGER,
-                last_updated   TEXT NOT NULL,
-                PRIMARY KEY (market_id, commodity_name)
-            )""",
-            """CREATE TABLE IF NOT EXISTS fleet_carrier_materials (
-                market_id       INTEGER NOT NULL,
-                material_symbol TEXT    NOT NULL,
-                carrier_name    TEXT,
-                carrier_id      TEXT,
-                price           INTEGER,
-                stock           INTEGER,
-                demand          INTEGER,
-                last_updated    TEXT    NOT NULL,
-                PRIMARY KEY (market_id, material_symbol)
-            )""",
-            "CREATE INDEX IF NOT EXISTS idx_fcm_symbol ON fleet_carrier_materials(material_symbol)",
             """CREATE TABLE IF NOT EXISTS rings (
                 system_address INTEGER NOT NULL,
                 ring_name      TEXT    NOT NULL,
@@ -236,30 +174,6 @@ class Database:
                 hotspots       TEXT,
                 PRIMARY KEY (system_address, ring_name)
             )""",
-            # market_prices' PRIMARY KEY is (market_id, commodity_name) — great
-            # for market_id lookups (Rare Goods, service finders), useless for
-            # a commodity_name-only search (the Market tab's main search),
-            # which was a confirmed full-table-scan taking 20+ seconds once
-            # this table reached ~12M rows.
-            "CREATE INDEX IF NOT EXISTS idx_market_prices_commodity ON market_prices(commodity_name)",
-            # Biology CodexEntry sightings from the EDDN network — species are
-            # deterministic per body, so another commander's already-reported
-            # find tells us exactly what's there before we personally DSS it.
-            """CREATE TABLE IF NOT EXISTS codex_species_sightings (
-                system_address  INTEGER NOT NULL,
-                body_id         INTEGER NOT NULL,
-                species_name    TEXT    NOT NULL,
-                species_symbol  TEXT,
-                last_seen       TEXT    NOT NULL,
-                PRIMARY KEY (system_address, body_id)
-            )""",
-            # ColonisationConstructionDepot only ever fires in your own
-            # journal when you personally dock at the depot — no EDDN schema
-            # exists for it (confirmed against EDCD/EDDN's schema repo), so
-            # this can't be crowdsourced. market_id is nullable to support
-            # manually adding a squadron site before ever visiting it; once
-            # visited, that row is matched by system+station name and
-            # updated in place with the real market_id and progress data.
             """CREATE TABLE IF NOT EXISTS colonisation_depots (
                 id             INTEGER PRIMARY KEY AUTOINCREMENT,
                 market_id      INTEGER,
@@ -272,29 +186,70 @@ class Database:
                 last_updated   TEXT
             )""",
             "ALTER TABLE bodies ADD COLUMN was_footfalled INTEGER DEFAULT 0",
-            # Tracks which BodyIDs were personally resolved via FSS/Scan --
-            # separate from `bodies` (planet-data-shaped, requires a
-            # PlanetClass) so stars, which have none, can still be recorded
-            # as resolved and survive a reload/revisit.
             """CREATE TABLE IF NOT EXISTS resolved_bodies (
                 system_address INTEGER NOT NULL,
                 body_id        INTEGER NOT NULL,
                 PRIMARY KEY (system_address, body_id)
             )""",
-            # Notable Stellar Phenomena Codex entries (e.g. Metallic
-            # Crystals) are a single-scan confirmation with no body of
-            # their own to key off -- is_phenomena distinguishes those from
-            # an ordinary pending Codex hint so a revisit can restore
-            # "already confirmed" instead of "still needs scanning".
             "ALTER TABLE codex_entries ADD COLUMN is_phenomena INTEGER DEFAULT 0",
-            # War/CivilWar conflicts + multi-state factions -- "latest known
-            # per system" (not daily history like faction_snapshots), only
-            # ever written when there's something combat/BGS-relevant to
-            # show. Fed live going forward only (own journal + EDDN), never
-            # backfilled from old journal files -- a war recorded weeks ago
-            # is very likely already resolved, so backfilling it would be
-            # actively misleading rather than merely stale.
-            """CREATE TABLE IF NOT EXISTS system_bgs_status (
+            # Outfitting/shipyard tracking (station_modules/station_ships) was
+            # removed 2026-08-27 -- see edc/core/eddn_market.py history.
+            "DROP TABLE IF EXISTS station_modules",
+            "DROP TABLE IF EXISTS station_ships",
+            # 2026-08-27 DB split: these 8 tables now live in `net`
+            # (network_cache.db) instead of `main` -- drop any copy an
+            # existing un-wiped edhelper.db already has. No-op on a
+            # database that never had them (new DBs, or one already
+            # created after this migration ran once).
+            "DROP TABLE IF EXISTS main.spansh_bodies",
+            "DROP TABLE IF EXISTS main.station_info",
+            "DROP TABLE IF EXISTS main.commodity_names",
+            "DROP TABLE IF EXISTS main.market_prices",
+            "DROP TABLE IF EXISTS main.fleet_carrier_materials",
+            "DROP TABLE IF EXISTS main.codex_species_sightings",
+            "DROP TABLE IF EXISTS main.system_bgs_status",
+            "DROP TABLE IF EXISTS main.system_res_sites",
+        ]
+        cache_migrations = [
+            "ALTER TABLE net.spansh_bodies ADD COLUMN surface_gravity REAL",
+            "ALTER TABLE net.spansh_bodies ADD COLUMN radius REAL",
+            "ALTER TABLE net.spansh_bodies ADD COLUMN mass_em REAL",
+            "ALTER TABLE net.spansh_bodies ADD COLUMN surface_temperature REAL",
+            "ALTER TABLE net.spansh_bodies ADD COLUMN surface_pressure REAL",
+            "ALTER TABLE net.spansh_bodies ADD COLUMN atmosphere_type TEXT",
+            "ALTER TABLE net.spansh_bodies ADD COLUMN volcanism TEXT",
+            "ALTER TABLE net.spansh_bodies ADD COLUMN tidal_lock INTEGER",
+            "ALTER TABLE net.spansh_bodies ADD COLUMN was_mapped INTEGER",
+            "ALTER TABLE net.spansh_bodies ADD COLUMN updated_at TEXT",
+            "ALTER TABLE net.station_info ADD COLUMN station_services TEXT",
+            "ALTER TABLE net.station_info ADD COLUMN station_faction TEXT",
+            "ALTER TABLE net.station_info ADD COLUMN carrier_docking_access TEXT",
+            "ALTER TABLE net.station_info ADD COLUMN economies TEXT",
+            "ALTER TABLE net.station_info ADD COLUMN dist_from_star_ls REAL",
+            "ALTER TABLE net.station_info ADD COLUMN station_government TEXT",
+            "ALTER TABLE net.station_info ADD COLUMN station_allegiance TEXT",
+            """CREATE TABLE IF NOT EXISTS net.fleet_carrier_materials (
+                market_id       INTEGER NOT NULL,
+                material_symbol TEXT    NOT NULL,
+                carrier_name    TEXT,
+                carrier_id      TEXT,
+                price           INTEGER,
+                stock           INTEGER,
+                demand          INTEGER,
+                last_updated    TEXT    NOT NULL,
+                PRIMARY KEY (market_id, material_symbol)
+            )""",
+            "CREATE INDEX IF NOT EXISTS idx_fcm_symbol ON net.fleet_carrier_materials(material_symbol)",
+            "CREATE INDEX IF NOT EXISTS idx_market_prices_commodity ON net.market_prices(commodity_name)",
+            """CREATE TABLE IF NOT EXISTS net.codex_species_sightings (
+                system_address  INTEGER NOT NULL,
+                body_id         INTEGER NOT NULL,
+                species_name    TEXT    NOT NULL,
+                species_symbol  TEXT,
+                last_seen       TEXT    NOT NULL,
+                PRIMARY KEY (system_address, body_id)
+            )""",
+            """CREATE TABLE IF NOT EXISTS net.system_bgs_status (
                 system_address INTEGER PRIMARY KEY,
                 system_name    TEXT,
                 conflicts      TEXT,
@@ -302,28 +257,15 @@ class Database:
                 data_timestamp TEXT,
                 source         TEXT
             )""",
-            # RES/Low RES/High RES/Hazardous RES presence, system-level only
-            # (FSSSignalDiscovered carries no ring/body granularity). Same
-            # "latest known, forward-only" reasoning as system_bgs_status.
-            """CREATE TABLE IF NOT EXISTS system_res_sites (
+            """CREATE TABLE IF NOT EXISTS net.system_res_sites (
                 system_address INTEGER PRIMARY KEY,
                 system_name    TEXT,
                 tiers          TEXT,
                 data_timestamp TEXT,
                 source         TEXT
             )""",
-            "ALTER TABLE spansh_bodies ADD COLUMN was_mapped INTEGER",
-            "ALTER TABLE spansh_bodies ADD COLUMN updated_at TEXT",
-            # Outfitting/shipyard tracking (station_modules/station_ships) was
-            # removed 2026-08-27 -- the per-station commit pattern needed for
-            # its delete-then-replace semantics was a major source of felt UI
-            # freezes under live EDDN load, not worth the module/ship finder
-            # feature it powered. Drops any copy of these tables an existing
-            # DB already created; new DBs never create them.
-            "DROP TABLE IF EXISTS station_modules",
-            "DROP TABLE IF EXISTS station_ships",
         ]
-        for sql in migrations:
+        for sql in personal_migrations + cache_migrations:
             try:
                 self.conn.execute(sql)
                 self.conn.commit()
