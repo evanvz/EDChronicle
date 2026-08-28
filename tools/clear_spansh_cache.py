@@ -8,7 +8,6 @@ Usage:
   python tools/clear_spansh_cache.py <address> --list  -- show bodies for one system
 """
 import argparse
-import sqlite3
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent.parent / "data" / "edhelper.db"
@@ -17,9 +16,8 @@ DB_PATH = Path(__file__).parent.parent / "data" / "edhelper.db"
 def get_conn():
     if not DB_PATH.exists():
         raise SystemExit(f"DB not found: {DB_PATH}")
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    from persistence.database import Database
+    return Database(DB_PATH).conn
 
 
 def cmd_list_systems(conn):
@@ -27,7 +25,7 @@ def cmd_list_systems(conn):
         """
         SELECT sb.system_address, s.system_name,
                COUNT(sb.body_name) AS cached_bodies
-        FROM spansh_bodies sb
+        FROM net.spansh_bodies sb
         LEFT JOIN systems s ON s.system_address = sb.system_address
         GROUP BY sb.system_address
         ORDER BY s.system_name
@@ -45,7 +43,7 @@ def cmd_list_systems(conn):
 def cmd_list_bodies(conn, address: int):
     rows = conn.execute(
         "SELECT body_name, planet_class, distance_ls, estimated_value, landable "
-        "FROM spansh_bodies WHERE system_address = ? ORDER BY distance_ls",
+        "FROM net.spansh_bodies WHERE system_address = ? ORDER BY distance_ls",
         (address,),
     ).fetchall()
     if not rows:
@@ -59,13 +57,13 @@ def cmd_list_bodies(conn, address: int):
 
 
 def cmd_delete(conn, address: int):
-    cur = conn.execute("DELETE FROM spansh_bodies WHERE system_address = ?", (address,))
+    cur = conn.execute("DELETE FROM net.spansh_bodies WHERE system_address = ?", (address,))
     conn.commit()
     print(f"Deleted {cur.rowcount} row(s) for address {address}.")
 
 
 def cmd_delete_all(conn):
-    cur = conn.execute("DELETE FROM spansh_bodies")
+    cur = conn.execute("DELETE FROM net.spansh_bodies")
     conn.commit()
     print(f"Deleted {cur.rowcount} row(s) from spansh_bodies.")
 

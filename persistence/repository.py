@@ -1224,7 +1224,7 @@ class Repository:
         """
         Deletes rows already excluded from search results by
         _market_data_cutoff() — a stale row is dead weight once nothing
-        can ever surface it, not just hidden. Same 14-day threshold as the
+        can ever surface it, not just hidden. Same 21-day threshold as the
         search filter, so this doesn't change what search can find, only
         what's still sitting on disk. Call from a worker thread only — a
         DELETE across the whole market_prices table is not instant at

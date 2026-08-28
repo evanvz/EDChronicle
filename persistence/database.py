@@ -38,20 +38,27 @@ class Database:
 
         try:
             self.conn.execute("ATTACH DATABASE ? AS net", (str(self.cache_db_path),))
+            self.conn.execute("PRAGMA net.journal_mode=WAL")
             self.conn.executescript(CACHE_SCHEMA_SQL)
         except sqlite3.DatabaseError:
             # Cache data is disposable by design -- a corrupted cache file
             # (partial write, disk issue, anything) must never take down
             # the app or risk the personal DB. Detach if partially
-            # attached, delete the bad file, and retry once against a
-            # fresh one.
+            # attached, delete the bad file (and any stale WAL/SHM
+            # sidecars now that this DB runs in WAL mode too), and retry
+            # once against a fresh one.
             try:
                 self.conn.execute("DETACH DATABASE net")
             except sqlite3.OperationalError:
                 pass
-            if self.cache_db_path != ":memory:" and Path(self.cache_db_path).exists():
-                Path(self.cache_db_path).unlink()
+            if self.cache_db_path != ":memory:":
+                for suffix in ("", "-wal", "-shm"):
+                    try:
+                        Path(f"{self.cache_db_path}{suffix}").unlink(missing_ok=True)
+                    except OSError:
+                        pass
             self.conn.execute("ATTACH DATABASE ? AS net", (str(self.cache_db_path),))
+            self.conn.execute("PRAGMA net.journal_mode=WAL")
             self.conn.executescript(CACHE_SCHEMA_SQL)
 
     def execute(self, sql: str, params: tuple = ()):
@@ -121,7 +128,11 @@ class Database:
         and climbing as of this writing) — an index build at that scale, or
         whatever scale it reaches later, could freeze app launch. IF NOT
         EXISTS makes every run after the first an instant no-op. Call from
-        a worker thread only, same reasoning as ensure_market_prices_indexes()."""
+        a worker thread only, same reasoning as ensure_market_prices_indexes().
+        Unlike ensure_market_prices_indexes()'s tables, system_coords stays
+        in `main` (it's personal-DB data, not EDDN/Spansh cache) -- that's
+        why this method takes no schema parameter and never references
+        `net.`."""
         self.conn.execute("CREATE INDEX IF NOT EXISTS idx_system_coords_xyz ON system_coords(x, y, z)")
 
     def run_migrations(self):

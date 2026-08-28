@@ -2,6 +2,8 @@
 schema, not `main` -- the whole split depends on this being right, since
 an unqualified CREATE TABLE in a script run against a connection with
 `net` attached still lands in `main` by default."""
+from pathlib import Path
+
 from persistence.database import Database
 from persistence.schema import SCHEMA_SQL, CACHE_SCHEMA_SQL
 
@@ -115,9 +117,11 @@ def test_enable_incremental_auto_vacuum_targets_requested_schema(tmp_path):
     db.enable_incremental_auto_vacuum(schema="net")
     mode = db.conn.execute("PRAGMA net.auto_vacuum").fetchone()[0]
     assert mode == 2  # INCREMENTAL
-    # main is untouched by that call
+    # main is untouched by that call -- a schema="net" call must not also
+    # flip main's auto_vacuum mode. tmp_path is a fresh file per test, so
+    # main starts at the SQLite default (0/NONE), never having been VACUUMed.
     main_mode = db.conn.execute("PRAGMA main.auto_vacuum").fetchone()[0]
-    assert main_mode != 2 or True  # main may or may not be 2 depending on prior test runs on this file; just confirm the call didn't raise
+    assert main_mode != 2  # NOT INCREMENTAL -- only net was touched
     db.close()
 
 
@@ -143,6 +147,52 @@ def test_ensure_market_prices_indexes_targets_net_schema(tmp_path):
         "SELECT * FROM net.market_prices WHERE system_name = ?", ("test_system",)
     ).fetchall()
     assert len(result) == 1
+    db.close()
+
+
+def test_net_schema_is_wal_mode(tmp_path):
+    """The whole point of attaching the cache DB as its own file is an
+    independent WAL/lock from `main` (see the __init__ comment) -- if
+    `net` were left in the default rollback-journal mode, a writer there
+    would still take an exclusive lock on the whole cache file, which is
+    exactly the contention this split exists to remove."""
+    db = Database(tmp_path / "edhelper.db")
+    net_mode = db.conn.execute("PRAGMA net.journal_mode").fetchone()[0]
+    assert net_mode.lower() == "wal"
+    db.close()
+
+
+def test_net_wal_checkpoint_reports_checkpointed_frames(tmp_path):
+    """Guards the exact Finding-1 regression: if `net` isn't actually in
+    WAL mode, PRAGMA net.wal_checkpoint(TRUNCATE) silently no-ops and
+    reports (0, -1, -1) instead of raising -- so only a real write +
+    checkpoint proves it's working, not just checking journal_mode.
+
+    Note: on a *successful* TRUNCATE checkpoint the reported log/
+    checkpointed frame counts are 0, not some positive number -- TRUNCATE
+    fully drains the WAL and then truncates it to 0 bytes, and the counts
+    reflect the WAL's state after that (confirmed empirically: PRAGMA
+    net.wal_checkpoint(FULL), which checkpoints but doesn't truncate,
+    reports the real pre-checkpoint frame count on this same data). -1 is
+    SQLite's actual "nothing to checkpoint / not in WAL mode" signal, so
+    that -- plus the WAL sidecar file actually shrinking to 0 bytes -- is
+    what this test checks for."""
+    db = Database(tmp_path / "edhelper.db")
+    db.executescript(SCHEMA_SQL)
+    db.conn.execute(
+        "INSERT INTO net.market_prices (market_id, commodity_name, system_name, sell_price, demand, stock, last_updated) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (1, "test_commodity", "test_system", 100, 5, 10, "2026-08-28"),
+    )
+    db.conn.commit()
+
+    wal_path = Path(f"{db.cache_db_path}-wal")
+    assert wal_path.exists() and wal_path.stat().st_size > 0  # real, unflushed WAL data
+
+    busy, log_frames, checkpointed_frames = db.conn.execute(
+        "PRAGMA net.wal_checkpoint(TRUNCATE)"
+    ).fetchone()
+    assert (log_frames, checkpointed_frames) != (-1, -1)  # -1,-1 == silent no-op (the bug)
+    assert wal_path.stat().st_size == 0  # WAL was actually drained and truncated
     db.close()
 
 
