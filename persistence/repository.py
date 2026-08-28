@@ -545,7 +545,7 @@ class Repository:
         normalized_timestamp = _normalize_data_timestamp(data_timestamp)
         self.db.execute(
             """
-            INSERT INTO system_bgs_status (
+            INSERT INTO net.system_bgs_status (
                 system_address, system_name, conflicts, faction_states, data_timestamp, source
             )
             VALUES (?, ?, ?, ?, ?, ?)
@@ -555,8 +555,8 @@ class Repository:
                 faction_states = excluded.faction_states,
                 data_timestamp = excluded.data_timestamp,
                 source         = excluded.source
-            WHERE system_bgs_status.data_timestamp IS NULL
-               OR excluded.data_timestamp >= system_bgs_status.data_timestamp
+            WHERE net.system_bgs_status.data_timestamp IS NULL
+               OR excluded.data_timestamp >= net.system_bgs_status.data_timestamp
             """,
             (
                 system_address, system_name,
@@ -578,7 +578,7 @@ class Repository:
         normalized_timestamp = _normalize_data_timestamp(data_timestamp)
         self.db.execute(
             """
-            INSERT INTO system_res_sites (
+            INSERT INTO net.system_res_sites (
                 system_address, system_name, tiers, data_timestamp, source
             )
             VALUES (?, ?, ?, ?, ?)
@@ -587,8 +587,8 @@ class Repository:
                 tiers          = excluded.tiers,
                 data_timestamp = excluded.data_timestamp,
                 source         = excluded.source
-            WHERE system_res_sites.data_timestamp IS NULL
-               OR excluded.data_timestamp >= system_res_sites.data_timestamp
+            WHERE net.system_res_sites.data_timestamp IS NULL
+               OR excluded.data_timestamp >= net.system_res_sites.data_timestamp
             """,
             (system_address, system_name, json.dumps(clean_tiers), normalized_timestamp, source),
         )
@@ -606,7 +606,7 @@ class Repository:
             """
             SELECT b.system_address, b.system_name, b.conflicts, b.faction_states,
                    b.data_timestamp, sc.x, sc.y, sc.z
-            FROM system_bgs_status b
+            FROM net.system_bgs_status b
             INNER JOIN system_coords sc ON sc.system_name = b.system_name
             WHERE b.data_timestamp >= ?
                   AND sc.x BETWEEN ? AND ? AND sc.y BETWEEN ? AND ? AND sc.z BETWEEN ? AND ?
@@ -637,7 +637,7 @@ class Repository:
         rows = self.db.conn.execute(
             """
             SELECT r.system_address, r.system_name, r.tiers, r.data_timestamp, sc.x, sc.y, sc.z
-            FROM system_res_sites r
+            FROM net.system_res_sites r
             INNER JOIN system_coords sc ON sc.system_name = r.system_name
             WHERE r.data_timestamp >= ?
                   AND sc.x BETWEEN ? AND ? AND sc.y BETWEEN ? AND ? AND sc.z BETWEEN ? AND ?
@@ -669,7 +669,7 @@ class Repository:
         stale-but-known data alongside its own timestamp is more useful
         than showing nothing."""
         row = self.db.conn.execute(
-            "SELECT conflicts, faction_states, data_timestamp FROM system_bgs_status WHERE system_address = ?",
+            "SELECT conflicts, faction_states, data_timestamp FROM net.system_bgs_status WHERE system_address = ?",
             (system_address,),
         ).fetchone()
         if not row:
@@ -1296,8 +1296,8 @@ class Repository:
         total_deleted = 0
         while True:
             cur = self.db.conn.execute(
-                "DELETE FROM system_bgs_status WHERE rowid IN "
-                "(SELECT rowid FROM system_bgs_status WHERE data_timestamp < ? LIMIT ?)",
+                "DELETE FROM net.system_bgs_status WHERE rowid IN "
+                "(SELECT rowid FROM net.system_bgs_status WHERE data_timestamp < ? LIMIT ?)",
                 (cutoff, batch_size),
             )
             self.db.conn.commit()
@@ -1315,8 +1315,8 @@ class Repository:
         total_deleted = 0
         while True:
             cur = self.db.conn.execute(
-                "DELETE FROM system_res_sites WHERE rowid IN "
-                "(SELECT rowid FROM system_res_sites WHERE data_timestamp < ? LIMIT ?)",
+                "DELETE FROM net.system_res_sites WHERE rowid IN "
+                "(SELECT rowid FROM net.system_res_sites WHERE data_timestamp < ? LIMIT ?)",
                 (cutoff, batch_size),
             )
             self.db.conn.commit()
