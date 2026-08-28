@@ -1147,7 +1147,7 @@ class Repository:
         cur = self.db.conn.cursor()
         cur.executemany(
             """
-            INSERT INTO market_prices (
+            INSERT INTO net.market_prices (
                 market_id, commodity_name, station_name, station_type, system_name,
                 sell_price, buy_price, mean_price, demand, demand_bracket,
                 stock, stock_bracket, last_updated
@@ -1212,7 +1212,7 @@ class Repository:
         cur = self.db.conn.cursor()
         cur.executemany(
             """
-            INSERT INTO station_info (market_id, carrier_docking_access)
+            INSERT INTO net.station_info (market_id, carrier_docking_access)
             VALUES (?, ?)
             ON CONFLICT(market_id) DO UPDATE SET
                 carrier_docking_access = excluded.carrier_docking_access
@@ -1245,8 +1245,8 @@ class Repository:
         total_deleted = 0
         while True:
             cur = self.db.conn.execute(
-                "DELETE FROM market_prices WHERE rowid IN "
-                "(SELECT rowid FROM market_prices WHERE last_updated < ? LIMIT ?)",
+                "DELETE FROM net.market_prices WHERE rowid IN "
+                "(SELECT rowid FROM net.market_prices WHERE last_updated < ? LIMIT ?)",
                 (cutoff, batch_size),
             )
             self.db.conn.commit()
@@ -1339,7 +1339,7 @@ class Repository:
         cur = self.db.conn.cursor()
         cur.executemany(
             """
-            INSERT INTO commodity_names (internal_name, display_name)
+            INSERT INTO net.commodity_names (internal_name, display_name)
             VALUES (?, ?)
             ON CONFLICT(internal_name) DO UPDATE SET display_name = excluded.display_name
             """,
@@ -1349,7 +1349,7 @@ class Repository:
 
     def get_all_commodity_display_names(self) -> list[str]:
         rows = self.db.conn.execute(
-            "SELECT DISTINCT display_name FROM commodity_names ORDER BY display_name"
+            "SELECT DISTINCT display_name FROM net.commodity_names ORDER BY display_name"
         ).fetchall()
         return [r["display_name"] for r in rows]
 
@@ -1359,7 +1359,7 @@ class Repository:
         never the pretty name, so anything rendering a commodity_name
         straight from that table needs this to show real names."""
         rows = self.db.conn.execute(
-            "SELECT internal_name, display_name FROM commodity_names"
+            "SELECT internal_name, display_name FROM net.commodity_names"
         ).fetchall()
         return {r["internal_name"]: r["display_name"] for r in rows}
 
@@ -1379,7 +1379,7 @@ class Repository:
         """Ground truth from our own Docked events — ON CONFLICT keeps the latest visit's data."""
         self.db.execute(
             """
-            INSERT INTO station_info (
+            INSERT INTO net.station_info (
                 market_id, station_name, system_name, station_type,
                 pads_small, pads_medium, pads_large, last_visited,
                 station_services, station_faction
@@ -1427,7 +1427,7 @@ class Repository:
         cur = self.db.conn.cursor()
         cur.executemany(
             """
-            INSERT INTO station_info (
+            INSERT INTO net.station_info (
                 market_id, station_name, system_name, station_type,
                 pads_small, pads_medium, pads_large, last_visited,
                 station_services, station_faction, economies,
@@ -1542,7 +1542,7 @@ class Repository:
             SELECT si.market_id, si.station_name, si.system_name, si.station_faction,
                    si.station_type, si.pads_small, si.pads_medium, si.pads_large,
                    si.last_visited, c.x, c.y, c.z
-            FROM station_info si
+            FROM net.station_info si
             JOIN system_coords c ON c.system_name = si.system_name
             WHERE si.station_services LIKE '%Facilitator%'
             {exclusion_clause}
@@ -1594,7 +1594,7 @@ class Repository:
             SELECT si.market_id, si.station_name, si.system_name, si.station_faction,
                    si.station_type, si.pads_small, si.pads_medium, si.pads_large,
                    si.last_visited, c.x, c.y, c.z
-            FROM station_info si
+            FROM net.station_info si
             JOIN system_coords c ON c.system_name = si.system_name
             WHERE LOWER(si.station_faction) = ?
             """,
@@ -1632,7 +1632,7 @@ class Repository:
         placeholders = ",".join("?" for _ in market_ids)
         rows = self.db.conn.execute(
             f"SELECT market_id, station_type, pads_small, pads_medium, pads_large "
-            f"FROM station_info WHERE market_id IN ({placeholders})",
+            f"FROM net.station_info WHERE market_id IN ({placeholders})",
             market_ids,
         ).fetchall()
         return {
@@ -1659,7 +1659,7 @@ class Repository:
             """
             SELECT market_id, station_name, system_name, station_faction,
                    station_type, pads_small, pads_medium, pads_large, last_visited
-            FROM station_info
+            FROM net.station_info
             WHERE LOWER(station_faction) = ? AND system_name = ?
             ORDER BY station_name
             """,
@@ -1678,7 +1678,7 @@ class Repository:
     def get_station_info(self, market_id: int) -> dict | None:
         """Full station_info row (as a dict) for a market_id, or None."""
         row = self.db.conn.execute(
-            "SELECT * FROM station_info WHERE market_id = ?", (market_id,)
+            "SELECT * FROM net.station_info WHERE market_id = ?", (market_id,)
         ).fetchone()
         return dict(row) if row else None
 
@@ -1700,7 +1700,7 @@ class Repository:
             SELECT si.market_id, si.station_name, si.system_name, si.station_faction,
                    si.station_type, si.pads_small, si.pads_medium, si.pads_large,
                    si.last_visited, c.x, c.y, c.z
-            FROM station_info si
+            FROM net.station_info si
             JOIN system_coords c ON c.system_name = si.system_name
             WHERE {where_clause}
             """,
@@ -1743,9 +1743,9 @@ class Repository:
                    m.sell_price, m.buy_price, m.stock, m.demand, m.last_updated,
                    c.x, c.y, c.z,
                    si.pads_small, si.pads_medium, si.pads_large
-            FROM market_prices m
+            FROM net.market_prices m
             LEFT JOIN system_coords c ON c.system_name = m.system_name
-            LEFT JOIN station_info si ON si.market_id = m.market_id
+            LEFT JOIN net.station_info si ON si.market_id = m.market_id
             WHERE m.market_id IN ({placeholders})
             """,
             market_ids,
@@ -1803,9 +1803,9 @@ class Repository:
                    m.sell_price, m.demand, m.stock, m.last_updated,
                    si.pads_small, si.pads_medium, si.pads_large, si.station_faction,
                    sc.x, sc.y, sc.z
-            FROM market_prices m
+            FROM net.market_prices m
             INNER JOIN system_coords sc ON sc.system_name = m.system_name
-            LEFT JOIN station_info si ON si.market_id = m.market_id
+            LEFT JOIN net.station_info si ON si.market_id = m.market_id
             WHERE m.commodity_name = ? AND m.sell_price IS NOT NULL
                   AND (m.station_type IS NULL OR m.station_type != 'FleetCarrier')
                   AND m.last_updated >= ?
@@ -1867,9 +1867,9 @@ class Repository:
                    m.commodity_name, m.sell_price, m.demand, m.stock, m.last_updated,
                    si.pads_small, si.pads_medium, si.pads_large,
                    sc.x, sc.y, sc.z
-            FROM market_prices m
+            FROM net.market_prices m
             INNER JOIN system_coords sc ON sc.system_name = m.system_name
-            LEFT JOIN station_info si ON si.market_id = m.market_id
+            LEFT JOIN net.station_info si ON si.market_id = m.market_id
             WHERE m.commodity_name IN ({commodity_placeholders}) AND m.sell_price IS NOT NULL
                   AND (m.station_type IS NULL OR m.station_type != 'FleetCarrier')
                   AND m.last_updated >= ?
@@ -1937,7 +1937,7 @@ class Repository:
                    si.carrier_docking_access AS docking_access,
                    sc.x, sc.y, sc.z
             FROM fleet_carrier_materials fcm
-            INNER JOIN station_info si ON si.market_id = fcm.market_id
+            INNER JOIN net.station_info si ON si.market_id = fcm.market_id
             INNER JOIN system_coords sc ON sc.system_name = si.system_name
             WHERE fcm.material_symbol IN ({sym_placeholders})
                   AND fcm.stock > 0
@@ -1987,9 +1987,9 @@ class Repository:
                    m.buy_price, m.stock, m.last_updated,
                    si.pads_small, si.pads_medium, si.pads_large, si.station_faction,
                    sc.x, sc.y, sc.z
-            FROM market_prices m
+            FROM net.market_prices m
             INNER JOIN system_coords sc ON sc.system_name = m.system_name
-            LEFT JOIN station_info si ON si.market_id = m.market_id
+            LEFT JOIN net.station_info si ON si.market_id = m.market_id
             WHERE m.commodity_name = ? AND m.buy_price IS NOT NULL AND m.buy_price > 0
                   AND m.stock IS NOT NULL AND m.stock > 0
                   AND (m.station_type IS NULL OR m.station_type != 'FleetCarrier')
@@ -2052,9 +2052,9 @@ class Repository:
                    m.last_updated,
                    si.pads_small, si.pads_medium, si.pads_large, si.station_faction,
                    sc.x, sc.y, sc.z
-            FROM market_prices m
+            FROM net.market_prices m
             INNER JOIN system_coords sc ON sc.system_name = m.system_name
-            LEFT JOIN station_info si ON si.market_id = m.market_id
+            LEFT JOIN net.station_info si ON si.market_id = m.market_id
             WHERE (m.sell_price IS NOT NULL
                      OR (m.buy_price IS NOT NULL AND m.buy_price > 0 AND m.stock IS NOT NULL AND m.stock > 0))
                   AND (m.station_type IS NULL OR m.station_type != 'FleetCarrier')
@@ -2128,8 +2128,8 @@ class Repository:
                    m.commodity_name, m.sell_price, m.demand, m.buy_price, m.stock,
                    m.last_updated,
                    si.pads_small, si.pads_medium, si.pads_large, si.station_faction
-            FROM market_prices m
-            LEFT JOIN station_info si ON si.market_id = m.market_id
+            FROM net.market_prices m
+            LEFT JOIN net.station_info si ON si.market_id = m.market_id
             WHERE (m.sell_price IS NOT NULL
                      OR (m.buy_price IS NOT NULL AND m.buy_price > 0 AND m.stock IS NOT NULL AND m.stock > 0))
                   AND (m.station_type IS NULL OR m.station_type != 'FleetCarrier')
@@ -2253,7 +2253,7 @@ class Repository:
         rows = self.db.conn.execute(
             """
             SELECT DISTINCT si.station_name, si.system_name, sc.x, sc.y, sc.z
-            FROM station_info si
+            FROM net.station_info si
             JOIN system_coords sc ON sc.system_name = si.system_name
             WHERE si.station_name LIKE 'Trailblazer %' AND si.station_type = 'MegaShip'
             """

@@ -86,8 +86,8 @@ def test_uses_inner_join_against_station_info_not_left_join():
     # data-seeding test can distinguish the two join types here. Pinning the
     # SQL text itself is the only way to catch a future INNER -> LEFT edit.
     source = inspect.getsource(Repository.search_fleet_carrier_materials)
-    assert "INNER JOIN station_info" in source
-    assert "LEFT JOIN station_info" not in source
+    assert "INNER JOIN net.station_info" in source
+    assert "LEFT JOIN net.station_info" not in source
 
 
 def test_stale_listing_excluded_past_7_day_cutoff(repo):
