@@ -408,6 +408,32 @@ class Repository:
             (system_address, system_name),
         )
 
+    def save_system_from_flight_log(
+        self,
+        system_address: int,
+        system_name: str,
+        first_visit: str,
+        last_visit: str,
+        visit_count: int,
+        first_discovery: int,
+    ):
+        """One-time backfill from the commander's personal EDSM flight log
+        (tools/import_edsm_flight_log.py) -- only for a system with no
+        existing row (ON CONFLICT DO NOTHING). A journal-derived save_system()
+        row is always more precise (real body_count/fss_complete, exact visit
+        history) and must never be overwritten by an EDSM summary."""
+        self.db.execute(
+            """
+            INSERT INTO systems (
+                system_address, system_name, body_count, fss_complete,
+                first_visit, last_visit, visit_count, first_discovery
+            )
+            VALUES (?, ?, NULL, 0, ?, ?, ?, ?)
+            ON CONFLICT(system_address) DO NOTHING
+            """,
+            (system_address, system_name, first_visit, last_visit, visit_count, first_discovery),
+        )
+
     def save_faction_snapshot(
         self,
         system_address: int,
@@ -2478,7 +2504,8 @@ class Repository:
                 fss_complete,
                 first_visit,
                 last_visit,
-                visit_count
+                visit_count,
+                first_discovery
             FROM systems
             WHERE system_address = ?
             """,

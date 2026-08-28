@@ -232,6 +232,12 @@ class Database:
             "DROP TABLE IF EXISTS main.codex_species_sightings",
             "DROP TABLE IF EXISTS main.system_bgs_status",
             "DROP TABLE IF EXISTS main.system_res_sites",
+            # Set true for a system backfilled from the commander's personal
+            # EDSM flight log (tools/import_edsm_flight_log.py) where any
+            # visit had EDSM's own firstDiscover flag set -- distinct from
+            # bodies.first_discovered, which is per-body and only ever known
+            # from a personal journal Scan event.
+            "ALTER TABLE systems ADD COLUMN first_discovery INTEGER DEFAULT 0",
         ]
         cache_migrations = [
             "ALTER TABLE net.spansh_bodies ADD COLUMN surface_gravity REAL",
