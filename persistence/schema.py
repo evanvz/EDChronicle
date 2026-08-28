@@ -72,16 +72,6 @@ CREATE TABLE IF NOT EXISTS processed_journals (
     PRIMARY KEY (file_name, file_size)
 );
 
-CREATE TABLE IF NOT EXISTS spansh_bodies (
-    system_address  INTEGER NOT NULL,
-    body_name       TEXT    NOT NULL,
-    planet_class    TEXT,
-    distance_ls     REAL,
-    estimated_value INTEGER,
-    landable        INTEGER,
-    PRIMARY KEY (system_address, body_name)
-);
-
 CREATE TABLE IF NOT EXISTS faction_snapshots (
     system_address    INTEGER NOT NULL,
     faction_name      TEXT    NOT NULL,
@@ -108,7 +98,29 @@ CREATE TABLE IF NOT EXISTS system_coords (
     last_seen TEXT
 );
 
-CREATE TABLE IF NOT EXISTS station_info (
+CREATE TABLE IF NOT EXISTS dismissed_faction_systems (
+    faction_name   TEXT NOT NULL,
+    system_address INTEGER NOT NULL,
+    PRIMARY KEY (faction_name, system_address)
+);
+"""
+
+# Tables sourced from EDDN/Spansh -- disposable, rebuildable, never backed
+# up. Lives in the `net` schema (network_cache.db, attached by
+# Database.__init__), never `main` -- see docs/superpowers/specs/
+# 2026-08-27-db-split-design.md for why these 8 tables specifically.
+CACHE_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS net.spansh_bodies (
+    system_address  INTEGER NOT NULL,
+    body_name       TEXT    NOT NULL,
+    planet_class    TEXT,
+    distance_ls     REAL,
+    estimated_value INTEGER,
+    landable        INTEGER,
+    PRIMARY KEY (system_address, body_name)
+);
+
+CREATE TABLE IF NOT EXISTS net.station_info (
     market_id     INTEGER PRIMARY KEY,
     station_name  TEXT,
     system_name   TEXT,
@@ -122,18 +134,12 @@ CREATE TABLE IF NOT EXISTS station_info (
     last_visited  TEXT
 );
 
-CREATE TABLE IF NOT EXISTS commodity_names (
+CREATE TABLE IF NOT EXISTS net.commodity_names (
     internal_name TEXT PRIMARY KEY,
     display_name  TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS dismissed_faction_systems (
-    faction_name   TEXT NOT NULL,
-    system_address INTEGER NOT NULL,
-    PRIMARY KEY (faction_name, system_address)
-);
-
-CREATE TABLE IF NOT EXISTS market_prices (
+CREATE TABLE IF NOT EXISTS net.market_prices (
     market_id      INTEGER NOT NULL,
     commodity_name TEXT    NOT NULL,
     station_name   TEXT,
