@@ -144,3 +144,22 @@ def test_ensure_market_prices_indexes_targets_net_schema(tmp_path):
     ).fetchall()
     assert len(result) == 1
     db.close()
+
+
+def test_run_migrations_creates_net_cache_indexes(tmp_path):
+    """Verify that run_migrations() actually creates the cache schema indexes
+    (idx_fcm_symbol and idx_market_prices_commodity) in the net schema.
+    These were silently failing due to incorrect SQL syntax until fixed."""
+    db = Database(tmp_path / "edhelper.db")
+    db.executescript(SCHEMA_SQL)
+    db.run_migrations()
+
+    # Verify idx_fcm_symbol is created in net.fleet_carrier_materials
+    fcm_indexes = {r[1] for r in db.conn.execute("PRAGMA net.index_list(fleet_carrier_materials)").fetchall()}
+    assert "idx_fcm_symbol" in fcm_indexes, f"idx_fcm_symbol not found in fleet_carrier_materials indexes: {fcm_indexes}"
+
+    # Verify idx_market_prices_commodity is created in net.market_prices
+    mp_indexes = {r[1] for r in db.conn.execute("PRAGMA net.index_list(market_prices)").fetchall()}
+    assert "idx_market_prices_commodity" in mp_indexes, f"idx_market_prices_commodity not found in market_prices indexes: {mp_indexes}"
+
+    db.close()

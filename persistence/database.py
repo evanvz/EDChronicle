@@ -77,7 +77,12 @@ class Database:
         size and needs a write lock like any schema change — call from a
         worker thread only, same reasoning as enable_incremental_auto_vacuum().
         Targets net.market_prices -- that table lives in the cache DB
-        (see docs/superpowers/specs/2026-08-27-db-split-design.md)."""
+        (see docs/superpowers/specs/2026-08-27-db-split-design.md).
+
+        NOTE: SQLite schema-qualifies CREATE INDEX on the INDEX name, not the
+        table name (opposite of CREATE TABLE/ALTER TABLE/FROM/JOIN which qualify
+        the table). Correct form: CREATE INDEX net.idx_name ON table_name(...).
+        Incorrect form: CREATE INDEX idx_name ON net.table_name(...) raises syntax error."""
         self.conn.execute("CREATE INDEX IF NOT EXISTS net.idx_market_prices_system_name ON market_prices(system_name)")
 
     def enable_incremental_auto_vacuum(self, schema: str = "main") -> bool:
@@ -246,8 +251,8 @@ class Database:
                 last_updated    TEXT    NOT NULL,
                 PRIMARY KEY (market_id, material_symbol)
             )""",
-            "CREATE INDEX IF NOT EXISTS idx_fcm_symbol ON net.fleet_carrier_materials(material_symbol)",
-            "CREATE INDEX IF NOT EXISTS idx_market_prices_commodity ON net.market_prices(commodity_name)",
+            "CREATE INDEX IF NOT EXISTS net.idx_fcm_symbol ON fleet_carrier_materials(material_symbol)",
+            "CREATE INDEX IF NOT EXISTS net.idx_market_prices_commodity ON market_prices(commodity_name)",
             """CREATE TABLE IF NOT EXISTS net.codex_species_sightings (
                 system_address  INTEGER NOT NULL,
                 body_id         INTEGER NOT NULL,
