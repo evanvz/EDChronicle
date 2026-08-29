@@ -10,7 +10,8 @@ from persistence.repository import Repository
 from persistence.schema import SCHEMA_SQL
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "tools"))
-from import_edsm_flight_log import fetch_flight_log, group_by_system  # noqa: E402
+from import_edsm_flight_log import fetch_flight_log, group_by_system, open_staging_db, save_staged_systems  # noqa: E402
+from import_edsm_staging_to_db import read_staged_systems  # noqa: E402
 
 
 def _fake_response(logs):
@@ -152,3 +153,42 @@ def test_fetch_flight_log_skips_a_window_that_keeps_failing_and_continues():
         logs = fetch_flight_log("CMDR", "key", "2019-01-01", "2019-01-15")  # 14 days = 2 windows
 
     assert logs == [{"system": "B"}]
+
+
+def test_staging_db_roundtrip(tmp_path):
+    """The staging DB is a real sqlite3 file, deliberately separate from
+    edhelper.db -- writing to it must never require or touch the real DB."""
+    staging_path = tmp_path / "staging.db"
+    conn = open_staging_db(staging_path)
+    save_staged_systems(conn, {
+        1: {"system_name": "Eranin", "first_visit": "2019-01-01 10:00:00", "last_visit": "2019-03-01 10:00:00", "visit_count": 3, "first_discovery": 1},
+        2: {"system_name": "Sol", "first_visit": "2019-01-02 10:00:00", "last_visit": "2019-01-02 10:00:00", "visit_count": 1, "first_discovery": 0},
+    })
+    conn.close()
+
+    rows = {r["system_address"]: r for r in read_staged_systems(staging_path)}
+    assert rows[1]["system_name"] == "Eranin"
+    assert rows[1]["visit_count"] == 3
+    assert rows[1]["first_discovery"] == 1
+    assert rows[2]["system_name"] == "Sol"
+
+
+def test_staging_db_merges_repeated_runs_for_the_same_system(tmp_path):
+    """Re-running the fetch for an overlapping/retried date range must
+    merge into the existing staged row, not duplicate or clobber it."""
+    staging_path = tmp_path / "staging.db"
+    conn = open_staging_db(staging_path)
+    save_staged_systems(conn, {
+        1: {"system_name": "Eranin", "first_visit": "2019-02-01 10:00:00", "last_visit": "2019-02-01 10:00:00", "visit_count": 1, "first_discovery": 0},
+    })
+    save_staged_systems(conn, {
+        1: {"system_name": "Eranin", "first_visit": "2019-01-01 10:00:00", "last_visit": "2019-03-01 10:00:00", "visit_count": 2, "first_discovery": 1},
+    })
+    conn.close()
+
+    rows = read_staged_systems(staging_path)
+    assert len(rows) == 1
+    assert rows[0]["first_visit"] == "2019-01-01 10:00:00"  # earliest of the two runs
+    assert rows[0]["last_visit"] == "2019-03-01 10:00:00"   # latest of the two runs
+    assert rows[0]["visit_count"] == 3                       # summed
+    assert rows[0]["first_discovery"] == 1                   # OR'd in

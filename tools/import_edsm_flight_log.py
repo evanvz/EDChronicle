@@ -1,9 +1,14 @@
 """
-One-off CLI tool to backfill the `systems` table from the commander's
-personal EDSM flight log — for systems visited before local journal
-history exists (e.g. Xbox-era play, which never produced PC journal
-files at all). Never overwrites a system the journal already knows about
-(see repo.save_system_from_flight_log()).
+One-off CLI tool to fetch the commander's personal EDSM flight log and
+stage it in a disposable local DB (data/edsm_staging.db) -- for systems
+visited before local journal history exists (e.g. Xbox-era play, which
+never produced PC journal files at all). Writes nowhere near the real
+edhelper.db; run tools/import_edsm_staging_to_db.py afterward to merge
+the staged rows into it (still insert-only there, never overwrites a
+system the journal already knows about -- see
+repo.save_system_from_flight_log()). Staging first means the slow fetch
+below can be interrupted, retried, or inspected with any SQLite browser
+without ever touching real data.
 
 EDSM's api-logs-v1/get-logs silently caps how much history one request
 can return -- passing a wide startDateTime/endDateTime span (or none at
@@ -22,18 +27,14 @@ Usage:
   python tools/import_edsm_flight_log.py --commander "CMDR Name" --api-key "..." --since 2018-12-01 --until 2021-01-01
 """
 import argparse
-import sys
+import sqlite3
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
 
-DB_PATH = Path(__file__).parent.parent / "data" / "edhelper.db"
-# Running this file directly (`python tools/import_edsm_flight_log.py`) sets
-# sys.path[0] to tools/, not the repo root -- persistence/ lives one level
-# up, so it's unimportable without this (confirmed live 2026-08-29).
-sys.path.insert(0, str(Path(__file__).parent.parent))
+STAGING_DB_PATH = Path(__file__).parent.parent / "data" / "edsm_staging.db"
 _LOGS_URL = "https://www.edsm.net/api-logs-v1/get-logs"
 _TIMEOUT = 60
 # See edc/core/edsm_faction_lookup.py -- EDSM's Cloudflare front-end 403s
@@ -131,46 +132,73 @@ def group_by_system(logs: list[dict]) -> dict[int, dict]:
     return systems
 
 
+def open_staging_db(path: Path = STAGING_DB_PATH) -> sqlite3.Connection:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS staged_systems (
+            system_address  INTEGER PRIMARY KEY,
+            system_name     TEXT NOT NULL,
+            first_visit     TEXT,
+            last_visit      TEXT,
+            visit_count     INTEGER,
+            first_discovery INTEGER
+        )
+        """
+    )
+    conn.commit()
+    return conn
+
+
+def save_staged_systems(conn: sqlite3.Connection, systems: dict[int, dict]) -> None:
+    """Upserts -- unlike the final merge into edhelper.db, the staging DB
+    is disposable and safe to re-run into (e.g. retrying a failed range,
+    or fetching in separate pieces across multiple invocations). A repeat
+    entry for the same system merges: earliest first_visit, latest
+    last_visit, summed visit_count, first_discovery OR'd in."""
+    conn.executemany(
+        """
+        INSERT INTO staged_systems (system_address, system_name, first_visit, last_visit, visit_count, first_discovery)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(system_address) DO UPDATE SET
+            system_name     = excluded.system_name,
+            first_visit     = min(first_visit, excluded.first_visit),
+            last_visit      = max(last_visit, excluded.last_visit),
+            visit_count     = visit_count + excluded.visit_count,
+            first_discovery = max(first_discovery, excluded.first_discovery)
+        """,
+        [
+            (address, row["system_name"], row["first_visit"], row["last_visit"], row["visit_count"], row["first_discovery"])
+            for address, row in systems.items()
+        ],
+    )
+    conn.commit()
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Backfill systems from your personal EDSM flight log.")
+    parser = argparse.ArgumentParser(description="Fetch your personal EDSM flight log into a staging DB (data/edsm_staging.db).")
     parser.add_argument("--commander", required=True, help="Commander name as registered on EDSM")
     parser.add_argument("--api-key", required=True, help="Your EDSM API key (Settings > My API Key)")
     parser.add_argument("--since", default=_EDSM_LAUNCH_DATE, help="YYYY-MM-DD, default: EDSM's launch (full history)")
     parser.add_argument("--until", default=datetime.now(timezone.utc).strftime("%Y-%m-%d"), help="YYYY-MM-DD, default: today")
     args = parser.parse_args()
 
-    if not DB_PATH.exists():
-        raise SystemExit(f"DB not found: {DB_PATH}")
-
     logs = fetch_flight_log(args.commander, args.api_key, args.since, args.until)
     print(f"EDSM flight log ({args.since} to {args.until}): {len(logs)} entries.")
     if not logs:
-        print("Nothing to import for this range.")
+        print("Nothing to stage for this range.")
         return
     systems = group_by_system(logs)
     print(f"{len(systems)} distinct systems.")
 
-    from persistence.database import Database
-    from persistence.repository import Repository
+    conn = open_staging_db()
+    save_staged_systems(conn, systems)
+    total_staged = conn.execute("SELECT COUNT(*) FROM staged_systems").fetchone()[0]
+    conn.close()
 
-    db = Database(DB_PATH)
-    repo = Repository(db)
-    before = {addr: repo.get_system(addr) for addr in systems}
-    for address, row in systems.items():
-        repo.save_system_from_flight_log(
-            system_address=address,
-            system_name=row["system_name"],
-            first_visit=row["first_visit"],
-            last_visit=row["last_visit"],
-            visit_count=row["visit_count"],
-            first_discovery=row["first_discovery"],
-        )
-    inserted = sum(1 for addr in systems if before[addr] is None)
-    skipped_existing = len(systems) - inserted
-    db.close()
-
-    print(f"Inserted {inserted} new system(s).")
-    print(f"Left {skipped_existing} already-known system(s) untouched.")
+    print(f"Staged to {STAGING_DB_PATH} ({total_staged} systems total in staging).")
+    print("Run tools/import_edsm_staging_to_db.py to merge into edhelper.db.")
 
 
 if __name__ == "__main__":
