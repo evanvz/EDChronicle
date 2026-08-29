@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from typing import List, Optional
 
 from PyQt6.QtCore import Qt, QObject, QThread, pyqtSignal
@@ -38,6 +39,7 @@ _MISSION_OPTIONS = [
     ("Reinforcement systems", "reinforcement"),
     ("Undermining targets",   "undermining"),
     ("Acquisition systems",   "acquisition"),
+    ("Preparation votes (your power)", "preparation"),
     ("All PP systems",        "all"),
 ]
 
@@ -65,6 +67,7 @@ _STATE_COLORS = {
     "expansion":    "#FFD93D",
     "contested":    "#FF8C00",
     "uncontrolled": "#AAAAAA",
+    "preparation":  "#9BE68C",
 }
 
 _STATE_TOOLTIPS = {
@@ -74,6 +77,7 @@ _STATE_TOOLTIPS = {
     "expansion":    "Acquisition — power is expanding into this system",
     "contested":    "Acquisition — multiple powers competing for control",
     "uncontrolled": "Acquisition — no power controls this system",
+    "preparation":  "Preparation — your power is voting to expand here this cycle",
 }
 
 _SCOPE_HINTS = {
@@ -88,6 +92,11 @@ _SCOPE_HINTS = {
     "acquisition": (
         ["Uncontrolled", "Expansion", "Contested"],
         "Unclaimed or contested territory — expand your power's reach.",
+    ),
+    "preparation": (
+        [],
+        "Straight from Frontier's own data, not Spansh — systems your "
+        "power is actively voting to expand into this PowerPlay cycle.",
     ),
     "all": (
         [],
@@ -407,12 +416,17 @@ class PowerplayFinderPanel(QWidget):
         if self._thread and self._thread.isRunning():
             return
 
+        self._search_mission = self._mission_key()
+
+        if self._search_mission == "preparation":
+            self._search_preparation()
+            return
+
         self._search_btn.setEnabled(False)
         self._status_label.setText("Searching Spansh…")
         self._table.setRowCount(0)
         self._loading_spinner.start_over(self._table)
 
-        self._search_mission = self._mission_key()
         self._worker = _SearchWorker(
             power=self._power,
             mission=self._search_mission,
@@ -429,6 +443,41 @@ class PowerplayFinderPanel(QWidget):
         self._worker.finished.connect(self._on_results)
         self._worker.finished.connect(self._thread.quit)
         self._thread.start()
+
+    def _search_preparation(self):
+        """Preparation votes come straight from Frontier's own feed, which
+        already carries coordinates -- no Spansh search or worker thread
+        needed, just local distance math over the cached rows."""
+        if self._fdev_powerplay is None or not self._fdev_powerplay.has_data():
+            self._status_label.setText(
+                "Frontier's official PowerPlay data isn't downloaded yet — try again shortly."
+            )
+            return
+
+        range_ly = self._range_spin.value()
+        candidates = []
+        for row in self._fdev_powerplay.get_preparation_systems(self._power):
+            dx = row["x"] - self._ref_x
+            dy = row["y"] - self._ref_y
+            dz = row["z"] - self._ref_z
+            dist = math.sqrt(dx * dx + dy * dy + dz * dz)
+            if dist <= range_ly:
+                candidates.append((dist, row))
+        candidates.sort(key=lambda pair: pair[0])
+
+        results = [
+            SpanshSystem(
+                name=row["system"],
+                distance=dist,
+                controlling_power=self._power,
+                pp_state="Preparation",
+                powers=[self._power],
+                station_types=[],
+                id64=None,
+            )
+            for dist, row in candidates[:50]
+        ]
+        self._on_results(results, "")
 
     def _apply_fdev_correction(self, results: List[SpanshSystem]):
         """Drops any Reinforcement/Undermining candidate Frontier's own
