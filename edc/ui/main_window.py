@@ -4491,9 +4491,23 @@ class MainWindow(QMainWindow):
         PayBounties yet), find the closest station we've personally
         confirmed offers Interstellar Factors, excluding any station owned
         by an issuing faction — that station can't clear the bounty.
+
+        A bounty 7+ days old goes DORMANT (see bounty_scanner.py) and is
+        only payable at a station the issuing faction controls, never at
+        Interstellar Factors — so a dormant bounty must never produce an
+        IF suggestion (confirmed live: the game's own IF menu shows
+        nothing for one, so recommending a station for it is just wrong).
         """
         active = getattr(self.state, "active_bounties", None) or {}
         if not active:
+            self.state.closest_interstellar_factors = None
+            return
+        last_commit = getattr(self.state, "bounty_last_commit", None) or {}
+        payable = {
+            faction: amount for faction, amount in active.items()
+            if (fmt.bounty_age_days(last_commit.get(faction) or "") or 0) < 7
+        }
+        if not payable:
             self.state.closest_interstellar_factors = None
             return
         x, y, z = self.state.system_x, self.state.system_y, self.state.system_z
@@ -4501,7 +4515,7 @@ class MainWindow(QMainWindow):
             return
         try:
             self.state.closest_interstellar_factors = self.repo.find_closest_interstellar_factors(
-                x, y, z, exclude_factions=list(active.keys())
+                x, y, z, exclude_factions=list(payable.keys())
             )
         except Exception:
             log.exception("Failed to find closest Interstellar Factors station")
