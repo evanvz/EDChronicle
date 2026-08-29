@@ -26,7 +26,7 @@ class PowerplayPanel(QWidget):
     main_window, repo, or any other panel.
     """
 
-    def __init__(self, parent=None, edsm_powerplay=None, eddn_powerplay=None):
+    def __init__(self, parent=None, edsm_powerplay=None, eddn_powerplay=None, fdev_powerplay=None):
         super().__init__(parent)
 
         root = QVBoxLayout(self)
@@ -68,7 +68,9 @@ class PowerplayPanel(QWidget):
         self._tabs.addTab(status_widget, "Status")
 
         # ── Tab 2: Target Finder ──────────────────────────────────────────
-        self.finder_panel = PowerplayFinderPanel(edsm_powerplay=edsm_powerplay, eddn_powerplay=eddn_powerplay)
+        self.finder_panel = PowerplayFinderPanel(
+            edsm_powerplay=edsm_powerplay, eddn_powerplay=eddn_powerplay, fdev_powerplay=fdev_powerplay,
+        )
         self._tabs.addTab(self.finder_panel, "Target Finder")
 
         # ── PP Status card ────────────────────────────────────────────────

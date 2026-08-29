@@ -55,6 +55,7 @@ from edc.core.farming_locations import FarmingLocations
 from edc.core.powerplay_activities import PowerPlayActivityTable
 from edc.core.spansh_client import SpanshClient as _SpanshClient
 from edc.core.edsm_powerplay import EdsmPowerPlayCache
+from edc.core.fdev_powerplay import FdevPowerPlayCache
 from edc.core.eddn_publisher import EddnPublisher, _commodity_symbol
 from edc.core.canonn_client import CanonnClient, SystemPoi
 from edc.core.engineering_blueprints import EngineeringBlueprintTable
@@ -144,6 +145,18 @@ class _EdsmPowerPlayRefreshWorker(QObject):
     finished = pyqtSignal(bool)
 
     def __init__(self, cache: EdsmPowerPlayCache):
+        super().__init__()
+        self._cache = cache
+
+    def run(self):
+        ok = self._cache.refresh()
+        self.finished.emit(ok)
+
+
+class _FdevPowerPlayRefreshWorker(QObject):
+    finished = pyqtSignal(bool)
+
+    def __init__(self, cache: FdevPowerPlayCache):
         super().__init__()
         self._cache = cache
 
@@ -1337,6 +1350,9 @@ class MainWindow(QMainWindow):
         self.edsm_powerplay = EdsmPowerPlayCache(settings_base)
         self._edsm_powerplay_thread: QThread | None = None
         self._edsm_powerplay_worker: _EdsmPowerPlayRefreshWorker | None = None
+        self.fdev_powerplay = FdevPowerPlayCache(settings_base)
+        self._fdev_powerplay_thread: QThread | None = None
+        self._fdev_powerplay_worker: _FdevPowerPlayRefreshWorker | None = None
         self._market_prune_thread: QThread | None = None
         self._market_prune_worker: _MarketPruneWorker | None = None
         self._market_vacuum_thread: QThread | None = None
@@ -1390,6 +1406,12 @@ class MainWindow(QMainWindow):
         # not-actually-stale tick a no-op.
         self._edsm_powerplay_retry_timer.setInterval(10 * 60 * 1000)
         self._edsm_powerplay_retry_timer.timeout.connect(self._maybe_start_edsm_powerplay_refresh)
+
+        # Same daily-refresh pattern as EDSM's cache above, for Frontier's
+        # own official PowerPlay feed -- see fdev_powerplay.py.
+        self._fdev_powerplay_retry_timer = QTimer(self)
+        self._fdev_powerplay_retry_timer.setInterval(10 * 60 * 1000)
+        self._fdev_powerplay_retry_timer.timeout.connect(self._maybe_start_fdev_powerplay_refresh)
 
         self.eddn_market_cache = EddnMarketCache(self.repo)
         self._market_flush_timer = QTimer(self)
@@ -1618,7 +1640,10 @@ class MainWindow(QMainWindow):
         )
 
         # PowerPlay tab
-        self.powerplay_panel = PowerplayPanel(edsm_powerplay=self.edsm_powerplay, eddn_powerplay=self.eddn_powerplay)
+        self.powerplay_panel = PowerplayPanel(
+            edsm_powerplay=self.edsm_powerplay, eddn_powerplay=self.eddn_powerplay,
+            fdev_powerplay=self.fdev_powerplay,
+        )
 
         # Engineering tab
         self.engineering_panel = EngineeringPanel(
@@ -1871,6 +1896,7 @@ class MainWindow(QMainWindow):
         # for up to 20 minutes after every app start.
         self._refresh_player_faction()
         self._maybe_start_edsm_powerplay_refresh()
+        self._maybe_start_fdev_powerplay_refresh()
         self._maybe_start_market_prune()
         self._start_eddn_listener()
         # Always running, not just when today's initial check found the
@@ -1878,6 +1904,7 @@ class MainWindow(QMainWindow):
         # at midnight regardless of session length, so this needs to keep
         # polling for the rest of the app's lifetime, not stop once fresh.
         self._edsm_powerplay_retry_timer.start()
+        self._fdev_powerplay_retry_timer.start()
         if auto_start:
             self._auto_start_if_configured()
 
@@ -2088,6 +2115,27 @@ class MainWindow(QMainWindow):
         # Timer keeps running either way -- see its own comment: it's now
         # a continuous "did the calendar day roll over" poll for the rest
         # of the app's lifetime, not a one-shot retry-until-fresh loop.
+
+    def _maybe_start_fdev_powerplay_refresh(self):
+        if not self.fdev_powerplay.is_stale():
+            return
+        if self._fdev_powerplay_thread and self._fdev_powerplay_thread.isRunning():
+            return
+
+        log.info("Frontier PowerPlay cache is stale — refreshing in background")
+        self._fdev_powerplay_worker = _FdevPowerPlayRefreshWorker(self.fdev_powerplay)
+        self._fdev_powerplay_thread = QThread()
+        self._fdev_powerplay_worker.moveToThread(self._fdev_powerplay_thread)
+        self._fdev_powerplay_thread.started.connect(self._fdev_powerplay_worker.run)
+        self._fdev_powerplay_worker.finished.connect(self._on_fdev_powerplay_refreshed)
+        self._fdev_powerplay_worker.finished.connect(self._fdev_powerplay_thread.quit)
+        self._fdev_powerplay_thread.start()
+
+    def _on_fdev_powerplay_refreshed(self, ok: bool):
+        if ok:
+            log.info("Frontier PowerPlay cache refresh complete")
+        else:
+            log.warning("Frontier PowerPlay cache refresh failed — will retry later")
 
     def _maybe_start_market_prune(self):
         """Once/day is plenty — the prune thresholds are 21 days for

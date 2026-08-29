@@ -140,13 +140,15 @@ class PowerplayFinderPanel(QWidget):
     _HDR_STYLE   = HDR_STYLE
     _LABEL_STYLE = LABEL_STYLE
 
-    def __init__(self, parent=None, edsm_powerplay=None, eddn_powerplay=None):
+    def __init__(self, parent=None, edsm_powerplay=None, eddn_powerplay=None, fdev_powerplay=None):
         super().__init__(parent)
 
         self._edsm_powerplay = edsm_powerplay
         self._eddn_powerplay = eddn_powerplay
+        self._fdev_powerplay = fdev_powerplay
 
         self._power:        str   = ""
+        self._search_mission: str = ""
         self._system:       str   = ""
         self._ref_x:        float = 0.0
         self._ref_y:        float = 0.0
@@ -410,9 +412,10 @@ class PowerplayFinderPanel(QWidget):
         self._table.setRowCount(0)
         self._loading_spinner.start_over(self._table)
 
+        self._search_mission = self._mission_key()
         self._worker = _SearchWorker(
             power=self._power,
-            mission=self._mission_key(),
+            mission=self._search_mission,
             pp_state=self._state_key(),
             ref_x=self._ref_x,
             ref_y=self._ref_y,
@@ -427,6 +430,40 @@ class PowerplayFinderPanel(QWidget):
         self._worker.finished.connect(self._thread.quit)
         self._thread.start()
 
+    def _apply_fdev_correction(self, results: List[SpanshSystem]):
+        """Drops any Reinforcement/Undermining candidate Frontier's own
+        official feed contradicts -- Spansh's crawl can lag reality
+        (confirmed live: a Finder-suggested Reinforcement system no
+        longer had a controller to deliver to in-game), and unlike the
+        EDSM/EDDN cross-check sources this one is first-party, trusted
+        enough to actively filter rather than just flag. Acquisition/"all"
+        aren't touched -- "blocked"/"takingControl" in Frontier's feed
+        aren't confidently mapped to those states yet."""
+        if self._fdev_powerplay is None or not self._fdev_powerplay.has_data():
+            return results, 0
+        if self._search_mission not in ("reinforcement", "undermining"):
+            return results, 0
+
+        my_power = self._power.strip().lower()
+        kept: List[SpanshSystem] = []
+        dropped = 0
+        for sys in results:
+            rec = self._fdev_powerplay.get_by_name(sys.name)
+            if rec is None:
+                kept.append(sys)
+                continue
+            rec_power = (rec.get("power") or "").strip().lower()
+            rec_state = (rec.get("state") or "").strip().lower()
+            if self._search_mission == "reinforcement":
+                valid = rec_state == "control" and rec_power == my_power
+            else:  # undermining
+                valid = rec_state == "control" and rec_power not in ("", my_power)
+            if valid:
+                kept.append(sys)
+            else:
+                dropped += 1
+        return kept, dropped
+
     def _on_results(self, results: List[SpanshSystem], error: str):
         from PyQt6.QtGui import QColor
         self._search_btn.setEnabled(True)
@@ -435,10 +472,20 @@ class PowerplayFinderPanel(QWidget):
             self._status_label.setText(f"Error: {error}")
             return
 
+        results, fdev_dropped = self._apply_fdev_correction(results)
+
         status_txt = (
             f"Found {len(results)} system{'s' if len(results) != 1 else ''} "
             f"within {self._range_spin.value()} ly."
         )
+        if fdev_dropped:
+            status_txt += f"  {fdev_dropped} dropped (Frontier's official data no longer agrees)."
+        if self._fdev_powerplay is not None:
+            if self._fdev_powerplay.has_data():
+                age = " (today's data)" if not self._fdev_powerplay.is_stale() else " (cache outdated)"
+                status_txt += f"  Frontier official data active{age}."
+            else:
+                status_txt += "  Frontier official data not yet downloaded."
         if self._edsm_powerplay is not None:
             if self._edsm_powerplay.has_data():
                 age = " (today's data)" if not self._edsm_powerplay.is_stale() else " (cache outdated)"
@@ -470,6 +517,14 @@ class PowerplayFinderPanel(QWidget):
             # between Spansh and these sources, so tier itself isn't compared).
             cross_notes = []
             any_disagreement = False
+            if self._fdev_powerplay is not None:
+                fdev_rec = self._fdev_powerplay.get_by_name(sys.name)
+                if fdev_rec:
+                    fdev_power = fdev_rec.get("power") or ""
+                    fdev_state = fdev_rec.get("state") or ""
+                    cross_notes.append(f"Frontier (official): {fdev_power or '—'} ({fdev_state})")
+                else:
+                    cross_notes.append("Not found in Frontier's official data.")
             for label, source in (("EDSM", self._edsm_powerplay), ("EDDN (live)", self._eddn_powerplay)):
                 if source is None:
                     continue
