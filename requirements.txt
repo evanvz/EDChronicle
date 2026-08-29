@@ -10,5 +10,5 @@ miniaudio==1.71
 vosk==0.3.45
 pycaw==20251023
 pydirectinput==1.0.4
-pyzmq==27.1.0
+pyzmq==27.2.0
 keyboard==0.13.5
