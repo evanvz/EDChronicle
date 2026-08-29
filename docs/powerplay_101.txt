@@ -1,0 +1,20 @@
+POWERPLAY 101
+Getting Started
+Once you have pledged to your PP, you need to complete your first set of weekly assignments to start gaining ranks. After this, you don't need to complete your weekly assignments, but they are a good source of bonus merits.
+
+System States
+There are 4 Powerplay states:
+Unoccupied - no Powerplay power controls the system
+Exploited - one of the 12 powers controls the system
+Fortified - the system can be used to Acquire other systems within 20 Ly
+Stronghold - similar to Fortified but with a larger range of 30 Ly
+
+Activities
+There are 3 activities in Powerplay:
+Acquisition - where a power wants to take control of the system
+Reinforcement - where the controlling power wants to increase their influence
+Undermining - a system controlled by another power where the aim is to reduce their influence
+
+In general, you shouldn't need to plan your own Powerplay activities - you can follow your weekly assignments.
+
+While working towards Rank 100, concentrate on Acquisition (and possibly Undermining) as this earns the best merits. Help with Reinforcement objectives - these don't earn as many merits, but we need to ensure systems aren't lost to rival Undermining.

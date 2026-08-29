@@ -1,0 +1,24 @@
+
+
+BGS 101
+The Background Simulation (BGS) governs the state of minor factions (such as Elite United Worlds) in the galaxy. As a squadron, one of our primary aims is to manage the BGS in the area around Ekono (our home system) and in our distant colonies.
+
+Boost a Faction
+The aim is to increase a faction's influence within a star system. The main ways to achieve this are:
+Completing missions, ideally ones offering a high influence reward
+Cashing in bounty vouchers for the faction, which can be earned either in the same system or another system where the faction is present
+Trading profitably by selling goods for profit at one of the faction's stations in the system
+Selling exploration data to Universal Cartographics at one of the faction's stations
+
+Hinder a Faction
+The aim is to reduce a faction's influence within a star system. The main ways to achieve this are:
+Sign up to missions for the faction but don't complete them and allow them to expire (don't abandon them or they won't count)
+Take on passenger missions and either don't complete them or self-destruct with passengers onboard
+Trade at a loss or smuggle goods at one of the faction's stations in the system
+Commit crimes against the faction, including murdering their clean (i.e. not Wanted) ships
+
+Fight for a Faction
+This involves winning war Conflict Zones (CZs) in the system against another faction. Each day the number of CZs and combat bonds cashed in for each faction are tallied, with the faction contributing most winning that day. If a faction wins 4 days of the possible 7, they will win the war. Enemy ships in CZs are tough so an engineered combat ship is recommended. If you think you are going to lose the CZ, you should jump out before it finishes.
+
+Vote for a Faction
+In some situations, rather than fight a war, two factions will contest an election. To participate, complete non-combat missions for a faction, ideally those that specifically mention the election, such as sensitive poll data courier missions, and those offering high influence rewards. Whichever faction contributes the most influence in a day will win that day. As with wars, if a faction wins 4 days of the possible 7, they will win the election.
