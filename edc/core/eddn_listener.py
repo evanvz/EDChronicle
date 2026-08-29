@@ -275,9 +275,24 @@ class EddnPowerPlayWorker(QObject):
             # EDDN is public/unmoderated at the data level — some uploader clients
             # send malformed SystemAddress values (observed: negative ints, likely
             # truncated 32-bit artifacts). Real ones are always positive.
-            if not (isinstance(power, str) and power and isinstance(power_state, str) and power_state
+            #
+            # ControllingPower is only sent at all once a system has an actual
+            # controller (Exploited/Fortified/Stronghold/Turmoil) -- an
+            # "Unoccupied" system, including one that just lost its
+            # controller, reports PowerplayState with no ControllingPower
+            # field. Previously required both fields truthy, so a lost
+            # controller was silently dropped instead of updating the
+            # cache -- the cross-check kept "confirming" a stale Spansh
+            # controlling_power forever, since nothing ever told it control
+            # had actually been lost (confirmed: a Reinforcement Finder
+            # result stayed unflagged after the system it named had already
+            # gone uncontrolled). power="" is the explicit "no controller"
+            # sighting; get_controller() below treats it as real data, not
+            # a missing entry.
+            if not (isinstance(power_state, str) and power_state
                     and isinstance(id64, int) and id64 > 0):
                 continue
+            power = power if isinstance(power, str) else ""
 
             timestamp = msg.get("timestamp") or ""
             self.system_seen.emit(id64, power, power_state, timestamp)

@@ -75,7 +75,10 @@ class EddnPowerPlayCache:
         return self._systems.get(str(id64))
 
     def get_controller(self, id64: Optional[int]) -> Optional[Dict[str, Any]]:
-        """Most recent sighting for this system (all rows here already imply an actual controller)."""
+        """Most recent sighting for this system. power="" is a real, explicit
+        "no controller" sighting (the system was Unoccupied at that
+        timestamp), not a missing entry -- callers must check for it
+        rather than treating an empty power as "no data"."""
         rows = self.lookup(id64)
         if not rows:
             return None

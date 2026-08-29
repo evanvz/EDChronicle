@@ -478,7 +478,19 @@ class PowerplayFinderPanel(QWidget):
                     rec_power = rec.get("power") or ""
                     rec_state = rec.get("power_state") or ""
                     rec_date  = rec.get("date") or ""
-                    if rec_power and sys.controlling_power and rec_power.lower() != sys.controlling_power.lower():
+                    # A source reporting no controller (EDDN's explicit
+                    # power="" sighting, or EDSM's power_state=="Unoccupied"
+                    # fallback) is just as much a disagreement as reporting
+                    # a different power -- Spansh's snapshot can lag a
+                    # system losing control, which is exactly the case a
+                    # Reinforcement search must not silently trust
+                    # (confirmed live: a Finder result stayed unflagged for
+                    # a system that no longer had a controller to reinforce).
+                    lost_control = sys.controlling_power and (rec_power == "" or rec_state == "Unoccupied")
+                    if lost_control:
+                        any_disagreement = True
+                        cross_notes.append(f"⚠ {label} disagrees: no longer controlled as of {rec_date}")
+                    elif rec_power and sys.controlling_power and rec_power.lower() != sys.controlling_power.lower():
                         any_disagreement = True
                         cross_notes.append(f"⚠ {label} disagrees: {rec_power} ({rec_state}) as of {rec_date}")
                     else:
