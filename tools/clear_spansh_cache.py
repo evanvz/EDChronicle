@@ -8,9 +8,14 @@ Usage:
   python tools/clear_spansh_cache.py <address> --list  -- show bodies for one system
 """
 import argparse
+import sys
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent.parent / "data" / "edhelper.db"
+# Running this file directly (`python tools/clear_spansh_cache.py`) sets
+# sys.path[0] to tools/, not the repo root -- persistence/ lives one level
+# up, so it's unimportable without this (confirmed live 2026-08-29).
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 def get_conn():

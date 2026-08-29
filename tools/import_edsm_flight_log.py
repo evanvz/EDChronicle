@@ -22,6 +22,7 @@ Usage:
   python tools/import_edsm_flight_log.py --commander "CMDR Name" --api-key "..." --since 2018-12-01 --until 2021-01-01
 """
 import argparse
+import sys
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -29,6 +30,10 @@ from pathlib import Path
 import requests
 
 DB_PATH = Path(__file__).parent.parent / "data" / "edhelper.db"
+# Running this file directly (`python tools/import_edsm_flight_log.py`) sets
+# sys.path[0] to tools/, not the repo root -- persistence/ lives one level
+# up, so it's unimportable without this (confirmed live 2026-08-29).
+sys.path.insert(0, str(Path(__file__).parent.parent))
 _LOGS_URL = "https://www.edsm.net/api-logs-v1/get-logs"
 _TIMEOUT = 60
 # See edc/core/edsm_faction_lookup.py -- EDSM's Cloudflare front-end 403s
