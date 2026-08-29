@@ -18,6 +18,16 @@ tools like Inara/EDSM/Spansh use for the same underlying data. Only
 "control" (this power currently holds it) matters for validating a
 Reinforcement target -- that's the one thing this feed is used for.
 
+qty_for/qty_against/thr_for/thr_against are this cycle's live Control
+Points tug-of-war -- the same numbers the in-game system map shows
+under "Control Points" (confirmed against a screenshot: in-game 0 vs
+2240 matches this feed's Qty For/Against magnitude, not the much
+larger cumulative 0-1,000,000+ CP total that determines the tier
+itself). prediction is Frontier's own server-side forecast for the
+next weekly tick ("PASS", "FORTIFY", etc) -- not shown anywhere in the
+game's own UI. "value" is per-system and per-power but its exact
+meaning is still unconfirmed -- not used for anything yet.
+
 No coordinates or id64 in this feed, so it can't drive distance search
 on its own -- keyed by system name only, purely to cross-check/correct
 Spansh's controlling_power for a candidate Spansh already found.
@@ -102,12 +112,30 @@ class FdevPowerPlayCache:
         return len(self._systems)
 
     def get_by_name(self, system_name: Optional[str]) -> Optional[dict]:
-        """Returns {"power": ..., "state": ..., "value": ...} or None if
-        Frontier's feed has no row for this system (most systems aren't
+        """Returns {"power", "state", "value", "qty_for", "qty_against",
+        "thr_for", "thr_against", "prediction"} or None if Frontier's
+        feed has no row for this system (most systems aren't
         PowerPlay-exerted at all)."""
         if not isinstance(system_name, str) or not system_name.strip():
             return None
         return self._systems.get(system_name.strip().lower())
+
+    def get_systems_for_power(self, power: Optional[str]) -> List[dict]:
+        """Every system in the control feed belonging to `power` (any
+        state -- control/contested/blocked/takingControl), each shaped
+        like get_by_name()'s return plus a "system" key (original-cased
+        name -- the dict is keyed by the lowercased name, so the display
+        name has to be carried inside the record itself). Filters the
+        same in-memory dict get_by_name() already holds -- ~1200 rows,
+        cheap enough not to need a second power-indexed structure kept
+        in sync."""
+        if not isinstance(power, str) or not power.strip():
+            return []
+        power_lower = power.strip().lower()
+        return [
+            rec for rec in self._systems.values()
+            if (rec.get("power") or "").strip().lower() == power_lower
+        ]
 
     def get_preparation_systems(self, power: Optional[str]) -> List[dict]:
         """Systems `power` is currently voting to expand into this cycle:
@@ -129,24 +157,36 @@ class FdevPowerPlayCache:
 
     @staticmethod
     def _parse_control_feed(text: str) -> Dict[str, dict]:
+        def _int_or_none(field: str) -> Optional[int]:
+            try:
+                return int(field) if field.strip() else None
+            except ValueError:
+                return None
+
         systems: Dict[str, dict] = {}
         reader = csv.reader(io.StringIO(text))
         for row in reader:
-            if len(row) < 4:
+            if len(row) < 13:
                 continue
             sys_field, power_field, value_field, state_field = row[0], row[1], row[2], row[3]
+            qty_for_field, qty_against_field = row[8], row[9]
+            thr_for_field, thr_against_field = row[10], row[11]
+            prediction_field = row[12]
+
             name = _strip_id_suffix(sys_field)
             if not name:
                 continue
             power = _strip_id_suffix(power_field) if power_field else ""
-            try:
-                value = int(value_field) if value_field.strip() else None
-            except ValueError:
-                value = None
             systems[name.lower()] = {
+                "system": name,
                 "power": power,
                 "state": (state_field or "").strip(),
-                "value": value,
+                "value": _int_or_none(value_field),
+                "qty_for": _int_or_none(qty_for_field),
+                "qty_against": _int_or_none(qty_against_field),
+                "thr_for": _int_or_none(thr_for_field),
+                "thr_against": _int_or_none(thr_against_field),
+                "prediction": (prediction_field or "").strip(),
             }
         return systems
 

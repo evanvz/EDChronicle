@@ -1641,6 +1641,7 @@ class MainWindow(QMainWindow):
 
         # PowerPlay tab
         self.powerplay_panel = PowerplayPanel(
+            repo=self.repo,
             edsm_powerplay=self.edsm_powerplay, eddn_powerplay=self.eddn_powerplay,
             fdev_powerplay=self.fdev_powerplay,
         )

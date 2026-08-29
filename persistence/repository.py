@@ -2498,6 +2498,16 @@ class Repository:
             (system_address,),
         ).fetchone()
 
+    def get_all_visited_system_names(self) -> list[str]:
+        """Every system name ever recorded in `systems` (personally
+        visited, from journal history) -- used to cross-reference against
+        Frontier's PowerPlay feed for the PowerPlay System Status tab's
+        "visited PP-active systems" section."""
+        rows = self.db.conn.execute(
+            "SELECT system_name FROM systems WHERE system_name IS NOT NULL"
+        ).fetchall()
+        return [r["system_name"] for r in rows]
+
     def get_most_recent_system(self):
         return self.db.execute(
             """

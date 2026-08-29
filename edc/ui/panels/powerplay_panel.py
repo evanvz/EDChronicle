@@ -14,6 +14,7 @@ from PyQt6.QtCore import Qt
 
 from edc.ui import formatting as fmt
 from edc.ui.panels.powerplay_finder_panel import PowerplayFinderPanel
+from edc.ui.panels.powerplay_system_status_panel import PowerplaySystemStatusPanel
 from edc.ui.panels.player_faction_panel import derive_bgs_action
 
 log = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ class PowerplayPanel(QWidget):
     main_window, repo, or any other panel.
     """
 
-    def __init__(self, parent=None, edsm_powerplay=None, eddn_powerplay=None, fdev_powerplay=None):
+    def __init__(self, parent=None, repo=None, edsm_powerplay=None, eddn_powerplay=None, fdev_powerplay=None):
         super().__init__(parent)
 
         root = QVBoxLayout(self)
@@ -72,6 +73,12 @@ class PowerplayPanel(QWidget):
             edsm_powerplay=edsm_powerplay, eddn_powerplay=eddn_powerplay, fdev_powerplay=fdev_powerplay,
         )
         self._tabs.addTab(self.finder_panel, "Target Finder")
+
+        # ── Tab 3: System Status ────────────────────────────────────────────
+        self.system_status_panel = PowerplaySystemStatusPanel(
+            repo=repo, edsm_powerplay=edsm_powerplay, fdev_powerplay=fdev_powerplay,
+        )
+        self._tabs.addTab(self.system_status_panel, "System Status")
 
         # ── PP Status card ────────────────────────────────────────────────
         pp_frame = QFrame()
@@ -555,5 +562,10 @@ class PowerplayPanel(QWidget):
 
         try:
             self.finder_panel.refresh(state, pp_activities)
+        except Exception:
+            pass
+
+        try:
+            self.system_status_panel.refresh(state, pp_activities)
         except Exception:
             pass

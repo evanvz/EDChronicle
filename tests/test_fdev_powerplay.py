@@ -34,7 +34,23 @@ def test_refresh_strips_id_suffix_from_names(tmp_path, monkeypatch):
     assert cache.refresh() is True
 
     rec = cache.get_by_name("10 Arietis")
-    assert rec == {"power": "Pranav Antal", "state": "control", "value": 7}
+    assert rec == {
+        "system": "10 Arietis", "power": "Pranav Antal", "state": "control", "value": 7,
+        "qty_for": 30, "qty_against": 4650, "thr_for": 3365, "thr_against": 14203,
+        "prediction": "PASS",
+    }
+
+
+def test_contested_row_with_blank_thresholds_parses_as_none(tmp_path, monkeypatch):
+    cache = _cache(tmp_path, monkeypatch)
+    cache.refresh()
+
+    rec = cache.get_by_name("17 Cygni")
+    assert rec["qty_for"] == 0
+    assert rec["qty_against"] == 0
+    assert rec["thr_for"] is None
+    assert rec["thr_against"] is None
+    assert rec["prediction"] == "PASS"
 
 
 def test_get_by_name_is_case_insensitive(tmp_path, monkeypatch):
@@ -57,6 +73,29 @@ def test_unknown_system_returns_none(tmp_path, monkeypatch):
     cache.refresh()
 
     assert cache.get_by_name("Sol") is None
+
+
+def test_get_systems_for_power_filters_by_power(tmp_path, monkeypatch):
+    cache = _cache(tmp_path, monkeypatch)
+    cache.refresh()
+
+    rows = cache.get_systems_for_power("Pranav Antal")
+    assert len(rows) == 1
+    assert rows[0]["system"] == "10 Arietis"
+
+
+def test_get_systems_for_power_is_case_insensitive(tmp_path, monkeypatch):
+    cache = _cache(tmp_path, monkeypatch)
+    cache.refresh()
+
+    assert len(cache.get_systems_for_power("pranav antal")) == 1
+
+
+def test_get_systems_for_power_unknown_power_returns_empty(tmp_path, monkeypatch):
+    cache = _cache(tmp_path, monkeypatch)
+    cache.refresh()
+
+    assert cache.get_systems_for_power("Nobody") == []
 
 
 def test_preparation_feed_parses_coords_and_strips_id_suffix(tmp_path, monkeypatch):
