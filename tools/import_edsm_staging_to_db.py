@@ -46,6 +46,7 @@ def main():
     from persistence.repository import Repository
 
     db = Database(DB_PATH)
+    db.run_migrations()
     repo = Repository(db)
     before = {row["system_address"]: repo.get_system(row["system_address"]) for row in rows}
     for row in rows:
