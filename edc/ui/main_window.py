@@ -1893,6 +1893,7 @@ class MainWindow(QMainWindow):
         self._tts_spoken_signal_bodies: set = set()  # body keys with signals already announced this system
         self._tts_fss_complete_systems: set = set()  # system_address values already announced "FSS complete"
         self._tts_phenomena_announced: set = set()  # signal names already announced this system
+        self._tts_megaship_announced: set = set()  # megaship keys already announced this system
         self._tts_ship_cooldown_until: float = 0.0  # monotonic timestamp
         self._tts_under_attack_cooldown_until: float = 0.0
         self._commander_quip_cooldown_until: float = 0.0
@@ -2603,6 +2604,7 @@ class MainWindow(QMainWindow):
                 self._tts_spoken_ships.clear()
                 self._tts_spoken_signal_bodies.clear()
                 self._tts_phenomena_announced.clear()
+                self._tts_megaship_announced.clear()
                 self.load_current_system_data()
                 self._load_persisted_rings(incoming_system_address)
                 self._maybe_start_spansh_enrichment()
@@ -2953,7 +2955,15 @@ class MainWindow(QMainWindow):
                 if sig_type == "megaship":
                     signal_name = evt.get("SignalName") or ""
                     mega_key = MegashipTracker.key(evt.get("SystemAddress"), signal_name)
-                    if signal_name and not self.megaship_tracker.has_seen(mega_key):
+                    # has_seen() only ever gets set on a confirmed drop-in
+                    # (SupercruiseDestinationDrop), so it can't gate this
+                    # announcement -- FSSSignalDiscovered can re-fire for
+                    # the same still-undocked megaship (confirmed live: the
+                    # merit callout played twice for one signal), so track
+                    # "already announced this system" separately, cleared
+                    # on system change like the other TTS announce sets.
+                    if (signal_name and mega_key not in self._tts_megaship_announced
+                            and not self.megaship_tracker.has_seen(mega_key)):
                         pledged = (getattr(state, "pp_power", None) or "").strip()
                         ctrl = (getattr(state, "system_controlling_power", None) or "").strip()
                         pp_state_val = (getattr(state, "system_powerplay_state", None) or "").strip()
@@ -2963,9 +2973,11 @@ class MainWindow(QMainWindow):
                             # only decides whether it's worth alerting about.
                             # Reinforcement: our own power controls this system
                             if ctrl and ctrl.lower() == pledged.lower():
+                                self._tts_megaship_announced.add(mega_key)
                                 return ExplorationPhrases.megaship_pp_merits("reinforcement")
                             # Acquisition: no controlling power, but PP-active
                             if not ctrl and pp_state_val:
+                                self._tts_megaship_announced.add(mega_key)
                                 return ExplorationPhrases.megaship_pp_merits("acquisition")
                     return ""
 
