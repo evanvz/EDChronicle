@@ -302,7 +302,7 @@ class Database:
         self._apply_version_migrations()
 
     # Bump this constant whenever a migration requires journals to be re-imported.
-    _REQUIRED_SCHEMA_VERSION = 7
+    _REQUIRED_SCHEMA_VERSION = 8
 
     def _apply_version_migrations(self):
         self.conn.execute(
@@ -321,6 +321,9 @@ class Database:
             # v6: bodies.was_footfalled was added.
             # v7: resolved_bodies table (star FSS-resolution) and
             #     codex_entries.is_phenomena (NSP Codex confirmations) were added.
+            # v8: journal_importer.py now backfills faction_snapshots
+            #     (including SquadronFaction:true detection) from historical
+            #     Location/FSDJump events, which it never did before.
             # Re-import all journals to backfill.
             self.conn.execute("DELETE FROM processed_journals")
             if current == 0:

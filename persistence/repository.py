@@ -497,34 +497,22 @@ class Repository:
             ),
         )
         # Rolling 30-day retention — one row/day already matches the real
-        # BGS tick rate, so this just bounds DB growth over time.
+        # BGS tick rate, so this just bounds DB growth over time. Never
+        # prunes a squadron-faction row though: that flag is an identity
+        # fact (which faction the player is aligned to), not a BGS
+        # snapshot that goes stale -- a historical backfill (journal
+        # replay, EDSM sync, Inara CSV) legitimately writes dates far
+        # older than 30 days, and get_player_faction_overview() needs
+        # that row to still be there (confirmed live: it was deleted in
+        # the same breath it got inserted).
         self.db.execute(
             """
             DELETE FROM faction_snapshots
             WHERE system_address = ? AND faction_name = ?
               AND snapshot_date < date('now', '-30 days')
+              AND is_squadron_faction = 0
             """,
             (system_address, name),
-        )
-
-    def set_manual_squadron_faction(self, faction_name: str) -> None:
-        """
-        Seeds is_squadron_faction detection without waiting for a live
-        Location/Docked/FSDJump event to report SquadronFaction:true —
-        for when a commander's faction is already known (e.g. after moving
-        to a new PC with no journal history yet) but they haven't visited
-        one of its systems this session. Stored under the reserved
-        system_address=0 sentinel, which get_player_faction_overview
-        excludes from the actual systems list.
-        """
-        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        self.save_faction_snapshot(
-            system_address=0,
-            faction={"Name": faction_name, "SquadronFaction": True},
-            snapshot_date=now[:10],
-            is_controlling=False,
-            data_timestamp=now,
-            source="manual",
         )
 
     def save_system_bgs_status(
@@ -708,12 +696,10 @@ class Repository:
     def get_player_faction_overview(self) -> Optional[dict]:
         """
         Detects the player's squadron-aligned minor faction (if any, from
-        SquadronFaction:true in the journal, or a manually-set placeholder
-        at system_address=0 — see set_manual_squadron_faction) and returns
-        its most recent recorded status in every system it's ever been seen
-        in — not just the current system. The placeholder row itself is
-        excluded from the systems list (system_address=0 isn't a real
-        system). Returns None if no squadron faction has ever been recorded.
+        SquadronFaction:true in the journal) and returns its most recent
+        recorded status in every system it's ever been seen in — not just
+        the current system. Returns None if no squadron faction has ever
+        been recorded.
 
         Tiebroken by data_timestamp, not just snapshot_date -- confirmed
         live: a same-day manual entry (e.g. typed in different case/

@@ -113,26 +113,34 @@ def test_source_and_data_timestamp_are_stored_on_first_write(repo):
 # --- get_player_faction_overview()'s same-day tiebreak ---
 
 def test_get_player_faction_overview_breaks_same_day_tie_by_data_timestamp():
-    """Regression test: a manually-set placeholder (system_address=0) and
-    a real same-day journal detection can tie on snapshot_date alone --
-    confirmed live, a manual entry typed in different case than the
-    game's own exact string ('ELITE UNITED WORLDS' vs 'Elite United
-    Worlds') won that tie non-deterministically before data_timestamp was
-    added as a tiebreaker, silently breaking every downstream
-    case-sensitive comparison against the real journal Factions[] name."""
+    """Regression test: a CSV import and a real same-day journal detection
+    can tie on snapshot_date alone -- confirmed live, an import typed/
+    exported in different case than the game's own exact string
+    ('ELITE UNITED WORLDS' vs 'Elite United Worlds') won that tie
+    non-deterministically before data_timestamp was added as a
+    tiebreaker, silently breaking every downstream case-sensitive
+    comparison against the real journal Factions[] name."""
     db = Database(":memory:")
     db.executescript(SCHEMA_SQL)
     db.run_migrations()
     repo = Repository(db)
 
-    repo.set_manual_squadron_faction("ELITE UNITED WORLDS")
+    today = repo.db.conn.execute("SELECT date('now')").fetchone()[0]
+    repo.save_faction_snapshot(
+        3205949786483,
+        {"Name": "ELITE UNITED WORLDS", "SquadronFaction": True, "Influence": 0.5},
+        snapshot_date=today,
+        is_controlling=False,
+        data_timestamp=f"{today}T09:00:00Z",
+        source="csv",
+    )
     # Real detection lands later the same day, with the game's own casing.
     repo.save_faction_snapshot(
         3205949786483,
         {"Name": "Elite United Worlds", "SquadronFaction": True, "Influence": 0.4},
-        snapshot_date=repo.db.conn.execute("SELECT date('now')").fetchone()[0],
+        snapshot_date=today,
         is_controlling=False,
-        data_timestamp="2099-01-01T23:59:59Z",  # later than set_manual_squadron_faction's "now"
+        data_timestamp="2099-01-01T23:59:59Z",
         source="journal",
     )
     overview = repo.get_player_faction_overview()

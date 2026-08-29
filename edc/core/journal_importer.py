@@ -259,6 +259,32 @@ class JournalImporter:
         self.current_system_address = system_address
         self.current_system_name = system_name
 
+    def _save_faction_snapshots(self, event: dict[str, Any], system_address: int) -> None:
+        """Backfills faction_snapshots (including SquadronFaction:true
+        detection) from historical Location/FSDJump events -- without this,
+        a fresh DB never learns the player's squadron-aligned minor faction
+        until a live visit happens during the current session, even though
+        it's sitting right there in years of already-imported journals.
+        Uses the event's own date, not today's -- these are historical
+        snapshots, and get_player_faction_overview picks the most recent
+        squadron-faction sighting by snapshot_date, which must stay in
+        real chronological order to survive a faction change over time."""
+        factions = event.get("Factions")
+        if not isinstance(factions, list) or not factions:
+            return
+        timestamp = event.get("timestamp") or ""
+        if not isinstance(timestamp, str) or len(timestamp) < 10:
+            return
+        snapshot_date = timestamp[:10]
+        controlling = ((event.get("SystemFaction") or {}).get("Name") or "").strip()
+        for f in factions:
+            if not isinstance(f, dict):
+                continue
+            is_controlling = bool(controlling) and f.get("Name") == controlling
+            self.repo.save_faction_snapshot(
+                system_address, f, snapshot_date, is_controlling, timestamp, "journal",
+            )
+
     def _handle_location(self, event: dict[str, Any]) -> None:
         system_address = event.get("SystemAddress")
         system_name = _norm_text(event.get("StarSystem"))
@@ -274,6 +300,7 @@ class JournalImporter:
             timestamp=timestamp,
             increment_visit=True,
         )
+        self._save_faction_snapshots(event, system_address)
 
         body_count = event.get("BodyCount")
         if isinstance(body_count, int):
@@ -296,6 +323,7 @@ class JournalImporter:
             timestamp=timestamp,
             increment_visit=True,
         )
+        self._save_faction_snapshots(event, system_address)
 
     def _handle_fss_discovery_scan(self, event: dict[str, Any]) -> None:
         system_address = event.get("SystemAddress")

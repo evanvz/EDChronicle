@@ -84,3 +84,27 @@ def test_planetary_codex_entry_backfilled_not_phenomena(tmp_path):
     assert len(rows) == 1
     assert rows[0]["is_phenomena"] == 0
     assert rows[0]["variant"] == "Green"
+
+
+def test_historical_fsdjump_backfills_squadron_faction(tmp_path):
+    # Without this, a fresh DB never learns the player's squadron-aligned
+    # faction until a live Docked/FSDJump/Location happens during the
+    # current session -- even with years of already-imported journals.
+    repo = _repo(tmp_path)
+    imp = _importer(tmp_path, repo)
+
+    imp._process_event({
+        "event": "FSDJump", "SystemAddress": 12345, "StarSystem": "Test System",
+        "timestamp": "2024-03-01T10:00:00Z",
+        "SystemFaction": {"Name": "Some Faction"},
+        "Factions": [
+            {"Name": "Some Faction", "SquadronFaction": True, "Influence": 0.4},
+            {"Name": "Other Faction", "Influence": 0.6},
+        ],
+    })
+
+    overview = repo.get_player_faction_overview()
+    assert overview is not None
+    assert overview["faction_name"] == "Some Faction"
+    assert len(overview["systems"]) == 1
+    assert overview["systems"][0]["system_address"] == 12345
