@@ -282,9 +282,18 @@ class CommsWorker(QObject):
                     chunks.append(chunk["data"])
             return b"".join(chunks)
 
+        # Cleared before synthesis, not after -- edge_tts's network round
+        # trip is long enough for interrupt() to fire mid-synthesis (e.g.
+        # a StartJump cutting the departed system's chatter), and clearing
+        # the flag afterward wiped that pending interrupt right before
+        # playback, letting the old system's phrase play through anyway
+        # (confirmed live: last system's system-wide announcement still
+        # heard after jumping). Checking is_set() post-synthesis instead
+        # of blindly clearing means an interrupt requested during the
+        # network call correctly skips playback.
+        self._interrupt.clear()
         mp3_bytes = self._loop.run_until_complete(_synth())
-        if mp3_bytes:
-            self._interrupt.clear()
+        if mp3_bytes and not self._interrupt.is_set():
             wav_bytes = _mp3_to_wav_bytes(mp3_bytes)
             device_id = resolve_playback_device_id(self._output_device_name)
             _dsp_and_play(wav_bytes, 22050, self._volume, pan, self._interrupt, device_id)
