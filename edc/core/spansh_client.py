@@ -198,7 +198,8 @@ class SpanshClient:
         """
         Returns (body_list, error).  Each body dict has:
           name, planet_class, distance_ls, estimated_value, landable (int|None),
-          plus physical stats.
+          plus physical stats and was_mapped/updated_at (Spansh's own last-visit
+          signal, used to estimate footfall likelihood before a personal scan).
         Uses id64 filter when system_address is provided (exact match); falls back to name search.
         """
         if isinstance(system_address, int):
@@ -267,6 +268,9 @@ class SpanshClient:
             volcanism = b.get("volcanism_type") or None
             _tl = b.get("is_rotational_period_tidally_locked")
             tidal_lock = int(bool(_tl)) if isinstance(_tl, bool) else None
+            _wm = b.get("was_mapped")
+            was_mapped = int(bool(_wm)) if isinstance(_wm, bool) else None
+            updated_at = b.get("update_time") or None
 
             out.append({
                 "name":               name,
@@ -282,6 +286,8 @@ class SpanshClient:
                 "atmosphere_type":    atmosphere_type,
                 "volcanism":          volcanism,
                 "tidal_lock":         tidal_lock,
+                "was_mapped":         was_mapped,
+                "updated_at":         updated_at,
             })
 
         return out, ""

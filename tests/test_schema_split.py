@@ -76,7 +76,8 @@ def test_run_migrations_adds_columns_to_both_schemas(tmp_path):
 
     # A cache-schema migration column (net.spansh_bodies)
     spansh_cols = {r[1] for r in db.conn.execute("PRAGMA net.table_info(spansh_bodies)").fetchall()}
-    assert "tidal_lock" in spansh_cols
+    assert "was_mapped" in spansh_cols
+    assert "updated_at" in spansh_cols
 
     # Cache-only tables created purely by migrations (no base CREATE in
     # CACHE_SCHEMA_SQL), e.g. fleet_carrier_materials
