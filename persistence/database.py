@@ -248,8 +248,6 @@ class Database:
             "ALTER TABLE net.spansh_bodies ADD COLUMN atmosphere_type TEXT",
             "ALTER TABLE net.spansh_bodies ADD COLUMN volcanism TEXT",
             "ALTER TABLE net.spansh_bodies ADD COLUMN tidal_lock INTEGER",
-            "ALTER TABLE net.spansh_bodies ADD COLUMN was_mapped INTEGER",
-            "ALTER TABLE net.spansh_bodies ADD COLUMN updated_at TEXT",
             "ALTER TABLE net.station_info ADD COLUMN station_services TEXT",
             "ALTER TABLE net.station_info ADD COLUMN station_faction TEXT",
             "ALTER TABLE net.station_info ADD COLUMN carrier_docking_access TEXT",

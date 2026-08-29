@@ -2602,17 +2602,15 @@ class Repository:
         atmosphere_type: str | None = None,
         volcanism: str | None = None,
         tidal_lock: int | None = None,
-        was_mapped: int | None = None,
-        updated_at: str | None = None,
     ):
         self.db.execute(
             """
             INSERT INTO net.spansh_bodies (
                 system_address, body_name, planet_class, distance_ls, estimated_value, landable,
                 surface_gravity, radius, mass_em, surface_temperature, surface_pressure,
-                atmosphere_type, volcanism, tidal_lock, was_mapped, updated_at
+                atmosphere_type, volcanism, tidal_lock
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(system_address, body_name) DO UPDATE SET
                 planet_class        = excluded.planet_class,
                 distance_ls         = excluded.distance_ls,
@@ -2625,14 +2623,12 @@ class Repository:
                 surface_pressure    = COALESCE(excluded.surface_pressure,    net.spansh_bodies.surface_pressure),
                 atmosphere_type     = COALESCE(excluded.atmosphere_type,     net.spansh_bodies.atmosphere_type),
                 volcanism           = COALESCE(excluded.volcanism,           net.spansh_bodies.volcanism),
-                tidal_lock          = COALESCE(excluded.tidal_lock,          net.spansh_bodies.tidal_lock),
-                was_mapped          = COALESCE(excluded.was_mapped,          net.spansh_bodies.was_mapped),
-                updated_at          = COALESCE(excluded.updated_at,          net.spansh_bodies.updated_at)
+                tidal_lock          = COALESCE(excluded.tidal_lock,          net.spansh_bodies.tidal_lock)
             """,
             (
                 system_address, body_name, planet_class, distance_ls, estimated_value, landable,
                 surface_gravity, radius, mass_em, surface_temperature, surface_pressure,
-                atmosphere_type, volcanism, tidal_lock, was_mapped, updated_at,
+                atmosphere_type, volcanism, tidal_lock,
             ),
         )
 
@@ -2641,7 +2637,7 @@ class Repository:
             """
             SELECT body_name, planet_class, distance_ls, estimated_value, landable,
                    surface_gravity, radius, mass_em, surface_temperature, surface_pressure,
-                   atmosphere_type, volcanism, tidal_lock, was_mapped, updated_at
+                   atmosphere_type, volcanism, tidal_lock
             FROM net.spansh_bodies
             WHERE system_address = ?
             ORDER BY distance_ls IS NULL, distance_ls, body_name

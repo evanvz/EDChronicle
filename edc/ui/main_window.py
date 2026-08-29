@@ -2262,8 +2262,6 @@ class MainWindow(QMainWindow):
                 atmosphere_type=b.get("atmosphere_type"),
                 volcanism=b.get("volcanism"),
                 tidal_lock=b.get("tidal_lock"),
-                was_mapped=b.get("was_mapped"),
-                updated_at=b.get("updated_at"),
             )
             saved += 1
         _elapsed_ms = (time.perf_counter() - _t0) * 1000
