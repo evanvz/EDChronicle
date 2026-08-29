@@ -5,22 +5,25 @@ history exists (e.g. Xbox-era play, which never produced PC journal
 files at all). Never overwrites a system the journal already knows about
 (see repo.save_system_from_flight_log()).
 
-EDSM's api-logs-v1/get-logs returns the whole flight log for a date range
-in one response, not paginated -- this tool makes exactly one request,
-nowhere near EDSM's 360 requests/hour limit for this endpoint. IMPORTANT:
-confirmed live -- if startDateTime/endDateTime aren't given, EDSM quietly
-defaults to the last 7 days only, not your full history (a genuine
-commander with 12,000+ systems visited got an empty response with no
-error, just a 7-day startDateTime/endDateTime in the reply). Defaults
-here to 2014-01-01 (Elite Dangerous's actual launch) through now, so a
-bare run covers full history unless narrowed with --since/--until.
+EDSM's api-logs-v1/get-logs silently caps how much history one request
+can return -- passing a wide startDateTime/endDateTime span (or none at
+all, which defaults to the last 7 days) came back with zero entries for
+a real commander with 12,000+ systems visited, no error either time.
+Confirmed against EDDiscovery's own EDSM sync source (EDSMLogFetcher.cs,
+proven to work) that the real pattern is one request per 7-day window,
+walked forward from an anchor date to now -- so that's what this does.
+For ~7-11 years of history that's roughly 400-600 requests; at the
+throttle below (safely under EDSM's 360 requests/hour for this endpoint)
+that's on the order of an hour, not a quick one-off -- expected, not a
+bug, and progress prints per chunk so it's clear it's still working.
 
 Usage:
   python tools/import_edsm_flight_log.py --commander "CMDR Name" --api-key "..."
-  python tools/import_edsm_flight_log.py --commander "CMDR Name" --api-key "..." --since 2018-01-01 --until 2021-01-01
+  python tools/import_edsm_flight_log.py --commander "CMDR Name" --api-key "..." --since 2018-12-01 --until 2021-01-01
 """
 import argparse
-from datetime import datetime, timezone
+import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
@@ -32,26 +35,61 @@ _TIMEOUT = 60
 # the default python-requests User-Agent specifically.
 _USER_AGENT = "EDChronicle/1.0.0 (+https://github.com/evanvz/EDChronicle)"
 _EDSM_DATETIME_FMT = "%Y-%m-%d %H:%M:%S"
-_ELITE_LAUNCH_DATE = "2014-01-01"
+# EDSM's own launch date -- no flight log entry can predate it. Matches
+# EDDiscovery's EliteReleaseDates.EDSMRelease anchor.
+_EDSM_LAUNCH_DATE = "2015-06-01"
+_WINDOW_DAYS = 7
+# EDSM publishes 360 requests/hour for this endpoint (~1 per 10s) --
+# 10.5s keeps a safe margin rather than riding the limit exactly.
+_MIN_REQUEST_INTERVAL_S = 10.5
+_RETRY_DELAYS_S = (2.0, 5.0, 10.0)
+
+
+def _fetch_window(commander: str, api_key: str, start: datetime, end: datetime) -> list[dict]:
+    """One request for one date window. Returns [] on a genuine EDSM
+    error after retries are exhausted (logged, not raised) -- a single
+    bad week must not abort an hour-long run; the caller reports which
+    windows were skipped so they can be re-run narrowly if needed."""
+    params = {
+        "commanderName": commander, "apiKey": api_key, "showId": 1,
+        "startDateTime": start.strftime(_EDSM_DATETIME_FMT),
+        "endDateTime": end.strftime(_EDSM_DATETIME_FMT),
+    }
+    for attempt in range(len(_RETRY_DELAYS_S) + 1):
+        try:
+            resp = requests.get(_LOGS_URL, params=params, headers={"User-Agent": _USER_AGENT}, timeout=_TIMEOUT)
+            resp.raise_for_status()
+            data = resp.json()
+        except requests.RequestException:
+            data = None
+        if data is not None and data.get("msgnum") == 100:
+            return data.get("logs") or []
+        if attempt < len(_RETRY_DELAYS_S):
+            time.sleep(_RETRY_DELAYS_S[attempt])
+    print(f"  WARNING: window {start.date()}..{end.date()} failed after retries, skipped.")
+    return []
 
 
 def fetch_flight_log(commander: str, api_key: str, since: str, until: str) -> list[dict]:
-    start = datetime.strptime(since, "%Y-%m-%d").strftime(_EDSM_DATETIME_FMT)
-    end = datetime.strptime(until, "%Y-%m-%d").strftime(_EDSM_DATETIME_FMT)
-    resp = requests.get(
-        _LOGS_URL,
-        params={
-            "commanderName": commander, "apiKey": api_key, "showId": 1,
-            "startDateTime": start, "endDateTime": end,
-        },
-        headers={"User-Agent": _USER_AGENT},
-        timeout=_TIMEOUT,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    if data.get("msgnum") != 100:
-        raise SystemExit(f"EDSM error: {data.get('msg', data)}")
-    return data.get("logs") or []
+    """Walks [since, until) in _WINDOW_DAYS-day chunks, one request per
+    chunk (see module docstring for why this can't be a single request),
+    and returns every log entry found across all of them."""
+    start = datetime.strptime(since, "%Y-%m-%d")
+    end_bound = datetime.strptime(until, "%Y-%m-%d")
+    window = timedelta(days=_WINDOW_DAYS)
+    total_windows = max(1, -(-(end_bound - start) // window))  # ceil division
+
+    all_logs: list[dict] = []
+    i = 0
+    while start < end_bound:
+        i += 1
+        chunk_end = min(start + window, end_bound)
+        print(f"Window {i}/{total_windows}: {start.date()}..{chunk_end.date()}...")
+        all_logs.extend(_fetch_window(commander, api_key, start, chunk_end))
+        start = chunk_end
+        if start < end_bound:
+            time.sleep(_MIN_REQUEST_INTERVAL_S)
+    return all_logs
 
 
 def group_by_system(logs: list[dict]) -> dict[int, dict]:
@@ -92,7 +130,7 @@ def main():
     parser = argparse.ArgumentParser(description="Backfill systems from your personal EDSM flight log.")
     parser.add_argument("--commander", required=True, help="Commander name as registered on EDSM")
     parser.add_argument("--api-key", required=True, help="Your EDSM API key (Settings > My API Key)")
-    parser.add_argument("--since", default=_ELITE_LAUNCH_DATE, help="YYYY-MM-DD, default: Elite Dangerous's launch (full history)")
+    parser.add_argument("--since", default=_EDSM_LAUNCH_DATE, help="YYYY-MM-DD, default: EDSM's launch (full history)")
     parser.add_argument("--until", default=datetime.now(timezone.utc).strftime("%Y-%m-%d"), help="YYYY-MM-DD, default: today")
     args = parser.parse_args()
 

@@ -1,15 +1,23 @@
 """Tests for repo.save_system_from_flight_log() (the EDSM personal flight
 log backfill, tools/import_edsm_flight_log.py) and the tool's own log-entry
-grouping logic."""
+grouping/date-windowing logic."""
 import sys
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 from persistence.database import Database
 from persistence.repository import Repository
 from persistence.schema import SCHEMA_SQL
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "tools"))
-from import_edsm_flight_log import group_by_system  # noqa: E402
+from import_edsm_flight_log import fetch_flight_log, group_by_system  # noqa: E402
+
+
+def _fake_response(logs):
+    resp = Mock()
+    resp.raise_for_status = Mock()
+    resp.json.return_value = {"msgnum": 100, "msg": "OK", "logs": logs}
+    return resp
 
 
 def _repo(tmp_path) -> Repository:
@@ -100,3 +108,47 @@ def test_group_by_system_separate_systems_stay_separate():
     assert result[2]["visit_count"] == 1
     assert result[1]["first_discovery"] == 0
     assert result[2]["first_discovery"] == 1
+
+
+def test_fetch_flight_log_walks_in_7_day_windows_and_accumulates():
+    """EDSM's get-logs silently returns nothing for a wide date span
+    (confirmed live) -- this must issue one request per 7-day window,
+    not one request for the whole range."""
+    responses = [_fake_response([{"system": "A"}]), _fake_response([{"system": "B"}]), _fake_response([{"system": "C"}])]
+    with patch("import_edsm_flight_log.requests.get", side_effect=responses) as mock_get, \
+         patch("import_edsm_flight_log.time.sleep") as mock_sleep:
+        logs = fetch_flight_log("CMDR", "key", "2019-01-01", "2019-01-22")  # 21 days = 3 windows
+
+    assert mock_get.call_count == 3
+    assert logs == [{"system": "A"}, {"system": "B"}, {"system": "C"}]
+    # First window starts exactly at `since`
+    first_call_params = mock_get.call_args_list[0].kwargs["params"]
+    assert first_call_params["startDateTime"] == "2019-01-01 00:00:00"
+    assert first_call_params["endDateTime"] == "2019-01-08 00:00:00"
+    # Last window is clipped to `until`, not overshooting into an 8th day
+    last_call_params = mock_get.call_args_list[2].kwargs["params"]
+    assert last_call_params["endDateTime"] == "2019-01-22 00:00:00"
+    # Sleeps between windows (2 sleeps for 3 windows), never after the last
+    assert mock_sleep.call_count == 2
+
+
+def test_fetch_flight_log_single_partial_window_for_short_range():
+    with patch("import_edsm_flight_log.requests.get", return_value=_fake_response([])) as mock_get, \
+         patch("import_edsm_flight_log.time.sleep") as mock_sleep:
+        fetch_flight_log("CMDR", "key", "2019-01-01", "2019-01-03")  # 2 days, under one window
+
+    assert mock_get.call_count == 1
+    mock_sleep.assert_not_called()
+
+
+def test_fetch_flight_log_skips_a_window_that_keeps_failing_and_continues():
+    """A single bad week must not abort an hour-long run."""
+    import requests as requests_module
+
+    responses = [requests_module.exceptions.ConnectionError("boom")] * 4  # 3 retries + initial for window 1
+    responses += [_fake_response([{"system": "B"}])]  # window 2 succeeds
+    with patch("import_edsm_flight_log.requests.get", side_effect=responses), \
+         patch("import_edsm_flight_log.time.sleep"):
+        logs = fetch_flight_log("CMDR", "key", "2019-01-01", "2019-01-15")  # 14 days = 2 windows
+
+    assert logs == [{"system": "B"}]
