@@ -165,6 +165,7 @@ class FdevPowerPlayCache:
 
         systems: Dict[str, dict] = {}
         reader = csv.reader(io.StringIO(text))
+        next(reader, None)  # header row: "Id","Power Id","Value","State",...
         for row in reader:
             if len(row) < 13:
                 continue
@@ -194,6 +195,7 @@ class FdevPowerPlayCache:
     def _parse_preparation_feed(text: str) -> Dict[str, List[dict]]:
         preparation: Dict[str, List[dict]] = {}
         reader = csv.reader(io.StringIO(text))
+        next(reader, None)  # header row: "Power Id","Starsystem Id","X","Y","Z",...
         for row in reader:
             if len(row) < 6:
                 continue

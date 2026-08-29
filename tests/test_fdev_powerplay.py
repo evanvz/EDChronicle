@@ -4,11 +4,13 @@ stripped, and lookups are name-keyed since neither feed has an id64."""
 from edc.core.fdev_powerplay import FdevPowerPlayCache, _FEED_URL, _PREP_URL
 
 _SAMPLE_CONTROL_CSV = (
+    '"Id","Power Id","Value","State","Upkeep Default","Upkeep Current","Income","Controlstarsystem Id","Qty For","Qty Against","Thr For","Thr Against","Prediction"," "\n'
     '"10 Arietis (62982)","Pranav Antal (100090)","7","control","26","26","90","","30","4650","3365","14203","PASS",""\n'
     '"17 Cygni (74490)","Zachary Hudson (100060)","11","contested","","","","Venetic (2827959142763)","0","0","","","PASS",""\n'
 )
 
 _SAMPLE_PREP_CSV = (
+    '"Power Id","Starsystem Id","X","Y","Z","Value","Cost"," "\n'
     '"A. Lavigny-Duval (100020)","HIP 10123 (5619)","50045","40802","24079","10","",""\n'
     '"A. Lavigny-Duval (100020)","HIP 10716 (5945)","50038","40759","24044","264","",""\n'
 )
@@ -66,6 +68,14 @@ def test_contested_system_has_no_single_power_but_state_recorded(tmp_path, monke
 
     rec = cache.get_by_name("17 Cygni")
     assert rec["state"] == "contested"
+
+
+def test_header_row_is_not_parsed_as_a_fake_system(tmp_path, monkeypatch):
+    cache = _cache(tmp_path, monkeypatch)
+    cache.refresh()
+
+    assert cache.get_by_name("Id") is None
+    assert cache.system_count() == 2
 
 
 def test_unknown_system_returns_none(tmp_path, monkeypatch):

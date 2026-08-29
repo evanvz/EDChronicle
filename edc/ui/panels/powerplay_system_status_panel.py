@@ -28,25 +28,52 @@ from typing import Optional
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit,
     QTableWidget, QTableWidgetItem, QHeaderView, QFrame,
 )
 
 from edc.ui.style import CARD_STYLE, HDR_STYLE, LABEL_STYLE
 from edc.ui.panels.powerplay_finder_panel import _STATE_COLORS
+from edc.ui.panels.market_panel import _NumericTableWidgetItem
 
 log = logging.getLogger(__name__)
 
 _BAR_WIDTH = 10
 
+# Outcome colors from the player's own power's perspective -- a system
+# gaining a tier or shaking off an undermining/expansion attack is
+# favorable regardless of which raw Prediction string produced it.
+_FAVORABLE_PREDICTIONS = {"FORTIFY", "EXPANDED", "NEGATED"}
+_UNFAVORABLE_PREDICTIONS = {"UNDERMINE", "FAIL"}
+_COLOR_FAVORABLE = "#6BCB77"
+_COLOR_UNFAVORABLE = "#FF6B6B"
+_COLOR_NEUTRAL = "#888888"
+
+
+def _prediction_color(prediction: str) -> str:
+    pred = (prediction or "").strip().upper()
+    if pred in _FAVORABLE_PREDICTIONS:
+        return _COLOR_FAVORABLE
+    if pred in _UNFAVORABLE_PREDICTIONS:
+        return _COLOR_UNFAVORABLE
+    return _COLOR_NEUTRAL
+
+
+def _progress_fraction(qty: Optional[int], threshold: Optional[int]) -> Optional[float]:
+    """0.0-1.0, or None if there's nothing to show progress toward (blank
+    threshold in Frontier's own feed -- seen on contested rows with no
+    active vote either way)."""
+    if not isinstance(qty, int) or not isinstance(threshold, int) or threshold <= 0:
+        return None
+    return max(0.0, min(1.0, qty / threshold))
+
 
 def _progress_bar_text(qty: Optional[int], threshold: Optional[int]) -> str:
     """"{filled}{empty} NN%" using block characters, or "—" if there's
-    nothing to show progress toward (blank threshold in Frontier's own
-    feed -- seen on contested rows with no active vote either way)."""
-    if not isinstance(qty, int) or not isinstance(threshold, int) or threshold <= 0:
+    no progress fraction to show (see _progress_fraction)."""
+    frac = _progress_fraction(qty, threshold)
+    if frac is None:
         return "—"
-    frac = max(0.0, min(1.0, qty / threshold))
     filled = round(frac * _BAR_WIDTH)
     bar = "█" * filled + "░" * (_BAR_WIDTH - filled)
     return f"{bar} {frac * 100:.0f}%"
@@ -93,6 +120,11 @@ class PowerplaySystemStatusPanel(QWidget):
         self._status_label.setWordWrap(True)
         root.addWidget(self._status_label)
 
+        self._search_edit = QLineEdit()
+        self._search_edit.setPlaceholderText("Search system name…")
+        self._search_edit.textChanged.connect(self._apply_search_filter)
+        root.addWidget(self._search_edit)
+
         self._power_frame, self._power_table = self._build_section("YOUR POWER'S SYSTEMS")
         root.addWidget(self._power_frame, 1)
 
@@ -117,9 +149,18 @@ class PowerplaySystemStatusPanel(QWidget):
         table.verticalHeader().setVisible(False)
         table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        table.setSortingEnabled(True)
         layout.addWidget(table)
 
         return frame, table
+
+    def _apply_search_filter(self, text: str) -> None:
+        needle = text.strip().lower()
+        for table in (self._power_table, self._visited_table):
+            for row in range(table.rowCount()):
+                item = table.item(row, 0)
+                name = item.text().lower() if item else ""
+                table.setRowHidden(row, bool(needle) and needle not in name)
 
     def refresh(self, state, pp_activities=None) -> None:
         self._power = (getattr(state, "pp_power", None) or "").strip()
@@ -181,35 +222,51 @@ class PowerplaySystemStatusPanel(QWidget):
         self._populate_table(self._visited_table, entries)
 
     def _populate_table(self, table: QTableWidget, entries: list):
+        # Sorting must be off while rebuilding -- setItem() during an
+        # active sort reorders rows mid-fill, scrambling which record
+        # lands with which row index.
+        table.setSortingEnabled(False)
         table.setRowCount(len(entries))
         for i, (dist, row) in enumerate(entries):
             name = row["system"]
-            dist_txt = f"{dist:.1f}" if isinstance(dist, (int, float)) else "—"
             tier = _tier_label(self._edsm_powerplay, name)
-
-            name_item = QTableWidgetItem(name)
-            dist_item = QTableWidgetItem(dist_txt)
-            dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            tier_item = QTableWidgetItem(tier)
-            color = _STATE_COLORS.get(tier.lower())
-            if color:
-                tier_item.setForeground(QColor(color))
-
             prediction = row.get("prediction") or "—"
-            pred_item = QTableWidgetItem(prediction)
-            pred_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            pred_color = _prediction_color(row.get("prediction") or "")
 
             # Whichever direction has an active threshold this cycle is
             # the one worth showing -- a system with no undermining
             # pressure has thr_against blank in Frontier's own feed.
             if row.get("thr_for") is not None:
-                cp_text = _progress_bar_text(row.get("qty_for"), row.get("thr_for"))
+                cp_frac = _progress_fraction(row.get("qty_for"), row.get("thr_for"))
             else:
-                cp_text = _progress_bar_text(row.get("qty_against"), row.get("thr_against"))
-            cp_item = QTableWidgetItem(cp_text)
+                cp_frac = _progress_fraction(row.get("qty_against"), row.get("thr_against"))
+            cp_text = _progress_bar_text(
+                row.get("qty_for") if row.get("thr_for") is not None else row.get("qty_against"),
+                row.get("thr_for") if row.get("thr_for") is not None else row.get("thr_against"),
+            )
+
+            name_item = QTableWidgetItem(name)
+
+            dist_txt = f"{dist:.1f}" if isinstance(dist, (int, float)) else "—"
+            dist_item = _NumericTableWidgetItem(dist_txt, dist if isinstance(dist, (int, float)) else float("inf"))
+            dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            tier_item = QTableWidgetItem(tier)
+            tier_color = _STATE_COLORS.get(tier.lower())
+            if tier_color:
+                tier_item.setForeground(QColor(tier_color))
+
+            pred_item = QTableWidgetItem(prediction)
+            pred_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            pred_item.setForeground(QColor(pred_color))
+
+            cp_item = _NumericTableWidgetItem(cp_text, cp_frac if cp_frac is not None else -1.0)
+            cp_item.setForeground(QColor(pred_color))
 
             table.setItem(i, 0, name_item)
             table.setItem(i, 1, dist_item)
             table.setItem(i, 2, tier_item)
             table.setItem(i, 3, pred_item)
             table.setItem(i, 4, cp_item)
+        table.setSortingEnabled(True)
+        self._apply_search_filter(self._search_edit.text())
