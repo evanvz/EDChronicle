@@ -92,13 +92,24 @@ class SystemDataLoader:
                                 val = bool(val)
                             existing[rec_key] = val
                     continue
+                # Spansh's own was_mapped is a real (if global/community,
+                # not necessarily "you personally") signal that this body
+                # is already mapped -- previously hardcoded False here for
+                # every Spansh-only body regardless of what Spansh actually
+                # reported, so a body the community (or the player, in a
+                # session whose journal was never imported) had already
+                # mapped still showed as a fresh unmapped opportunity
+                # (confirmed live: in-game System Map disagreed with the
+                # app for a body it had never personally scanned).
+                was_mapped_bool = bool(row["was_mapped"]) if "was_mapped" in row.keys() and row["was_mapped"] is not None else False
+
                 estimated_value = row["estimated_value"]
                 if not isinstance(estimated_value, int) and self.planet_values:
                     try:
                         estimated_value = self.planet_values.estimate(
                             planet_class=self._planet_value_class_name(row["planet_class"] or ""),
                             terraformable=False,
-                            mapped=False,
+                            mapped=was_mapped_bool,
                             first_discovered=False,
                         )
                     except Exception:
@@ -116,7 +127,7 @@ class SystemDataLoader:
                     "Terraformable": False,
                     "DistanceLS":    row["distance_ls"],
                     "Landable":      None if row["landable"] is None else bool(row["landable"]),
-                    "WasMapped":     False,
+                    "WasMapped":     was_mapped_bool,
                     "DSSMapped":     False,
                     "EstimatedValue": estimated_value,
                     "Volcanism":     row["volcanism"] if "volcanism" in row.keys() else "",

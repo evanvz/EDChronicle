@@ -647,10 +647,13 @@ class ExplorationPanel(QWidget):
             badges.append(self._badge("Footfall", "#1a1a1a", "#AAAAAA"))
         elif was_footfalled:
             badges.append(self._badge("Already Footfalled", "#0a2a2a", "#5FB3B3"))
-        elif footfall_estimate:
+        elif footfall_estimate and landable:
             # Pre-visit estimate only (Spansh's own last-update/was_mapped
             # signal, see footfall_predictor.py) -- shown only when no real
-            # journal-confirmed footfall status exists yet for this body.
+            # journal-confirmed footfall status exists yet for this body,
+            # and only for a landable body -- First Footfall only exists
+            # for bodies you can actually set foot on, so the estimate is
+            # meaningless (and was previously shown) for stars/gas giants.
             est_score, est_label = footfall_estimate
             badges.append(self._badge(f"≈{est_score}% unclaimed?", "#1a1500", "#C9A227"))
 
