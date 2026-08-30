@@ -243,8 +243,16 @@ class EventEngine:
                 return "USS"
             s = signal_name if isinstance(signal_name, str) else ""
             sl = s.lower()
+            # "lagrange" was previously its own keyword here (for "Lagrange
+            # Cloud" phenomena) but "cloud" alone already catches that name
+            # -- the standalone keyword's only real effect was a false
+            # positive on "Lagrange Platform" (a real station, not a
+            # phenomenon) since it never even reaches this substring
+            # fallback when signal_type/is_station are set correctly, but
+            # does when they aren't (confirmed live: HIP 11645's Lagrange
+            # Platform misclassified as Phenomena).
             if any(k in sl for k in (
-                "lagrange", "cloud", "anomal", "phenomen",
+                "cloud", "anomal", "phenomen",
                 "notable", "stellar"
             )):
                 return "Phenomena"

@@ -24,3 +24,23 @@ def test_nav_beacon_still_classified_separately_from_res():
         None, "Nav Beacon", "", None, "NavBeacon",
     )
     assert result == "NavBeacon"
+
+
+def test_lagrange_platform_not_misclassified_as_phenomena():
+    # Real station, not a phenomenon -- confirmed live at HIP 11645. Falls
+    # through to the name-heuristic fallback when signal_type/is_station
+    # aren't set (e.g. an FSS-only sighting), so the bare "lagrange"
+    # keyword previously caught it by name alone.
+    result = EventEngine._classify_system_signal(
+        None, "Lagrange Platform", "", None, None,
+    )
+    assert result != "Phenomena"
+
+
+def test_lagrange_cloud_still_classified_as_phenomena():
+    # The actual Notable Stellar Phenomena type "lagrange" was added for --
+    # still caught via the "cloud" keyword alone.
+    result = EventEngine._classify_system_signal(
+        None, "Lagrange Cloud", "", None, None,
+    )
+    assert result == "Phenomena"
