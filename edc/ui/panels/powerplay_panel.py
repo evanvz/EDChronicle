@@ -70,7 +70,7 @@ class PowerplayPanel(QWidget):
 
         # ── Tab 2: Target Finder ──────────────────────────────────────────
         self.finder_panel = PowerplayFinderPanel(
-            edsm_powerplay=edsm_powerplay, eddn_powerplay=eddn_powerplay, fdev_powerplay=fdev_powerplay,
+            repo=repo, edsm_powerplay=edsm_powerplay, eddn_powerplay=eddn_powerplay, fdev_powerplay=fdev_powerplay,
         )
         self._tabs.addTab(self.finder_panel, "Target Finder")
 

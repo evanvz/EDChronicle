@@ -20,6 +20,21 @@ from edc.ui.style import CARD_STYLE, HDR_STYLE, LABEL_STYLE, card_style, hdr_sty
 
 log = logging.getLogger(__name__)
 
+
+def _tier_label(edsm_powerplay, system_name: str) -> str:
+    """Fortified/Stronghold/etc, sourced from EDSM's cache since Frontier's
+    own feed doesn't name the tier directly (see fdev_powerplay.py). Same
+    helper as powerplay_system_status_panel.py's -- kept separate to avoid
+    a circular import (that module already imports _STATE_COLORS from
+    here)."""
+    if edsm_powerplay is None:
+        return ""
+    rec = edsm_powerplay.get_controller_by_name(system_name)
+    if not rec:
+        return ""
+    return rec.get("power_state") or ""
+
+
 _SHORT_POWER = {
     "Aisling Duval":        "Aisling",
     "Arissa Lavigny-Duval": "ALD",
@@ -149,9 +164,10 @@ class PowerplayFinderPanel(QWidget):
     _HDR_STYLE   = HDR_STYLE
     _LABEL_STYLE = LABEL_STYLE
 
-    def __init__(self, parent=None, edsm_powerplay=None, eddn_powerplay=None, fdev_powerplay=None):
+    def __init__(self, parent=None, repo=None, edsm_powerplay=None, eddn_powerplay=None, fdev_powerplay=None):
         super().__init__(parent)
 
+        self._repo = repo
         self._edsm_powerplay = edsm_powerplay
         self._eddn_powerplay = eddn_powerplay
         self._fdev_powerplay = fdev_powerplay
@@ -513,6 +529,58 @@ class PowerplayFinderPanel(QWidget):
                 dropped += 1
         return kept, dropped
 
+    _ACQUISITION_FORTIFIED_RADIUS_LY = 20.0
+    _ACQUISITION_STRONGHOLD_RADIUS_LY = 30.0
+
+    def _apply_acquisition_proximity_filter(self, results: List[SpanshSystem]):
+        """An Acquisition target is only ever real if it's within 20 ly of
+        one of your power's Fortified systems, or 30 ly of a Stronghold --
+        Frontier's own hard requirement (per the Powerplay 2.0 guide), not
+        enforced by Spansh's own filters at all. Without this, the Finder
+        could suggest an uncontrolled/contested system your power has no
+        actual path to acquire. Fails open on missing data (no anchor
+        systems found, or a candidate with no coordinates) rather than
+        hiding results just because proximity couldn't be verified."""
+        if self._search_mission != "acquisition":
+            return results, 0
+        if self._repo is None or self._fdev_powerplay is None or not self._fdev_powerplay.has_data():
+            return results, 0
+
+        anchors = []  # (name, radius_ly)
+        for row in self._fdev_powerplay.get_systems_for_power(self._power):
+            tier = _tier_label(self._edsm_powerplay, row["system"]).lower()
+            if tier == "stronghold":
+                anchors.append((row["system"], self._ACQUISITION_STRONGHOLD_RADIUS_LY))
+            elif tier == "fortified":
+                anchors.append((row["system"], self._ACQUISITION_FORTIFIED_RADIUS_LY))
+        if not anchors:
+            return results, 0
+
+        coords = self._repo.get_system_coords_for_names([name for name, _ in anchors])
+        anchor_points = [
+            (xyz[0], xyz[1], xyz[2], radius)
+            for name, radius in anchors
+            if (xyz := coords.get(name)) is not None
+        ]
+        if not anchor_points:
+            return results, 0
+
+        kept: List[SpanshSystem] = []
+        dropped = 0
+        for sys in results:
+            if sys.x is None or sys.y is None or sys.z is None:
+                kept.append(sys)  # can't verify -- don't drop on missing data
+                continue
+            in_range = any(
+                math.sqrt((sys.x - ax) ** 2 + (sys.y - ay) ** 2 + (sys.z - az) ** 2) <= radius
+                for ax, ay, az, radius in anchor_points
+            )
+            if in_range:
+                kept.append(sys)
+            else:
+                dropped += 1
+        return kept, dropped
+
     def _on_results(self, results: List[SpanshSystem], error: str):
         from PyQt6.QtGui import QColor
         self._search_btn.setEnabled(True)
@@ -522,6 +590,7 @@ class PowerplayFinderPanel(QWidget):
             return
 
         results, fdev_dropped = self._apply_fdev_correction(results)
+        results, proximity_dropped = self._apply_acquisition_proximity_filter(results)
 
         status_txt = (
             f"Found {len(results)} system{'s' if len(results) != 1 else ''} "
@@ -529,6 +598,8 @@ class PowerplayFinderPanel(QWidget):
         )
         if fdev_dropped:
             status_txt += f"  {fdev_dropped} dropped (Frontier's official data no longer agrees)."
+        if proximity_dropped:
+            status_txt += f"  {proximity_dropped} dropped (too far from any Fortified/Stronghold system of yours)."
         if self._fdev_powerplay is not None:
             if self._fdev_powerplay.has_data():
                 age = " (today's data)" if not self._fdev_powerplay.is_stale() else " (cache outdated)"

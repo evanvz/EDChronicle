@@ -39,6 +39,9 @@ class SpanshSystem:
     powers:            List[str] = field(default_factory=list)
     station_types:     List[str] = field(default_factory=list)
     id64:              Optional[int] = None
+    x:                 Optional[float] = None
+    y:                 Optional[float] = None
+    z:                 Optional[float] = None
 
     def all_powers(self) -> List[str]:
         """Deduplicated list: controlling power first, then any additional powers."""
@@ -142,6 +145,12 @@ class SpanshClient:
             powers     = [str(p) for p in raw_powers if p] if isinstance(raw_powers, list) else []
             id64       = sys.get("id64") if isinstance(sys.get("id64"), int) else None
 
+            def _coord(key: str) -> Optional[float]:
+                v = sys.get(key)
+                return float(v) if isinstance(v, (int, float)) else None
+
+            sys_x, sys_y, sys_z = _coord("x"), _coord("y"), _coord("z")
+
             # Distance guard
             try:
                 dist = float(dist)
@@ -184,6 +193,7 @@ class SpanshClient:
                 powers=powers,
                 station_types=station_types,
                 id64=id64,
+                x=sys_x, y=sys_y, z=sys_z,
             )
             if facility == "megaship"   and not candidate.has_megaship():
                 continue
