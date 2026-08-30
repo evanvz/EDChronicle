@@ -141,12 +141,18 @@ def test_save_res_tiers_dedupes_and_sorts(repo):
 # --- search_bgs_status_near / search_res_sites_near ---
 
 def test_search_bgs_status_near_filters_by_radius(repo):
+    # search_bgs_status_near applies a 7-day freshness cutoff (see
+    # test_search_bgs_status_near_excludes_rows_past_7_day_war_cycle
+    # below), so the seeded timestamp must stay relative to "now" --
+    # a hardcoded absolute date silently ages out and starts failing
+    # once real time catches up to it (confirmed live: this test broke
+    # the day the fixed 2026-08-23 timestamp turned 7 days old).
     _seed_coords(repo, "Near", 0.0, 0.0, 0.0)
     _seed_coords(repo, "Far", 500.0, 0.0, 0.0)
     repo.save_system_bgs_status(1, "Near", conflicts=[{"WarType": "war", "Faction1": {"Name": "A"}, "Faction2": {"Name": "B"}}],
-                                 factions=[], data_timestamp="2026-08-23T00:00:00Z", source="journal")
+                                 factions=[], data_timestamp=_ts_days_ago(1), source="journal")
     repo.save_system_bgs_status(2, "Far", conflicts=[{"WarType": "war", "Faction1": {"Name": "C"}, "Faction2": {"Name": "D"}}],
-                                 factions=[], data_timestamp="2026-08-23T00:00:00Z", source="journal")
+                                 factions=[], data_timestamp=_ts_days_ago(1), source="journal")
     results = repo.search_bgs_status_near(0.0, 0.0, 0.0, radius_ly=50.0)
     assert [r["system_name"] for r in results] == ["Near"]
 

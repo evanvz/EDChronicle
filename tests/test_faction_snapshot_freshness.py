@@ -1,11 +1,21 @@
 """Tests for save_faction_snapshot()'s freshness-guarded upsert and its
 _normalize_data_timestamp() helper -- real SQLite (temp file), not mocks,
 since the guard lives in the SQL itself."""
+from datetime import date, timedelta
+
 import pytest
 
 from persistence.database import Database
 from persistence.repository import Repository, _normalize_data_timestamp
 from persistence.schema import SCHEMA_SQL
+
+# save_faction_snapshot()'s own 30-day retention delete would silently wipe
+# a row seeded with a fixed date once that date turns 30 days old (confirmed
+# live: test_search_bgs_status_near_filters_by_radius broke the same way
+# with a fixed date and a 7-day cutoff) -- these tests only care about same-
+# day/relative ordering, not any particular calendar date, so "yesterday"
+# keeps them correct regardless of when they run.
+_RECENT_DATE = (date.today() - timedelta(days=1)).isoformat()
 
 
 @pytest.fixture
@@ -64,26 +74,26 @@ def test_normalize_falls_back_to_now_for_missing_value():
 # --- save_faction_snapshot()'s freshness guard ---
 
 def test_fresher_write_overwrites_older_row(repo):
-    repo.save_faction_snapshot(1, _faction(influence=0.3), "2026-08-12", False, "2026-08-12T09:00:00Z", "edsm")
-    repo.save_faction_snapshot(1, _faction(influence=0.7), "2026-08-12", False, "2026-08-12T12:00:00Z", "eddn")
-    row = _read_row(repo, 1, "Test Faction", "2026-08-12")
+    repo.save_faction_snapshot(1, _faction(influence=0.3), _RECENT_DATE, False, f"{_RECENT_DATE}T09:00:00Z", "edsm")
+    repo.save_faction_snapshot(1, _faction(influence=0.7), _RECENT_DATE, False, f"{_RECENT_DATE}T12:00:00Z", "eddn")
+    row = _read_row(repo, 1, "Test Faction", _RECENT_DATE)
     assert row["influence"] == 0.7
     assert row["source"] == "eddn"
-    assert row["data_timestamp"] == "2026-08-12T12:00:00Z"
+    assert row["data_timestamp"] == f"{_RECENT_DATE}T12:00:00Z"
 
 
 def test_staler_write_does_not_overwrite_newer_row(repo):
-    repo.save_faction_snapshot(1, _faction(influence=0.7), "2026-08-12", False, "2026-08-12T12:00:00Z", "eddn")
-    repo.save_faction_snapshot(1, _faction(influence=0.3), "2026-08-12", False, "2026-08-12T09:00:00Z", "edsm")
-    row = _read_row(repo, 1, "Test Faction", "2026-08-12")
+    repo.save_faction_snapshot(1, _faction(influence=0.7), _RECENT_DATE, False, f"{_RECENT_DATE}T12:00:00Z", "eddn")
+    repo.save_faction_snapshot(1, _faction(influence=0.3), _RECENT_DATE, False, f"{_RECENT_DATE}T09:00:00Z", "edsm")
+    row = _read_row(repo, 1, "Test Faction", _RECENT_DATE)
     assert row["influence"] == 0.7  # unchanged -- the older write was rejected
     assert row["source"] == "eddn"
 
 
 def test_equal_timestamp_write_does_overwrite(repo):
-    repo.save_faction_snapshot(1, _faction(influence=0.3), "2026-08-12", False, "2026-08-12T09:00:00Z", "edsm")
-    repo.save_faction_snapshot(1, _faction(influence=0.4), "2026-08-12", False, "2026-08-12T09:00:00Z", "journal")
-    row = _read_row(repo, 1, "Test Faction", "2026-08-12")
+    repo.save_faction_snapshot(1, _faction(influence=0.3), _RECENT_DATE, False, f"{_RECENT_DATE}T09:00:00Z", "edsm")
+    repo.save_faction_snapshot(1, _faction(influence=0.4), _RECENT_DATE, False, f"{_RECENT_DATE}T09:00:00Z", "journal")
+    row = _read_row(repo, 1, "Test Faction", _RECENT_DATE)
     assert row["influence"] == 0.4
 
 
@@ -93,20 +103,20 @@ def test_any_write_overwrites_a_legacy_null_timestamp_row(repo):
     repo.db.conn.execute(
         """INSERT INTO faction_snapshots (system_address, faction_name, snapshot_date, influence, is_controlling)
            VALUES (?, ?, ?, ?, ?)""",
-        (1, "Test Faction", "2026-08-12", 0.1, 0),
+        (1, "Test Faction", _RECENT_DATE, 0.1, 0),
     )
     repo.db.conn.commit()
-    repo.save_faction_snapshot(1, _faction(influence=0.9), "2026-08-12", False, "2026-08-12T01:00:00Z", "edsm")
-    row = _read_row(repo, 1, "Test Faction", "2026-08-12")
+    repo.save_faction_snapshot(1, _faction(influence=0.9), _RECENT_DATE, False, f"{_RECENT_DATE}T01:00:00Z", "edsm")
+    row = _read_row(repo, 1, "Test Faction", _RECENT_DATE)
     assert row["influence"] == 0.9
-    assert row["data_timestamp"] == "2026-08-12T01:00:00Z"
+    assert row["data_timestamp"] == f"{_RECENT_DATE}T01:00:00Z"
 
 
 def test_source_and_data_timestamp_are_stored_on_first_write(repo):
-    repo.save_faction_snapshot(1, _faction(), "2026-08-12", True, "2026-08-12T09:18:35Z", "csv")
-    row = _read_row(repo, 1, "Test Faction", "2026-08-12")
+    repo.save_faction_snapshot(1, _faction(), _RECENT_DATE, True, f"{_RECENT_DATE}T09:18:35Z", "csv")
+    row = _read_row(repo, 1, "Test Faction", _RECENT_DATE)
     assert row["source"] == "csv"
-    assert row["data_timestamp"] == "2026-08-12T09:18:35Z"
+    assert row["data_timestamp"] == f"{_RECENT_DATE}T09:18:35Z"
     assert row["is_controlling"] == 1
 
 
