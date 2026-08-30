@@ -38,6 +38,7 @@ class SpanshSystem:
     pp_state:          str
     powers:            List[str] = field(default_factory=list)
     station_types:     List[str] = field(default_factory=list)
+    station_services:  List[str] = field(default_factory=list)
     id64:              Optional[int] = None
     x:                 Optional[float] = None
     y:                 Optional[float] = None
@@ -65,6 +66,12 @@ class SpanshSystem:
             for t in self.station_types
             for kw in ("starport", "coriolis", "orbis", "ocellus")
         )
+
+    def has_vista_genomics(self) -> bool:
+        return "vista genomics" in (s.lower() for s in self.station_services)
+
+    def has_universal_cartographics(self) -> bool:
+        return "universal cartographics" in (s.lower() for s in self.station_services)
 
     def facility_summary(self) -> str:
         tags = []
@@ -94,7 +101,7 @@ class SpanshClient:
         ref_y:    float,
         ref_z:    float,
         range_ly: int = 100,
-        facility: str = "any",    # "any" | "megaship" | "settlement"
+        facility: str = "any",    # "any" | "megaship" | "settlement" | "vista_genomics" | "universal_cartographics"
         pp_state: str = "any",    # "any" | "stronghold" | "fortified" | "exploited" | "expansion" | "contested" | "uncontrolled"
         size:     Optional[int] = None,
     ) -> Tuple[List[SpanshSystem], str]:
@@ -186,10 +193,18 @@ class SpanshClient:
                 if not is_acq:
                     continue
 
+            raw_stations = sys.get("stations") or []
             station_types = [
                 s.get("type") or ""
-                for s in (sys.get("stations") or [])
+                for s in raw_stations
                 if isinstance(s, dict) and s.get("type")
+            ]
+            station_services = [
+                svc
+                for s in raw_stations
+                if isinstance(s, dict)
+                for svc in (s.get("services") or [])
+                if isinstance(svc, str)
             ]
 
             # PP state filter
@@ -204,12 +219,17 @@ class SpanshClient:
                 pp_state=sys_state,
                 powers=powers,
                 station_types=station_types,
+                station_services=station_services,
                 id64=id64,
                 x=sys_x, y=sys_y, z=sys_z,
             )
             if facility == "megaship"   and not candidate.has_megaship():
                 continue
             if facility == "settlement" and not candidate.has_settlement():
+                continue
+            if facility == "vista_genomics" and not candidate.has_vista_genomics():
+                continue
+            if facility == "universal_cartographics" and not candidate.has_universal_cartographics():
                 continue
 
             out.append(candidate)

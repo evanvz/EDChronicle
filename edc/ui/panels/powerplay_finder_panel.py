@@ -69,9 +69,11 @@ _PP_STATE_OPTIONS = [
 ]
 
 _FACILITY_OPTIONS = [
-    ("Any facility",  "any"),
-    ("Has Megaship",  "megaship"),
-    ("Has Settlement","settlement"),
+    ("Any facility",                "any"),
+    ("Has Megaship",                "megaship"),
+    ("Has Settlement",              "settlement"),
+    ("Has Vista Genomics",          "vista_genomics"),
+    ("Has Universal Cartographics", "universal_cartographics"),
 ]
 
 # Color + tooltip per PP state — Acquisition = amber/orange, Reinforcement = blue family
