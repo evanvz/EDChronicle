@@ -39,6 +39,7 @@ from edc.core.ring_signals import RING_NAME_RE
 from edc.core.journal_watcher import JournalWatcher
 from edc.ui.watcher_controller import WatcherController
 from edc.ui.system_data_loader import SystemDataLoader
+from edc.ui.style import CARD_STYLE
 from edc.ui.panels.combat_panel import CombatPanel
 from edc.ui.panels.inventory_panel import MaterialsPanel
 from edc.ui.panels.powerplay_panel import PowerplayPanel
@@ -1494,9 +1495,14 @@ class MainWindow(QMainWindow):
         # GalNet latest headline -- leftmost, non-permanent so it takes the
         # status bar's spare space and gets pushed aside by a temporary
         # message, same as Qt's own convention for the non-permanent slot.
+        galnet_card = QFrame()
+        galnet_card.setStyleSheet(CARD_STYLE)
+        galnet_card_layout = QHBoxLayout(galnet_card)
+        galnet_card_layout.setContentsMargins(8, 2, 8, 2)
         self._galnet_label = QLabel("")
-        self._galnet_label.setStyleSheet("color: #888888; font-size: 10px;")
-        self.statusBar().addWidget(self._galnet_label, 1)
+        self._galnet_label.setStyleSheet("color: #FFB347; font-size: 12px; background:transparent; border:none;")
+        galnet_card_layout.addWidget(self._galnet_label)
+        self.statusBar().addWidget(galnet_card, 1)
 
         self._service_health_labels: dict[str, QLabel] = {}
         for name in ("EDSM", "EDDN", "BGS Tick"):
