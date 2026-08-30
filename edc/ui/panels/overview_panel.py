@@ -434,17 +434,30 @@ class OverviewPanel(QWidget):
         self.conflict_widget.setVisible(False)
         layout.addWidget(self.conflict_widget)
 
-        # ── Section label ─────────────────────────────────────────────────
+        # ── System Minor Factions card — same bordered-QFrame schema as
+        # system_card above; this section was previously just a bare label
+        # and QListWidget with no frame around it, standing out visually
+        # against every other bordered card on this tab (per user report).
+        self.factions_card = QFrame()
+        self.factions_card.setFrameShape(QFrame.Shape.StyledPanel)
+        self.factions_card.setStyleSheet(
+            "QFrame { background: #0d1a2a; border: 1px solid #1e3a5a;"
+            "border-radius: 6px; }"
+        )
+        factions_card_layout = QVBoxLayout(self.factions_card)
+        factions_card_layout.setContentsMargins(10, 8, 10, 8)
+        factions_card_layout.setSpacing(4)
+
         fac_label = QLabel("SYSTEM MINOR FACTIONS")
         fac_label.setStyleSheet(
             "color: #667788; font-size:12px; font-weight: bold;"
             "letter-spacing: 1px; padding: 4px 0px 2px 2px;"
         )
-        layout.addWidget(fac_label)
+        factions_card_layout.addWidget(fac_label)
 
         # ── Faction header + list ─────────────────────────────────────────
         self.factions_header = FactionHeader()
-        layout.addWidget(self.factions_header)
+        factions_card_layout.addWidget(self.factions_header)
 
         self.factions_list = QListWidget()
         self.factions_list.setItemDelegate(FactionDelegate())
@@ -456,7 +469,9 @@ class OverviewPanel(QWidget):
             "QListWidget { background: transparent; border: none; }"
             "QListWidget::item { border: none; }"
         )
-        layout.addWidget(self.factions_list)
+        factions_card_layout.addWidget(self.factions_list)
+
+        layout.addWidget(self.factions_card)
         # factions_list is setFixedHeight()'d dynamically to fit its content
         # (see _refresh_factions), so it can't act as the layout's overflow
         # sink itself — without a real stretch item here, leftover vertical
