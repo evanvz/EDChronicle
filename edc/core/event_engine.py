@@ -219,7 +219,8 @@ class EventEngine:
         """
         Journal-derived classification to keep UI low-noise.
         Categories: Megaship | FleetCarrier | Station | Installation
-                    | NavBeacon | TouristBeacon | USS | Phenomena | Other
+                    | NavBeacon | CompromisedNavBeacon | TouristBeacon | USS
+                    | Phenomena | Other
         """
         try:
             st = (signal_type or "").strip().lower()
@@ -230,6 +231,14 @@ class EventEngine:
             if st == "installation":
                 return "Installation"
             if st == "navbeacon":
+                # Compromised Navigation Beacon shares SignalType="NavBeacon"
+                # with a plain Nav Beacon -- only SignalName/localised text
+                # ("Compromised Navigation Beacon" vs "Nav Beacon")
+                # distinguishes them. No security response there (confirmed
+                # live), so it's a real combat/PowerPlay-merit opportunity a
+                # plain Nav Beacon isn't.
+                if "compromised" in (signal_name or "").strip().lower():
+                    return "CompromisedNavBeacon"
                 return "NavBeacon"
             if st == "touristbeacon":
                 return "TouristBeacon"

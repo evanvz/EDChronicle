@@ -200,6 +200,24 @@ class ExplorationPhrases:
         "There's our acquisition opportunity. Megaship on sensors.",
     ]
 
+    CNB_PP_REINFORCEMENT = [
+        "Compromised nav beacon. No security response — good reinforcement kills, Commander.",
+        "Compromised beacon on sensors. Free-fire zone for reinforcement merits.",
+        "Compromised nav beacon detected. Security's offline — hunt for reinforcement merits.",
+    ]
+
+    CNB_PP_ACQUISITION = [
+        "Compromised nav beacon. No security response — good acquisition kills, Commander.",
+        "Compromised beacon on sensors. Free-fire zone for acquisition merits.",
+        "Compromised nav beacon detected. Security's offline — hunt for acquisition merits.",
+    ]
+
+    CNB_PP_UNDERMINING = [
+        "Compromised nav beacon. No security response — good undermining kills, Commander.",
+        "Compromised beacon on sensors. Free-fire zone for undermining merits.",
+        "Compromised nav beacon detected. Security's offline — hunt for undermining merits.",
+    ]
+
     CODEX_ENTRY = [
         "New codex entry. {name}.",
         "Discovery logged. {name}.",
@@ -313,6 +331,14 @@ class ExplorationPhrases:
         if activity == "acquisition":
             return pick(ExplorationPhrases.MEGASHIP_PP_ACQUISITION)
         return pick(ExplorationPhrases.MEGASHIP_PP_MERITS)
+
+    @staticmethod
+    def compromised_nav_beacon_pp_merits(activity: str) -> str:
+        if activity == "undermining":
+            return pick(ExplorationPhrases.CNB_PP_UNDERMINING)
+        if activity == "acquisition":
+            return pick(ExplorationPhrases.CNB_PP_ACQUISITION)
+        return pick(ExplorationPhrases.CNB_PP_REINFORCEMENT)
 
     @staticmethod
     def nhss_detected(threat: int) -> str:

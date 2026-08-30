@@ -37,6 +37,24 @@ def test_lagrange_platform_not_misclassified_as_phenomena():
     assert result != "Phenomena"
 
 
+def test_compromised_navigation_beacon_classified_distinctly():
+    # Shares SignalType="NavBeacon" with a plain Nav Beacon -- only the
+    # localised name distinguishes it (confirmed live via real journal
+    # data). No security response there, a real combat/PP-merit spot a
+    # plain Nav Beacon isn't.
+    result = EventEngine._classify_system_signal(
+        None, "Compromised Navigation Beacon", "", None, "NavBeacon",
+    )
+    assert result == "CompromisedNavBeacon"
+
+
+def test_plain_nav_beacon_still_classified_as_navbeacon():
+    result = EventEngine._classify_system_signal(
+        None, "Nav Beacon", "", None, "NavBeacon",
+    )
+    assert result == "NavBeacon"
+
+
 def test_lagrange_cloud_still_classified_as_phenomena():
     # The actual Notable Stellar Phenomena type "lagrange" was added for --
     # still caught via the "cloud" keyword alone.
