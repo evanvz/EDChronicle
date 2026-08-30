@@ -493,13 +493,14 @@ class _ColonisationCandidatesWorker(QObject):
     established throttle-then-cache pattern for EDSM calls."""
     finished = pyqtSignal(str, dict)  # system_name queried, result dict (see find_nearby_colonisation_candidates)
 
-    def __init__(self, system_name: str):
+    def __init__(self, system_name: str, own_colony_names: list[str]):
         super().__init__()
         self._system_name = system_name
+        self._own_colony_names = own_colony_names
 
     def run(self):
         from edc.core.colonisation_eligibility import find_nearby_colonisation_candidates
-        result = find_nearby_colonisation_candidates(self._system_name)
+        result = find_nearby_colonisation_candidates(self._system_name, own_colony_names=self._own_colony_names)
         self.finished.emit(self._system_name, result)
 
 
@@ -509,13 +510,14 @@ class _ColonisationEligibilityCheckWorker(QObject):
     (a genuine one-off action, not a per-refresh poll)."""
     finished = pyqtSignal(dict)
 
-    def __init__(self, system_name: str):
+    def __init__(self, system_name: str, own_colony_names: list[str]):
         super().__init__()
         self._system_name = system_name
+        self._own_colony_names = own_colony_names
 
     def run(self):
         from edc.core.colonisation_eligibility import check_system_eligibility
-        result = check_system_eligibility(self._system_name)
+        result = check_system_eligibility(self._system_name, own_colony_names=self._own_colony_names)
         self.finished.emit(result)
 
 
@@ -4832,13 +4834,20 @@ class MainWindow(QMainWindow):
             return
         if self._colonisation_candidates_thread and self._colonisation_candidates_thread.isRunning():
             return  # a fetch is already in flight -- next real system change will retry
-        self._colonisation_candidates_worker = _ColonisationCandidatesWorker(system_name)
+        self._colonisation_candidates_worker = _ColonisationCandidatesWorker(
+            system_name, self._get_completed_colony_names()
+        )
         self._colonisation_candidates_thread = QThread()
         self._colonisation_candidates_worker.moveToThread(self._colonisation_candidates_thread)
         self._colonisation_candidates_thread.started.connect(self._colonisation_candidates_worker.run)
         self._colonisation_candidates_worker.finished.connect(self._on_colonisation_candidates_finished)
         self._colonisation_candidates_worker.finished.connect(self._colonisation_candidates_thread.quit)
         self._colonisation_candidates_thread.start()
+
+    def _get_completed_colony_names(self) -> list[str]:
+        depots = self.repo.get_colonisation_depots()
+        names = {d["system_name"] for d in depots if d.get("complete")}
+        return sorted(names)
 
     def _on_colonisation_candidates_finished(self, system_name: str, result: dict) -> None:
         self._colonisation_candidates_system = system_name
@@ -4849,7 +4858,9 @@ class MainWindow(QMainWindow):
             return
         if self._colonisation_check_thread and self._colonisation_check_thread.isRunning():
             return  # a check is already in flight -- ignore rapid double-clicks
-        self._colonisation_check_worker = _ColonisationEligibilityCheckWorker(system_name.strip())
+        self._colonisation_check_worker = _ColonisationEligibilityCheckWorker(
+            system_name.strip(), self._get_completed_colony_names()
+        )
         self._colonisation_check_thread = QThread()
         self._colonisation_check_worker.moveToThread(self._colonisation_check_thread)
         self._colonisation_check_thread.started.connect(self._colonisation_check_worker.run)

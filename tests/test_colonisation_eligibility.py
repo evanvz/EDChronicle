@@ -3,6 +3,7 @@ response parsing, mocked (no live network call in the automated suite).
 Real endpoint shape verified live during development: the queried center
 system is always present at distance 0; an empty "information": {} object
 is EDSM's own signal for "no known population"."""
+import pytest
 from unittest.mock import patch
 
 from edc.core.colonisation_eligibility import (
@@ -10,6 +11,14 @@ from edc.core.colonisation_eligibility import (
     check_system_eligibility,
     _query_sphere,
 )
+
+
+@pytest.fixture(autouse=True)
+def _no_spansh_claims():
+    """Every test in this file exercises EDSM behavior; default Spansh to
+    "no data" (fail-open, keeps candidates) unless a test overrides it."""
+    with patch("edc.core.colonisation_eligibility.requests.post", return_value=_FakeResponse({"results": []})):
+        yield
 
 
 def _sphere_response(entries):
@@ -151,3 +160,67 @@ def test_query_sphere_exception_is_real_failure():
     with patch("edc.core.colonisation_eligibility.requests.get", side_effect=Exception("network error")):
         result = _query_sphere("Sol", 15.0)
     assert result is None
+
+
+def test_find_nearby_includes_chained_expansion_from_own_colony():
+    main_payload = _sphere_response([("Sol", 0, True), ("Empty One", 5.0, False)])
+    colony_payload = _sphere_response([("My Colony", 0, True), ("Chain Candidate", 4.0, False)])
+
+    def _fake_get(url, params=None, **kwargs):
+        if params["systemName"] == "My Colony":
+            return _FakeResponse(colony_payload)
+        return _FakeResponse(main_payload)
+
+    with patch("edc.core.colonisation_eligibility.requests.get", side_effect=_fake_get):
+        result = find_nearby_colonisation_candidates("Sol", own_colony_names=["My Colony"])
+    by_name = {c["name"]: c for c in result["candidates"]}
+    assert "Chain Candidate" in by_name
+    assert by_name["Chain Candidate"]["via"] == "My Colony"
+    assert by_name["Empty One"]["via"] is None
+
+
+def test_find_nearby_dedupes_keeping_shortest_distance():
+    main_payload = _sphere_response([("Sol", 0, True), ("Shared", 6.0, False)])
+    colony_payload = _sphere_response([("My Colony", 0, True), ("Shared", 3.0, False)])
+
+    def _fake_get(url, params=None, **kwargs):
+        if params["systemName"] == "My Colony":
+            return _FakeResponse(colony_payload)
+        return _FakeResponse(main_payload)
+
+    with patch("edc.core.colonisation_eligibility.requests.get", side_effect=_fake_get):
+        result = find_nearby_colonisation_candidates("Sol", own_colony_names=["My Colony"])
+    shared = next(c for c in result["candidates"] if c["name"] == "Shared")
+    assert shared["distance_ly"] == 3.0
+    assert shared["via"] == "My Colony"
+
+
+def test_find_nearby_drops_candidate_spansh_says_already_claimed():
+    payload = _sphere_response([("Sol", 0, True), ("Claimed Elsewhere", 5.0, False), ("Still Free", 6.0, False)])
+
+    def _fake_post(url, json=None, **kwargs):
+        name = json["filters"]["name"]["value"]
+        claimed = name == "Claimed Elsewhere"
+        return _FakeResponse({"results": [{"is_colonised": claimed, "is_being_colonised": False}]})
+
+    with patch("edc.core.colonisation_eligibility.requests.get", return_value=_FakeResponse(payload)), \
+         patch("edc.core.colonisation_eligibility.requests.post", side_effect=_fake_post):
+        result = find_nearby_colonisation_candidates("Sol")
+    names = [c["name"] for c in result["candidates"]]
+    assert "Claimed Elsewhere" not in names
+    assert "Still Free" in names
+
+
+def test_check_eligibility_no_populated_neighbor_but_within_chain_radius():
+    payload = _sphere_response([("Target System", 0, False), ("Also Empty", 10.0, False)])
+    colony_payload = _sphere_response([("My Colony", 0, True), ("Target System", 7.0, False)])
+
+    def _fake_get(url, params=None, **kwargs):
+        if params["systemName"] == "My Colony":
+            return _FakeResponse(colony_payload)
+        return _FakeResponse(payload)
+
+    with patch("edc.core.colonisation_eligibility.requests.get", side_effect=_fake_get):
+        result = check_system_eligibility("Target System", own_colony_names=["My Colony"])
+    assert result["eligible"] is True
+    assert "My Colony" in result["reason"]

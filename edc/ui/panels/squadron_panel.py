@@ -294,8 +294,8 @@ class SquadronPanel(QWidget):
         cand_l.addWidget(self._candidates_status_label)
 
         self._candidates_table = QTableWidget()
-        self._candidates_table.setColumnCount(2)
-        self._candidates_table.setHorizontalHeaderLabels(["System", "Dist (ly)"])
+        self._candidates_table.setColumnCount(3)
+        self._candidates_table.setHorizontalHeaderLabels(["System", "Dist (ly)", "Via"])
         self._candidates_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._candidates_table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
         self._candidates_table.verticalHeader().setVisible(False)
@@ -553,8 +553,11 @@ class SquadronPanel(QWidget):
             name_item = QTableWidgetItem(c.get("name") or "—")
             dist_item = QTableWidgetItem(f"{c.get('distance_ly', 0):.1f}")
             dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            via = c.get("via")
+            via_item = QTableWidgetItem(f"colony: {via}" if via else "current system")
             self._candidates_table.setItem(row, 0, name_item)
             self._candidates_table.setItem(row, 1, dist_item)
+            self._candidates_table.setItem(row, 2, via_item)
 
         if lookup_failed:
             self._candidates_status_label.setText("Lookup failed — EDSM unreachable.")
