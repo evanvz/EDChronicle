@@ -676,6 +676,7 @@ class OverviewPanel(QWidget):
             # faction happens to iterate first.
             last = getattr(state, "bounty_last_commit", None) or {}
             dormant_note = ""
+            is_dormant = False
             max_age_days = None
             for faction, amount in bounties.items():
                 age_days = fmt.bounty_age_days(last.get(faction) or "")
@@ -685,14 +686,24 @@ class OverviewPanel(QWidget):
                     max_age_days = age_days
             if max_age_days is not None:
                 if max_age_days >= 7:
+                    is_dormant = True
                     dormant_note = f" — <b>DORMANT</b>: only payable at a station this faction controls"
                 else:
                     days_left = max(1, 7 - int(max_age_days))
                     dormant_note = f" — goes dormant in {days_left}d"
+            # A dormant bounty is never payable at Interstellar Factors --
+            # the generic IF suggestion directly contradicted the DORMANT
+            # note right next to it (confirmed live: visited several IF
+            # contacts, none showed anything owed, because it's dormant).
+            # dormant_note already says where it IS payable, so nothing
+            # more to add in that case.
+            payment_note = (
+                "" if is_dormant else
+                " Notoriety-clean commanders can pay at any Interstellar Factors contact (+25% fee)."
+            )
             items.append((
                 0,
-                f"⚖️ <b>Pay off bounty:</b> {total:,} Cr outstanding{dormant_note}. "
-                f"Notoriety-clean commanders can pay at any Interstellar Factors contact (+25% fee)."
+                f"⚖️ <b>Pay off bounty:</b> {total:,} Cr outstanding{dormant_note}.{payment_note}"
             ))
 
         notoriety = getattr(state, "notoriety", None)
