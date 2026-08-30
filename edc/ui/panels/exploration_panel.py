@@ -544,16 +544,34 @@ class ExplorationPanel(QWidget):
         personally_scanned = len(getattr(state, "resolved_body_ids", set()) or set())
         scanned     = len(state.bodies)
         if isinstance(total, int) and total > 0:
-            # Leads with personal FSS progress, not known/total -- known can
-            # hit total almost instantly on arrival from Spansh/DB backfill
-            # alone, well before FSS is anywhere near done, which read as
-            # "0 unknown" (nothing left to do) while the game's own FSS
-            # panel still showed most bodies unrevealed (confirmed live:
-            # 27/27 known here, 3/27 in the game's own FSS scanner).
-            extra = f" — {scanned} known via Spansh/DB" if scanned > personally_scanned else ""
-            self.exploration_hint.setText(
-                f"Bodies: {personally_scanned}/{total} resolved (FSS){extra}"
-            )
+            if scanned >= total:
+                # Every body's data is already in hand (Spansh/DB backfill,
+                # typically a pre-discovered system where FSSDiscoveryScan
+                # reports Progress=1.0 on the honk itself) -- there's
+                # nothing left to learn, so lead with that instead of the
+                # personal-FSS-reveal count, which previously made a fully
+                # known system read as "still need to discover/FSS" even
+                # though every body card was already populated (confirmed
+                # live: this exact case, all bodies known, most unrevealed
+                # in the player's own FSS scanner).
+                fss_note = (
+                    f" — {personally_scanned}/{total} revealed in your own FSS scan"
+                    if personally_scanned < total else ""
+                )
+                self.exploration_hint.setText(
+                    f"All {total} bodies known{fss_note}"
+                )
+            else:
+                # Leads with personal FSS progress, not known/total -- known can
+                # hit total almost instantly on arrival from Spansh/DB backfill
+                # alone, well before FSS is anywhere near done, which read as
+                # "0 unknown" (nothing left to do) while the game's own FSS
+                # panel still showed most bodies unrevealed (confirmed live:
+                # 27/27 known here, 3/27 in the game's own FSS scanner).
+                extra = f" — {scanned} known via Spansh/DB" if scanned > personally_scanned else ""
+                self.exploration_hint.setText(
+                    f"Bodies: {personally_scanned}/{total} resolved (FSS){extra}"
+                )
         else:
             self.exploration_hint.setText(
                 f"Bodies: {scanned} known (honk for total count)"
