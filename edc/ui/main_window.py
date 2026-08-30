@@ -4257,18 +4257,24 @@ class MainWindow(QMainWindow):
             resolved = len(getattr(self.state, "resolved_body_ids", set()) or set())
             # Always shown (not just while incomplete) -- matches the
             # Exploration tab's persistent progress line (per user request).
-            # Leads with resolved/total (personal FSS progress) rather than
-            # known/total -- known can hit total almost instantly on arrival
-            # from Spansh/DB backfill alone, well before FSS is anywhere
-            # near done, making "0 unknown" read as "nothing left to do"
-            # when the in-game FSS panel still shows most bodies unrevealed
-            # (confirmed live: 27/27 known, 0 unknown shown here while the
-            # game's own FSS scanner still read 3/27).
+            # Mirrors exploration_panel.py's exact fix: once every body's
+            # data is already known (Spansh/DB backfill, typically a
+            # pre-discovered system honked at Progress=1.0), lead with
+            # that instead of resolved/total -- otherwise a fully known
+            # system reads as "still need to FSS" even though nothing is
+            # actually missing (confirmed live: this exact Overview line
+            # still showed "1/25 resolved" after the Exploration tab was
+            # already fixed to read "All 25 bodies known" -- same bug,
+            # separate duplicated display).
             if isinstance(total, int) and total > 0:
-                extra = f" — {known} known via Spansh/DB" if known > resolved else ""
-                lines.append(
-                    f"🔎 Intel: {resolved}/{total} bodies resolved (FSS){extra}"
-                )
+                if known >= total:
+                    fss_note = f" — {resolved}/{total} revealed in your own FSS scan" if resolved < total else ""
+                    lines.append(f"🔎 Intel: All {total} bodies known{fss_note}")
+                else:
+                    extra = f" — {known} known via Spansh/DB" if known > resolved else ""
+                    lines.append(
+                        f"🔎 Intel: {resolved}/{total} bodies resolved (FSS){extra}"
+                    )
         except Exception:
             pass
 
