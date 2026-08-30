@@ -5,6 +5,10 @@ fine doesn't clear just because the app restarted -- so this replays every
 journal file chronologically rather than relying on any persisted app
 state. Mirrors bounty_scanner.py exactly; fines and bounties are separate
 CommitCrime fields with separate payoff events.
+
+Resurrect also clears everything outstanding -- see bounty_scanner.py's
+module docstring; the same Detention Centre capture forcibly pays off
+fines alongside bounties.
 """
 from __future__ import annotations
 
@@ -23,7 +27,8 @@ def scan_active_fines(journal_dir: Path) -> Dict[str, int]:
         try:
             with path.open("r", encoding="utf-8", errors="replace") as f:
                 for line in f:
-                    if '"CommitCrime"' not in line and '"PayFines"' not in line:
+                    if ('"CommitCrime"' not in line and '"PayFines"' not in line
+                            and '"Resurrect"' not in line):
                         continue
                     try:
                         event = json.loads(line)
@@ -41,6 +46,8 @@ def scan_active_fines(journal_dir: Path) -> Dict[str, int]:
                             active.pop(faction, None)
                         else:
                             active.clear()
+                    elif name == "Resurrect":
+                        active.clear()
         except OSError:
             continue
 

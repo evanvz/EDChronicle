@@ -9,6 +9,13 @@ Also records each faction's most recent CommitCrime timestamp: a bounty
 older than 7 days goes DORMANT (hidden from scans; payable ONLY at a
 station controlled by the issuing faction, not at Interstellar Factors),
 so the age matters as much as the amount.
+
+Resurrect also clears everything outstanding: dying while wanted sends
+you to the nearest Detention Centre, which forcibly pays off every
+accumulated bounty as part of the resurrection -- no separate PayBounties
+event fires for it (confirmed live: a Resurrect event's Cost exactly
+matched two outstanding on-foot murder bounties, immediately followed by
+a Location event at a SystemGovernment=$government_Prison; station).
 """
 from __future__ import annotations
 
@@ -34,7 +41,8 @@ def scan_active_bounties_with_dates(journal_dir: Path) -> Tuple[Dict[str, int], 
         try:
             with path.open("r", encoding="utf-8", errors="replace") as f:
                 for line in f:
-                    if '"CommitCrime"' not in line and '"PayBounties"' not in line:
+                    if ('"CommitCrime"' not in line and '"PayBounties"' not in line
+                            and '"Resurrect"' not in line):
                         continue
                     try:
                         event = json.loads(line)
@@ -55,6 +63,9 @@ def scan_active_bounties_with_dates(journal_dir: Path) -> Tuple[Dict[str, int], 
                         else:
                             active.clear()
                             last_commit.clear()
+                    elif name == "Resurrect":
+                        active.clear()
+                        last_commit.clear()
         except OSError:
             continue
 

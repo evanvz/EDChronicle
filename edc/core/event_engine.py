@@ -1179,6 +1179,24 @@ class EventEngine:
             except Exception:
                 pass
 
+        elif name == "Resurrect":
+            # Dying on foot (or in an SRV) while wanted sends you to the
+            # nearest Detention Centre, which forcibly pays off every
+            # accumulated bounty and fine as part of the resurrection --
+            # no separate PayBounties/PayFines event fires for it.
+            # Confirmed live: a Resurrect event's Cost exactly matched two
+            # outstanding on-foot murder bounties (2x1000cr = 2000cr), and
+            # the very next Location event landed at a
+            # SystemGovernment=$government_Prison; station -- yet the
+            # bounty stayed marked outstanding forever after, since
+            # nothing ever cleared it. No-op if nothing was owed.
+            try:
+                self.state.active_bounties = {}
+                self.state.bounty_last_commit = {}
+                self.state.active_fines = {}
+            except Exception:
+                pass
+
         elif name == "RedeemVoucher":
             if event.get("Type") in ("bounty", "CombatBond"):
                 amount = event.get("Amount")
