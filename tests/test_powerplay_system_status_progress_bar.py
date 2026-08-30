@@ -2,6 +2,7 @@
 (qty/threshold) as a text bar -- pure function, no Qt dependency."""
 from edc.ui.panels.powerplay_system_status_panel import (
     _progress_bar_text, _prediction_color, _COLOR_FAVORABLE, _COLOR_UNFAVORABLE, _COLOR_NEUTRAL,
+    _is_decay_risk,
 )
 
 
@@ -62,3 +63,27 @@ def test_unknown_prediction_defaults_to_neutral():
 
 def test_prediction_color_is_case_insensitive():
     assert _prediction_color("fortify") == _COLOR_FAVORABLE
+
+
+def test_decay_risk_above_25_percent_reinforcement():
+    assert _is_decay_risk("control", True, 0.30) is True
+
+
+def test_no_decay_risk_at_or_below_25_percent():
+    assert _is_decay_risk("control", True, 0.25) is False
+    assert _is_decay_risk("control", True, 0.10) is False
+
+
+def test_no_decay_risk_for_undermining_direction():
+    # High progress on the *against* bar means someone else is undermining
+    # this system, not that it's decaying -- only the reinforcement/fortify
+    # direction is subject to the 25%+ decay rule.
+    assert _is_decay_risk("control", False, 0.90) is False
+
+
+def test_no_decay_risk_for_uncontrolled_state():
+    assert _is_decay_risk("contested", True, 0.90) is False
+
+
+def test_no_decay_risk_when_fraction_unknown():
+    assert _is_decay_risk("control", True, None) is False

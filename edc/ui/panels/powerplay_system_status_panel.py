@@ -79,6 +79,25 @@ def _progress_bar_text(qty: Optional[int], threshold: Optional[int]) -> str:
     return f"{bar} {frac * 100:.0f}%"
 
 
+_DECAY_RISK_THRESHOLD = 0.25
+
+
+def _is_decay_risk(state: str, is_reinforcement_direction: bool, cp_frac: Optional[float]) -> bool:
+    """The 03/07/2025 Ascendancy rebalance added a weekly control-point
+    decay (counted as undermining) to any controlled system already above
+    25% progress toward its next tier -- strength increasing the further
+    past 25% it sits. Not shown anywhere in the game's own UI. Only
+    applies to an actually-controlled system's fortify-direction progress
+    (qty_for/thr_for) -- a contested/blocked system, or one being read in
+    its undermining direction, isn't subject to this."""
+    return (
+        state == "control"
+        and is_reinforcement_direction
+        and cp_frac is not None
+        and cp_frac > _DECAY_RISK_THRESHOLD
+    )
+
+
 def _tier_label(edsm_powerplay, system_name: str) -> str:
     if edsm_powerplay is None:
         return "—"
@@ -236,14 +255,18 @@ class PowerplaySystemStatusPanel(QWidget):
             # Whichever direction has an active threshold this cycle is
             # the one worth showing -- a system with no undermining
             # pressure has thr_against blank in Frontier's own feed.
-            if row.get("thr_for") is not None:
+            is_reinforcement_direction = row.get("thr_for") is not None
+            if is_reinforcement_direction:
                 cp_frac = _progress_fraction(row.get("qty_for"), row.get("thr_for"))
             else:
                 cp_frac = _progress_fraction(row.get("qty_against"), row.get("thr_against"))
             cp_text = _progress_bar_text(
-                row.get("qty_for") if row.get("thr_for") is not None else row.get("qty_against"),
-                row.get("thr_for") if row.get("thr_for") is not None else row.get("thr_against"),
+                row.get("qty_for") if is_reinforcement_direction else row.get("qty_against"),
+                row.get("thr_for") if is_reinforcement_direction else row.get("thr_against"),
             )
+            decay_risk = _is_decay_risk((row.get("state") or "").strip().lower(), is_reinforcement_direction, cp_frac)
+            if decay_risk:
+                cp_text += " ⚠"
 
             name_item = QTableWidgetItem(name)
 
@@ -262,6 +285,11 @@ class PowerplaySystemStatusPanel(QWidget):
 
             cp_item = _NumericTableWidgetItem(cp_text, cp_frac if cp_frac is not None else -1.0)
             cp_item.setForeground(QColor(pred_color))
+            if decay_risk:
+                cp_item.setToolTip(
+                    "Above 25% progress: subject to weekly control-point decay "
+                    "(counted as undermining) since the 03/07/2025 Ascendancy rebalance."
+                )
 
             table.setItem(i, 0, name_item)
             table.setItem(i, 1, dist_item)
