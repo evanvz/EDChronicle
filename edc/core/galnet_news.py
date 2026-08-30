@@ -15,14 +15,17 @@ _NEWS_URL = (
     "https://cms.zaonce.net/en-GB/jsonapi/node/galnet_article"
     "?page[limit]=1&sort=-published_at"
 )
+_ARTICLE_URL_FMT = "https://community.elitedangerous.com/en/galnet/uid/{guid}"
 _TIMEOUT = 10
 _USER_AGENT = "EDChronicle/1.0.0 (+https://github.com/evanvz/EDChronicle)"
 
 
-def fetch_latest_headline() -> Optional[str]:
-    """Returns the newest GalNet article's title, or None on any failure
-    (network error, bad response shape, empty result). Synchronous --
-    call from a worker thread, never the UI thread."""
+def fetch_latest_headline() -> Optional[tuple[str, Optional[str]]]:
+    """Returns (title, article_url) for the newest GalNet article, or None
+    on any failure (network error, bad response shape, empty result).
+    article_url is None if the article had no field_galnet_guid to build
+    the community-site link from -- title alone is still shown. Synchronous
+    -- call from a worker thread, never the UI thread."""
     try:
         resp = requests.get(_NEWS_URL, headers={"User-Agent": _USER_AGENT}, timeout=_TIMEOUT)
         resp.raise_for_status()
@@ -41,4 +44,9 @@ def fetch_latest_headline() -> Optional[str]:
     if not isinstance(attrs, dict):
         return None
     title = attrs.get("title")
-    return title.strip() if isinstance(title, str) and title.strip() else None
+    if not (isinstance(title, str) and title.strip()):
+        return None
+
+    guid = attrs.get("field_galnet_guid")
+    url = _ARTICLE_URL_FMT.format(guid=guid) if isinstance(guid, str) and guid.strip() else None
+    return title.strip(), url

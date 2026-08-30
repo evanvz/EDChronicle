@@ -177,7 +177,7 @@ class _ServerStatusWorker(QObject):
 
 
 class _GalnetNewsWorker(QObject):
-    finished = pyqtSignal(object)  # Optional[str]
+    finished = pyqtSignal(object)  # Optional[tuple[str, Optional[str]]] -- (title, article_url)
 
     def run(self):
         self.finished.emit(fetch_latest_headline())
@@ -1501,6 +1501,8 @@ class MainWindow(QMainWindow):
         galnet_card_layout.setContentsMargins(8, 2, 8, 2)
         self._galnet_label = QLabel("")
         self._galnet_label.setStyleSheet("color: #FFB347; font-size: 12px; background:transparent; border:none;")
+        self._galnet_label.setOpenExternalLinks(True)
+        self._galnet_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
         galnet_card_layout.addWidget(self._galnet_label)
         self.statusBar().addWidget(galnet_card, 1)
 
@@ -4813,10 +4815,14 @@ class MainWindow(QMainWindow):
         self._galnet_worker.finished.connect(self._galnet_thread.quit)
         self._galnet_thread.start()
 
-    def _on_galnet_refreshed(self, title: str | None) -> None:
-        if not title:
+    def _on_galnet_refreshed(self, result: tuple[str, str | None] | None) -> None:
+        if not result:
             return
-        self._galnet_label.setText(f"📰 {title}")
+        title, url = result
+        if url:
+            self._galnet_label.setText(f'📰 <a href="{url}" style="color:#FFB347; text-decoration:none;">{title}</a>')
+        else:
+            self._galnet_label.setText(f"📰 {title}")
         self._galnet_label.setToolTip(title)
 
     def _on_bgs_tick_check_tick(self) -> None:
