@@ -243,6 +243,7 @@ class _ShipEngineeringTab(QWidget):
         left.addWidget(add_frame)
         self._on_blueprint_changed()
 
+        wl_card, wl_layout = make_card()
         wl_hdr_row = QHBoxLayout()
         wl_hdr = QLabel("TRACKED BUILDS")
         wl_hdr.setStyleSheet(_HDR_STYLE)
@@ -252,7 +253,7 @@ class _ShipEngineeringTab(QWidget):
         remove_btn.setStyleSheet(_DANGER_BUTTON_STYLE)
         remove_btn.clicked.connect(self._remove_selected)
         wl_hdr_row.addWidget(remove_btn)
-        left.addLayout(wl_hdr_row)
+        wl_layout.addLayout(wl_hdr_row)
 
         self._wl_table = _make_table(["Blueprint", "Grade", "Status"])
         h = self._wl_table.horizontalHeader()
@@ -260,7 +261,9 @@ class _ShipEngineeringTab(QWidget):
         h.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         self._wl_table.itemSelectionChanged.connect(self._refresh_detail_table)
-        left.addWidget(self._wl_table, 1)
+        wl_layout.addWidget(self._wl_table)
+
+        left.addWidget(wl_card, 1)
 
         root.addLayout(left, 2)
 
@@ -804,6 +807,7 @@ class _OdysseyEngineeringTab(QWidget):
         left.addWidget(add_frame)
         self._on_kind_changed()
 
+        wl_card, wl_layout = make_card()
         wl_hdr_row = QHBoxLayout()
         wl_hdr = QLabel("TRACKED TARGETS")
         wl_hdr.setStyleSheet(_HDR_STYLE)
@@ -813,7 +817,7 @@ class _OdysseyEngineeringTab(QWidget):
         remove_btn.setStyleSheet(_DANGER_BUTTON_STYLE)
         remove_btn.clicked.connect(self._remove_selected)
         wl_hdr_row.addWidget(remove_btn)
-        left.addLayout(wl_hdr_row)
+        wl_layout.addLayout(wl_hdr_row)
 
         self._wl_table = _make_table(["Item", "Kind", "Status"])
         h = self._wl_table.horizontalHeader()
@@ -821,7 +825,9 @@ class _OdysseyEngineeringTab(QWidget):
         h.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         self._wl_table.itemSelectionChanged.connect(self._refresh_detail_table)
-        left.addWidget(self._wl_table, 1)
+        wl_layout.addWidget(self._wl_table)
+
+        left.addWidget(wl_card, 1)
 
         root.addLayout(left, 2)
 

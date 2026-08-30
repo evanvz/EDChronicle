@@ -870,9 +870,15 @@ class PlayerFactionPanel(QWidget):
         self._stale_system_addresses: List[int] = []
 
         # ── Bucket dashboard (replaces the old flat ~700-row table) ────────
+        buckets_frame = QFrame()
+        buckets_frame.setStyleSheet(_CARD_STYLE)
+        buckets_frame_l = QVBoxLayout(buckets_frame)
+        buckets_frame_l.setContentsMargins(8, 6, 8, 6)
+        buckets_frame_l.setSpacing(4)
+
         buckets_hdr = QLabel("SYSTEMS BY STATUS — CLICK A TILE FOR DETAILS")
         buckets_hdr.setStyleSheet(_HDR_STYLE)
-        root.addWidget(buckets_hdr)
+        buckets_frame_l.addWidget(buckets_hdr)
 
         search_row = QHBoxLayout()
         search_row.addWidget(QLabel("Search:"))
@@ -888,24 +894,32 @@ class PlayerFactionPanel(QWidget):
         self._system_search_edit.setCompleter(self._system_search_completer)
         self._system_search_edit.returnPressed.connect(self._on_system_search)
         search_row.addWidget(self._system_search_edit, 1)
-        root.addLayout(search_row)
+        buckets_frame_l.addLayout(search_row)
 
         self._buckets_widget = QWidget()
         self._buckets_layout = QGridLayout(self._buckets_widget)
         self._buckets_layout.setSpacing(6)
-        root.addWidget(self._buckets_widget, 1)
+        buckets_frame_l.addWidget(self._buckets_widget)
+
+        root.addWidget(buckets_frame, 1)
         self._bucket_dialogs: Dict[str, "_FactionBucketDialog"] = {}
         self._last_buckets: Dict[str, List[dict]] = {}
 
         # ── Active missions for this faction (what to complete) ───────────
+        missions_frame = QFrame()
+        missions_frame.setStyleSheet(_CARD_STYLE)
+        missions_frame_l = QVBoxLayout(missions_frame)
+        missions_frame_l.setContentsMargins(8, 6, 8, 6)
+        missions_frame_l.setSpacing(4)
+
         missions_hdr = QLabel("ACTIVE MISSIONS — HELP THIS FACTION")
         missions_hdr.setStyleSheet(_HDR_STYLE)
-        root.addWidget(missions_hdr)
+        missions_frame_l.addWidget(missions_hdr)
 
         self._missions_status_label = QLabel("")
         self._missions_status_label.setWordWrap(True)
         self._missions_status_label.setStyleSheet("background:transparent; border:none; color:#888888; font-size:12px;")
-        root.addWidget(self._missions_status_label)
+        missions_frame_l.addWidget(self._missions_status_label)
 
         self._missions_table = QTableWidget()
         self._missions_table.setColumnCount(4)
@@ -929,7 +943,9 @@ class PlayerFactionPanel(QWidget):
         mh.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         mh.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         mh.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        root.addWidget(self._missions_table, 1)
+        missions_frame_l.addWidget(self._missions_table)
+
+        root.addWidget(missions_frame, 1)
 
     def showEvent(self, event) -> None:
         super().showEvent(event)

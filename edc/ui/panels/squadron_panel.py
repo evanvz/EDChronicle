@@ -340,9 +340,15 @@ class SquadronPanel(QWidget):
         root.addWidget(cand_card)
 
         # ── Rank history ─────────────────────────────────────────────────
+        history_card = QFrame()
+        history_card.setStyleSheet(_CARD_STYLE)
+        history_l = QVBoxLayout(history_card)
+        history_l.setContentsMargins(8, 6, 8, 6)
+        history_l.setSpacing(4)
+
         history_hdr = QLabel("RANK HISTORY")
         history_hdr.setStyleSheet(_HDR_STYLE)
-        root.addWidget(history_hdr)
+        history_l.addWidget(history_hdr)
 
         self._history_table = QTableWidget()
         self._history_table.setColumnCount(3)
@@ -361,7 +367,9 @@ class SquadronPanel(QWidget):
         h.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         h.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        root.addWidget(self._history_table, 1)
+        history_l.addWidget(self._history_table)
+
+        root.addWidget(history_card, 1)
 
     def refresh(self, state) -> None:
         self._last_state = state

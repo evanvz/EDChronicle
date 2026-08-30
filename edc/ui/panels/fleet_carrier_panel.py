@@ -145,9 +145,15 @@ class FleetCarrierPanel(QWidget):
         root.addWidget(squad_frame)
 
         # ── Trade orders table ────────────────────────────────────────────
+        orders_frame = QFrame()
+        orders_frame.setStyleSheet(self._CARD_STYLE)
+        orders_layout = QVBoxLayout(orders_frame)
+        orders_layout.setContentsMargins(8, 6, 8, 6)
+        orders_layout.setSpacing(4)
+
         orders_hdr = QLabel("TRADE ORDERS")
         orders_hdr.setStyleSheet(self._HDR_STYLE)
-        root.addWidget(orders_hdr)
+        orders_layout.addWidget(orders_hdr)
 
         self._orders_table = QTableWidget()
         self._orders_table.setColumnCount(4)
@@ -167,7 +173,9 @@ class FleetCarrierPanel(QWidget):
         h.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        root.addWidget(self._orders_table, 1)
+        orders_layout.addWidget(self._orders_table)
+
+        root.addWidget(orders_frame, 1)
 
     # Real max Fleet Carrier fuel capacity — carriers run purely on Tritium,
     # capped at 1000t, so a bare tonnage number doesn't convey how close to
