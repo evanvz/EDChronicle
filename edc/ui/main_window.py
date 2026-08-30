@@ -56,6 +56,8 @@ from edc.core.powerplay_activities import PowerPlayActivityTable
 from edc.core.spansh_client import SpanshClient as _SpanshClient
 from edc.core.edsm_powerplay import EdsmPowerPlayCache
 from edc.core.fdev_powerplay import FdevPowerPlayCache
+from edc.core.server_status import fetch_server_status
+from edc.core.galnet_news import fetch_latest_headline
 from edc.core.eddn_publisher import EddnPublisher, _commodity_symbol
 from edc.core.canonn_client import CanonnClient, SystemPoi
 from edc.core.engineering_blueprints import EngineeringBlueprintTable
@@ -163,6 +165,21 @@ class _FdevPowerPlayRefreshWorker(QObject):
     def run(self):
         ok = self._cache.refresh()
         self.finished.emit(ok)
+
+
+class _ServerStatusWorker(QObject):
+    finished = pyqtSignal(object, object)  # (status, message), both Optional[str]
+
+    def run(self):
+        status, message = fetch_server_status()
+        self.finished.emit(status, message)
+
+
+class _GalnetNewsWorker(QObject):
+    finished = pyqtSignal(object)  # Optional[str]
+
+    def run(self):
+        self.finished.emit(fetch_latest_headline())
 
 
 class _MarketPruneWorker(QObject):
@@ -1472,12 +1489,41 @@ class MainWindow(QMainWindow):
         # for up to the full 10-minute interval after every launch.
         self._on_bgs_tick_check_tick()
 
+        # GalNet latest headline -- leftmost, non-permanent so it takes the
+        # status bar's spare space and gets pushed aside by a temporary
+        # message, same as Qt's own convention for the non-permanent slot.
+        self._galnet_label = QLabel("")
+        self._galnet_label.setStyleSheet("color: #888888; font-size: 10px;")
+        self.statusBar().addWidget(self._galnet_label, 1)
+
         self._service_health_labels: dict[str, QLabel] = {}
         for name in ("EDSM", "EDDN", "BGS Tick"):
             lbl = QLabel(f"● {name}")
             lbl.setStyleSheet("color: #6BCB77; font-size: 10px;")  # green -- matches this app's existing "ok" color convention
             self.statusBar().addPermanentWidget(lbl)
             self._service_health_labels[name] = lbl
+
+        # ED Servers -- unlike the three above (inferred passively from our
+        # own error logs), server status needs a real periodic check; see
+        # server_status.py's module docstring for why.
+        self._server_status_label = QLabel("● ED Servers")
+        self._server_status_label.setStyleSheet("color: #888888; font-size: 10px;")  # grey until first check completes
+        self.statusBar().addPermanentWidget(self._server_status_label)
+        self._server_status_thread: QThread | None = None
+        self._server_status_worker: _ServerStatusWorker | None = None
+        self._server_status_timer = QTimer(self)
+        self._server_status_timer.setInterval(5 * 60 * 1000)  # servers rarely flip state faster than this
+        self._server_status_timer.timeout.connect(self._start_server_status_check)
+        self._server_status_timer.start()
+        self._start_server_status_check()
+
+        self._galnet_thread: QThread | None = None
+        self._galnet_worker: _GalnetNewsWorker | None = None
+        self._galnet_timer = QTimer(self)
+        self._galnet_timer.setInterval(60 * 60 * 1000)  # GalNet posts roughly daily, no need to poll faster
+        self._galnet_timer.timeout.connect(self._start_galnet_refresh)
+        self._galnet_timer.start()
+        self._start_galnet_refresh()
 
         self._service_health_timer = QTimer(self)
         # 30s catches a real outage quickly without meaningfully adding overhead to a passive in-memory check.
@@ -4722,6 +4768,48 @@ class MainWindow(QMainWindow):
             else:
                 lbl.setStyleSheet("color: #6BCB77; font-size: 10px;")
                 lbl.setToolTip("")
+
+    def _start_server_status_check(self) -> None:
+        if self._server_status_thread and self._server_status_thread.isRunning():
+            return
+        self._server_status_worker = _ServerStatusWorker()
+        self._server_status_thread = QThread()
+        self._server_status_worker.moveToThread(self._server_status_thread)
+        self._server_status_thread.started.connect(self._server_status_worker.run)
+        self._server_status_worker.finished.connect(self._on_server_status_checked)
+        self._server_status_worker.finished.connect(self._server_status_thread.quit)
+        self._server_status_thread.start()
+
+    def _on_server_status_checked(self, status: str | None, message: str | None) -> None:
+        if status is None:
+            # Check failed (network error, etc.) -- grey, not red: this
+            # means "couldn't reach Frontier's status endpoint," not
+            # "Frontier's servers are confirmed down," a real distinction
+            # worth not blurring into a false alarm.
+            self._server_status_label.setStyleSheet("color: #888888; font-size: 10px;")
+            self._server_status_label.setToolTip("Couldn't reach the status endpoint.")
+            return
+        ok = status.strip().lower() == "good"
+        color = "#6BCB77" if ok else "#FF6B6B"
+        self._server_status_label.setStyleSheet(f"color: {color}; font-size: 10px;")
+        self._server_status_label.setToolTip(f"{status}{': ' + message if message else ''}")
+
+    def _start_galnet_refresh(self) -> None:
+        if self._galnet_thread and self._galnet_thread.isRunning():
+            return
+        self._galnet_worker = _GalnetNewsWorker()
+        self._galnet_thread = QThread()
+        self._galnet_worker.moveToThread(self._galnet_thread)
+        self._galnet_thread.started.connect(self._galnet_worker.run)
+        self._galnet_worker.finished.connect(self._on_galnet_refreshed)
+        self._galnet_worker.finished.connect(self._galnet_thread.quit)
+        self._galnet_thread.start()
+
+    def _on_galnet_refreshed(self, title: str | None) -> None:
+        if not title:
+            return
+        self._galnet_label.setText(f"📰 {title}")
+        self._galnet_label.setToolTip(title)
 
     def _on_bgs_tick_check_tick(self) -> None:
         if self._bgs_tick_thread and self._bgs_tick_thread.isRunning():
