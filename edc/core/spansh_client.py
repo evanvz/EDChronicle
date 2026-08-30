@@ -96,7 +96,7 @@ class SpanshClient:
         range_ly: int = 100,
         facility: str = "any",    # "any" | "megaship" | "settlement"
         pp_state: str = "any",    # "any" | "stronghold" | "fortified" | "exploited" | "expansion" | "contested" | "uncontrolled"
-        size:     int = 50,
+        size:     Optional[int] = None,
     ) -> Tuple[List[SpanshSystem], str]:
         """
         Returns (results, error).  error is "" on success.
@@ -106,7 +106,19 @@ class SpanshClient:
 
         if mission == "reinforcement":
             filters["controlling_power"] = {"value": power, "comparison": "="}
-        # acquisition, undermining, all — no server-side power filter; post-filter below
+        # acquisition, undermining, all — no server-side power filter; post-filter below.
+        # Without one, Spansh's distance-sorted top-`size` can be entirely
+        # consumed by the searcher's own dense home territory before ever
+        # reaching a relevant candidate a bit farther out (confirmed live:
+        # 0 undermining results within 100 ly of a Stronghold system, even
+        # though the closest actual rival-controlled system was only
+        # 22.6 ly away -- the default 50 closest systems of ANY kind never
+        # reached that far in that dense a region). Request more when the
+        # caller hasn't asked for a specific size; reinforcement doesn't
+        # need this since its server-side filter already excludes
+        # everything irrelevant before the size cap ever applies.
+        if size is None:
+            size = 50 if mission == "reinforcement" else 250
 
         body = {
             "filters":          filters,
