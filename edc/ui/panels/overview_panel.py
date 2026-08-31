@@ -538,20 +538,29 @@ class OverviewPanel(QWidget):
             unclaimed = poi.unclaimed_codex()
             if unclaimed:
                 # Same name/category can repeat once per body (e.g. a geological
-                # feature type present on several bodies) — dedupe and count
-                # rather than showing the identical label over and over.
-                counts: dict = {}
+                # feature type present on several bodies) — group and list which
+                # body(s) so the player knows where to land before surface-
+                # scanning, instead of only a bare type count.
+                bodies_by_key: dict = {}
                 for c in unclaimed:
                     key = (c.name, c.category)
-                    counts[key] = counts.get(key, 0) + 1
-                grouped = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)
+                    if c.body:
+                        bodies_by_key.setdefault(key, []).append(c.body)
+                    else:
+                        bodies_by_key.setdefault(key, [])
+                grouped = sorted(bodies_by_key.items(), key=lambda kv: len(kv[1]), reverse=True)
 
                 shown = grouped[:6]
                 parts = []
-                for (name, category), count in shown:
+                for (name, category), bodies in shown:
                     label = f"{name} ({category})" if category else name
-                    if count > 1:
-                        label += f" x{count}"
+                    unique_bodies = sorted(set(bodies), key=bodies.index)
+                    if unique_bodies:
+                        shown_bodies = unique_bodies[:3]
+                        body_txt = ", ".join(shown_bodies)
+                        if len(unique_bodies) > len(shown_bodies):
+                            body_txt += f" +{len(unique_bodies) - len(shown_bodies)} more"
+                        label += f" — {body_txt}"
                     parts.append(label)
                 names = ", ".join(parts)
                 if len(grouped) > len(shown):
