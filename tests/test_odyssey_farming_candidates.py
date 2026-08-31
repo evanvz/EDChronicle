@@ -2,6 +2,7 @@
 (temp file), not mocks, since the query does the classification logic
 that matters here."""
 import json
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -18,9 +19,13 @@ def repo(tmp_path):
     return Repository(db)
 
 
+_FRESH_TIMESTAMP = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def _save(repo, system_address, system_name, faction_name, government=None,
           faction_state=None, active_states=None, is_controlling=True,
-          data_timestamp="2026-08-12T00:00:00Z"):
+          data_timestamp=None):
+    data_timestamp = data_timestamp or _FRESH_TIMESTAMP
     repo.save_system_name_if_missing(system_address, system_name)
     faction = {"Name": faction_name, "Influence": 0.5}
     if government is not None:
@@ -108,10 +113,13 @@ def test_only_latest_snapshot_date_used(repo):
 
 
 def test_sorted_freshest_data_timestamp_first(repo):
+    now = datetime.now(timezone.utc)
+    older = (now - timedelta(days=20)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    newer = (now - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     _save(repo, 9, "Older", "Faction I", government="Anarchy",
-          data_timestamp="2026-08-01T00:00:00Z")
+          data_timestamp=older)
     _save(repo, 10, "Newer", "Faction J", government="Anarchy",
-          data_timestamp="2026-08-12T00:00:00Z")
+          data_timestamp=newer)
     result = repo.get_odyssey_farming_candidates()
     assert [r["system_name"] for r in result] == ["Newer", "Older"]
 
@@ -132,11 +140,12 @@ def test_returns_data_timestamp_field(repo):
 
 
 def test_bgs_state_signal_ranks_above_anarchy_only(repo):
+    now = datetime.now(timezone.utc)
     _save(repo, 20, "Anarchy Only", "Faction M", government="Anarchy",
-          data_timestamp="2026-08-12T00:00:00Z")
+          data_timestamp=(now - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ"))
     _save(repo, 21, "Unrest State", "Faction N", government="Democracy",
           active_states=[{"State": "CivilUnrest", "Trend": 0}],
-          data_timestamp="2026-08-01T00:00:00Z")
+          data_timestamp=(now - timedelta(days=20)).strftime("%Y-%m-%dT%H:%M:%SZ"))
     result = repo.get_odyssey_farming_candidates()
     assert [r["system_name"] for r in result] == ["Unrest State", "Anarchy Only"]
 
