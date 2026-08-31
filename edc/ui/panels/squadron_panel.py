@@ -284,7 +284,7 @@ class SquadronPanel(QWidget):
         cand_l.setContentsMargins(8, 6, 8, 6)
         cand_l.setSpacing(4)
 
-        cand_hdr = QLabel("COLONISATION CANDIDATES — WITHIN 15 LY")
+        cand_hdr = QLabel("COLONISATION CANDIDATES — NEAR CURRENT SYSTEM")
         cand_hdr.setStyleSheet(_HDR_STYLE)
         cand_l.addWidget(cand_hdr)
 
@@ -312,9 +312,13 @@ class SquadronPanel(QWidget):
         self._candidates_table.setMaximumHeight(160)
         cand_l.addWidget(self._candidates_table)
 
+        check_hdr = QLabel("CHECK ANY SYSTEM — NOT LIMITED TO YOUR CURRENT LOCATION")
+        check_hdr.setStyleSheet("color:#9aa4b0; font-size:10px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;")
+        cand_l.addWidget(check_hdr)
+
         check_row = QHBoxLayout()
         self._check_system_edit = QLineEdit()
-        self._check_system_edit.setPlaceholderText("Check a specific system name")
+        self._check_system_edit.setPlaceholderText("System name — anywhere in the galaxy")
         self._check_system_edit.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
         check_btn = QPushButton("Check")
         check_btn.setStyleSheet(_BTN_STYLE)
