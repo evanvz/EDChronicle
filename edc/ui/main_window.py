@@ -57,6 +57,7 @@ from edc.core.powerplay_activities import PowerPlayActivityTable
 from edc.core.spansh_client import SpanshClient as _SpanshClient
 from edc.core.edsm_powerplay import EdsmPowerPlayCache
 from edc.core.fdev_powerplay import FdevPowerPlayCache
+from edc.core.guardian_ruins import GuardianRuinsCache
 from edc.core.server_status import fetch_server_status
 from edc.core.galnet_news import fetch_latest_headlines
 from edc.core.eddn_publisher import EddnPublisher, _commodity_symbol
@@ -160,6 +161,18 @@ class _FdevPowerPlayRefreshWorker(QObject):
     finished = pyqtSignal(bool)
 
     def __init__(self, cache: FdevPowerPlayCache):
+        super().__init__()
+        self._cache = cache
+
+    def run(self):
+        ok = self._cache.refresh()
+        self.finished.emit(ok)
+
+
+class _GuardianRuinsRefreshWorker(QObject):
+    finished = pyqtSignal(bool)
+
+    def __init__(self, cache: GuardianRuinsCache):
         super().__init__()
         self._cache = cache
 
@@ -1360,6 +1373,9 @@ class MainWindow(QMainWindow):
         self.fdev_powerplay = FdevPowerPlayCache(settings_base)
         self._fdev_powerplay_thread: QThread | None = None
         self._fdev_powerplay_worker: _FdevPowerPlayRefreshWorker | None = None
+        self.guardian_ruins = GuardianRuinsCache(settings_base)
+        self._guardian_ruins_thread: QThread | None = None
+        self._guardian_ruins_worker: _GuardianRuinsRefreshWorker | None = None
         self._market_prune_thread: QThread | None = None
         self._market_prune_worker: _MarketPruneWorker | None = None
         self._market_vacuum_thread: QThread | None = None
@@ -1417,6 +1433,12 @@ class MainWindow(QMainWindow):
         self._fdev_powerplay_retry_timer = QTimer(self)
         self._fdev_powerplay_retry_timer.setInterval(10 * 60 * 1000)
         self._fdev_powerplay_retry_timer.timeout.connect(self._maybe_start_fdev_powerplay_refresh)
+
+        # Same daily-refresh pattern again, for Canonn's Guardian ruins list
+        # -- see guardian_ruins.py.
+        self._guardian_ruins_retry_timer = QTimer(self)
+        self._guardian_ruins_retry_timer.setInterval(10 * 60 * 1000)
+        self._guardian_ruins_retry_timer.timeout.connect(self._maybe_start_guardian_ruins_refresh)
 
         self.eddn_market_cache = EddnMarketCache(self.repo)
         self._market_flush_timer = QTimer(self)
@@ -2001,6 +2023,7 @@ class MainWindow(QMainWindow):
         self._refresh_player_faction()
         self._maybe_start_edsm_powerplay_refresh()
         self._maybe_start_fdev_powerplay_refresh()
+        self._maybe_start_guardian_ruins_refresh()
         self._maybe_start_market_prune()
         self._start_eddn_listener()
         # Always running, not just when today's initial check found the
@@ -2009,6 +2032,7 @@ class MainWindow(QMainWindow):
         # polling for the rest of the app's lifetime, not stop once fresh.
         self._edsm_powerplay_retry_timer.start()
         self._fdev_powerplay_retry_timer.start()
+        self._guardian_ruins_retry_timer.start()
         if auto_start:
             self._auto_start_if_configured()
 
@@ -2246,6 +2270,27 @@ class MainWindow(QMainWindow):
             log.info("Frontier PowerPlay cache refresh complete")
         else:
             log.warning("Frontier PowerPlay cache refresh failed — will retry later")
+
+    def _maybe_start_guardian_ruins_refresh(self):
+        if not self.guardian_ruins.is_stale():
+            return
+        if self._guardian_ruins_thread and self._guardian_ruins_thread.isRunning():
+            return
+
+        log.info("Guardian ruins cache is stale — refreshing in background")
+        self._guardian_ruins_worker = _GuardianRuinsRefreshWorker(self.guardian_ruins)
+        self._guardian_ruins_thread = QThread()
+        self._guardian_ruins_worker.moveToThread(self._guardian_ruins_thread)
+        self._guardian_ruins_thread.started.connect(self._guardian_ruins_worker.run)
+        self._guardian_ruins_worker.finished.connect(self._on_guardian_ruins_refreshed)
+        self._guardian_ruins_worker.finished.connect(self._guardian_ruins_thread.quit)
+        self._guardian_ruins_thread.start()
+
+    def _on_guardian_ruins_refreshed(self, ok: bool):
+        if ok:
+            log.info("Guardian ruins cache refresh complete")
+        else:
+            log.warning("Guardian ruins cache refresh failed — will retry later")
 
     def _maybe_start_market_prune(self):
         """Once/day is plenty — the prune thresholds are 21 days for
@@ -2985,6 +3030,11 @@ class MainWindow(QMainWindow):
                 names = [str(r.get("name") or "") for r in exact if r.get("name")]
                 if names:
                     parts.append(f"Known farming site: {names[0]}.")
+
+            # ── Canonn Guardian ruins (crowdsourced, distinct from the
+            # small static farming_locations list above) ──────────────────
+            if getattr(self, "guardian_ruins", None) and self.guardian_ruins.has_ruins(sys_name):
+                parts.append("Guardian ruins known in this system.")
 
             # ── Faction state tags ────────────────────────────────────────
             govt = str(getattr(state, "system_government", "") or "").lower()
