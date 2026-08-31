@@ -529,7 +529,8 @@ class _ColonisationEligibilityCheckWorker(QObject):
 
 
 class _CanonnRefreshWorker(QObject):
-    finished = pyqtSignal(object, str, object, str)  # poi, poi_error, challenge, challenge_error
+    finished = pyqtSignal(object, str, object, str, object, str)
+    # poi, poi_error, challenge, challenge_error, compres, compres_error
 
     def __init__(self, client: CanonnClient, system: str, odyssey: bool, cmdr: str, x: float, y: float, z: float):
         super().__init__()
@@ -542,7 +543,8 @@ class _CanonnRefreshWorker(QObject):
     def run(self):
         poi, poi_error = self._client.get_system_poi(self._system, self._odyssey, self._cmdr)
         challenge, challenge_error = self._client.get_nearest_challenge(self._cmdr, self._x, self._y, self._z)
-        self.finished.emit(poi, poi_error, challenge, challenge_error)
+        compres, compres_error = self._client.get_compres([self._system]) if self._system else ({}, "No system")
+        self.finished.emit(poi, poi_error, challenge, challenge_error, compres, compres_error)
 
 
 class MainWindow(QMainWindow):
@@ -2024,6 +2026,7 @@ class MainWindow(QMainWindow):
         self._tts_phenomena_announced: set = set()  # signal names already announced this system
         self._tts_megaship_announced: set = set()  # megaship keys already announced this system
         self._tts_cnb_announced: set = set()  # compromised nav beacon keys already announced this system
+        self._tts_cnb_canonn_announced: set = set()  # system_address values already given the proactive Canonn CNB heads-up
         self._tts_ship_cooldown_until: float = 0.0  # monotonic timestamp
         self._tts_under_attack_cooldown_until: float = 0.0
         self._commander_quip_cooldown_until: float = 0.0
@@ -2340,7 +2343,8 @@ class MainWindow(QMainWindow):
         self._canonn_worker.finished.connect(self._canonn_thread.quit)
         self._canonn_thread.start()
 
-    def _on_canonn_refreshed(self, poi, poi_error: str, challenge: dict, challenge_error: str):
+    def _on_canonn_refreshed(self, poi, poi_error: str, challenge: dict, challenge_error: str,
+                              compres: dict, compres_error: str):
         if poi_error:
             log.warning("Canonn POI fetch failed: %s", poi_error)
         else:
@@ -2357,6 +2361,50 @@ class MainWindow(QMainWindow):
             self._refresh_exobiology()
         except Exception:
             log.exception("Failed to refresh Exobiology tab with Canonn data")
+        if compres_error:
+            log.warning("Canonn get_compres fetch failed: %s", compres_error)
+        else:
+            try:
+                self._maybe_announce_canonn_cnb(compres)
+            except Exception:
+                log.exception("Failed to process Canonn get_compres CNB heads-up")
+
+    def _maybe_announce_canonn_cnb(self, compres: dict) -> None:
+        """Proactive Compromised Nav Beacon heads-up sourced from Canonn's
+        crowdsourced get_compres data -- fires on system arrival, before the
+        player's own FSS scan would surface it (see the reactive navbeacon
+        FSSSignalDiscovered handler in _tts_router for the personally-scanned
+        equivalent; this is a separate announced-set so the two don't fight
+        over the same key, at the minor cost of possibly hearing both once
+        for the same beacon)."""
+        system_name = getattr(self.state, "system", None) or ""
+        system_address = getattr(self.state, "system_address", None)
+        if not system_name or not isinstance(system_address, int):
+            return
+        interesting = compres.get(system_name) or []
+        if "Compromised Nav Beacon" not in interesting:
+            return
+        if system_address in self._tts_cnb_canonn_announced:
+            return
+
+        pledged = (getattr(self.state, "pp_power", None) or "").strip()
+        if not pledged:
+            return
+        ctrl = (getattr(self.state, "system_controlling_power", None) or "").strip()
+        pp_state_val = (getattr(self.state, "system_powerplay_state", None) or "").strip()
+
+        category = None
+        if ctrl and ctrl.lower() == pledged.lower():
+            category = "reinforcement"
+        elif ctrl and ctrl.lower() != pledged.lower():
+            category = "undermining"
+        elif not ctrl and pp_state_val.lower() == "contested":
+            category = "acquisition"
+        if category is None:
+            return
+
+        self._tts_cnb_canonn_announced.add(system_address)
+        self.tts.speak(ExplorationPhrases.compromised_nav_beacon_pp_merits(category), priority=5)
 
     def _maybe_start_spansh_enrichment(self):
         system_name    = getattr(self.state, "system",         None) or ""
@@ -2753,6 +2801,7 @@ class MainWindow(QMainWindow):
                 self._tts_phenomena_announced.clear()
                 self._tts_megaship_announced.clear()
                 self._tts_cnb_announced.clear()
+                self._tts_cnb_canonn_announced.clear()
                 self.load_current_system_data()
                 self._load_persisted_rings(incoming_system_address)
                 self._maybe_start_spansh_enrichment()
