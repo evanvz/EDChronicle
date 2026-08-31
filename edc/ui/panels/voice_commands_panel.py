@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (
     QListWidget, QListWidgetItem, QSlider,
 )
 
-from edc.core.binds_reader import ActionBinding, load_bindings
+from edc.core.binds_reader import ActionBinding, get_binds_status, load_bindings
 from edc.ui.style import DANGER_BUTTON_STYLE as _DANGER_BUTTON_STYLE
 
 log = logging.getLogger(__name__)
@@ -317,6 +317,19 @@ class VoiceCommandsPanel(QWidget):
         vol_layout.addStretch()
         root.addLayout(vol_layout)
 
+        # ── Bindings source status ──────────────────────────────────────────
+        # Which .binds file is actually being read, and a warning if Elite
+        # Dangerous's four independent control-scheme slots (General/Ship/
+        # SRV/On Foot -- one per line in StartPreset.4.start) don't all
+        # agree on the same preset, since a mismatch means some actions
+        # silently come from a different file than the others (confirmed
+        # live: this was the actual root cause of a "bindings not picked
+        # up" report -- the On Foot slot was still on a leftover preset
+        # while the other three had been fixed).
+        self._binds_status_label = QLabel("")
+        self._binds_status_label.setWordWrap(True)
+        root.addWidget(self._binds_status_label)
+
         # ── Table ─────────────────────────────────────────────────────────
         self._table = QTableWidget(0, 5)
         self._table.setHorizontalHeaderLabels(["On", "Phrase", "Action", "Key", "Status"])
@@ -476,11 +489,45 @@ class VoiceCommandsPanel(QWidget):
 
     def _load_bindings(self):
         self._bindings = load_bindings()
+        self._refresh_binds_status()
         self._refresh_table()
 
     def _reload_bindings(self):
         self._bindings = load_bindings()
+        self._refresh_binds_status()
         self._refresh_table()
+
+    def _refresh_binds_status(self):
+        status = get_binds_status()
+        if not status["bindings_dir"]:
+            self._binds_status_label.setText(
+                "⚠ No Elite Dangerous bindings folder found. Open Options → Controls "
+                "in-game and change any key once — this creates the file this app needs."
+            )
+            self._binds_status_label.setStyleSheet("color:#FF8C00;")
+            return
+
+        if not status["binds_file"]:
+            self._binds_status_label.setText(
+                f"⚠ No bindings file found for preset '{status['resolved_preset']}'. "
+                "Open Options → Controls in-game and change any key once to create one."
+            )
+            self._binds_status_label.setStyleSheet("color:#FF8C00;")
+            return
+
+        text = f"Reading: {status['binds_file']} (preset: {status['resolved_preset']})"
+        if status["mismatch"]:
+            general, ship, srv, on_foot = (status["preset_lines"] + ["?"] * 4)[:4]
+            text += (
+                f"\n⚠ Your General/Ship/SRV/On Foot control schemes aren't all set to the same "
+                f"profile in-game (currently: {general}, {ship}, {srv}, {on_foot}) — actions from "
+                f"a mismatched section may not read correctly. Set all four to the same profile "
+                f"in Options → Controls."
+            )
+            self._binds_status_label.setStyleSheet("color:#FF8C00;")
+        else:
+            self._binds_status_label.setStyleSheet("color:#888888;")
+        self._binds_status_label.setText(text)
 
     # ── Table ─────────────────────────────────────────────────────────────────
 

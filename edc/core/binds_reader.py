@@ -338,6 +338,44 @@ def _parse_binds_file(binds_file: Path) -> dict[str, ActionBinding]:
     return result
 
 
+def get_binds_status(bindings_dir: Optional[Path] = None) -> dict:
+    """Diagnostic info about which .binds file load_bindings() is actually
+    using, and whether Elite Dangerous's four independent control-scheme
+    slots (General/Ship/SRV/On Foot, in that order -- one per line in
+    StartPreset.4.start) agree on the same preset. If they don't, actions
+    belonging to the mismatched slot are silently reading from a different
+    file than the others -- confirmed live as the real root cause of a
+    "bindings not picked up" report, not a hypothetical edge case.
+
+    Returns {"bindings_dir": str | None, "preset_lines": list[str],
+    "resolved_preset": str | None, "binds_file": str | None,
+    "mismatch": bool}. resolved_preset/binds_file are None if no bindings
+    folder or matching .binds file could be found."""
+    if bindings_dir is None:
+        bindings_dir = _find_bindings_dir()
+    if not bindings_dir:
+        return {
+            "bindings_dir": None, "preset_lines": [], "resolved_preset": None,
+            "binds_file": None, "mismatch": False,
+        }
+
+    start_file = bindings_dir / "StartPreset.4.start"
+    lines: list[str] = []
+    if start_file.exists():
+        lines = [l.strip() for l in start_file.read_text(encoding="utf-8").splitlines() if l.strip()]
+
+    resolved_preset = _active_preset_name(bindings_dir)
+    binds_file = _find_active_binds_file(bindings_dir, resolved_preset)
+
+    return {
+        "bindings_dir": str(bindings_dir),
+        "preset_lines": lines,
+        "resolved_preset": resolved_preset,
+        "binds_file": binds_file.name if binds_file else None,
+        "mismatch": len(set(lines)) > 1 if lines else False,
+    }
+
+
 def load_bindings(bindings_dir: Optional[Path] = None) -> dict[str, ActionBinding]:
     """
     Parse the user's active .binds file (highest version of the ship preset in
