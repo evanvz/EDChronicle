@@ -284,13 +284,15 @@ class _MarketVacuumWorker(QObject):
 class _StartupHistoryScanWorker(QObject):
     """
     Runs the slow full-journal-history scanners (active bounties, unredeemed
-    combat bonds, squadron status, carrier status, active missions) off the
-    main thread — confirmed live these five alone took ~16s combined against
-    a long-lived commander's journal history (837 files), all running
-    synchronously before the window even appeared. Notoriety/rank/materials
-    scan a single periodic snapshot event and stay on the main thread (each
-    under 25ms); these five instead replay full event history with no
-    snapshot to jump to, which is what makes them slow at this journal size.
+    combat bonds, squadron status, carrier status, active missions, visited
+    megaships) off the main thread — confirmed live these alone took ~16s
+    combined against a long-lived commander's journal history (837 files),
+    all running synchronously before the window even appeared. Notoriety/
+    rank/materials scan a single periodic snapshot event and stay on the
+    main thread (confirmed live: under 10ms each against a 899-file
+    journal); these instead replay full event history with no snapshot to
+    jump to (megaships confirmed live: ~1.9s), which is what makes them
+    slow at this journal size.
     Pure file reads, no DB — safe to construct straight from the main thread
     and just move to a QThread, unlike the DB workers elsewhere in this file.
     """
@@ -304,7 +306,7 @@ class _StartupHistoryScanWorker(QObject):
         result = {
             "active_bounties": {}, "active_fines": {}, "combat_unsold_total": None,
             "squadron_rec": None, "carrier_rec": None, "active_missions": {},
-            "bounty_last_commit": {},
+            "bounty_last_commit": {}, "visited_megaships": set(),
         }
         if not self._journal_dir:
             self.finished.emit(result)
@@ -335,6 +337,10 @@ class _StartupHistoryScanWorker(QObject):
             result["active_missions"] = scan_active_missions(path)
         except Exception:
             log.exception("Failed to scan journal history for active missions")
+        try:
+            result["visited_megaships"] = scan_visited_megaships(path)
+        except Exception:
+            log.exception("Failed to scan journal history for visited megaships")
 
         self.finished.emit(result)
 
@@ -1396,11 +1402,9 @@ class MainWindow(QMainWindow):
         self.odyssey_wishlist_store = OdysseyWishlist(data_dir / "odyssey_engineering_wishlist.json")
         self.market_destination_store = MarketDestinationStore(data_dir / "market_destination.json")
         self.megaship_tracker = MegashipTracker(data_dir / "megaships_seen.json")
-        try:
-            if getattr(self.cfg, "journal_dir", None):
-                self.megaship_tracker.merge_seen(scan_visited_megaships(Path(self.cfg.journal_dir)))
-        except Exception:
-            log.exception("Failed to scan journal history for visited megaships")
+        # Visited megaships filled in by _StartupHistoryScanWorker (see its
+        # kickoff below) -- confirmed live ~1.9s against a 899-file journal,
+        # same blocking-startup risk as the five scans already moved there.
         self._pinned_destination: dict | None = self.market_destination_store.load()
         self.faction_refresh_tracker = FactionRefreshTracker(data_dir / "faction_refresh.json")
         self.eddn_powerplay = EddnPowerPlayCache(settings_base)
@@ -2023,8 +2027,8 @@ class MainWindow(QMainWindow):
         self._populate_voice_combo()
 
         # Slow full-journal-history scanners (bounties, combat bonds,
-        # squadron, carrier, missions) run off the main thread so they
-        # don't block the window from appearing — see
+        # squadron, carrier, missions, visited megaships) run off the main
+        # thread so they don't block the window from appearing — see
         # _StartupHistoryScanWorker's docstring. QThread kept as an
         # instance attribute for the app's lifetime, same reasoning as
         # every other background worker in this file.
@@ -2039,7 +2043,7 @@ class MainWindow(QMainWindow):
     def _on_startup_history_scan_finished(self, result: dict) -> None:
         """Mirrors the field assignments that used to run synchronously in
         __init__ before active bounties/combat bonds/squadron/carrier/
-        missions moved to _StartupHistoryScanWorker."""
+        missions/visited megaships moved to _StartupHistoryScanWorker."""
         self.state.active_bounties = result["active_bounties"]
         self.state.bounty_last_commit = result.get("bounty_last_commit") or {}
         self.state.active_fines = result["active_fines"]
@@ -2078,6 +2082,10 @@ class MainWindow(QMainWindow):
             self.state.squadron_carrier = carrier_rec.squadron_carrier
 
         self.state.active_missions = result["active_missions"]
+
+        visited_megaships = result.get("visited_megaships")
+        if visited_megaships:
+            self.megaship_tracker.merge_seen(visited_megaships)
 
         self._refresh_hud()
 
