@@ -15,7 +15,7 @@ from PyQt6.QtGui import QColor
 
 from edc.core.bgs_conflicts import find_squadron_war_enemy
 from edc.ui import formatting as fmt
-from edc.ui.style import CARD_STYLE, HDR_STYLE
+from edc.ui.style import CARD_STYLE, HDR_STYLE, card_style, hdr_style
 from edc.ui.panels.combat_bgs_status_panel import CombatBgsStatusPanel
 
 log = logging.getLogger(__name__)
@@ -79,22 +79,15 @@ class CombatPanel(QWidget):
         # ── Notoriety card (always visible — distinct from bounties, can't
         # be paid off, only decays with active play) ───────────────────────
         self.notoriety_card = QFrame()
-        self.notoriety_card.setStyleSheet(
-            "QFrame { background: #2a2200; border: 1px solid #4a4010;"
-            "border-radius: 5px; }"
-        )
+        self.notoriety_card.setStyleSheet(card_style("yellow"))
         notoriety_l = QVBoxLayout(self.notoriety_card)
         notoriety_l.setContentsMargins(8, 6, 8, 6)
         notoriety_l.setSpacing(4)
 
         notoriety_hdr = QLabel("NOTORIETY")
-        notoriety_hdr.setStyleSheet(
-            # This app's established yellow (#FFD93D, used everywhere else
-            # for the same "yellow" meaning) -- kept distinct from Fine
-            # Clearance's orange now that both cards sit next to each other.
-            "color: #FFD93D; font-size:12px; font-weight: bold; "
-            "letter-spacing: 1px; background: transparent; border: none;"
-        )
+        # This app's established yellow variant -- kept distinct from Fine
+        # Clearance's bespoke orange now that both cards sit next to each other.
+        notoriety_hdr.setStyleSheet(hdr_style("yellow"))
         notoriety_l.addWidget(notoriety_hdr)
 
         self.notoriety_summary = QLabel("")
@@ -108,10 +101,7 @@ class CombatPanel(QWidget):
 
         # ── Bounty clearance card (hidden unless a bounty is active) ──────
         self.bounty_card = QFrame()
-        self.bounty_card.setStyleSheet(
-            "QFrame { background: #2a0a0a; border: 1px solid #4a1e1e;"
-            "border-radius: 5px; }"
-        )
+        self.bounty_card.setStyleSheet(card_style("red"))
         bounty_l = QVBoxLayout(self.bounty_card)
         bounty_l.setContentsMargins(8, 6, 8, 6)
         bounty_l.setSpacing(4)
