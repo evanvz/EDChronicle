@@ -98,14 +98,6 @@ class ActionBinding:
     keyboard: Optional[Binding] = None
     controller: Optional[Binding] = None
 
-    @property
-    def status_keyboard(self) -> str:
-        return "ready" if self.keyboard else "no_keyboard"
-
-    @property
-    def status_controller(self) -> str:
-        return "ready" if self.controller else "no_controller"
-
     def resolve(self, prefer: str) -> Optional[Binding]:
         """Return the binding to use based on input preference with fallback."""
         if prefer == "controller":

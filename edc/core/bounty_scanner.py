@@ -24,11 +24,6 @@ from pathlib import Path
 from typing import Dict, Tuple
 
 
-def scan_active_bounties(journal_dir: Path) -> Dict[str, int]:
-    amounts, _ = scan_active_bounties_with_dates(journal_dir)
-    return amounts
-
-
 def scan_active_bounties_with_dates(journal_dir: Path) -> Tuple[Dict[str, int], Dict[str, str]]:
     """Returns ({faction: amount}, {faction: last_commit_timestamp})."""
     journal_dir = Path(journal_dir)

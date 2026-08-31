@@ -237,13 +237,6 @@ class EngineeringBlueprintTable:
         names = grade_engineers.get(str(grade))
         return list(names) if isinstance(names, list) else []
 
-    def engineer_system_address(self, engineer_name: str) -> Optional[int]:
-        """Home system id64 for a named engineer, or None if unknown."""
-        self._load(force=False)
-        rec = self._engineer_locations.get(engineer_name)
-        addr = rec.get("system_address") if isinstance(rec, dict) else None
-        return addr if isinstance(addr, int) else None
-
     def engineer_home(self, engineer_name: str) -> Optional[Dict[str, Any]]:
         """Returns {"system_name","x","y","z"} for a named engineer, or None if unknown."""
         self._load(force=False)

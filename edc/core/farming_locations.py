@@ -179,22 +179,6 @@ class FarmingLocations:
         recs = self._by_material.get(mk) or []
         return [r for r in recs if isinstance(r, dict)]
 
-    def get_for_materials(self, material_names: list) -> List[Dict[str, Any]]:
-        """Return deduped farming entries that match any of the given material names."""
-        self._load(force=False)
-        seen: set = set()
-        result: List[Dict[str, Any]] = []
-        for name in material_names:
-            mk = self._norm(name).lower()
-            if not mk:
-                continue
-            for rec in (self._by_material.get(mk) or []):
-                rid = id(rec)
-                if rid not in seen:
-                    seen.add(rid)
-                    result.append(rec)
-        return result
-
     def has_data(self) -> bool:
         self._load(force=False)
         return bool(self._records)

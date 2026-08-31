@@ -128,13 +128,3 @@ def pct_1(value: Any, default: str = "") -> str:
         return f"{x:.1f}%"
     except Exception:
         return default
-
-def join_meta(*parts: Optional[str], sep: str = " | ") -> str:
-    items = []
-    for p in parts:
-        if not p:
-            continue
-        s = str(p).strip()
-        if s:
-            items.append(s)
-    return sep.join(items)

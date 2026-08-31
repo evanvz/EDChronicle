@@ -1214,27 +1214,6 @@ class MainWindow(QMainWindow):
         }
         return mapping.get(pc, pc)
 
-    # --- add inside class MainWindow, near other helper methods ---
-    def _format_star_class_label(self, star_class: str | None) -> str:
-        if not isinstance(star_class, str) or not star_class.strip():
-            return ""
-
-        sc = star_class.strip().upper()
-
-        scoopable = {"O", "B", "A", "F", "G", "K", "M"}
-        brown_dwarfs = {"L", "T", "Y"}
-
-        if sc in scoopable:
-            return f"{sc} • Scoopable"
-        if sc in brown_dwarfs:
-            return f"{sc} • Brown Dwarf"
-        if sc.startswith("D"):
-            return f"{sc} • White Dwarf"
-        if sc in {"N", "NEUTRON"}:
-            return f"{sc} • Neutron Star"
-
-        return sc
-
     def _get_star_class_label_and_color(self, star_class: str | None) -> tuple[str, str]:
         if not isinstance(star_class, str) or not star_class.strip():
             return "", ""
@@ -2552,14 +2531,6 @@ class MainWindow(QMainWindow):
         self._append(f"Started watching: {journal_path}")
         self._append(f"Started watching status: {status_path}")
 
-    def _pp_state_category(self, pp_state: str, friendly: bool):
-        s = (pp_state or "").lower()
-        if "unoccupied" in s or "expansion" in s:
-            return "Acquisition"
-        if friendly:
-            return "Reinforcing"
-        return "Undermining"
-    
     def stop_watching(self):
         self.watcher_controller.stop_watching()
 

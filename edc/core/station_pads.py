@@ -65,14 +65,6 @@ def effective_pad_size(
     return pad_size_hint(station_type)
 
 
-def has_interstellar_factors(station_services: Any) -> bool:
-    """StationServices (array of strings) includes "Facilitator" for
-    stations offering Interstellar Factors (bounty/fine clearance)."""
-    if not isinstance(station_services, list):
-        return False
-    return any(isinstance(s, str) and s.strip().lower() == "facilitator" for s in station_services)
-
-
 def extract_station_info(event: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
     Pulls MarketID/StationName/StarSystem/StationType/LandingPads/

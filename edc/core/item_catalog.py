@@ -148,37 +148,3 @@ class ItemCatalog:
         if t and st:
             return f"{t} / {st}"
         return t or st or ""
-
-    def create_sample(self) -> bool:
-        """
-        Create a tiny starter catalog if one does not exist.
-        This is NOT scraped data; it's a user-editable template.
-        """
-        try:
-            if self.path.exists():
-                return False
-            sample = {
-                "last_updated": "",
-                "items": [
-                    {
-                        "name": "Pharmaceutical Isolators",
-                        "type": "Manufactured",
-                        "subtype": "Chemical",
-                        "grade": "Very rare",
-                        "locations": ["USS (High grade emissions)", "Mission reward"],
-                    },
-                    {
-                        "name": "Manufacturing Instructions",
-                        "type": "Data",
-                        "subtype": "Odyssey",
-                        "grade": "",
-                        "locations": ["IND buildings", "RES buildings", "Mission reward"],
-                    },
-                ],
-            }
-            self.path.write_text(json.dumps(sample, indent=2, ensure_ascii=False), encoding="utf-8")
-            self._load(force=True)
-            return True
-        except Exception:
-            log.exception("Failed to create sample inara_items_catalog.json")
-            return False

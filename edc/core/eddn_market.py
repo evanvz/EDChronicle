@@ -167,17 +167,6 @@ class EddnMarketCache:
                 timestamp,
             )
 
-    def buffered_counts(self) -> Tuple[int, int, int, int, int, int, int, int]:
-        """Returns (coord_count, market_row_count, faction_count,
-        station_count, fcmaterials_count, carrier_access_count,
-        bgs_status_count, res_sites_count) currently buffered -- for
-        status/logging."""
-        return (
-            len(self._coord_buffer), len(self._market_buffer), len(self._faction_buffer),
-            len(self._station_buffer), len(self._fcmaterials_buffer), len(self._carrier_access_buffer),
-            len(self._bgs_status_buffer), len(self._res_sites_buffer),
-        )
-
     def pop_buffers(self):
         """
         Snapshots and clears all seven buffers, returning their contents as
