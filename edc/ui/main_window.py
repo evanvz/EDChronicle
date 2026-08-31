@@ -1919,7 +1919,7 @@ class MainWindow(QMainWindow):
             v.setSpacing(0)
             lbl = QLabel(text.upper())
             lbl.setStyleSheet(
-                "color:#9aa4b0; font-size:10px; font-weight:bold; letter-spacing:1px;"
+                "color:#FFA733; font-size:11px; font-weight:bold; letter-spacing:1.2px;"
                 " background:transparent; border:none;"
             )
             v.addWidget(lbl)
