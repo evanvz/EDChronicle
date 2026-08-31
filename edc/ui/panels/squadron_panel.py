@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
 
 from edc.ui.style import (
     CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, PRIMARY_BUTTON_STYLE as _BTN_STYLE,
+    TABLE_STYLE as _TABLE_STYLE,
     card_style as _card_style, hdr_style as _hdr_style,
 )
 
@@ -259,13 +260,7 @@ class SquadronPanel(QWidget):
         self._depot_table.verticalHeader().setVisible(False)
         self._depot_table.verticalHeader().setDefaultSectionSize(20)
         self._depot_table.setAlternatingRowColors(True)
-        self._depot_table.setStyleSheet(
-            "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
-            " gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
-            "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
-            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
-            "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
-        )
+        self._depot_table.setStyleSheet(_TABLE_STYLE)
         dh = self._depot_table.horizontalHeader()
         dh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         dh.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)

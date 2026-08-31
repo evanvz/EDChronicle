@@ -31,7 +31,7 @@ from edc.core.edsm_faction_lookup import (
 from edc.core.inara_faction_csv import parse_inara_faction_csv
 from edc.ui import formatting as fmt
 from edc.ui.panels.combat_bgs_status_panel import _conflicts_text, _faction_states_text
-from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE
+from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, TABLE_STYLE as _TABLE_STYLE
 
 log = logging.getLogger(__name__)
 
@@ -932,11 +932,7 @@ class PlayerFactionPanel(QWidget):
         self._missions_table.verticalHeader().setVisible(False)
         self._missions_table.setAlternatingRowColors(True)
         self._missions_table.setStyleSheet(
-            "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
-            " gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
-            "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
-            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
-            "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
+            _TABLE_STYLE
         )
         mh = self._missions_table.horizontalHeader()
         mh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
@@ -2255,11 +2251,7 @@ class _FactionBucketDialog(QDialog):
         self._table.verticalHeader().setVisible(False)
         self._table.setAlternatingRowColors(True)
         self._table.setStyleSheet(
-            "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
-            " gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
-            "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
-            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
-            "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
+            _TABLE_STYLE
         )
         h = self._table.horizontalHeader()
         # Action is the sole Stretch column now — System used to also be

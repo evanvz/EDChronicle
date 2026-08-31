@@ -16,7 +16,10 @@ from edc.core.spansh_client import SpanshClient, MiningRingResult
 from edc.core.station_pads import pad_size_hint
 from edc.ui.busy_spinner import BusySpinner
 from edc.ui.panels.market_panel import normalize_commodity_name, _NumericTableWidgetItem
-from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, LABEL_STYLE as _LABEL_STYLE
+from edc.ui.style import (
+    CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, LABEL_STYLE as _LABEL_STYLE,
+    TABLE_STYLE as _TABLE_STYLE,
+)
 
 log = logging.getLogger(__name__)
 
@@ -317,13 +320,7 @@ class MiningPanel(QWidget):
         self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self._table.verticalHeader().setVisible(False)
         self._table.setAlternatingRowColors(True)
-        self._table.setStyleSheet(
-            "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
-            " gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
-            "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
-            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
-            "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
-        )
+        self._table.setStyleSheet(_TABLE_STYLE)
         h = self._table.horizontalHeader()
         h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         h.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)

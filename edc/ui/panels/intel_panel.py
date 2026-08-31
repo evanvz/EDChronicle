@@ -17,6 +17,8 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 
+from edc.ui.style import CARD_STYLE, HDR_STYLE, TABLE_STYLE
+
 log = logging.getLogger(__name__)
 
 
@@ -345,16 +347,14 @@ class IntelPanel(QWidget):
         # ── POIs card ─────────────────────────────────────────────────────
         poi_frame = QFrame()
         poi_frame.setStyleSheet(
-            "QFrame { background: #0d1a2a; border: 1px solid #1e3a5a;"
-            "border-radius: 5px; }"
+            CARD_STYLE
         )
         poi_l = QVBoxLayout(poi_frame)
         poi_l.setContentsMargins(8, 6, 8, 6)
         poi_l.setSpacing(4)
         poi_hdr = QLabel("EXTERNAL POINTS OF INTEREST")
         poi_hdr.setStyleSheet(
-            "color: #4da3ff; font-size:12px; font-weight: bold; "
-            "letter-spacing: 1px; background: transparent; border: none;"
+            HDR_STYLE
         )
         poi_l.addWidget(poi_hdr)
         self.poi_display = QLabel("")
@@ -376,8 +376,7 @@ class IntelPanel(QWidget):
         farm_l.setSpacing(4)
         farm_hdr = QLabel("FARMING LOCATIONS — THIS SYSTEM")
         farm_hdr.setStyleSheet(
-            "color: #4da3ff; font-size:12px; font-weight: bold; "
-            "letter-spacing: 1px; background: transparent; border: none;"
+            HDR_STYLE
         )
         farm_l.addWidget(farm_hdr)
         self.farming_display = QLabel("")
@@ -399,8 +398,7 @@ class IntelPanel(QWidget):
         body_farm_l.setSpacing(4)
         body_farm_hdr = QLabel("SURFACE SCAN — FARMING MATCHES")
         body_farm_hdr.setStyleSheet(
-            "color: #4da3ff; font-size:12px; font-weight: bold; "
-            "letter-spacing: 1px; background: transparent; border: none;"
+            HDR_STYLE
         )
         body_farm_l.addWidget(body_farm_hdr)
         self.body_farm_display = QLabel("")
@@ -422,8 +420,7 @@ class IntelPanel(QWidget):
         nearby_l.setSpacing(4)
         nearby_hdr = QLabel("NEAREST FARMING OPPORTUNITIES")
         nearby_hdr.setStyleSheet(
-            "color: #4da3ff; font-size:12px; font-weight: bold; "
-            "letter-spacing: 1px; background: transparent; border: none;"
+            HDR_STYLE
         )
         nearby_l.addWidget(nearby_hdr)
 
@@ -442,13 +439,7 @@ class IntelPanel(QWidget):
         self.nearby_farming_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.nearby_farming_table.verticalHeader().setVisible(False)
         self.nearby_farming_table.setAlternatingRowColors(True)
-        self.nearby_farming_table.setStyleSheet(
-            "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
-            " gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
-            "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
-            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
-            "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
-        )
+        self.nearby_farming_table.setStyleSheet(TABLE_STYLE)
         h = self.nearby_farming_table.horizontalHeader()
         h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         h.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
@@ -472,8 +463,7 @@ class IntelPanel(QWidget):
         odyssey_l.setSpacing(4)
         odyssey_hdr = QLabel("ODYSSEY FARMING CANDIDATES")
         odyssey_hdr.setStyleSheet(
-            "color: #4da3ff; font-size:12px; font-weight: bold; "
-            "letter-spacing: 1px; background: transparent; border: none;"
+            HDR_STYLE
         )
         odyssey_l.addWidget(odyssey_hdr)
         self.odyssey_display = QLabel("")
@@ -497,8 +487,7 @@ class IntelPanel(QWidget):
         guide_l.setSpacing(4)
         guide_hdr = QLabel("FARMING GUIDE — ALL CATEGORIES")
         guide_hdr.setStyleSheet(
-            "color: #4da3ff; font-size:12px; font-weight: bold; "
-            "letter-spacing: 1px; background: transparent; border: none;"
+            HDR_STYLE
         )
         guide_l.addWidget(guide_hdr)
         self.guide_display = QLabel("")

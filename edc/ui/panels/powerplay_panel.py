@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 
 from edc.ui import formatting as fmt
+from edc.ui.style import CARD_STYLE, HDR_STYLE
 from edc.ui.panels.powerplay_finder_panel import PowerplayFinderPanel
 from edc.ui.panels.powerplay_system_status_panel import PowerplaySystemStatusPanel
 from edc.ui.panels.player_faction_panel import derive_bgs_action
@@ -83,8 +84,7 @@ class PowerplayPanel(QWidget):
         # ── PP Status card ────────────────────────────────────────────────
         pp_frame = QFrame()
         pp_frame.setStyleSheet(
-            "QFrame { background: #0d1a2a; border: 1px solid #1e3a5a;"
-            "border-radius: 5px; }"
+            CARD_STYLE
         )
         pp_frame_l = QVBoxLayout(pp_frame)
         pp_frame_l.setContentsMargins(8, 6, 8, 6)
@@ -92,8 +92,7 @@ class PowerplayPanel(QWidget):
 
         pp_hdr = QLabel("POWERPLAY STATUS")
         pp_hdr.setStyleSheet(
-            "color: #4da3ff; font-size:12px; font-weight: bold; "
-            "letter-spacing: 1px; background: transparent; border: none;"
+            HDR_STYLE
         )
         pp_frame_l.addWidget(pp_hdr)
 
@@ -129,8 +128,7 @@ class PowerplayPanel(QWidget):
 
         bgs_hdr = QLabel("LOCAL FACTION BGS")
         bgs_hdr.setStyleSheet(
-            "color: #4da3ff; font-size:12px; font-weight: bold; "
-            "letter-spacing: 1px; background: transparent; border: none;"
+            HDR_STYLE
         )
         bgs_frame_l.addWidget(bgs_hdr)
 
@@ -145,8 +143,7 @@ class PowerplayPanel(QWidget):
         # ── Activities card ───────────────────────────────────────────────
         act_frame = QFrame()
         act_frame.setStyleSheet(
-            "QFrame { background: #0d1a2a; border: 1px solid #1e3a5a;"
-            "border-radius: 5px; }"
+            CARD_STYLE
         )
         act_frame_l = QVBoxLayout(act_frame)
         act_frame_l.setContentsMargins(8, 6, 8, 6)
@@ -154,8 +151,7 @@ class PowerplayPanel(QWidget):
 
         act_hdr = QLabel("RECOMMENDED ACTIONS")
         act_hdr.setStyleSheet(
-            "color: #4da3ff; font-size:12px; font-weight: bold; "
-            "letter-spacing: 1px; background: transparent; border: none;"
+            HDR_STYLE
         )
         act_frame_l.addWidget(act_hdr)
 
@@ -171,8 +167,7 @@ class PowerplayPanel(QWidget):
         # ── Conflict progress card ────────────────────────────────────────
         prog_frame = QFrame()
         prog_frame.setStyleSheet(
-            "QFrame { background: #0d1a2a; border: 1px solid #1e3a5a;"
-            "border-radius: 5px; }"
+            CARD_STYLE
         )
         prog_frame_l = QVBoxLayout(prog_frame)
         prog_frame_l.setContentsMargins(8, 6, 8, 6)
@@ -180,8 +175,7 @@ class PowerplayPanel(QWidget):
 
         self.pp_progress_label = QLabel("CONFLICT PROGRESS")
         self.pp_progress_label.setStyleSheet(
-            "color: #4da3ff; font-size:12px; font-weight: bold; "
-            "letter-spacing: 1px; background: transparent; border: none;"
+            HDR_STYLE
         )
         prog_frame_l.addWidget(self.pp_progress_label)
 

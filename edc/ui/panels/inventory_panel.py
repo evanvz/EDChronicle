@@ -12,6 +12,8 @@ from PyQt6.QtWidgets import (
     QHeaderView,
 )
 
+from edc.ui.style import CARD_STYLE
+
 log = logging.getLogger(__name__)
 
 
@@ -30,9 +32,7 @@ class MaterialsPanel(QWidget):
         outer.setSpacing(0)
 
         card = QFrame()
-        card.setStyleSheet(
-            "QFrame { background: #0d1a2a; border: 1px solid #1e3a5a; border-radius: 5px; }"
-        )
+        card.setStyleSheet(CARD_STYLE)
         layout = QVBoxLayout(card)
         layout.setContentsMargins(8, 6, 8, 6)
         layout.setSpacing(6)

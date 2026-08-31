@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal
 
 from edc.ui import formatting as fmt
+from edc.ui.style import CARD_STYLE, HDR_STYLE
 
 log = logging.getLogger(__name__)
 
@@ -78,8 +79,7 @@ class ExplorationPanel(QWidget):
         # ── Signals box (always visible at top) ───────────────────────────
         sig_frame = QFrame()
         sig_frame.setStyleSheet(
-            "QFrame { background: #0d1a2a; border: 1px solid #1e3a5a;"
-            "border-radius: 5px; }"
+            CARD_STYLE
         )
         sig_l = QVBoxLayout(sig_frame)
         sig_l.setContentsMargins(8, 6, 8, 6)
@@ -91,8 +91,7 @@ class ExplorationPanel(QWidget):
         sig_hdr_row = QHBoxLayout()
         sig_hdr_lbl = QLabel("SYSTEM SIGNALS (FSS)")
         sig_hdr_lbl.setStyleSheet(
-            "color: #4da3ff; font-size:12px; font-weight: bold; "
-            "letter-spacing: 1px; background: transparent; border: none;"
+            HDR_STYLE
         )
         self._sig_toggle_btn = QPushButton("Show detail ▼")
         self._sig_toggle_btn.setStyleSheet(
@@ -117,16 +116,14 @@ class ExplorationPanel(QWidget):
         # ── Rings box (which bodies have rings, scan status, hotspots) ─────
         rings_frame = QFrame()
         rings_frame.setStyleSheet(
-            "QFrame { background: #0d1a2a; border: 1px solid #1e3a5a;"
-            "border-radius: 5px; }"
+            CARD_STYLE
         )
         rings_l = QVBoxLayout(rings_frame)
         rings_l.setContentsMargins(8, 6, 8, 6)
         rings_l.setSpacing(2)
         rings_hdr = QLabel("RINGS IN THIS SYSTEM")
         rings_hdr.setStyleSheet(
-            "color: #4da3ff; font-size:12px; font-weight: bold; "
-            "letter-spacing: 1px; background: transparent; border: none;"
+            HDR_STYLE
         )
         self.rings_box = QLabel("")
         self.rings_box.setWordWrap(True)
@@ -174,8 +171,7 @@ class ExplorationPanel(QWidget):
         mat_l.setSpacing(2)
         mat_hdr = QLabel("MATERIALS SHORTLIST (landable + Geo signals)")
         mat_hdr.setStyleSheet(
-            "color: #4da3ff; font-size:12px; font-weight: bold; "
-            "letter-spacing: 1px; background: transparent; border: none;"
+            HDR_STYLE
         )
         self.materials_box = QLabel("")
         self.materials_box.setWordWrap(True)

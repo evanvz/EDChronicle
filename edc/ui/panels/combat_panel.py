@@ -15,6 +15,7 @@ from PyQt6.QtGui import QColor
 
 from edc.core.bgs_conflicts import find_squadron_war_enemy
 from edc.ui import formatting as fmt
+from edc.ui.style import CARD_STYLE, HDR_STYLE
 from edc.ui.panels.combat_bgs_status_panel import CombatBgsStatusPanel
 
 log = logging.getLogger(__name__)
@@ -270,18 +271,14 @@ class CombatPanel(QWidget):
 
         # ── Combat contacts card ──────────────────────────────────────────
         card = QFrame()
-        card.setStyleSheet(
-            "QFrame { background: #0d1a2a; border: 1px solid #1e3a5a;"
-            "border-radius: 5px; }"
-        )
+        card.setStyleSheet(CARD_STYLE)
         card_l = QVBoxLayout(card)
         card_l.setContentsMargins(8, 6, 8, 6)
         card_l.setSpacing(4)
 
         card_hdr = QLabel("COMBAT CONTACTS")
         card_hdr.setStyleSheet(
-            "color: #4da3ff; font-size:12px; font-weight: bold; "
-            "letter-spacing: 1px; background: transparent; border: none;"
+            HDR_STYLE
         )
         card_l.addWidget(card_hdr)
 

@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
 from edc.core.spansh_client import SpanshClient, SpanshSystem
 from edc.core.powerplay_activities import PowerPlayActivityTable
 from edc.ui.busy_spinner import BusySpinner
-from edc.ui.style import CARD_STYLE, HDR_STYLE, LABEL_STYLE, card_style, hdr_style
+from edc.ui.style import CARD_STYLE, HDR_STYLE, LABEL_STYLE, TABLE_STYLE, card_style, hdr_style
 
 log = logging.getLogger(__name__)
 
@@ -313,13 +313,7 @@ class PowerplayFinderPanel(QWidget):
         self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self._table.verticalHeader().setVisible(False)
         self._table.setAlternatingRowColors(True)
-        self._table.setStyleSheet(
-            "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
-            " gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
-            "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
-            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
-            "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
-        )
+        self._table.setStyleSheet(TABLE_STYLE)
         h = self._table.horizontalHeader()
         h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         h.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)

@@ -18,6 +18,7 @@ from PyQt6.QtCore import (
 from PyQt6.QtGui import QColor, QPainter, QPen, QFont, QFontMetrics
 
 from edc.ui import formatting as fmt
+from edc.ui.style import CARD_STYLE
 from edc.core.rank_names import rank_name
 from edc.core.bgs_conflicts import squadron_faction_name
 
@@ -305,8 +306,7 @@ class OverviewPanel(QWidget):
         self.system_card = QFrame()
         self.system_card.setFrameShape(QFrame.Shape.StyledPanel)
         self.system_card.setStyleSheet(
-            "QFrame { background: #0d1a2a; border: 1px solid #1e3a5a;"
-            "border-radius: 6px; }"
+            CARD_STYLE
         )
         card_layout = QVBoxLayout(self.system_card)
         card_layout.setContentsMargins(10, 8, 10, 8)
@@ -441,8 +441,7 @@ class OverviewPanel(QWidget):
         self.factions_card = QFrame()
         self.factions_card.setFrameShape(QFrame.Shape.StyledPanel)
         self.factions_card.setStyleSheet(
-            "QFrame { background: #0d1a2a; border: 1px solid #1e3a5a;"
-            "border-radius: 6px; }"
+            CARD_STYLE
         )
         factions_card_layout = QVBoxLayout(self.factions_card)
         factions_card_layout.setContentsMargins(10, 8, 10, 8)
