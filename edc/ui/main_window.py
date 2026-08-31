@@ -1908,41 +1908,87 @@ class MainWindow(QMainWindow):
         lg.addWidget(QLabel("Log"))
         lg.addWidget(self.log_box)
 
-        # ── Sidebar/stack registration — alphabetical by tab name, with
-        # Overview pinned first (the home tab) and Settings/Log (utility
-        # tabs, not content) pinned at the end, regardless of sort order.
-        # Panels above are constructed in a dependency-safe order (e.g.
-        # Mining before Market, since Market wires into Mining's
-        # sell_search_requested signal) that's independent of this display
-        # order.
-        for widget, name in [
-            (self.overview_panel,        "Overview"),
-            (self.combat_panel,          "Combat"),
-            (self.engineering_panel,     "Engineering"),
-            (self.exobiology_panel,      "Exobiology"),
-            (self.exploration_panel,     "Exploration"),
-            (self.fleet_carrier_panel,   "Fleet Carrier"),
-            (self.intel_panel,           "Intel"),
-            (self.market_panel,          "Market"),
-            (self.materials_panel,       "Materials"),
-            (self.mining_panel,          "Mining"),
-            (self.player_faction_panel,  "Player Faction"),
-            (self.powerplay_panel,       "PowerPlay"),
-            (self.squadron_panel,        "Squadron"),
-            (self.trade_route_panel,     "Trade Routes"),
-            (self.voice_commands_panel,  "Voice Cmds"),
-        ]:
+        # ── Sidebar/stack registration — grouped by function so a player
+        # doesn't have to guess which of 17 alphabetical items to scan for
+        # (audit finding, 2026-08-31: a flat alphabetical list gives no hint
+        # that BGS status lives under Combat, not Player Faction). Overview
+        # stays pinned first, ungrouped, as the home tab; Tools (Voice Cmds/
+        # Settings/Log) pinned last. Panels are constructed above in a
+        # dependency-safe order (e.g. Mining before Market) independent of
+        # this display order.
+        #
+        # Section headers are inert QListWidget rows (no selection flags, no
+        # matching stack page) purely for visual grouping -- they must NOT
+        # be counted as sidebar "rows" for navigation purposes, which is why
+        # this loop tracks stack_index and sidebar_row separately rather
+        # than assuming they're the same number (true before this change,
+        # since every sidebar row had exactly one matching stack page).
+        self._sidebar_row_to_stack_index: dict[int, int] = {}
+        self._sidebar_row_by_name: dict[str, int] = {}
+
+        def _add_header(text: str) -> None:
+            # A QLabel with CSS-only padding sized unreliably inside
+            # QListWidget.setItemWidget() (confirmed live: text rendered
+            # clipped/overflowing its row regardless of item.setSizeHint()).
+            # A container QWidget with an explicit fixed height and a
+            # layout-margin-based QVBoxLayout lays out predictably instead.
+            container = QWidget()
+            container.setFixedHeight(30)
+            container.setStyleSheet("border-top:1px solid #1c1c1c;")
+            v = QVBoxLayout(container)
+            v.setContentsMargins(10, 10, 10, 4)
+            v.setSpacing(0)
+            lbl = QLabel(text.upper())
+            lbl.setStyleSheet(
+                "color:#9aa4b0; font-size:10px; font-weight:bold; letter-spacing:1px;"
+                " background:transparent; border:none;"
+            )
+            v.addWidget(lbl)
+            item = QListWidgetItem()
+            item.setFlags(Qt.ItemFlag.NoItemFlags)
+            item.setSizeHint(QSize(150, 30))
+            self.sidebar.addItem(item)
+            self.sidebar.setItemWidget(item, container)
+
+        def _add_panel(widget, name: str) -> None:
+            stack_index = self.stack.count()
             self.stack.addWidget(widget)
             self.sidebar.addItem(name)
+            sidebar_row = self.sidebar.count() - 1
+            self._sidebar_row_to_stack_index[sidebar_row] = stack_index
+            self._sidebar_row_by_name[name] = sidebar_row
             if name == "Market":
-                self._market_tab_row = self.sidebar.count() - 1
+                self._market_tab_row = sidebar_row
             elif name == "Overview":
-                self._overview_tab_row = self.sidebar.count() - 1
+                self._overview_tab_row = sidebar_row
 
-        self.stack.addWidget(tab_settings)
-        self.sidebar.addItem("Settings")
-        self.stack.addWidget(tab_log)
-        self.sidebar.addItem("Log")
+        _add_panel(self.overview_panel, "Overview")
+
+        _add_header("Exploration")
+        _add_panel(self.exploration_panel, "Exploration")
+        _add_panel(self.exobiology_panel, "Exobiology")
+        _add_panel(self.intel_panel, "Intel")
+
+        _add_header("Combat & PP")
+        _add_panel(self.combat_panel, "Combat")
+        _add_panel(self.powerplay_panel, "PowerPlay")
+        _add_panel(self.squadron_panel, "Squadron")
+
+        _add_header("Trade")
+        _add_panel(self.market_panel, "Market")
+        _add_panel(self.trade_route_panel, "Trade Routes")
+        _add_panel(self.mining_panel, "Mining")
+        _add_panel(self.materials_panel, "Materials")
+        _add_panel(self.engineering_panel, "Engineering")
+
+        _add_header("Fleet & Faction")
+        _add_panel(self.fleet_carrier_panel, "Fleet Carrier")
+        _add_panel(self.player_faction_panel, "Player Faction")
+
+        _add_header("Tools")
+        _add_panel(self.voice_commands_panel, "Voice Cmds")
+        _add_panel(tab_settings, "Settings")
+        _add_panel(tab_log, "Log")
 
         btn_browse.clicked.connect(self._browse_journal_dir)
         self.settings_journal_edit.editingFinished.connect(self._on_settings_journal_changed)
@@ -1957,8 +2003,14 @@ class MainWindow(QMainWindow):
         self._hud_refresh_timer.timeout.connect(self._do_hud_refresh)
 
         # Sidebar navigation — Overview is the intended home tab regardless
-        # of its alphabetical position in the list.
-        self.sidebar.currentRowChanged.connect(self.stack.setCurrentIndex)
+        # of its position in the grouped list. Routed through
+        # _sidebar_row_to_stack_index rather than a direct connect since
+        # section-header rows occupy a sidebar row with no matching stack
+        # page (see the registration loop above); a header row can't
+        # actually become current (NoItemFlags), but the indirection is
+        # what keeps a real item's row number correctly mapped to its
+        # stack page now that they're no longer numerically identical.
+        self.sidebar.currentRowChanged.connect(self._on_sidebar_row_changed)
         self.sidebar.setCurrentRow(self._overview_tab_row)
         self._refresh_hud()
         # QTimer.start() fires its first timeout 20 minutes from now, not
@@ -3330,27 +3382,6 @@ class MainWindow(QMainWindow):
             pass
         return ""
 
-    # Kept in sync with the sidebar order set up in __init__ (Overview
-    # pinned first, then Combat, Engineering, Exobiology, Exploration,
-    # Fleet Carrier, Intel, Market, Materials, Mining, Player Faction,
-    # PowerPlay, Squadron, Trade Routes, Voice Cmds, then Settings/Log
-    # pinned last). Voice Cmds/Settings/Log deliberately have no voice trigger.
-    _TAB_INDEX: dict = {
-        "Overview":       0,
-        "Combat":         1,
-        "Engineering":    2,
-        "Exobiology":     3,
-        "Exploration":    4,
-        "Fleet Carrier":  5,
-        "Intel":          6,
-        "Market":         7,
-        "Materials":      8,
-        "Mining":         9,
-        "Player Faction": 10,
-        "PowerPlay":      11,
-        "Squadron":       12,
-    }
-
     def _start_voice_commands(self):
         if self._voice_cmd_thread and self._voice_cmd_thread.isRunning():
             return
@@ -3689,10 +3720,10 @@ class MainWindow(QMainWindow):
         self._play_radio_click(end=True)
 
     def _on_voice_command(self, tab_name: str):
-        idx = self._TAB_INDEX.get(tab_name)
-        if idx is None:
+        row = self._sidebar_row_by_name.get(tab_name)
+        if row is None:
             return
-        self.sidebar.setCurrentRow(idx)
+        self.sidebar.setCurrentRow(row)
 
     def _on_ship_voice_command(self, phrase: str):
         """Dispatch a recognised ship voice command via pydirectinput."""
@@ -4884,6 +4915,11 @@ class MainWindow(QMainWindow):
         self._colonisation_candidates_worker.finished.connect(self._on_colonisation_candidates_finished)
         self._colonisation_candidates_worker.finished.connect(self._colonisation_candidates_thread.quit)
         self._colonisation_candidates_thread.start()
+
+    def _on_sidebar_row_changed(self, row: int) -> None:
+        stack_index = self._sidebar_row_to_stack_index.get(row)
+        if stack_index is not None:
+            self.stack.setCurrentIndex(stack_index)
 
     def _get_completed_colony_names(self) -> list[str]:
         depots = self.repo.get_colonisation_depots()
