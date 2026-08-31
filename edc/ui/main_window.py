@@ -58,7 +58,7 @@ from edc.core.spansh_client import SpanshClient as _SpanshClient
 from edc.core.edsm_powerplay import EdsmPowerPlayCache
 from edc.core.fdev_powerplay import FdevPowerPlayCache
 from edc.core.server_status import fetch_server_status
-from edc.core.galnet_news import fetch_latest_headline
+from edc.core.galnet_news import fetch_latest_headlines
 from edc.core.eddn_publisher import EddnPublisher, _commodity_symbol
 from edc.core.canonn_client import CanonnClient, SystemPoi
 from edc.core.engineering_blueprints import EngineeringBlueprintTable
@@ -177,10 +177,10 @@ class _ServerStatusWorker(QObject):
 
 
 class _GalnetNewsWorker(QObject):
-    finished = pyqtSignal(object)  # Optional[tuple[str, Optional[str]]] -- (title, article_url)
+    finished = pyqtSignal(object)  # list[tuple[str, Optional[str]]] -- (title, article_url) pairs, newest first
 
     def run(self):
-        self.finished.emit(fetch_latest_headline())
+        self.finished.emit(fetch_latest_headlines())
 
 
 class _MarketPruneWorker(QObject):
@@ -1529,11 +1529,21 @@ class MainWindow(QMainWindow):
 
         self._galnet_thread: QThread | None = None
         self._galnet_worker: _GalnetNewsWorker | None = None
+        self._galnet_headlines: list[tuple[str, str | None]] = []
+        self._galnet_headline_index = 0
         self._galnet_timer = QTimer(self)
         self._galnet_timer.setInterval(60 * 60 * 1000)  # GalNet posts roughly daily, no need to poll faster
         self._galnet_timer.timeout.connect(self._start_galnet_refresh)
         self._galnet_timer.start()
         self._start_galnet_refresh()
+
+        # Pages through the fetched headlines one at a time -- a static
+        # swap, not a scrolling ticker (matches the in-game "Local News"
+        # panel's own last-5, one-page-at-a-time behavior).
+        self._galnet_rotate_timer = QTimer(self)
+        self._galnet_rotate_timer.setInterval(8 * 1000)
+        self._galnet_rotate_timer.timeout.connect(self._rotate_galnet_headline)
+        self._galnet_rotate_timer.start()
 
         self._service_health_timer = QTimer(self)
         # 30s catches a real outage quickly without meaningfully adding overhead to a passive in-memory check.
@@ -4815,10 +4825,21 @@ class MainWindow(QMainWindow):
         self._galnet_worker.finished.connect(self._galnet_thread.quit)
         self._galnet_thread.start()
 
-    def _on_galnet_refreshed(self, result: tuple[str, str | None] | None) -> None:
-        if not result:
+    def _on_galnet_refreshed(self, headlines: list[tuple[str, str | None]]) -> None:
+        if not headlines:
             return
-        title, url = result
+        self._galnet_headlines = headlines
+        self._galnet_headline_index = 0
+        self._show_galnet_headline()
+
+    def _rotate_galnet_headline(self) -> None:
+        if len(self._galnet_headlines) <= 1:
+            return
+        self._galnet_headline_index = (self._galnet_headline_index + 1) % len(self._galnet_headlines)
+        self._show_galnet_headline()
+
+    def _show_galnet_headline(self) -> None:
+        title, url = self._galnet_headlines[self._galnet_headline_index]
         if url:
             self._galnet_label.setText(f'📰 <a href="{url}" style="color:#FFB347; text-decoration:none;">{title}</a>')
         else:
