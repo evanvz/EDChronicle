@@ -27,6 +27,50 @@ from edc.core.spansh_client import SpanshClient
 
 log = logging.getLogger(__name__)
 
+# Update 3 colony economy override table, verbatim from Frontier's own
+# patch notes (cross-checked against the ed-colonisation-planner /
+# ed-colonisation-planner-solver community tools' own verbatim citation of
+# the same patch notes) -- which economies a port gets from the body it's
+# built on/around, stacking. Only strong links (same body, or a facility
+# directly linked to that port) actually apply this; a weak link (different
+# body, same system) only ever contributes a flat 5% regardless of type.
+# Ordered so a more specific match (e.g. "rocky ice") is checked before a
+# substring it also contains ("rocky"). Organics/geologicals aren't
+# included -- those need an actual FSS/DSS scan signal, not available for
+# a not-yet-visited candidate from Spansh's body list alone.
+_ECONOMY_BY_BODY_ATTR: list[tuple[str, list[str]]] = [
+    ("neutron", ["High Tech", "Tourism"]),
+    ("white dwarf", ["High Tech", "Tourism"]),
+    ("black hole", ["High Tech", "Tourism"]),
+    ("earth-like", ["Agriculture", "High Tech", "Military", "Tourism"]),
+    ("water world", ["Agriculture", "Tourism"]),
+    ("ammonia world", ["High Tech", "Tourism"]),
+    ("gas giant", ["High Tech", "Industrial"]),
+    ("metal-rich", ["Extraction"]),
+    ("metal content", ["Extraction"]),
+    ("rocky ice", ["Industrial", "Refinery"]),
+    ("icy", ["Industrial"]),
+    ("rocky", ["Refinery"]),
+]
+
+
+def _predict_economies(planet_class: str, has_rings: bool) -> list[str]:
+    """Which Update 3 economy types this body would contribute as a strong
+    link, based only on what Spansh's body list already tells us (planet
+    class, ring presence) -- pure function, no I/O, so it's independently
+    testable without a QWidget."""
+    pc = (planet_class or "").lower()
+    economies: list[str] = []
+    for needle, adds in _ECONOMY_BY_BODY_ATTR:
+        if needle in pc:
+            for e in adds:
+                if e not in economies:
+                    economies.append(e)
+            break  # first (most specific) match wins -- these are mutually exclusive body classes
+    if has_rings and "Extraction" not in economies:
+        economies.append("Extraction")
+    return economies
+
 
 class _SystemDetailWorker(QObject):
     """One-shot background fetch of a candidate system's body list and ring
@@ -199,8 +243,6 @@ class _SystemDetailDialog(QDialog):
     background so opening it never blocks the UI; shown immediately in a
     loading state."""
 
-    _WATER_ELW_HINTS = ("water world", "earth-like")
-
     def __init__(self, system_name: str):
         super().__init__(None)
         self.setStyleSheet("QDialog { background:#080f18; color:#c8c8c8; }")
@@ -223,10 +265,15 @@ class _SystemDetailDialog(QDialog):
         self._status_label.setStyleSheet("color:#9aa4b0; background:transparent; border:none;")
         layout.addWidget(self._status_label)
 
+        self._economy_summary_label = QLabel("")
+        self._economy_summary_label.setWordWrap(True)
+        self._economy_summary_label.setStyleSheet("color:#7CFC98; font-weight:bold; background:transparent; border:none;")
+        layout.addWidget(self._economy_summary_label)
+
         self._table = QTableWidget()
-        self._table.setColumnCount(7)
+        self._table.setColumnCount(8)
         self._table.setHorizontalHeaderLabels(
-            ["Body", "Type", "Landable", "Dist (ls)", "Mass (Em)", "Gravity (G)", "Temp (K)"]
+            ["Body", "Type", "Landable", "Dist (ls)", "Mass (Em)", "Gravity (G)", "Temp (K)", "Likely Economy"]
         )
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -236,6 +283,7 @@ class _SystemDetailDialog(QDialog):
         h = self._table.horizontalHeader()
         h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         h.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        h.setSectionResizeMode(7, QHeaderView.ResizeMode.Stretch)
         for c in (2, 3, 4, 5, 6):
             h.setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
         layout.addWidget(self._table, 1)
@@ -251,9 +299,10 @@ class _SystemDetailDialog(QDialog):
 
         caveat = QLabel(
             "Community-sourced via Spansh — reflects whoever last scanned each body/ring, not "
-            "necessarily current. Water World / Earth-like bodies and ringed bodies highlighted "
-            "(Agriculture/Tourism/High Tech/Military and Extraction economy boosts respectively, "
-            "if you build near one)."
+            "necessarily current. Likely Economy is a prediction from Update 3's body-attribute "
+            "table (strong link only — same body as your port); doesn't account for organics/"
+            "geologicals, which need an actual scan. High-value economies (Agriculture/Tourism/"
+            "High Tech/Military) highlighted green, Extraction/Industrial/Refinery-only teal."
         )
         caveat.setWordWrap(True)
         caveat.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
@@ -279,12 +328,24 @@ class _SystemDetailDialog(QDialog):
 
         ringed_bodies = {r.get("parent_body") for r in rings if r.get("parent_body")}
 
+        # High-value economies (Agriculture/Tourism/High Tech/Military come
+        # from Earth-like/water/ammonia worlds or stellar remnants) get the
+        # same green as the rest of the app's "notable" convention;
+        # Extraction/Industrial/Refinery-only bodies (rings, gas giants,
+        # metal-rich, icy, rocky) get teal -- matches the resources/mining
+        # semantic color already used elsewhere (style.py's CARD_VARIANTS).
+        _HIGH_VALUE = {"Agriculture", "Tourism", "High Tech", "Military"}
+
         self._table.setRowCount(len(bodies))
+        system_economies: list[str] = []
         for row, b in enumerate(bodies):
             planet_class = b.get("planet_class") or "—"
             name = b.get("name") or "—"
-            is_water_elw = any(h in planet_class.lower() for h in self._WATER_ELW_HINTS)
             is_ringed = name in ringed_bodies
+            economies = _predict_economies(planet_class, is_ringed)
+            for e in economies:
+                if e not in system_economies:
+                    system_economies.append(e)
 
             name_item = QTableWidgetItem(name + (" 💍" if is_ringed else ""))
             type_item = QTableWidgetItem(planet_class)
@@ -297,20 +358,18 @@ class _SystemDetailDialog(QDialog):
             gravity_item = QTableWidgetItem(f"{gravity / 9.80665:.2f}" if isinstance(gravity, (int, float)) else "—")
             temp = b.get("surface_temperature")
             temp_item = QTableWidgetItem(f"{temp:.0f}" if isinstance(temp, (int, float)) else "—")
+            economy_item = QTableWidgetItem(", ".join(economies) if economies else "—")
 
             for it in (landable_item, dist_item, mass_item, gravity_item, temp_item):
                 it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            # Water World/ELW (Agriculture/Tourism/High Tech/Military) and
-            # ringed bodies (Extraction) both carry real Update 3 economy
-            # boosts if you build near them -- distinct colors since a body
-            # can be neither, either, or (moons aside) not usually both.
             color = None
-            if is_water_elw:
+            if any(e in _HIGH_VALUE for e in economies):
                 color = "#6BCB77"
-            elif is_ringed:
+            elif economies:
                 color = "#6BE6D9"
             if color:
-                for it in (name_item, type_item, landable_item, dist_item, mass_item, gravity_item, temp_item):
+                all_items = (name_item, type_item, landable_item, dist_item, mass_item, gravity_item, temp_item, economy_item)
+                for it in all_items:
                     it.setForeground(QColor(color))
 
             self._table.setItem(row, 0, name_item)
@@ -320,6 +379,12 @@ class _SystemDetailDialog(QDialog):
             self._table.setItem(row, 4, mass_item)
             self._table.setItem(row, 5, gravity_item)
             self._table.setItem(row, 6, temp_item)
+            self._table.setItem(row, 7, economy_item)
+
+        self._economy_summary_label.setText(
+            f"Likely economy here: {', '.join(system_economies)}" if system_economies
+            else "No strong economy signal from known bodies (no ELW/water/ammonia/gas giant/rings/etc. yet)."
+        )
 
     def _render_rings(self, rings: list) -> None:
         if not rings:
