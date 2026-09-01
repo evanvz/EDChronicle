@@ -270,6 +270,8 @@ class ColonisationPanel(QWidget):
         cch.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         cch.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self._candidates_table.setMaximumHeight(160)
+        self._candidates_table.setToolTip("Click the System cell to copy its name to the clipboard.")
+        self._candidates_table.cellClicked.connect(self._on_candidates_cell_clicked)
         cand_l.addWidget(self._candidates_table)
 
         check_hdr = QLabel("CHECK ANY SYSTEM — NOT LIMITED TO YOUR CURRENT LOCATION")
@@ -462,6 +464,13 @@ class ColonisationPanel(QWidget):
             )
         else:
             self._candidates_status_label.setText(f"Near {system_name}:")
+
+    def _on_candidates_cell_clicked(self, row: int, column: int) -> None:
+        if column != 0:  # System
+            return
+        item = self._candidates_table.item(row, column)
+        if item and item.text():
+            QApplication.clipboard().setText(item.text())
 
     def _on_check_clicked(self) -> None:
         system_name = self._check_system_edit.text().strip()
