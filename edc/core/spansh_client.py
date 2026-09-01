@@ -245,16 +245,29 @@ class SpanshClient:
         Uses id64 filter when system_address is provided (exact match); falls back to name search.
         """
         if isinstance(system_address, int):
-            filters = {"id64": {"value": system_address, "comparison": "="}}
+            body = {
+                "filters": {"id64": {"value": system_address, "comparison": "="}},
+                "sort":    [{"distance": {"direction": "asc"}}],
+                "size":    1,
+                "page":    0,
+            }
         else:
-            filters = {"name": {"value": system_name, "comparison": "="}}
-
-        body = {
-            "filters": filters,
-            "sort":    [{"distance": {"direction": "asc"}}],
-            "size":    1,
-            "page":    0,
-        }
+            # Confirmed live: including the "sort by distance" clause here
+            # makes Spansh silently ignore the name filter entirely (count
+            # comes back as a generic 10000, nearest-to-Sol system returned
+            # regardless of the name given) -- sorting by distance only
+            # makes sense relative to a coordinate reference, which a bare
+            # name filter doesn't have. Drop it for the name-only path.
+            # "comparison": "=" on the name filter has the same silent-
+            # ignore effect, so it's omitted too. Name-only lookup was
+            # previously unreachable code (every caller always had a real
+            # system_address) until the colonisation candidate detail
+            # dialog started using it.
+            body = {
+                "filters": {"name": {"value": system_name}},
+                "size":    1,
+                "page":    0,
+            }
         try:
             resp = requests.post(_SEARCH_URL, json=body, timeout=_TIMEOUT)
             resp.raise_for_status()

@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, QObject, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
@@ -22,8 +22,25 @@ from edc.ui.style import (
     TABLE_STYLE as _TABLE_STYLE,
     card_style as _card_style, hdr_style as _hdr_style,
 )
+from edc.core.spansh_client import SpanshClient
 
 log = logging.getLogger(__name__)
+
+
+class _SystemDetailWorker(QObject):
+    """One-shot background fetch of a candidate system's body list from
+    Spansh -- name-only lookup (no system_address available for a
+    not-yet-visited candidate), see SpanshClient.fetch_system_bodies()'s
+    own name-fallback docstring."""
+    finished = pyqtSignal(list, str)  # bodies, error
+
+    def __init__(self, system_name: str):
+        super().__init__()
+        self._system_name = system_name
+
+    def run(self):
+        bodies, error = SpanshClient().fetch_system_bodies(self._system_name)
+        self.finished.emit(bodies, error)
 
 
 class _ColonisationDetailDialog(QDialog):
@@ -161,6 +178,112 @@ class _ColonisationDetailDialog(QDialog):
             return None
 
 
+class _SystemDetailDialog(QDialog):
+    """Non-modal window showing a candidate system's body list from Spansh
+    -- planet types, water worlds/ELWs, landable flags, distance -- the
+    things a player normally checks before deciding whether a system is
+    worth building in. Fetches in the background so opening it never
+    blocks the UI; shown immediately in a loading state."""
+
+    _WATER_ELW_HINTS = ("water world", "earth-like")
+
+    def __init__(self, system_name: str):
+        super().__init__(None)
+        self.setStyleSheet("QDialog { background:#080f18; color:#c8c8c8; }")
+        self.setWindowTitle(f"System Detail — {system_name}")
+        self.resize(760, 460)
+        self._system_name = system_name
+
+        layout = QVBoxLayout(self)
+        hdr_row = QHBoxLayout()
+        hdr = QLabel(system_name)
+        hdr.setStyleSheet("color:#FFB347; font-size:14px; font-weight:bold; background:transparent; border:none;")
+        hdr_row.addWidget(hdr, 1)
+        copy_btn = QPushButton("Copy System")
+        copy_btn.setStyleSheet(_BTN_STYLE)
+        copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(system_name))
+        hdr_row.addWidget(copy_btn)
+        layout.addLayout(hdr_row)
+
+        self._status_label = QLabel("Loading from Spansh…")
+        self._status_label.setStyleSheet("color:#9aa4b0; background:transparent; border:none;")
+        layout.addWidget(self._status_label)
+
+        self._table = QTableWidget()
+        self._table.setColumnCount(7)
+        self._table.setHorizontalHeaderLabels(
+            ["Body", "Type", "Landable", "Dist (ls)", "Mass (Em)", "Gravity (G)", "Temp (K)"]
+        )
+        self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._table.verticalHeader().setVisible(False)
+        self._table.setAlternatingRowColors(True)
+        self._table.setStyleSheet(_TABLE_STYLE)
+        h = self._table.horizontalHeader()
+        h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        h.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        for c in (2, 3, 4, 5, 6):
+            h.setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
+        layout.addWidget(self._table, 1)
+
+        caveat = QLabel(
+            "Community-sourced via Spansh — reflects whoever last scanned each body, not "
+            "necessarily current. Water World / Earth-like bodies highlighted (Agriculture/"
+            "Tourism economy boost if you build near one)."
+        )
+        caveat.setWordWrap(True)
+        caveat.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
+        layout.addWidget(caveat)
+
+        self._thread = QThread()
+        self._worker = _SystemDetailWorker(system_name)
+        self._worker.moveToThread(self._thread)
+        self._thread.started.connect(self._worker.run)
+        self._worker.finished.connect(self._on_loaded)
+        self._worker.finished.connect(self._thread.quit)
+        self._thread.start()
+
+    def _on_loaded(self, bodies: list, error: str) -> None:
+        if error:
+            self._status_label.setText(f"Lookup failed — {error}")
+            return
+        if not bodies:
+            self._status_label.setText(f"No body data on Spansh yet for {self._system_name}.")
+            return
+        self._status_label.setText(f"{len(bodies)} bodies known:")
+
+        self._table.setRowCount(len(bodies))
+        for row, b in enumerate(bodies):
+            planet_class = b.get("planet_class") or "—"
+            is_notable = any(h in planet_class.lower() for h in self._WATER_ELW_HINTS)
+
+            name_item = QTableWidgetItem(b.get("name") or "—")
+            type_item = QTableWidgetItem(planet_class)
+            landable = b.get("landable")
+            landable_item = QTableWidgetItem("Yes" if landable else ("No" if landable is not None else "—"))
+            dist_item = QTableWidgetItem(f"{b.get('distance_ls', 0):,.0f}")
+            mass = b.get("mass_em")
+            mass_item = QTableWidgetItem(f"{mass:.2f}" if isinstance(mass, (int, float)) else "—")
+            gravity = b.get("surface_gravity")
+            gravity_item = QTableWidgetItem(f"{gravity / 9.80665:.2f}" if isinstance(gravity, (int, float)) else "—")
+            temp = b.get("surface_temperature")
+            temp_item = QTableWidgetItem(f"{temp:.0f}" if isinstance(temp, (int, float)) else "—")
+
+            for it in (landable_item, dist_item, mass_item, gravity_item, temp_item):
+                it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            if is_notable:
+                for it in (name_item, type_item, landable_item, dist_item, mass_item, gravity_item, temp_item):
+                    it.setForeground(QColor("#6BCB77"))
+
+            self._table.setItem(row, 0, name_item)
+            self._table.setItem(row, 1, type_item)
+            self._table.setItem(row, 2, landable_item)
+            self._table.setItem(row, 3, dist_item)
+            self._table.setItem(row, 4, mass_item)
+            self._table.setItem(row, 5, gravity_item)
+            self._table.setItem(row, 6, temp_item)
+
+
 class ColonisationPanel(QWidget):
     buy_search_requested = pyqtSignal(str)
     eligibility_check_requested = pyqtSignal(str)  # system name to check
@@ -173,6 +296,7 @@ class ColonisationPanel(QWidget):
         self._last_state = None
         self._colonisation_candidates: list = []
         self._colonisation_candidates_system: Optional[str] = None
+        self._detail_dialogs: dict = {}
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 8)
@@ -254,8 +378,8 @@ class ColonisationPanel(QWidget):
         cand_l.addWidget(self._candidates_status_label)
 
         self._candidates_table = QTableWidget()
-        self._candidates_table.setColumnCount(3)
-        self._candidates_table.setHorizontalHeaderLabels(["System", "Dist (ly)", "Via"])
+        self._candidates_table.setColumnCount(4)
+        self._candidates_table.setHorizontalHeaderLabels(["System", "Dist (ly)", "Via", ""])
         self._candidates_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._candidates_table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
         self._candidates_table.verticalHeader().setVisible(False)
@@ -269,6 +393,7 @@ class ColonisationPanel(QWidget):
         cch = self._candidates_table.horizontalHeader()
         cch.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         cch.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        cch.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         self._candidates_table.setMaximumHeight(160)
         self._candidates_table.setToolTip("Click the System cell to copy its name to the clipboard.")
         self._candidates_table.cellClicked.connect(self._on_candidates_cell_clicked)
@@ -449,6 +574,12 @@ class ColonisationPanel(QWidget):
             self._candidates_table.setItem(row, 1, dist_item)
             self._candidates_table.setItem(row, 2, via_item)
 
+            name = c.get("name") or ""
+            info_btn = QPushButton("Details")
+            info_btn.setStyleSheet(_BTN_STYLE)
+            info_btn.clicked.connect(lambda _checked=False, n=name: self._show_system_detail(n))
+            self._candidates_table.setCellWidget(row, 3, info_btn)
+
         if lookup_failed:
             self._candidates_status_label.setText("Lookup failed — EDSM unreachable.")
         elif center_populated is None and not candidates:
@@ -464,6 +595,17 @@ class ColonisationPanel(QWidget):
             )
         else:
             self._candidates_status_label.setText(f"Near {system_name}:")
+
+    def _show_system_detail(self, system_name: str) -> None:
+        if not system_name:
+            return
+        dlg = self._detail_dialogs.get(system_name)
+        if dlg is None or not dlg.isVisible():
+            dlg = _SystemDetailDialog(system_name)
+            self._detail_dialogs[system_name] = dlg
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
 
     def _on_candidates_cell_clicked(self, row: int, column: int) -> None:
         if column != 0:  # System
