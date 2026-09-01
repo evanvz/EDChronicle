@@ -94,6 +94,7 @@ from edc.core.squadron_scanner import scan_squadron_status
 from edc.core.carrier_scanner import scan_carrier_status
 from edc.core.mission_scanner import scan_active_missions
 from edc.ui.panels.squadron_panel import SquadronPanel
+from edc.ui.panels.colonisation_panel import ColonisationPanel
 from edc.ui.panels.mining_panel import MiningPanel
 from edc.ui.panels.market_panel import MarketPanel, normalize_commodity_name
 from edc.ui.panels.trade_route_panel import TradeRoutePanel
@@ -1744,8 +1745,11 @@ class MainWindow(QMainWindow):
 
         # Squadron tab
         self.squadron_panel = SquadronPanel(self.repo)
-        self.squadron_panel.buy_search_requested.connect(self._on_squadron_buy_search_requested)
-        self.squadron_panel.eligibility_check_requested.connect(self._on_check_colonisation_eligibility_clicked)
+
+        # Colonisation tab
+        self.colonisation_panel = ColonisationPanel(self.repo)
+        self.colonisation_panel.buy_search_requested.connect(self._on_squadron_buy_search_requested)
+        self.colonisation_panel.eligibility_check_requested.connect(self._on_check_colonisation_eligibility_clicked)
 
         # Combat tab (stub)
         self.combat_panel = CombatPanel(self.repo, ship_names=self.ship_names)
@@ -1987,6 +1991,7 @@ class MainWindow(QMainWindow):
         _add_header("Fleet & Faction")
         _add_panel(self.fleet_carrier_panel, "Fleet Carrier")
         _add_panel(self.player_faction_panel, "Player Faction")
+        _add_panel(self.colonisation_panel, "Colonisation")
 
         _add_header("Tools")
         _add_panel(self.voice_commands_panel, "Voice Cmds")
@@ -4769,6 +4774,7 @@ class MainWindow(QMainWindow):
 
     def _refresh_squadron(self):
         self.squadron_panel.refresh(self.state)
+        self.colonisation_panel.refresh(self.state)
 
     def _refresh_bounty_status(self):
         """
@@ -4998,7 +5004,7 @@ class MainWindow(QMainWindow):
 
     def _on_colonisation_candidates_finished(self, system_name: str, result: dict) -> None:
         self._colonisation_candidates_system = system_name
-        self.squadron_panel.set_colonisation_candidates(system_name, result)
+        self.colonisation_panel.set_colonisation_candidates(system_name, result)
 
     def _on_check_colonisation_eligibility_clicked(self, system_name: str) -> None:
         if not system_name.strip():
@@ -5011,7 +5017,7 @@ class MainWindow(QMainWindow):
         self._colonisation_check_thread = QThread()
         self._colonisation_check_worker.moveToThread(self._colonisation_check_thread)
         self._colonisation_check_thread.started.connect(self._colonisation_check_worker.run)
-        self._colonisation_check_worker.finished.connect(self.squadron_panel.set_eligibility_check_result)
+        self._colonisation_check_worker.finished.connect(self.colonisation_panel.set_eligibility_check_result)
         self._colonisation_check_worker.finished.connect(self._colonisation_check_thread.quit)
         self._colonisation_check_thread.start()
 
