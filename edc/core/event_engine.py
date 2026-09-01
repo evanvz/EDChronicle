@@ -1760,26 +1760,38 @@ class EventEngine:
             for sig in (event.get("Signals") or []):
                 t  = (sig.get("Type") or "")
                 tl = (sig.get("Type_Localised") or "")
+                matched = False
                 if ("biological" in t.lower()) or (tl.strip().lower() == "biological"):
+                    matched = True
                     c = sig.get("Count", 0)
                     if isinstance(c, int):
                         bio = c
                 if ("geological" in t.lower()) or (tl.strip().lower() == "geological"):
+                    matched = True
                     c = sig.get("Count", 0)
                     if isinstance(c, int):
                         geo = c
                 if ("human" in t.lower()) or (tl.strip().lower() == "human"):
+                    matched = True
                     c = sig.get("Count", 0)
                     if isinstance(c, int):
                         human = c
                 if ("thargoid" in t.lower()) or (tl.strip().lower() == "thargoid"):
+                    matched = True
                     c = sig.get("Count", 0)
                     if isinstance(c, int):
                         thargoid = c
                 if ("other" in t.lower()) or (tl.strip().lower() == "other"):
+                    matched = True
                     c = sig.get("Count", 0)
                     if isinstance(c, int):
                         other = c
+                if not matched and t:
+                    # Genuinely new signal type we don't classify anywhere --
+                    # logged so it's noticed instead of silently vanishing
+                    # (confirmed gap: a leaked pre-release Surface Mining
+                    # signal type wouldn't have matched any bucket above).
+                    log.warning("Unrecognized SAASignalsFound signal type: %r (localised: %r)", t, tl)
             if bio:
                 self.state.bio_signals[body] = bio
             if geo:
