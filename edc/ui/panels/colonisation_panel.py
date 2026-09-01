@@ -72,6 +72,37 @@ def _predict_economies(planet_class: str, has_rings: bool) -> list[str]:
     return economies
 
 
+def _aggregate_shopping_list(depots: list[dict]) -> list[tuple[str, int, int]]:
+    """Sums still-needed amounts (required - provided, floored at 0) for
+    every commodity across every incomplete tracked depot. Returns
+    [(commodity_name, total_amount, site_count), ...] sorted by amount
+    descending. Pure function, no I/O -- independently testable."""
+    totals: dict[str, int] = {}
+    site_counts: dict[str, int] = {}
+    for d in depots:
+        if d.get("complete"):
+            continue  # nothing left to buy for a finished site
+        for r in (d.get("resources") or []):
+            if not isinstance(r, dict):
+                continue
+            name = r.get("name")
+            if not name:
+                continue
+            required = r.get("required") or 0
+            provided = r.get("provided") or 0
+            remaining = max(0, required - provided)
+            if remaining <= 0:
+                continue
+            totals[name] = totals.get(name, 0) + remaining
+            site_counts[name] = site_counts.get(name, 0) + 1
+
+    return sorted(
+        ((name, amount, site_counts[name]) for name, amount in totals.items()),
+        key=lambda row: row[1],
+        reverse=True,
+    )
+
+
 class _SystemDetailWorker(QObject):
     """One-shot background fetch of a candidate system's body list and ring
     list from Spansh -- name-only lookup (no system_address available for
@@ -485,6 +516,43 @@ class ColonisationPanel(QWidget):
 
         root.addWidget(colon_card)
 
+        # ── Combined resource shopping list — all tracked sites at once ─────
+        shop_card = QFrame()
+        shop_card.setStyleSheet(_CARD_STYLE)
+        shop_l = QVBoxLayout(shop_card)
+        shop_l.setContentsMargins(8, 6, 8, 6)
+        shop_l.setSpacing(4)
+
+        shop_hdr = QLabel("COMBINED RESOURCE SHOPPING LIST — ALL TRACKED SITES")
+        shop_hdr.setStyleSheet(_HDR_STYLE)
+        shop_l.addWidget(shop_hdr)
+
+        shop_note = QLabel(
+            "Still-needed amounts summed across every tracked site above — one list instead of "
+            "checking each site's own breakdown separately."
+        )
+        shop_note.setWordWrap(True)
+        shop_note.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
+        shop_l.addWidget(shop_note)
+
+        self._shopping_table = QTableWidget()
+        self._shopping_table.setColumnCount(4)
+        self._shopping_table.setHorizontalHeaderLabels(["Commodity", "Still Needed", "Sites", ""])
+        self._shopping_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._shopping_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._shopping_table.verticalHeader().setVisible(False)
+        self._shopping_table.verticalHeader().setDefaultSectionSize(20)
+        self._shopping_table.setAlternatingRowColors(True)
+        self._shopping_table.setStyleSheet(_TABLE_STYLE)
+        sh = self._shopping_table.horizontalHeader()
+        sh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        for c in (1, 2, 3):
+            sh.setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
+        self._shopping_table.setMaximumHeight(160)
+        shop_l.addWidget(self._shopping_table)
+
+        root.addWidget(shop_card)
+
         # ── Colonisation candidates — nearby unpopulated systems ────────────
         cand_card = QFrame()
         cand_card.setStyleSheet(_CARD_STYLE)
@@ -638,6 +706,33 @@ class ColonisationPanel(QWidget):
             variant = "blue"
         self._colon_card.setStyleSheet(_card_style(variant))
         self._colon_hdr.setStyleSheet(_hdr_style(variant))
+
+        self._refresh_shopping_list()
+
+    def _refresh_shopping_list(self) -> None:
+        """Sums still-needed amounts for every commodity across every
+        tracked depot (not just the current one) -- one list instead of
+        opening each site's own detail dialog separately."""
+        rows = _aggregate_shopping_list(self._depots)
+        self._shopping_table.setRowCount(len(rows))
+        for row, (name, amount, site_count) in enumerate(rows):
+            name_item = QTableWidgetItem(name)
+            amount_item = QTableWidgetItem(f"{amount:,}")
+            amount_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            sites_item = QTableWidgetItem(str(site_count))
+            sites_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._shopping_table.setItem(row, 0, name_item)
+            self._shopping_table.setItem(row, 1, amount_item)
+            self._shopping_table.setItem(row, 2, sites_item)
+
+            btn = QPushButton("Find Source")
+            btn.setStyleSheet(_BTN_STYLE)
+            btn.clicked.connect(lambda _checked=False, n=name: self.buy_search_requested.emit(n))
+            self._shopping_table.setCellWidget(row, 3, btn)
+
+        row_h = self._shopping_table.verticalHeader().defaultSectionSize()
+        content_h = self._shopping_table.horizontalHeader().height() + len(rows) * row_h + 4
+        self._shopping_table.setMaximumHeight(min(content_h, 160) if rows else 60)
 
     def _on_add_depot_clicked(self) -> None:
         system_name = self._depot_system_edit.text().strip()
