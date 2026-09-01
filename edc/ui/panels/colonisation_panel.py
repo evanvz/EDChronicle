@@ -8,6 +8,7 @@ planner).
 from __future__ import annotations
 
 import logging
+from html import escape
 from typing import Optional
 
 from PyQt6.QtCore import Qt, QThread, QObject, pyqtSignal
@@ -28,19 +29,31 @@ log = logging.getLogger(__name__)
 
 
 class _SystemDetailWorker(QObject):
-    """One-shot background fetch of a candidate system's body list from
-    Spansh -- name-only lookup (no system_address available for a
-    not-yet-visited candidate), see SpanshClient.fetch_system_bodies()'s
-    own name-fallback docstring."""
-    finished = pyqtSignal(list, str)  # bodies, error
+    """One-shot background fetch of a candidate system's body list and ring
+    list from Spansh -- name-only lookup (no system_address available for
+    a not-yet-visited candidate). Rings need id64, which fetch_system_bodies
+    doesn't resolve, so a separate id64 lookup chains into
+    fetch_system_rings(); if that first lookup fails, rings are just
+    skipped (empty list) rather than failing the whole dialog -- the body
+    list is the more important half."""
+    finished = pyqtSignal(list, str, list)  # bodies, error, rings
 
     def __init__(self, system_name: str):
         super().__init__()
         self._system_name = system_name
 
     def run(self):
-        bodies, error = SpanshClient().fetch_system_bodies(self._system_name)
-        self.finished.emit(bodies, error)
+        client = SpanshClient()
+        bodies, error = client.fetch_system_bodies(self._system_name)
+        rings: list = []
+        id64, id64_error = client.fetch_system_id64(self._system_name)
+        if id64 is not None:
+            rings, rings_error = client.fetch_system_rings(id64)
+            if rings_error:
+                log.warning("Spansh ring fetch failed for %s: %s", self._system_name, rings_error)
+        elif id64_error:
+            log.warning("Spansh id64 lookup failed for %s: %s", self._system_name, id64_error)
+        self.finished.emit(bodies, error, rings)
 
 
 class _ColonisationDetailDialog(QDialog):
@@ -179,11 +192,12 @@ class _ColonisationDetailDialog(QDialog):
 
 
 class _SystemDetailDialog(QDialog):
-    """Non-modal window showing a candidate system's body list from Spansh
-    -- planet types, water worlds/ELWs, landable flags, distance -- the
-    things a player normally checks before deciding whether a system is
-    worth building in. Fetches in the background so opening it never
-    blocks the UI; shown immediately in a loading state."""
+    """Non-modal window showing a candidate system's body and ring list from
+    Spansh -- planet types, water worlds/ELWs, landable flags, distance,
+    ring presence/hotspots -- the things a player normally checks before
+    deciding whether a system is worth building in. Fetches in the
+    background so opening it never blocks the UI; shown immediately in a
+    loading state."""
 
     _WATER_ELW_HINTS = ("water world", "earth-like")
 
@@ -226,10 +240,20 @@ class _SystemDetailDialog(QDialog):
             h.setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
         layout.addWidget(self._table, 1)
 
+        rings_hdr = QLabel("RINGS")
+        rings_hdr.setStyleSheet(_HDR_STYLE)
+        layout.addWidget(rings_hdr)
+        self._rings_label = QLabel("Loading…")
+        self._rings_label.setWordWrap(True)
+        self._rings_label.setTextFormat(Qt.TextFormat.RichText)
+        self._rings_label.setStyleSheet("background:transparent; border:none;")
+        layout.addWidget(self._rings_label)
+
         caveat = QLabel(
-            "Community-sourced via Spansh — reflects whoever last scanned each body, not "
-            "necessarily current. Water World / Earth-like bodies highlighted (Agriculture/"
-            "Tourism economy boost if you build near one)."
+            "Community-sourced via Spansh — reflects whoever last scanned each body/ring, not "
+            "necessarily current. Water World / Earth-like bodies and ringed bodies highlighted "
+            "(Agriculture/Tourism/High Tech/Military and Extraction economy boosts respectively, "
+            "if you build near one)."
         )
         caveat.setWordWrap(True)
         caveat.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
@@ -243,7 +267,8 @@ class _SystemDetailDialog(QDialog):
         self._worker.finished.connect(self._thread.quit)
         self._thread.start()
 
-    def _on_loaded(self, bodies: list, error: str) -> None:
+    def _on_loaded(self, bodies: list, error: str, rings: list) -> None:
+        self._render_rings(rings)
         if error:
             self._status_label.setText(f"Lookup failed — {error}")
             return
@@ -252,12 +277,16 @@ class _SystemDetailDialog(QDialog):
             return
         self._status_label.setText(f"{len(bodies)} bodies known:")
 
+        ringed_bodies = {r.get("parent_body") for r in rings if r.get("parent_body")}
+
         self._table.setRowCount(len(bodies))
         for row, b in enumerate(bodies):
             planet_class = b.get("planet_class") or "—"
-            is_notable = any(h in planet_class.lower() for h in self._WATER_ELW_HINTS)
+            name = b.get("name") or "—"
+            is_water_elw = any(h in planet_class.lower() for h in self._WATER_ELW_HINTS)
+            is_ringed = name in ringed_bodies
 
-            name_item = QTableWidgetItem(b.get("name") or "—")
+            name_item = QTableWidgetItem(name + (" 💍" if is_ringed else ""))
             type_item = QTableWidgetItem(planet_class)
             landable = b.get("landable")
             landable_item = QTableWidgetItem("Yes" if landable else ("No" if landable is not None else "—"))
@@ -271,9 +300,18 @@ class _SystemDetailDialog(QDialog):
 
             for it in (landable_item, dist_item, mass_item, gravity_item, temp_item):
                 it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            if is_notable:
+            # Water World/ELW (Agriculture/Tourism/High Tech/Military) and
+            # ringed bodies (Extraction) both carry real Update 3 economy
+            # boosts if you build near them -- distinct colors since a body
+            # can be neither, either, or (moons aside) not usually both.
+            color = None
+            if is_water_elw:
+                color = "#6BCB77"
+            elif is_ringed:
+                color = "#6BE6D9"
+            if color:
                 for it in (name_item, type_item, landable_item, dist_item, mass_item, gravity_item, temp_item):
-                    it.setForeground(QColor("#6BCB77"))
+                    it.setForeground(QColor(color))
 
             self._table.setItem(row, 0, name_item)
             self._table.setItem(row, 1, type_item)
@@ -282,6 +320,27 @@ class _SystemDetailDialog(QDialog):
             self._table.setItem(row, 4, mass_item)
             self._table.setItem(row, 5, gravity_item)
             self._table.setItem(row, 6, temp_item)
+
+    def _render_rings(self, rings: list) -> None:
+        if not rings:
+            self._rings_label.setText("No rings known on Spansh for this system.")
+            return
+        # Ring/signal names are Spansh community data, not trusted input --
+        # escape before interpolating into RichText (security review finding).
+        lines = []
+        for r in rings:
+            signals = r.get("signals") or []
+            sig_txt = ", ".join(
+                f"{escape(str(s.get('name')))} x{s.get('count')}" for s in signals if s.get("name")
+            )
+            ring_name = escape(str(r.get("ring_name") or "—"))
+            ring_type = escape(str(r.get("ring_type") or "—"))
+            parent_body = escape(str(r.get("parent_body") or "—"))
+            line = f"<b>{ring_name}</b> ({ring_type}) — {parent_body}"
+            if sig_txt:
+                line += f" — hotspots: {sig_txt}"
+            lines.append(line)
+        self._rings_label.setText("<br>".join(lines))
 
 
 class ColonisationPanel(QWidget):

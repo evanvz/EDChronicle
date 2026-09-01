@@ -59,3 +59,26 @@ def test_id64_lookup_keeps_comparison_and_sort():
     assert error == ""
     assert captured["filters"] == {"id64": {"value": 12345, "comparison": "="}}
     assert captured["sort"] == [{"distance": {"direction": "asc"}}]
+
+
+def test_fetch_system_id64_resolves_and_uses_bare_name_filter():
+    captured = {}
+
+    def _fake_post(url, json=None, timeout=None):
+        captured.update(json)
+        return _FakeResponse({"results": [{"id64": 11667681191425}]})
+
+    with patch("edc.core.spansh_client.requests.post", side_effect=_fake_post):
+        id64, error = SpanshClient().fetch_system_id64("Test System")
+
+    assert error == ""
+    assert id64 == 11667681191425
+    assert captured["filters"] == {"name": {"value": "Test System"}}
+    assert "sort" not in captured
+
+
+def test_fetch_system_id64_not_found():
+    with patch("edc.core.spansh_client.requests.post", return_value=_FakeResponse({"results": []})):
+        id64, error = SpanshClient().fetch_system_id64("Nowhere System")
+    assert id64 is None
+    assert error != ""

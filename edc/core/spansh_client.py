@@ -236,6 +236,29 @@ class SpanshClient:
 
         return out, ""
 
+    def fetch_system_id64(self, system_name: str) -> Tuple[Optional[int], str]:
+        """Resolves a system's id64 by name -- needed to chain into
+        fetch_system_rings(), which requires id64 and has no name-only
+        fallback (unlike fetch_system_bodies). Returns (id64, error);
+        id64 is None on any failure or if Spansh has no record."""
+        body = {"filters": {"name": {"value": system_name}}, "size": 1, "page": 0}
+        try:
+            resp = requests.post(_SEARCH_URL, json=body, timeout=_TIMEOUT)
+            resp.raise_for_status()
+            data = resp.json()
+        except requests.RequestException as exc:
+            log.error("Spansh id64 lookup failed: %s", exc)
+            return None, str(exc)
+        except ValueError:
+            return None, "Invalid response from Spansh"
+
+        results = data.get("results") or []
+        if not results:
+            return None, f"System not found on Spansh: {system_name!r}"
+
+        id64 = results[0].get("id64")
+        return (id64 if isinstance(id64, int) else None), ""
+
     def fetch_system_bodies(self, system_name: str, system_address: int | None = None) -> Tuple[List[dict], str]:
         """
         Returns (body_list, error).  Each body dict has:
