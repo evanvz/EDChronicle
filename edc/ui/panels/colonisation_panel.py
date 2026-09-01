@@ -586,10 +586,10 @@ class ColonisationPanel(QWidget):
         cch.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         cch.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         cch.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        self._candidates_table.setMaximumHeight(160)
+        self._candidates_table.setMinimumHeight(160)
         self._candidates_table.setToolTip("Click the System cell to copy its name to the clipboard.")
         self._candidates_table.cellClicked.connect(self._on_candidates_cell_clicked)
-        cand_l.addWidget(self._candidates_table)
+        cand_l.addWidget(self._candidates_table, 1)
 
         check_hdr = QLabel("CHECK ANY SYSTEM — NOT LIMITED TO YOUR CURRENT LOCATION")
         check_hdr.setStyleSheet("color:#9aa4b0; font-size:10px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;")
@@ -620,8 +620,7 @@ class ColonisationPanel(QWidget):
         cand_caveat.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
         cand_l.addWidget(cand_caveat)
 
-        root.addWidget(cand_card)
-        root.addStretch(1)
+        root.addWidget(cand_card, 1)
 
     def refresh(self, state) -> None:
         self._last_state = state
