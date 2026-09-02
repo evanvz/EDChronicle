@@ -87,6 +87,11 @@ class EddnMarketCache:
         # population/allegiance from any commander's FSDJump/Location/
         # CarrierJump journal/1 message.
         self._system_profile_buffer: Dict[int, Tuple[str, dict, str]] = {}
+        # Keyed by (system_address, body_name) -- planetary body physical
+        # stats from any commander's live journal/1 Scan message. Same
+        # shape/destination as Spansh's own body cache (net.spansh_bodies),
+        # just from EDDN directly instead of Spansh's periodic crawl of it.
+        self._body_scan_buffer: Dict[Tuple[int, str], tuple] = {}
 
     def on_coords_seen(self, system_name: str, x: float, y: float, z: float) -> None:
         if not system_name:
@@ -169,6 +174,38 @@ class EddnMarketCache:
             return
         self._system_profile_buffer[system_address] = (system_name, profile, _normalize_ts(timestamp))
 
+    def on_body_scan_seen(self, msg: Dict[str, Any]) -> None:
+        system_address = msg.get("SystemAddress")
+        body_name = msg.get("BodyName")
+        planet_class = msg.get("PlanetClass")
+        if not (isinstance(system_address, int) and isinstance(body_name, str) and body_name
+                and isinstance(planet_class, str) and planet_class):
+            return
+
+        def _num(key):
+            v = msg.get(key)
+            return float(v) if isinstance(v, (int, float)) else None
+
+        landable = msg.get("Landable")
+        tidal_lock = msg.get("TidalLock")
+        was_mapped = msg.get("WasMapped")
+        self._body_scan_buffer[(system_address, body_name)] = (
+            planet_class,
+            _num("DistanceFromArrivalLS"),
+            None,  # estimated_value -- not carried on a Scan event
+            int(landable) if isinstance(landable, bool) else None,
+            _num("SurfaceGravity"),
+            _num("Radius"),
+            _num("MassEM"),
+            _num("SurfaceTemperature"),
+            _num("SurfacePressure"),
+            msg.get("AtmosphereType") or None,
+            msg.get("Volcanism") or None,
+            int(tidal_lock) if isinstance(tidal_lock, bool) else None,
+            int(was_mapped) if isinstance(was_mapped, bool) else None,
+            _normalize_ts(msg.get("timestamp")),
+        )
+
     def on_fcmaterials_message(self, msg: Dict[str, Any]) -> None:
         market_id = msg.get("MarketID")
         if not isinstance(market_id, int):
@@ -209,6 +246,7 @@ class EddnMarketCache:
         res_sites = list(self._res_sites_buffer.items())
         body_signals = list(self._body_signals_buffer.items())
         system_profiles = list(self._system_profile_buffer.items())
+        body_scans = list(self._body_scan_buffer.items())
         self._coord_buffer.clear()
         self._market_buffer.clear()
         self._faction_buffer.clear()
@@ -220,8 +258,9 @@ class EddnMarketCache:
         self._res_sites_buffer.clear()
         self._body_signals_buffer.clear()
         self._system_profile_buffer.clear()
+        self._body_scan_buffer.clear()
         return (coords, market, factions, stations, codex, fcmaterials, carrier_access,
-                bgs_status, res_sites, body_signals, system_profiles)
+                bgs_status, res_sites, body_signals, system_profiles, body_scans)
 
     def flush(self) -> None:
         """Synchronous flush on the caller's own thread/connection — only
@@ -233,11 +272,11 @@ class EddnMarketCache:
         the main thread every 45s, which froze the UI for however long a
         big buffered batch took to write (confirmed live, worse right
         after docking at a busy station's market)."""
-        coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals, system_profiles = self.pop_buffers()
-        write_buffers(self._repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals, system_profiles)
+        coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals, system_profiles, body_scans = self.pop_buffers()
+        write_buffers(self._repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals, system_profiles, body_scans)
 
 
-def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals=(), system_profiles=()) -> None:
+def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals=(), system_profiles=(), body_scans=()) -> None:
     """The actual writes — factored out so both the main-thread flush()
     (shutdown) and a background worker (periodic, see main_window.py) can
     use the identical logic against whichever Repository they're given."""
@@ -339,3 +378,21 @@ def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, 
                 )
             except Exception:
                 log.exception("Failed to flush system profile for system_address=%s", system_address)
+
+    if body_scans:
+        for (system_address, body_name), fields in body_scans:
+            (planet_class, distance_ls, estimated_value, landable, surface_gravity, radius,
+             mass_em, surface_temperature, surface_pressure, atmosphere_type, volcanism,
+             tidal_lock, was_mapped, updated_at) = fields
+            try:
+                repo.save_spansh_body(
+                    system_address=system_address, body_name=body_name,
+                    planet_class=planet_class, distance_ls=distance_ls,
+                    estimated_value=estimated_value, landable=landable,
+                    surface_gravity=surface_gravity, radius=radius, mass_em=mass_em,
+                    surface_temperature=surface_temperature, surface_pressure=surface_pressure,
+                    atmosphere_type=atmosphere_type, volcanism=volcanism,
+                    tidal_lock=tidal_lock, was_mapped=was_mapped, updated_at=updated_at,
+                )
+            except Exception:
+                log.exception("Failed to flush body scan for system_address=%s body=%s", system_address, body_name)

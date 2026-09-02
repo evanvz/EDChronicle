@@ -2677,7 +2677,7 @@ class Repository:
             ON CONFLICT(system_address, body_name) DO UPDATE SET
                 planet_class        = excluded.planet_class,
                 distance_ls         = excluded.distance_ls,
-                estimated_value     = excluded.estimated_value,
+                estimated_value     = COALESCE(excluded.estimated_value,     net.spansh_bodies.estimated_value),
                 landable            = excluded.landable,
                 surface_gravity     = COALESCE(excluded.surface_gravity,     net.spansh_bodies.surface_gravity),
                 radius              = COALESCE(excluded.radius,              net.spansh_bodies.radius),
@@ -2722,9 +2722,9 @@ class Repository:
         via COALESCE so a call that only knows "mining" can never null out
         a "bio" count a previous call already stored, and vice versa.
         Unlike save_spansh_body() (which always overwrites planet_class/
-        distance_ls/estimated_value/landable even when the caller doesn't
-        have them), this only ever touches the six signal columns. Inserts
-        a minimal row if none exists yet."""
+        distance_ls/landable even when the caller doesn't have them),
+        this only ever touches the six signal columns. Inserts a minimal
+        row if none exists yet."""
         self.db.execute(
             """
             INSERT INTO net.spansh_bodies (

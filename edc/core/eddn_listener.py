@@ -23,7 +23,7 @@ _RELAY_URL = "tcp://eddn.edcd.io:9500"
 _JOURNAL_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/journal/"
 _COMMODITY_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/commodity/"
 _FCMATERIALS_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/fcmaterials_journal/"
-_RELEVANT_EVENTS = {"FSDJump", "Location", "CarrierJump", "Docked", "CodexEntry"}
+_RELEVANT_EVENTS = {"FSDJump", "Location", "CarrierJump", "Docked", "CodexEntry", "Scan"}
 _RECV_TIMEOUT_MS = 5000
 _RECONNECT_DELAY_S = 5
 
@@ -131,6 +131,12 @@ class EddnPowerPlayWorker(QObject):
     # fssbodysignals/1 sighting for a body this commander hasn't
     # personally scanned. Feeds net.spansh_bodies.
     body_signals_seen = pyqtSignal(object, str, dict)
+    # Raw journal/1 Scan message body, filtered to planetary bodies only
+    # (has a non-empty PlanetClass -- excludes stars/belt clusters). Other
+    # commanders' live body scans, network-wide -- fresher than Spansh's
+    # periodic crawl of the same underlying EDDN firehose, and covers
+    # bodies Spansh hasn't caught up on yet. Feeds net.spansh_bodies.
+    body_scan_seen = pyqtSignal(dict)
     # id64, StarSystem, profile dict (economy/second_economy/government/
     # security/population/allegiance), timestamp -- real system economy
     # data from another commander's FSDJump/Location/CarrierJump, feeds
@@ -285,6 +291,13 @@ class EddnPowerPlayWorker(QObject):
                         and isinstance(msg.get("BodyID"), int)
                         and isinstance(msg.get("Name_Localised"), str) and msg.get("Name_Localised")):
                     self.codex_entry_seen.emit(msg)
+                continue
+
+            if msg.get("event") == "Scan":
+                if (isinstance(msg.get("SystemAddress"), int)
+                        and isinstance(msg.get("BodyName"), str) and msg.get("BodyName")
+                        and isinstance(msg.get("PlanetClass"), str) and msg.get("PlanetClass")):
+                    self.body_scan_seen.emit(msg)
                 continue
 
             self._maybe_emit_bgs_status(msg, msg.get("timestamp") or "")
