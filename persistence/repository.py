@@ -582,6 +582,66 @@ class Repository:
             ),
         )
 
+    def save_system_profile(
+        self, system_address: int, system_name: str, economy: str, second_economy: str,
+        government: str, security: str, population: int | None, allegiance: str,
+        data_timestamp: str, source: str,
+    ) -> None:
+        """
+        Upserts real system economy/government/security/population/
+        allegiance from an EDDN FSDJump/Location/CarrierJump sighting --
+        shares net.system_bgs_status with save_system_bgs_status() but
+        only ever touches its own columns (profile_timestamp, not
+        data_timestamp) so the two independent write paths can't clobber
+        each other's freshness ordering or fields.
+        """
+        if not economy:
+            return
+
+        normalized_timestamp = _normalize_data_timestamp(data_timestamp)
+        self.db.execute(
+            """
+            INSERT INTO net.system_bgs_status (
+                system_address, system_name, economy, second_economy,
+                government, security, population, allegiance,
+                profile_timestamp, source
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(system_address) DO UPDATE SET
+                system_name       = excluded.system_name,
+                economy           = excluded.economy,
+                second_economy    = excluded.second_economy,
+                government        = excluded.government,
+                security          = excluded.security,
+                population        = excluded.population,
+                allegiance        = excluded.allegiance,
+                profile_timestamp = excluded.profile_timestamp,
+                source            = excluded.source
+            WHERE net.system_bgs_status.profile_timestamp IS NULL
+               OR excluded.profile_timestamp >= net.system_bgs_status.profile_timestamp
+            """,
+            (
+                system_address, system_name, economy, second_economy,
+                government, security, population, allegiance,
+                normalized_timestamp, source,
+            ),
+        )
+
+    def get_system_profile_by_name(self, system_name: str):
+        """One row (or None) with real EDDN-sourced economy/government/
+        security/population/allegiance for a system, looked up by name --
+        used by the colonisation candidate dialog before a system_address
+        is known (candidate systems aren't personally visited yet)."""
+        return self.db.execute(
+            """
+            SELECT economy, second_economy, government, security, population, allegiance
+            FROM net.system_bgs_status
+            WHERE system_name = ? AND economy IS NOT NULL
+            LIMIT 1
+            """,
+            (system_name,),
+        ).fetchone()
+
     def save_system_res_tiers(
         self, system_address: int, system_name: str, tiers: list, data_timestamp: str, source: str,
     ) -> None:

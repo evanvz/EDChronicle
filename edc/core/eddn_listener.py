@@ -130,6 +130,12 @@ class EddnPowerPlayWorker(QObject):
     # spansh_bodies.surface_mining_signals for bodies other commanders have
     # already found but this commander hasn't personally scanned.
     body_mining_signal_seen = pyqtSignal(object, str, int)
+    # id64, StarSystem, profile dict (economy/second_economy/government/
+    # security/population/allegiance), timestamp -- real system economy
+    # data from another commander's FSDJump/Location/CarrierJump, feeds
+    # system_bgs_status so the colonisation candidate dialog can show
+    # confirmed economy instead of a body-attribute guess.
+    system_profile_seen = pyqtSignal(object, str, dict, str)
     finished = pyqtSignal()
 
     def __init__(self, watched_factions=None):
@@ -281,6 +287,7 @@ class EddnPowerPlayWorker(QObject):
                 continue
 
             self._maybe_emit_bgs_status(msg, msg.get("timestamp") or "")
+            self._maybe_emit_system_profile(msg, msg.get("timestamp") or "")
 
             power = msg.get("ControllingPower")
             power_state = msg.get("PowerplayState")
@@ -373,6 +380,24 @@ class EddnPowerPlayWorker(QObject):
             if isinstance(count, int) and not isinstance(count, bool):
                 self.body_mining_signal_seen.emit(system_address, body_name, count)
             return
+
+    def _maybe_emit_system_profile(self, msg: dict, timestamp: str) -> None:
+        system_address = msg.get("SystemAddress")
+        star_system = msg.get("StarSystem")
+        economy = msg.get("SystemEconomy")
+        if not (isinstance(system_address, int) and system_address > 0
+                and isinstance(star_system, str) and star_system
+                and isinstance(economy, str) and economy):
+            return
+        profile = {
+            "economy":        economy,
+            "second_economy": msg.get("SystemSecondEconomy") or "",
+            "government":     msg.get("SystemGovernment") or "",
+            "security":       msg.get("SystemSecurity") or "",
+            "population":     msg.get("Population") if isinstance(msg.get("Population"), int) else None,
+            "allegiance":     msg.get("SystemAllegiance") or "",
+        }
+        self.system_profile_seen.emit(system_address, star_system, profile, timestamp)
 
     def _maybe_emit_res_signal(self, msg: dict) -> None:
         system_address = msg.get("SystemAddress")

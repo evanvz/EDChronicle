@@ -24,6 +24,7 @@ from edc.ui.style import (
     card_style as _card_style, hdr_style as _hdr_style,
 )
 from edc.core.spansh_client import SpanshClient
+from edc.ui.formatting import clean_token
 
 log = logging.getLogger(__name__)
 
@@ -52,6 +53,14 @@ _ECONOMY_BY_BODY_ATTR: list[tuple[str, list[str]]] = [
     ("icy", ["Industrial"]),
     ("rocky", ["Refinery"]),
 ]
+
+
+# clean_token("$economy_HighTech;") -> "HighTech" (no space) -- Frontier's
+# only multi-word economy label, so it's the only one that needs fixing up
+# to match _HIGH_VALUE's "High Tech" spelling used for highlighting below.
+def _economy_display(token: str) -> str:
+    name = clean_token(token)
+    return "High Tech" if name == "HighTech" else name
 
 
 def _predict_economies(planet_class: str, has_rings: bool) -> list[str]:
@@ -275,12 +284,25 @@ class _SystemDetailDialog(QDialog):
     background so opening it never blocks the UI; shown immediately in a
     loading state."""
 
-    def __init__(self, system_name: str):
+    def __init__(self, system_name: str, repo=None):
         super().__init__(None)
         self.setStyleSheet("QDialog { background:#080f18; color:#c8c8c8; }")
         self.setWindowTitle(f"System Detail — {system_name}")
         self.resize(760, 460)
         self._system_name = system_name
+        self._repo = repo
+        self._confirmed_economy_text = ""
+        if repo is not None:
+            try:
+                profile = repo.get_system_profile_by_name(system_name)
+            except Exception:
+                profile = None
+            if profile and profile["economy"]:
+                economy = _economy_display(profile["economy"])
+                second = _economy_display(profile["second_economy"]) if profile["second_economy"] else ""
+                self._confirmed_economy_text = (
+                    f"Confirmed economy (EDDN sighting): {economy}" + (f" / {second}" if second else "")
+                )
 
         layout = QVBoxLayout(self)
         hdr_row = QHBoxLayout()
@@ -426,7 +448,8 @@ class _SystemDetailDialog(QDialog):
             self._table.setItem(row, 7, economy_item)
 
         self._economy_summary_label.setText(
-            f"Likely economy here: {', '.join(system_economies)}" if system_economies
+            self._confirmed_economy_text if self._confirmed_economy_text
+            else f"Likely economy here: {', '.join(system_economies)}" if system_economies
             else "No strong economy signal from known bodies (no ELW/water/ammonia/gas giant/rings/etc. yet)."
         )
 
@@ -835,7 +858,7 @@ class ColonisationPanel(QWidget):
             return
         dlg = self._detail_dialogs.get(system_name)
         if dlg is None or not dlg.isVisible():
-            dlg = _SystemDetailDialog(system_name)
+            dlg = _SystemDetailDialog(system_name, self._repo)
             self._detail_dialogs[system_name] = dlg
         dlg.show()
         dlg.raise_()

@@ -301,6 +301,17 @@ class Database:
                 data_timestamp TEXT,
                 source         TEXT
             )""",
+            # Real system economy/government/security/population/allegiance
+            # from other commanders' EDDN FSDJump/Location/CarrierJump
+            # sightings -- lets the colonisation candidate dialog show
+            # confirmed economy instead of a body-attribute guess.
+            "ALTER TABLE net.system_bgs_status ADD COLUMN economy TEXT",
+            "ALTER TABLE net.system_bgs_status ADD COLUMN second_economy TEXT",
+            "ALTER TABLE net.system_bgs_status ADD COLUMN government TEXT",
+            "ALTER TABLE net.system_bgs_status ADD COLUMN security TEXT",
+            "ALTER TABLE net.system_bgs_status ADD COLUMN population INTEGER",
+            "ALTER TABLE net.system_bgs_status ADD COLUMN allegiance TEXT",
+            "ALTER TABLE net.system_bgs_status ADD COLUMN profile_timestamp TEXT",
         ]
         for sql in personal_migrations + cache_migrations:
             try:

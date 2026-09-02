@@ -24,6 +24,8 @@ def test_system_bgs_status_table_exists(db):
     assert cols == {
         "system_address", "system_name", "conflicts", "faction_states",
         "data_timestamp", "source",
+        "economy", "second_economy", "government", "security",
+        "population", "allegiance", "profile_timestamp",
     }
 
 
