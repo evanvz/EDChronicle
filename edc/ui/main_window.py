@@ -2748,6 +2748,8 @@ class MainWindow(QMainWindow):
         if getattr(self.cfg, "eddn_contribute_enabled", False) and not self._replaying:
             star_pos = (self.state.system_x, self.state.system_y, self.state.system_z)
             self.eddn_publisher.maybe_publish(evt, self.state.system, star_pos, self.state.system_address)
+            if name == "FSSBodySignals":
+                self.eddn_publisher.maybe_publish_fssbodysignals(evt, self.state.system, star_pos, self.state.system_address)
 
         if name in (
             "Bounty",

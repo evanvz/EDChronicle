@@ -29,6 +29,7 @@ _GATEWAY_URL = "https://eddn.edcd.io:4430/upload/"
 _SCHEMA_REF = "https://eddn.edcd.io/schemas/journal/1"
 _COMMODITY_SCHEMA_REF = "https://eddn.edcd.io/schemas/commodity/3"
 _FCMATERIALS_SCHEMA_REF = "https://eddn.edcd.io/schemas/fcmaterials_journal/1"
+_FSSBODYSIGNALS_SCHEMA_REF = "https://eddn.edcd.io/schemas/fssbodysignals/1"
 
 _ALLOWED_EVENTS = {"Docked", "FSDJump", "Scan", "Location", "SAASignalsFound", "CarrierJump", "CodexEntry"}
 
@@ -123,6 +124,71 @@ def build_message(
             return None
         msg["SystemAddress"] = system_address
 
+    return msg
+
+
+def build_fssbodysignals_message(
+    event: Dict[str, Any],
+    star_system: str,
+    star_pos: Optional[Sequence[float]],
+    system_address: Optional[int],
+) -> Optional[Dict[str, Any]]:
+    """
+    Returns an fssbodysignals/1-schema-compliant message body for an
+    FSSBodySignals event, or None if required fields are missing. Schema
+    requires exactly timestamp, event, StarSystem, StarPos, SystemAddress,
+    BodyID, Signals[] (each Signal: Type, Count only) at message level
+    (additionalProperties: false) -- verified directly against EDCD/EDDN's
+    schema repo. This is the schema that carries Surface Mining's
+    "$PlanetaryMiningLocation_Name;" signal to the wider community.
+    """
+    if event.get("event") != "FSSBodySignals":
+        return None
+
+    timestamp = event.get("timestamp")
+    body_id = event.get("BodyID")
+    body_name = event.get("BodyName")
+    signals = event.get("Signals")
+    if not (
+        isinstance(timestamp, str) and timestamp
+        and isinstance(body_id, int) and not isinstance(body_id, bool)
+        and isinstance(signals, list)
+    ):
+        return None
+
+    if not star_system:
+        return None
+    if not (isinstance(star_pos, (list, tuple)) and len(star_pos) == 3):
+        return None
+    if not isinstance(system_address, int):
+        return None
+
+    out_signals: list = []
+    for sig in signals:
+        if not isinstance(sig, dict):
+            continue
+        sig_type = sig.get("Type")
+        count = sig.get("Count")
+        if not (isinstance(sig_type, str) and sig_type):
+            continue
+        if not (isinstance(count, int) and not isinstance(count, bool)):
+            continue
+        out_signals.append({"Type": sig_type, "Count": count})
+
+    if not out_signals:
+        return None
+
+    msg: Dict[str, Any] = {
+        "timestamp": timestamp,
+        "event": "FSSBodySignals",
+        "StarSystem": star_system,
+        "StarPos": list(star_pos),
+        "SystemAddress": system_address,
+        "BodyID": body_id,
+        "Signals": out_signals,
+    }
+    if isinstance(body_name, str) and body_name:
+        msg["BodyName"] = body_name
     return msg
 
 
@@ -405,6 +471,41 @@ class EddnPublisher:
             self._queue.put_nowait(payload)
         except queue.Full:
             log.warning("EDDN publish queue full — dropping message")
+
+    def maybe_publish_fssbodysignals(
+        self,
+        event: Dict[str, Any],
+        star_system: str,
+        star_pos: Optional[Sequence[float]],
+        system_address: Optional[int],
+    ) -> None:
+        if self._is_beta:
+            return
+        if not self._commander:
+            return
+
+        msg = build_fssbodysignals_message(event, star_system, star_pos, system_address)
+        if msg is None:
+            return
+
+        msg["horizons"] = self._horizons
+        msg["odyssey"] = self._odyssey
+
+        payload = {
+            "$schemaRef": _FSSBODYSIGNALS_SCHEMA_REF,
+            "header": {
+                "uploaderID": self._commander,
+                "softwareName": _SOFTWARE_NAME,
+                "softwareVersion": _SOFTWARE_VERSION,
+                "gameversion": self._gameversion,
+                "gamebuild": self._gamebuild,
+            },
+            "message": msg,
+        }
+        try:
+            self._queue.put_nowait(payload)
+        except queue.Full:
+            log.warning("EDDN publish queue full — dropping fssbodysignals message")
 
     def maybe_publish_commodity(self, data: Dict[str, Any], docking_access: Optional[str] = None) -> None:
         if self._is_beta:
