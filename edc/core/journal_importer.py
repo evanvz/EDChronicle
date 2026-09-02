@@ -38,13 +38,14 @@ def _terraformable_from_state(terraform_state: Any) -> int | None:
     return 0 if state == "not terraformable" else 1
 
 
-def _surface_signal_counts(signals: Any) -> tuple[int, int, int]:
+def _surface_signal_counts(signals: Any) -> tuple[int, int, int, int]:
     bio = 0
     geo = 0
     human = 0
+    mining = 0
 
     if not isinstance(signals, list):
-        return bio, geo, human
+        return bio, geo, human, mining
 
     for sig in signals:
         if not isinstance(sig, dict):
@@ -62,8 +63,10 @@ def _surface_signal_counts(signals: Any) -> tuple[int, int, int]:
             geo = count
         if ("human" in sig_type) or (sig_type_loc == "human"):
             human = count
+        if ("mining" in sig_type) or (sig_type_loc == "planetary mining location"):
+            mining = count
 
-    return bio, geo, human
+    return bio, geo, human, mining
 
 
 @dataclass
@@ -434,8 +437,8 @@ class JournalImporter:
                     was_footfalled=cached.was_footfalled,
                 )
 
-        bio, geo, human = _surface_signal_counts(event.get("Signals"))
-        self.repo.save_body_signals(system_address, body_name, bio, geo, human)
+        bio, geo, human, mining = _surface_signal_counts(event.get("Signals"))
+        self.repo.save_body_signals(system_address, body_name, bio, geo, human, mining)
 
         cached = self.bodies_by_name.get(body_name)
         if cached is None:

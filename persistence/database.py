@@ -238,6 +238,9 @@ class Database:
             # bodies.first_discovered, which is per-body and only ever known
             # from a personal journal Scan event.
             "ALTER TABLE systems ADD COLUMN first_discovery INTEGER DEFAULT 0",
+            # Surface Mining (Update 4.4, 2026-09-02): $PlanetaryMiningLocation_Name;
+            # signal count, tracked alongside bio/geo/human in body_signals.
+            "ALTER TABLE body_signals ADD COLUMN surface_mining_signals INTEGER",
         ]
         cache_migrations = [
             "ALTER TABLE net.spansh_bodies ADD COLUMN surface_gravity REAL",
@@ -304,7 +307,7 @@ class Database:
         self._apply_version_migrations()
 
     # Bump this constant whenever a migration requires journals to be re-imported.
-    _REQUIRED_SCHEMA_VERSION = 8
+    _REQUIRED_SCHEMA_VERSION = 9
 
     def _apply_version_migrations(self):
         self.conn.execute(
@@ -326,6 +329,8 @@ class Database:
             # v8: journal_importer.py now backfills faction_snapshots
             #     (including SquadronFaction:true detection) from historical
             #     Location/FSDJump events, which it never did before.
+            # v9: body_signals.surface_mining_signals was added (Surface
+            #     Mining, Update 4.4).
             # Re-import all journals to backfill.
             self.conn.execute("DELETE FROM processed_journals")
             if current == 0:

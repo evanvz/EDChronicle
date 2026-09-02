@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS body_signals (
     bio_signals INTEGER,
     geo_signals INTEGER,
     human_signals INTEGER,
+    surface_mining_signals INTEGER,
     PRIMARY KEY (system_address, body_name)
 );
 

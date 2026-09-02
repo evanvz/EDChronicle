@@ -62,6 +62,7 @@ class GameState:
     guardian_signals: Dict[str, int] = field(default_factory=dict)
     thargoid_signals: Dict[str, int] = field(default_factory=dict)
     other_signals: Dict[str, int] = field(default_factory=dict)
+    surface_mining_signals: Dict[str, int] = field(default_factory=dict)   # BodyName -> Planetary Mining Location count (Surface Mining, Update 4.4)
     saa_signals: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
     # RingName -> {system_address, parent_body, ring_class, distance_ls,
     # scanned, hotspots: [{name, count}]}. Populated from Scan events' Rings

@@ -86,6 +86,29 @@ def test_planetary_codex_entry_backfilled_not_phenomena(tmp_path):
     assert rows[0]["variant"] == "Green"
 
 
+def test_fssbodysignals_backfills_surface_mining_signals(tmp_path):
+    # Surface Mining (Update 4.4): $PlanetaryMiningLocation_Name; must
+    # persist to body_signals.surface_mining_signals via the historical
+    # import path, same as bio/geo/human.
+    repo = _repo(tmp_path)
+    imp = _importer(tmp_path, repo)
+
+    imp._process_event({
+        "event": "FSSBodySignals", "BodyName": "HR 8769 A 1",
+        "SystemAddress": 12345, "BodyID": 5,
+        "Signals": [
+            {"Type": "$PlanetaryMiningLocation_Name;", "Type_Localised": "Planetary Mining Location", "Count": 6},
+            {"Type": "$SAA_SignalType_Geological;", "Type_Localised": "Geological", "Count": 3},
+        ],
+    })
+
+    rows = repo.get_body_signals(12345)
+    assert len(rows) == 1
+    assert rows[0]["body_name"] == "HR 8769 A 1"
+    assert rows[0]["surface_mining_signals"] == 6
+    assert rows[0]["geo_signals"] == 3
+
+
 def test_historical_fsdjump_backfills_squadron_faction(tmp_path):
     # Without this, a fresh DB never learns the player's squadron-aligned
     # faction until a live Docked/FSDJump/Location happens during the

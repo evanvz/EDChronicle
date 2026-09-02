@@ -1513,6 +1513,7 @@ class EventEngine:
             guardian = 0
             thargoid = 0
             other    = 0
+            mining_count   = 0
             for sig in (event.get("Signals") or []):
                 t  = (sig.get("Type") or "")
                 tl = (sig.get("Type_Localised") or "")
@@ -1538,16 +1539,29 @@ class EventEngine:
                     c = sig.get("Count", 0)
                     if isinstance(c, int):
                         thargoid = c
+                elif ("mining" in t_low) or (tl_low == "planetary mining location"):
+                    # Surface Mining (Update 4.4, confirmed live 2026-09-02):
+                    # "$PlanetaryMiningLocation_Name;" / "Planetary Mining
+                    # Location" -- Count is the number of mineable deposits
+                    # on this body, same shape as bio/geo counts.
+                    c = sig.get("Count", 0)
+                    if isinstance(c, int):
+                        mining_count = c
                 elif ("other" in t_low) or (tl_low == "other"):
                     c = sig.get("Count", 0)
                     if isinstance(c, int):
                         other = c
+                elif t:
+                    # Genuinely new signal type we don't classify anywhere --
+                    # logged so it's noticed instead of silently vanishing.
+                    log.warning("Unrecognized FSSBodySignals signal type: %r (localised: %r)", t, tl)
             self.state.bio_signals[body]      = bio
             self.state.geo_signals[body]      = geo
             self.state.human_signals[body]    = human
             self.state.guardian_signals[body] = guardian
             self.state.thargoid_signals[body] = thargoid
             self.state.other_signals[body]    = other
+            self.state.surface_mining_signals[body]   = mining_count
 
             # Create or update a placeholder record so the UI can show Bio immediately
             rec = self.state.bodies.get(body)
@@ -1571,6 +1585,7 @@ class EventEngine:
             rec["GuardianSignals"] = guardian
             rec["ThargoidSignals"] = thargoid
             rec["OtherSignals"]    = other
+            rec["SurfaceMiningSignals"]   = mining_count
             # IMPORTANT: preserve DSS-confirmed genera if we already have them.
             # FSSBodySignals can arrive after SAASignalsFound and would otherwise overwrite the body record.
             rec["BioGenuses"] = self.state.bio_genuses.get(body, rec.get("BioGenuses", []))
@@ -1756,6 +1771,7 @@ class EventEngine:
             human    = 0
             thargoid = 0
             other    = 0
+            mining_count   = 0
 
             for sig in (event.get("Signals") or []):
                 t  = (sig.get("Type") or "")
@@ -1786,11 +1802,18 @@ class EventEngine:
                     c = sig.get("Count", 0)
                     if isinstance(c, int):
                         other = c
+                if ("mining" in t.lower()) or (tl.strip().lower() == "planetary mining location"):
+                    # Surface Mining (Update 4.4) -- same signal EDChronicle
+                    # already handles on FSSBodySignals (the event it's
+                    # actually confirmed to arrive on); handled here too in
+                    # case a future DSS pass also reports it.
+                    matched = True
+                    c = sig.get("Count", 0)
+                    if isinstance(c, int):
+                        mining_count = c
                 if not matched and t:
                     # Genuinely new signal type we don't classify anywhere --
-                    # logged so it's noticed instead of silently vanishing
-                    # (confirmed gap: a leaked pre-release Surface Mining
-                    # signal type wouldn't have matched any bucket above).
+                    # logged so it's noticed instead of silently vanishing.
                     log.warning("Unrecognized SAASignalsFound signal type: %r (localised: %r)", t, tl)
             if bio:
                 self.state.bio_signals[body] = bio
@@ -1802,6 +1825,8 @@ class EventEngine:
                 self.state.thargoid_signals[body] = thargoid
             if other:
                 self.state.other_signals[body] = other
+            if mining_count:
+                self.state.surface_mining_signals[body] = mining_count
 
             genuses: List[str] = []
             for g in (event.get("Genuses") or []):
@@ -1845,6 +1870,7 @@ class EventEngine:
             rec["HumanSignals"] = self.state.human_signals.get(body, rec.get("HumanSignals", 0))
             rec["ThargoidSignals"] = self.state.thargoid_signals.get(body, rec.get("ThargoidSignals", 0))
             rec["OtherSignals"] = self.state.other_signals.get(body, rec.get("OtherSignals", 0))
+            rec["SurfaceMiningSignals"] = self.state.surface_mining_signals.get(body, rec.get("SurfaceMiningSignals", 0))
             rec["DSSMapped"] = True
             self.state.bodies[body] = rec
 

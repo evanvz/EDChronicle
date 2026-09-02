@@ -275,16 +275,19 @@ class SystemDataLoader:
             bio = int(row["bio_signals"] or 0)
             geo = int(row["geo_signals"] or 0)
             human = int(row["human_signals"] or 0)
+            mining = int(row["surface_mining_signals"] or 0)
 
             self.state.bio_signals[body_name] = bio
             self.state.geo_signals[body_name] = geo
             self.state.human_signals[body_name] = human
+            self.state.surface_mining_signals[body_name] = mining
 
             rec = self.state.bodies.get(body_name)
             if isinstance(rec, dict):
                 rec["BioSignals"] = bio
                 rec["GeoSignals"] = geo
                 rec["HumanSignals"] = human
+                rec["SurfaceMiningSignals"] = mining
 
         for row in self.repo.get_dss_genus_discovery(system_address):
             body_name = row["body_name"]

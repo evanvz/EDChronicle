@@ -1,8 +1,12 @@
 """SAASignalsFound logs a warning for any signal Type it doesn't classify
-into one of the known buckets (biological/geological/human/thargoid/other)
-instead of silently dropping it -- confirmed gap: a leaked pre-release
-Surface Mining signal type wouldn't have matched any bucket. Real
-EventEngine, matching this repo's convention (see test_codex_phenomena.py)."""
+into one of the known buckets (biological/geological/human/thargoid/other/
+mining) instead of silently dropping it. Real EventEngine, matching this
+repo's convention (see test_codex_phenomena.py).
+
+Surface Mining's "$PlanetaryMiningLocation_Name;" was the gap that
+originally motivated this fix. It's a recognized bucket now (see
+test_planetary_mining_location_signal.py), so a genuinely unknown type is
+used here instead to keep exercising the catch-all."""
 import logging
 
 from edc.core.event_engine import EventEngine
@@ -27,10 +31,10 @@ def test_unrecognized_type_logs_warning(tmp_path, caplog):
     engine = _engine(tmp_path)
     with caplog.at_level(logging.WARNING, logger="edc.event_engine"):
         engine.process(_saa_event([
-            {"Type": "$PlanetaryMiningLocation_Name;", "Type_Localised": "Planetary Mining Location", "Count": 18},
+            {"Type": "$SomeFutureSignalType_Name;", "Type_Localised": "Some Future Signal Type", "Count": 18},
         ]))
     assert any("Unrecognized SAASignalsFound signal type" in r.message for r in caplog.records)
-    assert any("PlanetaryMiningLocation_Name" in r.message for r in caplog.records)
+    assert any("SomeFutureSignalType_Name" in r.message for r in caplog.records)
 
 
 def test_known_type_does_not_log_warning(tmp_path, caplog):
@@ -43,16 +47,26 @@ def test_known_type_does_not_log_warning(tmp_path, caplog):
     assert engine.state.geo_signals.get("Test Body 1") == 2
 
 
+def test_mining_type_does_not_log_warning(tmp_path, caplog):
+    engine = _engine(tmp_path)
+    with caplog.at_level(logging.WARNING, logger="edc.event_engine"):
+        engine.process(_saa_event([
+            {"Type": "$PlanetaryMiningLocation_Name;", "Type_Localised": "Planetary Mining Location", "Count": 18},
+        ]))
+    assert caplog.records == []
+    assert engine.state.surface_mining_signals.get("Test Body 1") == 18
+
+
 def test_mixed_known_and_unknown_types_only_warns_for_unknown(tmp_path, caplog):
     engine = _engine(tmp_path)
     with caplog.at_level(logging.WARNING, logger="edc.event_engine"):
         engine.process(_saa_event([
             {"Type": "$SAA_SignalType_Geological;", "Type_Localised": "Geological", "Count": 2},
-            {"Type": "$PlanetaryMiningLocation_Name;", "Type_Localised": "Planetary Mining Location", "Count": 18},
+            {"Type": "$SomeFutureSignalType_Name;", "Type_Localised": "Some Future Signal Type", "Count": 18},
             {"Type": "$SAA_SignalType_Human;", "Type_Localised": "Human", "Count": 1},
         ]))
     assert len(caplog.records) == 1
-    assert "PlanetaryMiningLocation_Name" in caplog.records[0].message
+    assert "SomeFutureSignalType_Name" in caplog.records[0].message
     assert engine.state.geo_signals.get("Test Body 1") == 2
     assert engine.state.human_signals.get("Test Body 1") == 1
 

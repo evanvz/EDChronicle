@@ -246,6 +246,7 @@ class Repository:
         bio_signals: int | None,
         geo_signals: int | None,
         human_signals: int | None,
+        surface_mining_signals: int | None = None,
     ):
         self.db.execute(
             """
@@ -254,13 +255,15 @@ class Repository:
                 body_name,
                 bio_signals,
                 geo_signals,
-                human_signals
+                human_signals,
+                surface_mining_signals
             )
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(system_address, body_name) DO UPDATE SET
                 bio_signals = excluded.bio_signals,
                 geo_signals = excluded.geo_signals,
-                human_signals = excluded.human_signals
+                human_signals = excluded.human_signals,
+                surface_mining_signals = excluded.surface_mining_signals
             """,
             (
                 system_address,
@@ -268,6 +271,7 @@ class Repository:
                 bio_signals,
                 geo_signals,
                 human_signals,
+                surface_mining_signals,
             ),
         )
 
@@ -2574,7 +2578,8 @@ class Repository:
                 body_name,
                 bio_signals,
                 geo_signals,
-                human_signals
+                human_signals,
+                surface_mining_signals
             FROM body_signals
             WHERE system_address = ?
             ORDER BY body_name

@@ -484,6 +484,7 @@ class ExplorationPanel(QWidget):
             guardian  = rec.get("GuardianSignals", 0) or 0
             thargoid  = rec.get("ThargoidSignals", 0) or 0
             other_sig = rec.get("OtherSignals",    0) or 0
+            mining    = rec.get("SurfaceMiningSignals",   0) or 0
             genuses   = rec.get("BioGenuses", []) or []
             landable      = rec.get("Landable", False)
             volcanism     = rec.get("Volcanism") or ""
@@ -511,6 +512,7 @@ class ExplorationPanel(QWidget):
                 first, bio, geo, human, guardian, thargoid, other_sig,
                 genuses, landable, volcanism, materials, min_value,
                 first_footfall, has_footfall, was_footfalled, footfall_estimate,
+                mining,
             )
             existing = self._body_cards.get(body)
             if existing is not None and existing[1] == signature:
@@ -578,7 +580,7 @@ class ExplorationPanel(QWidget):
         first, bio, geo, human, guardian, thargoid, other_sig,
         genuses, landable, volcanism, materials, min_value,
         first_footfall=False, has_footfall=False, was_footfalled=False,
-        footfall_estimate=None
+        footfall_estimate=None, mining=0
     ):
         esc = self._esc
 
@@ -736,6 +738,12 @@ class ExplorationPanel(QWidget):
                 f'<span style="color:#9aa4b0;font-size:12px;">OTHER</span>'
                 f'&nbsp;<span style="color:#AAAAAA;font-size:12px;font-weight:700;">'
                 f'{other_sig}</span>'
+            )
+        if isinstance(mining, int) and mining > 0:
+            info_html.append(
+                f'<span style="color:#9aa4b0;font-size:12px;">MINING</span>'
+                f'&nbsp;<span style="color:#6BE6D9;font-size:12px;font-weight:700;">'
+                f'{mining}</span>'
             )
         if volcanism and "no volcanism" not in volcanism.lower():
             info_html.append(
