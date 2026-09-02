@@ -111,7 +111,7 @@ class _SystemDetailWorker(QObject):
     fetch_system_rings(); if that first lookup fails, rings are just
     skipped (empty list) rather than failing the whole dialog -- the body
     list is the more important half."""
-    finished = pyqtSignal(list, str, list)  # bodies, error, rings
+    finished = pyqtSignal(list, str, list, dict)  # bodies, error, rings, mining_signals
 
     def __init__(self, system_name: str):
         super().__init__()
@@ -121,14 +121,15 @@ class _SystemDetailWorker(QObject):
         client = SpanshClient()
         bodies, error = client.fetch_system_bodies(self._system_name)
         rings: list = []
+        mining_signals: dict = {}
         id64, id64_error = client.fetch_system_id64(self._system_name)
         if id64 is not None:
-            rings, rings_error = client.fetch_system_rings(id64)
+            rings, rings_error, mining_signals = client.fetch_system_rings(id64)
             if rings_error:
                 log.warning("Spansh ring fetch failed for %s: %s", self._system_name, rings_error)
         elif id64_error:
             log.warning("Spansh id64 lookup failed for %s: %s", self._system_name, id64_error)
-        self.finished.emit(bodies, error, rings)
+        self.finished.emit(bodies, error, rings, mining_signals)
 
 
 class _ColonisationDetailDialog(QDialog):
@@ -347,7 +348,7 @@ class _SystemDetailDialog(QDialog):
         self._worker.finished.connect(self._thread.quit)
         self._thread.start()
 
-    def _on_loaded(self, bodies: list, error: str, rings: list) -> None:
+    def _on_loaded(self, bodies: list, error: str, rings: list, mining_signals: dict) -> None:
         self._render_rings(rings)
         if error:
             self._status_label.setText(f"Lookup failed — {error}")
@@ -378,7 +379,9 @@ class _SystemDetailDialog(QDialog):
                 if e not in system_economies:
                     system_economies.append(e)
 
-            name_item = QTableWidgetItem(name + (" 💍" if is_ringed else ""))
+            mining_count = mining_signals.get(name)
+            suffix = (" 💍" if is_ringed else "") + (f" ⛏️{mining_count}" if mining_count else "")
+            name_item = QTableWidgetItem(name + suffix)
             type_item = QTableWidgetItem(planet_class)
             landable = b.get("landable")
             landable_item = QTableWidgetItem("Yes" if landable else ("No" if landable is not None else "—"))

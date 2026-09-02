@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import requests
 
@@ -460,7 +460,7 @@ class SpanshClient:
         out.sort(key=lambda r: r.distance)
         return out, ""
 
-    def fetch_system_rings(self, system_address: int) -> Tuple[List[dict], str]:
+    def fetch_system_rings(self, system_address: int) -> Tuple[List[dict], str, Dict[str, int]]:
         """
         Every ring in this system that Spansh knows about, with whatever
         community-reported hotspot signals it has (empty list if none — a
@@ -468,7 +468,14 @@ class SpanshClient:
         distinct from this commander simply not having scanned it personally).
 
         Each entry: {"ring_name", "parent_body", "ring_type", "signals": [{"name","count"}, ...]}.
-        Returns (rings, error). error is "" on success.
+
+        Also returns body_mining_signals: body_name -> Planetary Mining
+        Location signal count (Surface Mining, Update 4.4), read from the
+        same per-body "signals" array this response already carries
+        alongside ring data (confirmed live: {"count":3,"name":"Geological"}
+        shape) -- one request covers both, no extra API call needed.
+
+        Returns (rings, error, body_mining_signals). error is "" on success.
         """
         body = {
             "filters": {"system_id64": {"value": system_address, "comparison": "="}},
@@ -481,14 +488,22 @@ class SpanshClient:
             data = resp.json()
         except requests.RequestException as exc:
             log.error("Spansh ring fetch failed: %s", exc)
-            return [], str(exc)
+            return [], str(exc), {}
         except ValueError:
-            return [], "Invalid response from Spansh"
+            return [], "Invalid response from Spansh", {}
 
         out: List[dict] = []
+        body_mining_signals: Dict[str, int] = {}
         for rec in (data.get("results") or []):
             if not isinstance(rec, dict):
                 continue
+            body_name = str(rec.get("name") or "")
+            for sig in (rec.get("signals") or []):
+                if not isinstance(sig, dict):
+                    continue
+                sig_name = str(sig.get("name") or "").strip().lower()
+                if body_name and "mining" in sig_name:
+                    body_mining_signals[body_name] = int(sig.get("count") or 0)
             for ring in (rec.get("rings") or []):
                 if not isinstance(ring, dict):
                     continue
@@ -502,4 +517,4 @@ class SpanshClient:
                     "ring_type":   str(ring.get("type") or ""),
                     "signals":     signals,
                 })
-        return out, ""
+        return out, "", body_mining_signals

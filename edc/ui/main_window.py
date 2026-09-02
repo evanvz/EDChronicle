@@ -142,7 +142,7 @@ class _SpanshRingWorker(QObject):
         self._system_address = system_address
 
     def run(self):
-        rings, error = _SpanshClient().fetch_system_rings(self._system_address)
+        rings, error, _mining_signals = _SpanshClient().fetch_system_rings(self._system_address)
         self.finished.emit(rings, error, self._system_address)
 
 
