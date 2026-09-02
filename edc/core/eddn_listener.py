@@ -126,10 +126,11 @@ class EddnPowerPlayWorker(QObject):
     # id64, StarSystem, RES tiers present (list), timestamp. Feeds
     # system_res_sites.
     res_signal_seen = pyqtSignal(object, str, list, str)
-    # id64, BodyName, Planetary Mining Location signal count. Feeds
-    # spansh_bodies.surface_mining_signals for bodies other commanders have
-    # already found but this commander hasn't personally scanned.
-    body_mining_signal_seen = pyqtSignal(object, str, int)
+    # id64, BodyName, {bucket: count} -- whichever of bio/geo/human/
+    # guardian/thargoid/mining are present in another commander's
+    # fssbodysignals/1 sighting for a body this commander hasn't
+    # personally scanned. Feeds net.spansh_bodies.
+    body_signals_seen = pyqtSignal(object, str, dict)
     # id64, StarSystem, profile dict (economy/second_economy/government/
     # security/population/allegiance), timestamp -- real system economy
     # data from another commander's FSDJump/Location/CarrierJump, feeds
@@ -248,7 +249,7 @@ class EddnPowerPlayWorker(QObject):
                 self._stats["fssbodysignals"] += 1
                 msg = data.get("message")
                 if isinstance(msg, dict):
-                    self._maybe_emit_body_mining_signal(msg)
+                    self._maybe_emit_body_signals(msg)
                 continue
 
             if not schema.startswith(_JOURNAL_SCHEMA_PREFIX):
@@ -362,7 +363,12 @@ class EddnPowerPlayWorker(QObject):
             return
         self.bgs_status_seen.emit(system_address, star_system, conflicts, factions, timestamp)
 
-    def _maybe_emit_body_mining_signal(self, msg: dict) -> None:
+    def _maybe_emit_body_signals(self, msg: dict) -> None:
+        """Extracts whichever known signal buckets (biological/geological/
+        human/guardian/thargoid/mining) are present in a body's Signals[]
+        array -- same bucket keywords event_engine.py uses for the
+        commander's own live scans, applied here to other commanders'
+        fssbodysignals/1 sightings for bodies not yet personally visited."""
         system_address = msg.get("SystemAddress")
         body_name = msg.get("BodyName")
         signals = msg.get("Signals")
@@ -370,16 +376,28 @@ class EddnPowerPlayWorker(QObject):
                 and isinstance(body_name, str) and body_name
                 and isinstance(signals, list)):
             return
+        found: dict = {}
         for sig in signals:
             if not isinstance(sig, dict):
                 continue
             sig_type = str(sig.get("Type") or "").lower()
-            if "mining" not in sig_type:
-                continue
             count = sig.get("Count")
-            if isinstance(count, int) and not isinstance(count, bool):
-                self.body_mining_signal_seen.emit(system_address, body_name, count)
-            return
+            if not (isinstance(count, int) and not isinstance(count, bool)):
+                continue
+            if "biological" in sig_type:
+                found["bio"] = count
+            elif "geological" in sig_type:
+                found["geo"] = count
+            elif "human" in sig_type:
+                found["human"] = count
+            elif "guardian" in sig_type:
+                found["guardian"] = count
+            elif "thargoid" in sig_type:
+                found["thargoid"] = count
+            elif "mining" in sig_type:
+                found["mining"] = count
+        if found:
+            self.body_signals_seen.emit(system_address, body_name, found)
 
     def _maybe_emit_system_profile(self, msg: dict, timestamp: str) -> None:
         system_address = msg.get("SystemAddress")

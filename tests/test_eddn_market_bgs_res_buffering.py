@@ -42,33 +42,35 @@ def test_pop_buffers_returns_bgs_status_and_res_sites_in_11_tuple_and_clears_the
     assert cache._res_sites_buffer == {}
 
 
-def test_on_body_mining_signal_seen_buffers_and_dedupes():
+def test_on_body_signals_seen_buffers_and_merges():
     cache = EddnMarketCache(repo=None)
-    cache.on_body_mining_signal_seen(1281804437875, "HR 8769 A 1", 3)
-    cache.on_body_mining_signal_seen(1281804437875, "HR 8769 A 1", 6)  # later sighting wins
+    cache.on_body_signals_seen(1281804437875, "HR 8769 A 1", {"mining": 3})
+    cache.on_body_signals_seen(1281804437875, "HR 8769 A 1", {"mining": 6, "geo": 3})  # merges, mining overwritten
 
-    _, _, _, _, _, _, _, _, _, mining_signals, _ = cache.pop_buffers()
-    assert mining_signals == [((1281804437875, "HR 8769 A 1"), 6)]
-    assert cache._mining_signal_buffer == {}
+    _, _, _, _, _, _, _, _, _, body_signals, _ = cache.pop_buffers()
+    assert body_signals == [((1281804437875, "HR 8769 A 1"), {"mining": 6, "geo": 3})]
+    assert cache._body_signals_buffer == {}
 
 
-def test_on_body_mining_signal_seen_ignores_malformed_input():
+def test_on_body_signals_seen_ignores_malformed_input():
     cache = EddnMarketCache(repo=None)
-    cache.on_body_mining_signal_seen(None, "HR 8769 A 1", 6)
-    cache.on_body_mining_signal_seen(1, "", 6)
+    cache.on_body_signals_seen(None, "HR 8769 A 1", {"mining": 6})
+    cache.on_body_signals_seen(1, "", {"mining": 6})
+    cache.on_body_signals_seen(1, "HR 8769 A 1", {})
 
-    _, _, _, _, _, _, _, _, _, mining_signals, _ = cache.pop_buffers()
-    assert mining_signals == []
+    _, _, _, _, _, _, _, _, _, body_signals, _ = cache.pop_buffers()
+    assert body_signals == []
 
 
-def test_write_buffers_persists_mining_signals_to_db(repo):
-    write_buffers(repo, [], [], [], [], [], [], [], [], [], [((1, "Body 1"), 6)])
+def test_write_buffers_persists_body_signals_to_db(repo):
+    write_buffers(repo, [], [], [], [], [], [], [], [], [], [((1, "Body 1"), {"mining": 6, "bio": 4})])
 
     row = repo.db.conn.execute(
         "SELECT * FROM net.spansh_bodies WHERE system_address = 1 AND body_name = 'Body 1'"
     ).fetchone()
     assert row is not None
     assert row["surface_mining_signals"] == 6
+    assert row["bio_signals"] == 4
 
 
 def test_on_system_profile_seen_buffers_and_dedupes():

@@ -119,6 +119,11 @@ CREATE TABLE IF NOT EXISTS net.spansh_bodies (
     estimated_value INTEGER,
     landable        INTEGER,
     surface_mining_signals INTEGER,
+    bio_signals     INTEGER,
+    geo_signals     INTEGER,
+    human_signals   INTEGER,
+    guardian_signals INTEGER,
+    thargoid_signals INTEGER,
     PRIMARY KEY (system_address, body_name)
 );
 

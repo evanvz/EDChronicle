@@ -258,6 +258,15 @@ class Database:
             # fssbodysignals uploads -- not a personal DB column, so no
             # _REQUIRED_SCHEMA_VERSION bump needed (net.* is disposable cache).
             "ALTER TABLE net.spansh_bodies ADD COLUMN surface_mining_signals INTEGER",
+            # Crowd-sourced (other commanders' EDDN fssbodysignals/1
+            # sightings) bio/geo/human/guardian/thargoid counts for bodies
+            # not yet personally scanned -- same table/rationale as
+            # surface_mining_signals above.
+            "ALTER TABLE net.spansh_bodies ADD COLUMN bio_signals INTEGER",
+            "ALTER TABLE net.spansh_bodies ADD COLUMN geo_signals INTEGER",
+            "ALTER TABLE net.spansh_bodies ADD COLUMN human_signals INTEGER",
+            "ALTER TABLE net.spansh_bodies ADD COLUMN guardian_signals INTEGER",
+            "ALTER TABLE net.spansh_bodies ADD COLUMN thargoid_signals INTEGER",
             "ALTER TABLE net.station_info ADD COLUMN station_services TEXT",
             "ALTER TABLE net.station_info ADD COLUMN station_faction TEXT",
             "ALTER TABLE net.station_info ADD COLUMN carrier_docking_access TEXT",

@@ -91,14 +91,23 @@ class SystemDataLoader:
                             if rec_key == "TidalLock":
                                 val = bool(val)
                             existing[rec_key] = val
-                    # Crowd-sourced surface mining signal (EDDN/Spansh) —
-                    # only fills a gap, never overwrites a personal live/
-                    # historical count already known for this body.
-                    if not self.state.surface_mining_signals.get(body_name):
-                        mining = row["surface_mining_signals"] if "surface_mining_signals" in row.keys() else None
-                        if isinstance(mining, int):
-                            self.state.surface_mining_signals[body_name] = mining
-                            existing["SurfaceMiningSignals"] = mining
+                    # Crowd-sourced signal counts (EDDN/Spansh) — only fill
+                    # a gap, never overwrite a personal live/historical
+                    # count already known for this body.
+                    for state_dict, rec_key, col in (
+                        (self.state.surface_mining_signals, "SurfaceMiningSignals", "surface_mining_signals"),
+                        (self.state.bio_signals, "BioSignals", "bio_signals"),
+                        (self.state.geo_signals, "GeoSignals", "geo_signals"),
+                        (self.state.human_signals, "HumanSignals", "human_signals"),
+                        (self.state.guardian_signals, "GuardianSignals", "guardian_signals"),
+                        (self.state.thargoid_signals, "ThargoidSignals", "thargoid_signals"),
+                    ):
+                        if state_dict.get(body_name):
+                            continue
+                        value = row[col] if col in row.keys() else None
+                        if isinstance(value, int):
+                            state_dict[body_name] = value
+                            existing[rec_key] = value
                     continue
                 # Spansh's own was_mapped is a real (if global/community,
                 # not necessarily "you personally") signal that this body
@@ -152,10 +161,18 @@ class SystemDataLoader:
                     "AtmosphereType":     row["atmosphere_type"]     if "atmosphere_type"     in row.keys() else None,
                     "TidalLock":          bool(row["tidal_lock"])    if row["tidal_lock"] is not None else None,
                 }
-                mining = row["surface_mining_signals"] if "surface_mining_signals" in row.keys() else None
-                if isinstance(mining, int):
-                    self.state.surface_mining_signals[body_name] = mining
-                    self.state.bodies[body_name]["SurfaceMiningSignals"] = mining
+                for state_dict, rec_key, col in (
+                    (self.state.surface_mining_signals, "SurfaceMiningSignals", "surface_mining_signals"),
+                    (self.state.bio_signals, "BioSignals", "bio_signals"),
+                    (self.state.geo_signals, "GeoSignals", "geo_signals"),
+                    (self.state.human_signals, "HumanSignals", "human_signals"),
+                    (self.state.guardian_signals, "GuardianSignals", "guardian_signals"),
+                    (self.state.thargoid_signals, "ThargoidSignals", "thargoid_signals"),
+                ):
+                    value = row[col] if col in row.keys() else None
+                    if isinstance(value, int):
+                        state_dict[body_name] = value
+                        self.state.bodies[body_name][rec_key] = value
         except Exception:
             logger.exception("Failed loading Spansh fallback bodies for %d", system_address)
 

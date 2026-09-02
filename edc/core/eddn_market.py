@@ -76,10 +76,13 @@ class EddnMarketCache:
         # Keyed by system_address -- RES tiers present, from any
         # commander's fsssignaldiscovered/1 message.
         self._res_sites_buffer: Dict[int, Tuple[str, list, str]] = {}
-        # Keyed by (system_address, body_name) -- Surface Mining's
-        # Planetary Mining Location signal count, from any commander's
-        # fssbodysignals/1 message (Update 4.4).
-        self._mining_signal_buffer: Dict[Tuple[int, str], int] = {}
+        # Keyed by (system_address, body_name) -- whichever of bio/geo/
+        # human/guardian/thargoid/mining signal counts another commander's
+        # fssbodysignals/1 message carried for a body. Dicts from repeat
+        # sightings are merged (later sighting's fields win per-key), so a
+        # message with only "mining" doesn't erase a previously buffered
+        # "bio" count from an earlier message this same flush cycle.
+        self._body_signals_buffer: Dict[Tuple[int, str], dict] = {}
         # Keyed by system_address -- real economy/government/security/
         # population/allegiance from any commander's FSDJump/Location/
         # CarrierJump journal/1 message.
@@ -154,10 +157,12 @@ class EddnMarketCache:
         timestamp = _normalize_ts(timestamp)
         self._res_sites_buffer[system_address] = (system_name, tiers, timestamp)
 
-    def on_body_mining_signal_seen(self, system_address: int, body_name: str, mining_signals: int) -> None:
-        if not (isinstance(system_address, int) and isinstance(body_name, str) and body_name):
+    def on_body_signals_seen(self, system_address: int, body_name: str, signals: dict) -> None:
+        if not (isinstance(system_address, int) and isinstance(body_name, str) and body_name and signals):
             return
-        self._mining_signal_buffer[(system_address, body_name)] = mining_signals
+        key = (system_address, body_name)
+        existing = self._body_signals_buffer.get(key, {})
+        self._body_signals_buffer[key] = {**existing, **signals}
 
     def on_system_profile_seen(self, system_address: int, system_name: str, profile: dict, timestamp: str) -> None:
         if not (isinstance(system_address, int) and system_name):
@@ -202,7 +207,7 @@ class EddnMarketCache:
         carrier_access = list(self._carrier_access_buffer.values())
         bgs_status = list(self._bgs_status_buffer.items())
         res_sites = list(self._res_sites_buffer.items())
-        mining_signals = list(self._mining_signal_buffer.items())
+        body_signals = list(self._body_signals_buffer.items())
         system_profiles = list(self._system_profile_buffer.items())
         self._coord_buffer.clear()
         self._market_buffer.clear()
@@ -213,10 +218,10 @@ class EddnMarketCache:
         self._carrier_access_buffer.clear()
         self._bgs_status_buffer.clear()
         self._res_sites_buffer.clear()
-        self._mining_signal_buffer.clear()
+        self._body_signals_buffer.clear()
         self._system_profile_buffer.clear()
         return (coords, market, factions, stations, codex, fcmaterials, carrier_access,
-                bgs_status, res_sites, mining_signals, system_profiles)
+                bgs_status, res_sites, body_signals, system_profiles)
 
     def flush(self) -> None:
         """Synchronous flush on the caller's own thread/connection — only
@@ -228,11 +233,11 @@ class EddnMarketCache:
         the main thread every 45s, which froze the UI for however long a
         big buffered batch took to write (confirmed live, worse right
         after docking at a busy station's market)."""
-        coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, mining_signals, system_profiles = self.pop_buffers()
-        write_buffers(self._repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, mining_signals, system_profiles)
+        coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals, system_profiles = self.pop_buffers()
+        write_buffers(self._repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals, system_profiles)
 
 
-def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, mining_signals=(), system_profiles=()) -> None:
+def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals=(), system_profiles=()) -> None:
     """The actual writes — factored out so both the main-thread flush()
     (shutdown) and a background worker (periodic, see main_window.py) can
     use the identical logic against whichever Repository they're given."""
@@ -310,12 +315,17 @@ def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, 
             except Exception:
                 log.exception("Failed to flush RES sites for system_address=%s", system_address)
 
-    if mining_signals:
-        for (system_address, body_name), mining_count in mining_signals:
+    if body_signals:
+        for (system_address, body_name), signals in body_signals:
             try:
-                repo.save_body_mining_signal(system_address, body_name, mining_count)
+                repo.save_body_signal_counts(
+                    system_address, body_name,
+                    bio=signals.get("bio"), geo=signals.get("geo"), human=signals.get("human"),
+                    guardian=signals.get("guardian"), thargoid=signals.get("thargoid"),
+                    mining=signals.get("mining"),
+                )
             except Exception:
-                log.exception("Failed to flush mining signal for system_address=%s body=%s", system_address, body_name)
+                log.exception("Failed to flush body signals for system_address=%s body=%s", system_address, body_name)
 
     if system_profiles:
         for system_address, (system_name, profile, timestamp) in system_profiles:

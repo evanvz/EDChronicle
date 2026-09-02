@@ -2703,7 +2703,8 @@ class Repository:
             SELECT body_name, planet_class, distance_ls, estimated_value, landable,
                    surface_gravity, radius, mass_em, surface_temperature, surface_pressure,
                    atmosphere_type, volcanism, tidal_lock, was_mapped, updated_at,
-                   surface_mining_signals
+                   surface_mining_signals, bio_signals, geo_signals, human_signals,
+                   guardian_signals, thargoid_signals
             FROM net.spansh_bodies
             WHERE system_address = ?
             ORDER BY distance_ls IS NULL, distance_ls, body_name
@@ -2711,21 +2712,35 @@ class Repository:
             (system_address,),
         ).fetchall()
 
-    def save_body_mining_signal(self, system_address: int, body_name: str, mining_signals: int) -> None:
-        """Upserts just the crowd-sourced surface_mining_signals column --
-        unlike save_spansh_body() (which always overwrites planet_class/
+    def save_body_signal_counts(
+        self, system_address: int, body_name: str,
+        bio: int | None = None, geo: int | None = None, human: int | None = None,
+        guardian: int | None = None, thargoid: int | None = None, mining: int | None = None,
+    ) -> None:
+        """Upserts whichever crowd-sourced signal counts are given (any
+        subset -- an EDDN fssbodysignals sighting rarely carries all six),
+        via COALESCE so a call that only knows "mining" can never null out
+        a "bio" count a previous call already stored, and vice versa.
+        Unlike save_spansh_body() (which always overwrites planet_class/
         distance_ls/estimated_value/landable even when the caller doesn't
-        have them), this only ever touches this one column so an EDDN
-        fssbodysignals sighting can never clobber a fuller Spansh row for
-        the same body. Inserts a minimal row if none exists yet."""
+        have them), this only ever touches the six signal columns. Inserts
+        a minimal row if none exists yet."""
         self.db.execute(
             """
-            INSERT INTO net.spansh_bodies (system_address, body_name, surface_mining_signals)
-            VALUES (?, ?, ?)
+            INSERT INTO net.spansh_bodies (
+                system_address, body_name, bio_signals, geo_signals, human_signals,
+                guardian_signals, thargoid_signals, surface_mining_signals
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(system_address, body_name) DO UPDATE SET
-                surface_mining_signals = excluded.surface_mining_signals
+                bio_signals             = COALESCE(excluded.bio_signals,             net.spansh_bodies.bio_signals),
+                geo_signals             = COALESCE(excluded.geo_signals,             net.spansh_bodies.geo_signals),
+                human_signals           = COALESCE(excluded.human_signals,           net.spansh_bodies.human_signals),
+                guardian_signals        = COALESCE(excluded.guardian_signals,        net.spansh_bodies.guardian_signals),
+                thargoid_signals        = COALESCE(excluded.thargoid_signals,        net.spansh_bodies.thargoid_signals),
+                surface_mining_signals  = COALESCE(excluded.surface_mining_signals,  net.spansh_bodies.surface_mining_signals)
             """,
-            (system_address, body_name, mining_signals),
+            (system_address, body_name, bio, geo, human, guardian, thargoid, mining),
         )
 
     def count_spansh_bodies(self, system_address: int) -> int:

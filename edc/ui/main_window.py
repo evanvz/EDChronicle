@@ -2187,7 +2187,7 @@ class MainWindow(QMainWindow):
         self._eddn_worker.fcmaterials_seen.connect(self.eddn_market_cache.on_fcmaterials_message)
         self._eddn_worker.bgs_status_seen.connect(self.eddn_market_cache.on_bgs_status_seen)
         self._eddn_worker.res_signal_seen.connect(self.eddn_market_cache.on_res_signal_seen)
-        self._eddn_worker.body_mining_signal_seen.connect(self.eddn_market_cache.on_body_mining_signal_seen)
+        self._eddn_worker.body_signals_seen.connect(self.eddn_market_cache.on_body_signals_seen)
         self._eddn_worker.system_profile_seen.connect(self.eddn_market_cache.on_system_profile_seen)
         self._eddn_thread.start()
         self._eddn_save_timer.start()
