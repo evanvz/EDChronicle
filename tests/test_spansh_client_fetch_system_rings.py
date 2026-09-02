@@ -33,6 +33,7 @@ def _sample_response():
             {
                 "name": "HR 8769 A 2 A Ring",
                 "signals": [],
+                "reserve_level": "Pristine",
                 "rings": [
                     {"name": "HR 8769 A 2 A Ring", "type": "Metallic", "signals": [{"name": "Platinum", "count": 2}]},
                 ],
@@ -49,6 +50,7 @@ def test_body_mining_signal_extracted():
     assert mining_signals == {"HR 8769 A 1": 6}
     assert len(rings) == 1
     assert rings[0]["ring_name"] == "HR 8769 A 2 A Ring"
+    assert rings[0]["reserve_level"] == "Pristine"
 
 
 def test_body_with_no_mining_signal_not_in_dict():

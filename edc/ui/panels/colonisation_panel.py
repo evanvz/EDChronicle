@@ -111,7 +111,7 @@ class _SystemDetailWorker(QObject):
     fetch_system_rings(); if that first lookup fails, rings are just
     skipped (empty list) rather than failing the whole dialog -- the body
     list is the more important half."""
-    finished = pyqtSignal(list, str, list, dict)  # bodies, error, rings, mining_signals
+    finished = pyqtSignal(list, str, list, dict, dict)  # bodies, error, rings, mining_signals, system_info
 
     def __init__(self, system_name: str):
         super().__init__()
@@ -119,7 +119,7 @@ class _SystemDetailWorker(QObject):
 
     def run(self):
         client = SpanshClient()
-        bodies, error = client.fetch_system_bodies(self._system_name)
+        bodies, error, system_info = client.fetch_system_bodies(self._system_name)
         rings: list = []
         mining_signals: dict = {}
         id64, id64_error = client.fetch_system_id64(self._system_name)
@@ -129,7 +129,7 @@ class _SystemDetailWorker(QObject):
                 log.warning("Spansh ring fetch failed for %s: %s", self._system_name, rings_error)
         elif id64_error:
             log.warning("Spansh id64 lookup failed for %s: %s", self._system_name, id64_error)
-        self.finished.emit(bodies, error, rings, mining_signals)
+        self.finished.emit(bodies, error, rings, mining_signals, system_info)
 
 
 class _ColonisationDetailDialog(QDialog):
@@ -297,6 +297,12 @@ class _SystemDetailDialog(QDialog):
         self._status_label.setStyleSheet("color:#9aa4b0; background:transparent; border:none;")
         layout.addWidget(self._status_label)
 
+        self._claim_label = QLabel("")
+        self._claim_label.setWordWrap(True)
+        self._claim_label.setStyleSheet("color:#FF6B6B; font-weight:bold; background:transparent; border:none;")
+        self._claim_label.setVisible(False)
+        layout.addWidget(self._claim_label)
+
         self._economy_summary_label = QLabel("")
         self._economy_summary_label.setWordWrap(True)
         self._economy_summary_label.setStyleSheet("color:#7CFC98; font-weight:bold; background:transparent; border:none;")
@@ -348,8 +354,12 @@ class _SystemDetailDialog(QDialog):
         self._worker.finished.connect(self._thread.quit)
         self._thread.start()
 
-    def _on_loaded(self, bodies: list, error: str, rings: list, mining_signals: dict) -> None:
+    def _on_loaded(self, bodies: list, error: str, rings: list, mining_signals: dict, system_info: dict) -> None:
         self._render_rings(rings)
+        if system_info.get("is_being_colonised") or system_info.get("is_colonised"):
+            state = "already colonised" if system_info.get("is_colonised") else "already being colonised"
+            self._claim_label.setText(f"⚠ Spansh reports this system is {state} by someone.")
+            self._claim_label.setVisible(True)
         if error:
             self._status_label.setText(f"Lookup failed — {error}")
             return
@@ -435,7 +445,10 @@ class _SystemDetailDialog(QDialog):
             ring_name = escape(str(r.get("ring_name") or "—"))
             ring_type = escape(str(r.get("ring_type") or "—"))
             parent_body = escape(str(r.get("parent_body") or "—"))
+            reserve_level = escape(str(r.get("reserve_level") or ""))
             line = f"<b>{ring_name}</b> ({ring_type}) — {parent_body}"
+            if reserve_level:
+                line += f" — {reserve_level} reserves"
             if sig_txt:
                 line += f" — hotspots: {sig_txt}"
             lines.append(line)

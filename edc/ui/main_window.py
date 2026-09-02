@@ -130,7 +130,7 @@ class _SpanshEnrichWorker(QObject):
         self._system_address = system_address
 
     def run(self):
-        bodies, error = _SpanshClient().fetch_system_bodies(self._system_name, self._system_address)
+        bodies, error, _system_info = _SpanshClient().fetch_system_bodies(self._system_name, self._system_address)
         self.finished.emit(bodies, error, self._system_address)
 
 

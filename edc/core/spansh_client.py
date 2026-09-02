@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
@@ -259,13 +259,21 @@ class SpanshClient:
         id64 = results[0].get("id64")
         return (id64 if isinstance(id64, int) else None), ""
 
-    def fetch_system_bodies(self, system_name: str, system_address: int | None = None) -> Tuple[List[dict], str]:
+    def fetch_system_bodies(self, system_name: str, system_address: int | None = None) -> Tuple[List[dict], str, Dict[str, Any]]:
         """
-        Returns (body_list, error).  Each body dict has:
+        Returns (body_list, error, system_info).  Each body dict has:
           name, planet_class, distance_ls, estimated_value, landable (int|None),
           plus physical stats and was_mapped/updated_at (Spansh's own last-visit
           signal, used to estimate footfall likelihood before a personal scan).
         Uses id64 filter when system_address is provided (exact match); falls back to name search.
+
+        system_info carries whatever Spansh knows about the system itself
+        (not any one body) -- is_being_colonised/is_colonised (whether
+        someone's already claimed it, the main thing a colonisation
+        candidate finder needs to flag), controlling_minor_faction,
+        population, security, allegiance, government, primary_economy,
+        secondary_economy. Empty dict if the system lookup itself failed.
+        Confirmed live against Spansh's real systems/search response.
         """
         if isinstance(system_address, int):
             body = {
@@ -297,15 +305,27 @@ class SpanshClient:
             data = resp.json()
         except requests.RequestException as exc:
             log.error("Spansh body fetch failed: %s", exc)
-            return [], str(exc)
+            return [], str(exc), {}
         except ValueError:
-            return [], "Invalid response from Spansh"
+            return [], "Invalid response from Spansh", {}
 
         results = data.get("results") or []
         if not results:
-            return [], f"System not found on Spansh: {system_name!r}"
+            return [], f"System not found on Spansh: {system_name!r}", {}
 
         sys_data = results[0]
+
+        system_info = {
+            "is_being_colonised":       bool(sys_data.get("is_being_colonised")),
+            "is_colonised":             bool(sys_data.get("is_colonised")),
+            "controlling_minor_faction": sys_data.get("controlling_minor_faction") or "",
+            "population":               sys_data.get("population"),
+            "security":                 sys_data.get("security") or "",
+            "allegiance":               sys_data.get("allegiance") or "",
+            "government":               sys_data.get("government") or "",
+            "primary_economy":          sys_data.get("primary_economy") or "",
+            "secondary_economy":        sys_data.get("secondary_economy") or "",
+        }
 
         raw_bodies = sys_data.get("bodies") or []
 
@@ -368,7 +388,7 @@ class SpanshClient:
                 "updated_at":         updated_at,
             })
 
-        return out, ""
+        return out, "", system_info
 
     def search_mining_rings(
         self,
@@ -467,7 +487,12 @@ class SpanshClient:
         genuine "nobody has DSS'd this and had it reach Spansh via EDDN" gap,
         distinct from this commander simply not having scanned it personally).
 
-        Each entry: {"ring_name", "parent_body", "ring_type", "signals": [{"name","count"}, ...]}.
+        Each entry: {"ring_name", "parent_body", "ring_type", "reserve_level",
+        "signals": [{"name","count"}, ...]}. reserve_level (Pristine/Major/
+        Common/Low/Depleted, or "" if unknown) is read from the ring's
+        parent body record -- confirmed live: it's a sibling of "rings" on
+        the body, not a per-ring field (same source search_mining_rings()
+        already reads it from).
 
         Also returns body_mining_signals: body_name -> Planetary Mining
         Location signal count (Surface Mining, Update 4.4), read from the
@@ -498,6 +523,7 @@ class SpanshClient:
             if not isinstance(rec, dict):
                 continue
             body_name = str(rec.get("name") or "")
+            reserve_level = str(rec.get("reserve_level") or "")
             for sig in (rec.get("signals") or []):
                 if not isinstance(sig, dict):
                     continue
@@ -512,9 +538,10 @@ class SpanshClient:
                     if isinstance(sig, dict) and sig.get("name"):
                         signals.append({"name": str(sig.get("name")), "count": int(sig.get("count") or 0)})
                 out.append({
-                    "ring_name":   str(ring.get("name") or ""),
-                    "parent_body": str(rec.get("name") or ""),
-                    "ring_type":   str(ring.get("type") or ""),
+                    "ring_name":     str(ring.get("name") or ""),
+                    "parent_body":   str(rec.get("name") or ""),
+                    "ring_type":     str(ring.get("type") or ""),
+                    "reserve_level": reserve_level,
                     "signals":     signals,
                 })
         return out, "", body_mining_signals

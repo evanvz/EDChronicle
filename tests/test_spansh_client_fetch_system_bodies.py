@@ -38,7 +38,7 @@ def test_name_only_lookup_sends_bare_name_filter_no_sort():
         return _FakeResponse(_sample_response())
 
     with patch("edc.core.spansh_client.requests.post", side_effect=_fake_post):
-        bodies, error = SpanshClient().fetch_system_bodies("Test System")
+        bodies, error, system_info = SpanshClient().fetch_system_bodies("Test System")
 
     assert error == ""
     assert len(bodies) == 1
@@ -54,11 +54,51 @@ def test_id64_lookup_keeps_comparison_and_sort():
         return _FakeResponse(_sample_response())
 
     with patch("edc.core.spansh_client.requests.post", side_effect=_fake_post):
-        bodies, error = SpanshClient().fetch_system_bodies("Test System", 12345)
+        bodies, error, system_info = SpanshClient().fetch_system_bodies("Test System", 12345)
 
     assert error == ""
     assert captured["filters"] == {"id64": {"value": 12345, "comparison": "="}}
     assert captured["sort"] == [{"distance": {"direction": "asc"}}]
+
+
+def test_system_info_extracted_from_sys_data():
+    data = {
+        "results": [{
+            "is_being_colonised": True,
+            "is_colonised": False,
+            "controlling_minor_faction": "Some Faction",
+            "population": 12345,
+            "security": "Low",
+            "allegiance": "Independent",
+            "government": "Democracy",
+            "primary_economy": "Extraction",
+            "secondary_economy": "Refinery",
+            "bodies": [],
+        }],
+    }
+    with patch("edc.core.spansh_client.requests.post", return_value=_FakeResponse(data)):
+        bodies, error, system_info = SpanshClient().fetch_system_bodies("Test System")
+
+    assert system_info == {
+        "is_being_colonised": True,
+        "is_colonised": False,
+        "controlling_minor_faction": "Some Faction",
+        "population": 12345,
+        "security": "Low",
+        "allegiance": "Independent",
+        "government": "Democracy",
+        "primary_economy": "Extraction",
+        "secondary_economy": "Refinery",
+    }
+
+
+def test_system_not_found_returns_empty_system_info():
+    with patch("edc.core.spansh_client.requests.post", return_value=_FakeResponse({"results": []})):
+        bodies, error, system_info = SpanshClient().fetch_system_bodies("Nowhere System")
+
+    assert bodies == []
+    assert error != ""
+    assert system_info == {}
 
 
 def test_fetch_system_id64_resolves_and_uses_bare_name_filter():
