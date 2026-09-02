@@ -371,13 +371,14 @@ class _EddnFlushWorker(QObject):
     """
     finished = pyqtSignal()
 
-    def __init__(self, db_path, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites):
+    def __init__(self, db_path, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, mining_signals=()):
         super().__init__()
         self._db_path = db_path
         self._coords, self._market, self._factions = coords, market, factions
         self._stations, self._codex, self._fcmaterials = stations, codex, fcmaterials
         self._carrier_access = carrier_access
         self._bgs_status, self._res_sites = bgs_status, res_sites
+        self._mining_signals = mining_signals
 
     def run(self):
         from persistence.database import Database
@@ -389,7 +390,7 @@ class _EddnFlushWorker(QObject):
             write_buffers(
                 repo, self._coords, self._market, self._factions, self._stations,
                 self._codex, self._fcmaterials, self._carrier_access,
-                self._bgs_status, self._res_sites,
+                self._bgs_status, self._res_sites, self._mining_signals,
             )
         except Exception:
             log.exception("Background EDDN flush failed")
@@ -2185,6 +2186,7 @@ class MainWindow(QMainWindow):
         self._eddn_worker.fcmaterials_seen.connect(self.eddn_market_cache.on_fcmaterials_message)
         self._eddn_worker.bgs_status_seen.connect(self.eddn_market_cache.on_bgs_status_seen)
         self._eddn_worker.res_signal_seen.connect(self.eddn_market_cache.on_res_signal_seen)
+        self._eddn_worker.body_mining_signal_seen.connect(self.eddn_market_cache.on_body_mining_signal_seen)
         self._eddn_thread.start()
         self._eddn_save_timer.start()
         self._market_flush_timer.start()
@@ -4847,13 +4849,13 @@ class MainWindow(QMainWindow):
         """
         if self._flush_thread and self._flush_thread.isRunning():
             return  # previous flush still running — next tick will catch up
-        coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites = self.eddn_market_cache.pop_buffers()
-        if not (coords or market or factions or stations or codex or fcmaterials or carrier_access or bgs_status or res_sites):
+        coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, mining_signals = self.eddn_market_cache.pop_buffers()
+        if not (coords or market or factions or stations or codex or fcmaterials or carrier_access or bgs_status or res_sites or mining_signals):
             return
 
         self._flush_worker = _EddnFlushWorker(
             self.repo.db.db_path, coords, market, factions, stations, codex, fcmaterials, carrier_access,
-            bgs_status, res_sites,
+            bgs_status, res_sites, mining_signals,
         )
         self._flush_thread = QThread()
         self._flush_worker.moveToThread(self._flush_thread)

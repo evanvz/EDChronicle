@@ -253,6 +253,11 @@ class Database:
             "ALTER TABLE net.spansh_bodies ADD COLUMN tidal_lock INTEGER",
             "ALTER TABLE net.spansh_bodies ADD COLUMN was_mapped INTEGER",
             "ALTER TABLE net.spansh_bodies ADD COLUMN updated_at TEXT",
+            # Surface Mining (Update 4.4): crowd-sourced Planetary Mining
+            # Location signal count for bodies from other commanders' EDDN
+            # fssbodysignals uploads -- not a personal DB column, so no
+            # _REQUIRED_SCHEMA_VERSION bump needed (net.* is disposable cache).
+            "ALTER TABLE net.spansh_bodies ADD COLUMN surface_mining_signals INTEGER",
             "ALTER TABLE net.station_info ADD COLUMN station_services TEXT",
             "ALTER TABLE net.station_info ADD COLUMN station_faction TEXT",
             "ALTER TABLE net.station_info ADD COLUMN carrier_docking_access TEXT",

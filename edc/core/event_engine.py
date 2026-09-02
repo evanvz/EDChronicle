@@ -432,6 +432,7 @@ class EventEngine:
                 self.state.geo_signals.clear()
                 self.state.thargoid_signals.clear()
                 self.state.other_signals.clear()
+                self.state.surface_mining_signals.clear()
                 self.state.non_body_count = None
                 self.state.system_signals = []
                 self.state.external_pois = []
@@ -638,6 +639,7 @@ class EventEngine:
                 self.state.human_signals.clear()
                 self.state.bio_genuses.clear()
                 self.state.geo_signals.clear()
+                self.state.surface_mining_signals.clear()
                 self.state.non_body_count = None
                 self.state.system_signals = []
                 self.state.external_pois = []

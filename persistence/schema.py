@@ -118,6 +118,7 @@ CREATE TABLE IF NOT EXISTS net.spansh_bodies (
     distance_ls     REAL,
     estimated_value INTEGER,
     landable        INTEGER,
+    surface_mining_signals INTEGER,
     PRIMARY KEY (system_address, body_name)
 );
 

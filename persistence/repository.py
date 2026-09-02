@@ -2642,13 +2642,31 @@ class Repository:
             """
             SELECT body_name, planet_class, distance_ls, estimated_value, landable,
                    surface_gravity, radius, mass_em, surface_temperature, surface_pressure,
-                   atmosphere_type, volcanism, tidal_lock, was_mapped, updated_at
+                   atmosphere_type, volcanism, tidal_lock, was_mapped, updated_at,
+                   surface_mining_signals
             FROM net.spansh_bodies
             WHERE system_address = ?
             ORDER BY distance_ls IS NULL, distance_ls, body_name
             """,
             (system_address,),
         ).fetchall()
+
+    def save_body_mining_signal(self, system_address: int, body_name: str, mining_signals: int) -> None:
+        """Upserts just the crowd-sourced surface_mining_signals column --
+        unlike save_spansh_body() (which always overwrites planet_class/
+        distance_ls/estimated_value/landable even when the caller doesn't
+        have them), this only ever touches this one column so an EDDN
+        fssbodysignals sighting can never clobber a fuller Spansh row for
+        the same body. Inserts a minimal row if none exists yet."""
+        self.db.execute(
+            """
+            INSERT INTO net.spansh_bodies (system_address, body_name, surface_mining_signals)
+            VALUES (?, ?, ?)
+            ON CONFLICT(system_address, body_name) DO UPDATE SET
+                surface_mining_signals = excluded.surface_mining_signals
+            """,
+            (system_address, body_name, mining_signals),
+        )
 
     def count_spansh_bodies(self, system_address: int) -> int:
         row = self.db.execute(

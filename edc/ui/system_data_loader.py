@@ -91,6 +91,14 @@ class SystemDataLoader:
                             if rec_key == "TidalLock":
                                 val = bool(val)
                             existing[rec_key] = val
+                    # Crowd-sourced surface mining signal (EDDN/Spansh) —
+                    # only fills a gap, never overwrites a personal live/
+                    # historical count already known for this body.
+                    if not self.state.surface_mining_signals.get(body_name):
+                        mining = row["surface_mining_signals"] if "surface_mining_signals" in row.keys() else None
+                        if isinstance(mining, int):
+                            self.state.surface_mining_signals[body_name] = mining
+                            existing["SurfaceMiningSignals"] = mining
                     continue
                 # Spansh's own was_mapped is a real (if global/community,
                 # not necessarily "you personally") signal that this body
@@ -144,6 +152,10 @@ class SystemDataLoader:
                     "AtmosphereType":     row["atmosphere_type"]     if "atmosphere_type"     in row.keys() else None,
                     "TidalLock":          bool(row["tidal_lock"])    if row["tidal_lock"] is not None else None,
                 }
+                mining = row["surface_mining_signals"] if "surface_mining_signals" in row.keys() else None
+                if isinstance(mining, int):
+                    self.state.surface_mining_signals[body_name] = mining
+                    self.state.bodies[body_name]["SurfaceMiningSignals"] = mining
         except Exception:
             logger.exception("Failed loading Spansh fallback bodies for %d", system_address)
 
@@ -170,6 +182,7 @@ class SystemDataLoader:
         self.state.bio_signals.clear()
         self.state.geo_signals.clear()
         self.state.human_signals.clear()
+        self.state.surface_mining_signals.clear()
         self.state.exo.clear()
 
         for row in self.repo.get_bodies(system_address):

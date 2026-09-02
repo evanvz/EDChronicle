@@ -46,6 +46,7 @@ _STALE_CONNECTION_TIMEOUT_S = 300
 _MAX_DECOMPRESSED_BYTES = 10 * 1024 * 1024
 
 _FSSSIGNALS_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/fsssignaldiscovered/"
+_FSSBODYSIGNALS_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/fssbodysignals/"
 
 
 def _extract_bgs_status(msg: dict) -> tuple[list, list]:
@@ -125,6 +126,10 @@ class EddnPowerPlayWorker(QObject):
     # id64, StarSystem, RES tiers present (list), timestamp. Feeds
     # system_res_sites.
     res_signal_seen = pyqtSignal(object, str, list, str)
+    # id64, BodyName, Planetary Mining Location signal count. Feeds
+    # spansh_bodies.surface_mining_signals for bodies other commanders have
+    # already found but this commander hasn't personally scanned.
+    body_mining_signal_seen = pyqtSignal(object, str, int)
     finished = pyqtSignal()
 
     def __init__(self, watched_factions=None):
@@ -144,6 +149,7 @@ class EddnPowerPlayWorker(QObject):
             "journal": 0,
             "fcmaterials": 0,
             "fsssignaldiscovered": 0,
+            "fssbodysignals": 0,
             "other": 0,
             "invalid": 0,
         }
@@ -230,6 +236,13 @@ class EddnPowerPlayWorker(QObject):
                 msg = data.get("message")
                 if isinstance(msg, dict):
                     self._maybe_emit_res_signal(msg)
+                continue
+
+            if schema.startswith(_FSSBODYSIGNALS_SCHEMA_PREFIX):
+                self._stats["fssbodysignals"] += 1
+                msg = data.get("message")
+                if isinstance(msg, dict):
+                    self._maybe_emit_body_mining_signal(msg)
                 continue
 
             if not schema.startswith(_JOURNAL_SCHEMA_PREFIX):
@@ -341,6 +354,25 @@ class EddnPowerPlayWorker(QObject):
         if not conflicts and not factions:
             return
         self.bgs_status_seen.emit(system_address, star_system, conflicts, factions, timestamp)
+
+    def _maybe_emit_body_mining_signal(self, msg: dict) -> None:
+        system_address = msg.get("SystemAddress")
+        body_name = msg.get("BodyName")
+        signals = msg.get("Signals")
+        if not (isinstance(system_address, int) and system_address > 0
+                and isinstance(body_name, str) and body_name
+                and isinstance(signals, list)):
+            return
+        for sig in signals:
+            if not isinstance(sig, dict):
+                continue
+            sig_type = str(sig.get("Type") or "").lower()
+            if "mining" not in sig_type:
+                continue
+            count = sig.get("Count")
+            if isinstance(count, int) and not isinstance(count, bool):
+                self.body_mining_signal_seen.emit(system_address, body_name, count)
+            return
 
     def _maybe_emit_res_signal(self, msg: dict) -> None:
         system_address = msg.get("SystemAddress")

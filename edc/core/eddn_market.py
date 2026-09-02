@@ -76,6 +76,10 @@ class EddnMarketCache:
         # Keyed by system_address -- RES tiers present, from any
         # commander's fsssignaldiscovered/1 message.
         self._res_sites_buffer: Dict[int, Tuple[str, list, str]] = {}
+        # Keyed by (system_address, body_name) -- Surface Mining's
+        # Planetary Mining Location signal count, from any commander's
+        # fssbodysignals/1 message (Update 4.4).
+        self._mining_signal_buffer: Dict[Tuple[int, str], int] = {}
 
     def on_coords_seen(self, system_name: str, x: float, y: float, z: float) -> None:
         if not system_name:
@@ -146,6 +150,11 @@ class EddnMarketCache:
         timestamp = _normalize_ts(timestamp)
         self._res_sites_buffer[system_address] = (system_name, tiers, timestamp)
 
+    def on_body_mining_signal_seen(self, system_address: int, body_name: str, mining_signals: int) -> None:
+        if not (isinstance(system_address, int) and isinstance(body_name, str) and body_name):
+            return
+        self._mining_signal_buffer[(system_address, body_name)] = mining_signals
+
     def on_fcmaterials_message(self, msg: Dict[str, Any]) -> None:
         market_id = msg.get("MarketID")
         if not isinstance(market_id, int):
@@ -184,6 +193,7 @@ class EddnMarketCache:
         carrier_access = list(self._carrier_access_buffer.values())
         bgs_status = list(self._bgs_status_buffer.items())
         res_sites = list(self._res_sites_buffer.items())
+        mining_signals = list(self._mining_signal_buffer.items())
         self._coord_buffer.clear()
         self._market_buffer.clear()
         self._faction_buffer.clear()
@@ -193,8 +203,9 @@ class EddnMarketCache:
         self._carrier_access_buffer.clear()
         self._bgs_status_buffer.clear()
         self._res_sites_buffer.clear()
+        self._mining_signal_buffer.clear()
         return (coords, market, factions, stations, codex, fcmaterials, carrier_access,
-                bgs_status, res_sites)
+                bgs_status, res_sites, mining_signals)
 
     def flush(self) -> None:
         """Synchronous flush on the caller's own thread/connection — only
@@ -206,11 +217,11 @@ class EddnMarketCache:
         the main thread every 45s, which froze the UI for however long a
         big buffered batch took to write (confirmed live, worse right
         after docking at a busy station's market)."""
-        coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites = self.pop_buffers()
-        write_buffers(self._repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites)
+        coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, mining_signals = self.pop_buffers()
+        write_buffers(self._repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, mining_signals)
 
 
-def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites) -> None:
+def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, mining_signals=()) -> None:
     """The actual writes — factored out so both the main-thread flush()
     (shutdown) and a background worker (periodic, see main_window.py) can
     use the identical logic against whichever Repository they're given."""
@@ -287,3 +298,10 @@ def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, 
                 repo.save_system_res_tiers(system_address, system_name, tiers, timestamp, "eddn")
             except Exception:
                 log.exception("Failed to flush RES sites for system_address=%s", system_address)
+
+    if mining_signals:
+        for (system_address, body_name), mining_count in mining_signals:
+            try:
+                repo.save_body_mining_signal(system_address, body_name, mining_count)
+            except Exception:
+                log.exception("Failed to flush mining signal for system_address=%s body=%s", system_address, body_name)
