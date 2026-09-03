@@ -42,6 +42,39 @@ def _normalize_ts(ts: Any) -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+# EDDN's journal/1 schema strips every "_Localised$" key from Factions[]
+# entries before publish (confirmed against the schema's patternProperties
+# rule) -- Happiness_Localised never survives onto the wire, only the raw
+# internal Happiness token does. Frontier's happiness bands are a fixed,
+# documented 5-value enum, so a static map (unlike open-ended economy/
+# government tokens) is a safe, complete decode rather than a guess.
+_HAPPINESS_BANDS = {
+    "$faction_happinessband1;": "Elated",
+    "$faction_happinessband2;": "Happy",
+    "$faction_happinessband3;": "Discontented",
+    "$faction_happinessband4;": "Unhappy",
+    "$faction_happinessband5;": "Despondent",
+}
+
+
+def _decode_happiness(faction: Dict[str, Any]) -> Dict[str, Any]:
+    """Returns faction with Happiness_Localised filled in from the raw
+    Happiness token when EDDN stripped it -- confirmed live: an
+    eddn-sourced faction_snapshots row stored the raw
+    "$Faction_HappinessBand3;" token verbatim instead of "Discontented"."""
+    if faction.get("Happiness_Localised"):
+        return faction
+    raw = faction.get("Happiness")
+    if not isinstance(raw, str):
+        return faction
+    label = _HAPPINESS_BANDS.get(raw.strip().lower())
+    if not label:
+        return faction
+    faction = dict(faction)
+    faction["Happiness_Localised"] = label
+    return faction
+
+
 class EddnMarketCache:
 
     def __init__(self, repo):
@@ -148,6 +181,7 @@ class EddnMarketCache:
         if not (isinstance(system_address, int) and system_name):
             return
         timestamp = _normalize_ts(timestamp)
+        faction = _decode_happiness(faction)
         self._faction_buffer[system_address] = (system_name, faction, is_controlling, timestamp)
 
     def on_bgs_status_seen(self, system_address: int, system_name: str, conflicts: list, factions: list, timestamp: str) -> None:

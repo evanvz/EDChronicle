@@ -168,6 +168,14 @@ def _bgs_action_core(sys_rec: Dict[str, Any]) -> Tuple[str, str]:
             )
         return ("⚔ War/Civil War active — combat kills for this faction help win it.", "#FF6B6B")
     if "election" in active:
+        # Same one-sided-claim risk as War/CivilWar (see above) -- a real
+        # Election always has a contesting candidate faction sharing the
+        # state.
+        if sys_rec.get("election_corroborated") is False:
+            return (
+                "⚠ Election reported for this faction — no contesting faction confirmed, may be stale EDSM data.",
+                "#FFB347",
+            )
         return ("🗳 Election in progress — trade/mission activity favors your faction's chances.", "#FFD93D")
     if "civilunrest" in active:
         return ("⚠ Civil Unrest — security/combat missions help stabilize.", "#FF8C00")
@@ -1229,7 +1237,7 @@ class PlayerFactionPanel(QWidget):
         # red row highlight; it's downgraded the same way the Action
         # column's message is.
         is_war = bool(active_lower & {"war", "civilwar"}) and s.get("war_corroborated") is not False
-        is_election = "election" in active_lower
+        is_election = "election" in active_lower and s.get("election_corroborated") is not False
         is_pirate_attack = "pirateattack" in active_lower
 
         pending_names = _parse_states(s.get("pending_states"))

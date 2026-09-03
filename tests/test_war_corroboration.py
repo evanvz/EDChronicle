@@ -107,3 +107,65 @@ def test_bgs_action_core_defaults_to_full_message_when_field_absent():
     sys_rec = {"faction_state": "War", "is_controlling": True}
     text, color = _bgs_action_core(sys_rec)
     assert text.startswith("⚔ War/Civil War active")
+
+
+# --- Election shares the same one-sided-claim risk as War/CivilWar ---
+
+def test_election_with_no_contestant_is_not_corroborated(tmp_path):
+    repo = _repo(tmp_path)
+    repo.save_faction_snapshot(
+        1, _faction("Elite United Worlds", influence=0.5, faction_state="Election", squadron=True),
+        "2026-09-03", True, "2026-08-30T15:20:00Z", "edsm",
+    )
+    repo.save_faction_snapshot(
+        1, _faction("Peaceful Faction", influence=0.2, faction_state="None"),
+        "2026-09-03", False, "2026-08-30T15:20:00Z", "edsm",
+    )
+
+    overview = repo.get_player_faction_overview()
+    sys_row = overview["systems"][0]
+    assert sys_row["election_corroborated"] is False
+
+
+def test_election_with_matching_contestant_is_corroborated(tmp_path):
+    repo = _repo(tmp_path)
+    repo.save_faction_snapshot(
+        1, _faction("Elite United Worlds", influence=0.5, faction_state="Election", squadron=True),
+        "2026-09-03", True, "2026-08-30T15:20:00Z", "edsm",
+    )
+    repo.save_faction_snapshot(
+        1, _faction("Rival Faction", influence=0.45, faction_state="Election"),
+        "2026-09-03", False, "2026-08-30T15:20:00Z", "edsm",
+    )
+
+    overview = repo.get_player_faction_overview()
+    sys_row = overview["systems"][0]
+    assert sys_row["election_corroborated"] is True
+
+
+def test_war_and_election_corroboration_are_independent(tmp_path):
+    # A War claim being uncorroborated must not affect Election's own
+    # (separately computed) corroboration, and vice versa.
+    repo = _repo(tmp_path)
+    repo.save_faction_snapshot(
+        1, _faction("Elite United Worlds", influence=0.5, faction_state="War", squadron=True),
+        "2026-09-03", True, "2026-08-30T15:20:00Z", "edsm",
+    )
+    overview = repo.get_player_faction_overview()
+    sys_row = overview["systems"][0]
+    assert sys_row["war_corroborated"] is False
+    assert sys_row["election_corroborated"] is None
+
+
+def test_bgs_action_core_downgrades_uncorroborated_election():
+    sys_rec = {"faction_state": "Election", "election_corroborated": False, "is_controlling": True}
+    text, color = _bgs_action_core(sys_rec)
+    assert "no contesting faction confirmed" in text
+    assert color == "#FFB347"
+
+
+def test_bgs_action_core_keeps_full_election_message_when_corroborated():
+    sys_rec = {"faction_state": "Election", "election_corroborated": True, "is_controlling": True}
+    text, color = _bgs_action_core(sys_rec)
+    assert text.startswith("🗳 Election in progress")
+    assert color == "#FFD93D"

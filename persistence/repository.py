@@ -92,15 +92,19 @@ def _parse_states(raw) -> List[str]:
     ]
 
 
-def _row_is_at_war(faction_state, active_states) -> bool:
+def _row_has_state(faction_state, active_states, state_names: set) -> bool:
     """True if a faction_snapshots row's own faction_state or active_states
-    shows War or CivilWar -- mirrors player_faction_panel.py's
-    _bgs_action_core() war check, duplicated as logic (not imported) for
-    the same layering reason as _parse_states() above."""
+    contains any of state_names -- mirrors player_faction_panel.py's
+    _bgs_action_core() state checks, duplicated as logic (not imported)
+    for the same layering reason as _parse_states() above."""
     states = {s.lower() for s in _parse_states(active_states)}
     if isinstance(faction_state, str) and faction_state.strip():
         states.add(faction_state.strip().lower())
-    return "war" in states or "civilwar" in states
+    return bool(states & state_names)
+
+
+def _row_is_at_war(faction_state, active_states) -> bool:
+    return _row_has_state(faction_state, active_states, {"war", "civilwar"})
 
 
 class Repository:
@@ -815,26 +819,32 @@ class Repository:
                 sys_dict["system_address"], faction_name, sys_dict.get("faction_state"),
                 sys_dict.get("active_states"), sys_dict.get("snapshot_date"),
             )
+            sys_dict["election_corroborated"] = self._election_corroborated(
+                sys_dict["system_address"], faction_name, sys_dict.get("faction_state"),
+                sys_dict.get("active_states"), sys_dict.get("snapshot_date"),
+            )
 
         return {
             "faction_name": faction_name,
             "systems": systems_out,
         }
 
-    def _war_corroborated(
-        self, system_address: int, faction_name: str, faction_state, active_states, snapshot_date,
+    def _two_sided_state_corroborated(
+        self, system_address: int, faction_name: str, faction_state, active_states,
+        snapshot_date, state_names: set,
     ) -> Optional[bool]:
-        """None if this faction isn't in a War/CivilWar state at all (not
+        """None if this faction isn't in one of state_names at all (not
         applicable). Otherwise True only if at least one OTHER faction in
-        the same system, on the same snapshot date, also shows a War/
-        CivilWar state -- a real BGS war always has two combatants sharing
-        it (see edsm_faction_lookup.py's derive_conflicts_from_factions_states,
-        which requires >=2 combatants for the same reason). False means a
-        one-sided claim -- confirmed live: EDSM can report a lone faction's
+        the same system, on the same snapshot date, also shows one of
+        state_names -- a real BGS War/CivilWar/Election always has two
+        combatants/candidates sharing it (see edsm_faction_lookup.py's
+        derive_conflicts_from_factions_states, which requires >=2
+        combatants for the same reason). False means a one-sided claim --
+        confirmed live for War: EDSM can report a lone faction's
         FactionState as "War" with a data_timestamp frozen for days and no
         opposing faction anywhere in the same snapshot, which is not how a
-        real two-sided BGS war looks."""
-        if not _row_is_at_war(faction_state, active_states):
+        real two-sided state looks."""
+        if not _row_has_state(faction_state, active_states, state_names):
             return None
         siblings = self.db.conn.execute(
             """
@@ -843,7 +853,23 @@ class Repository:
             """,
             (system_address, faction_name, snapshot_date),
         ).fetchall()
-        return any(_row_is_at_war(r["faction_state"], r["active_states"]) for r in siblings)
+        return any(
+            _row_has_state(r["faction_state"], r["active_states"], state_names) for r in siblings
+        )
+
+    def _war_corroborated(
+        self, system_address: int, faction_name: str, faction_state, active_states, snapshot_date,
+    ) -> Optional[bool]:
+        return self._two_sided_state_corroborated(
+            system_address, faction_name, faction_state, active_states, snapshot_date, {"war", "civilwar"},
+        )
+
+    def _election_corroborated(
+        self, system_address: int, faction_name: str, faction_state, active_states, snapshot_date,
+    ) -> Optional[bool]:
+        return self._two_sided_state_corroborated(
+            system_address, faction_name, faction_state, active_states, snapshot_date, {"election"},
+        )
 
     def get_player_faction_system_status(self, faction_name: str, system_address: int) -> Optional[dict]:
         """
@@ -876,6 +902,10 @@ class Repository:
             return None
         result = dict(row)
         result["war_corroborated"] = self._war_corroborated(
+            system_address, faction_name, result.get("faction_state"),
+            result.get("active_states"), result.get("snapshot_date"),
+        )
+        result["election_corroborated"] = self._election_corroborated(
             system_address, faction_name, result.get("faction_state"),
             result.get("active_states"), result.get("snapshot_date"),
         )
