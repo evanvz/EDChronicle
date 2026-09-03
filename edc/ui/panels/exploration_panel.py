@@ -477,7 +477,15 @@ class ExplorationPanel(QWidget):
             # exists on disk -- WasMapped is re-stamped on every later Scan
             # of an already-mapped body, so it's the more durable signal.
             dss_mapped = bool(rec.get("DSSMapped", False)) or was_mapped or bool(rec.get("BioGenuses"))
-            first      = rec.get("FirstDiscovered", False)
+            # None (not False) for a body we've never personally scanned or
+            # imported a discovery record for -- distinct from a real,
+            # known-negative "someone else discovered this" (confirmed via
+            # WasDiscovered on an actual Scan event). Collapsing both to
+            # False previously made every Spansh/EDDN-only candidate body
+            # silently claim "already discovered by someone else", which
+            # we simply don't know.
+            first      = rec.get("FirstDiscovered")
+            first_mapped = rec.get("FirstMapped")
             bio       = rec.get("BioSignals",      0) or 0
             geo       = rec.get("GeoSignals",      0) or 0
             human     = rec.get("HumanSignals",    0) or 0
@@ -486,7 +494,7 @@ class ExplorationPanel(QWidget):
             other_sig = rec.get("OtherSignals",    0) or 0
             mining    = rec.get("SurfaceMiningSignals",   0) or 0
             genuses   = rec.get("BioGenuses", []) or []
-            landable      = rec.get("Landable", False)
+            landable      = rec.get("Landable")
             volcanism     = rec.get("Volcanism") or ""
             materials     = rec.get("Materials") or {}
             first_footfall = bool(rec.get("FirstFootfall", False))
@@ -508,7 +516,7 @@ class ExplorationPanel(QWidget):
                 first, bio, geo, human, guardian, thargoid, other_sig,
                 genuses, landable, volcanism, materials, min_value,
                 first_footfall, has_footfall, was_footfalled,
-                mining,
+                mining, first_mapped,
             )
             existing = self._body_cards.get(body)
             if existing is not None and existing[1] == signature:
@@ -576,7 +584,7 @@ class ExplorationPanel(QWidget):
         first, bio, geo, human, guardian, thargoid, other_sig,
         genuses, landable, volcanism, materials, min_value,
         first_footfall=False, has_footfall=False, was_footfalled=False,
-        mining=0
+        mining=0, first_mapped=None
     ):
         esc = self._esc
 
@@ -642,14 +650,21 @@ class ExplorationPanel(QWidget):
 
         # Badges top right
         badges = []
-        if landable:
+        if landable is True:
             badges.append(self._badge("Landable", "#1a3a1a", "#6BCB77", bold=True))
+        elif landable is False:
+            badges.append(self._badge("Not Landable", "#1a1a1a", "#666666"))
         if tf:
             badges.append(self._badge("Terraformable", "#2a1a3a", "#C77DFF", bold=True))
-        if first:
+        if first is True:
             badges.append(self._badge("First Discovery", "#2a1a00", "#FFB347", bold=True))
+        elif first is False:
+            badges.append(self._badge("Discovered", "#1a1a1a", "#888888"))
         if dss_mapped:
-            badges.append(self._badge("DSS Mapped", "#1a2a3a", "#4D96FF"))
+            if first_mapped:
+                badges.append(self._badge("First DSS Mapped", "#0a1a3a", "#7CB8FF", bold=True))
+            else:
+                badges.append(self._badge("DSS Mapped", "#1a2a3a", "#4D96FF"))
         elif was_mapped:
             badges.append(self._badge("Prev Mapped", "#1a1a2a", "#888888"))
 
