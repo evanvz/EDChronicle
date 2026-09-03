@@ -17,7 +17,6 @@ log = logging.getLogger(__name__)
 
 _POI_URL = "https://us-central1-canonn-api-236217.cloudfunctions.net/query/getSystemPoi"
 _CHALLENGE_URL = "https://us-central1-canonn-api-236217.cloudfunctions.net/query/challenge/next"
-_COMPRES_URL = "https://us-central1-canonn-api-236217.cloudfunctions.net/query/get_compres"
 _TIMEOUT = 20
 
 
@@ -104,37 +103,3 @@ class CanonnClient:
             return {}, "Unexpected response shape"
 
         return data, ""
-
-    def get_compres(self, systems: List[str]) -> Tuple[Dict[str, List[str]], str]:
-        """Crowdsourced Resource Extraction Site [High]/[Hazardous] and
-        Compromised Nav Beacon presence per system name. Returns
-        ({system_name: [interesting, ...]}, error) -- error is "" on
-        success. Response confirmed live: a flat JSON array of
-        {"system": ..., "interesting": ...} pairs, one per known site."""
-        if not systems:
-            return {}, "No systems given"
-
-        params = {"systems": ",".join(systems)}
-        try:
-            resp = requests.get(_COMPRES_URL, params=params, timeout=_TIMEOUT)
-            resp.raise_for_status()
-            data = resp.json()
-        except requests.RequestException as exc:
-            log.error("Canonn get_compres failed: %s", exc)
-            return {}, str(exc)
-        except ValueError:
-            return {}, "Invalid response from Canonn"
-
-        if not isinstance(data, list):
-            return {}, "Unexpected response shape"
-
-        by_system: Dict[str, List[str]] = {}
-        for rec in data:
-            if not isinstance(rec, dict):
-                continue
-            system = rec.get("system")
-            interesting = rec.get("interesting")
-            if isinstance(system, str) and isinstance(interesting, str):
-                by_system.setdefault(system, []).append(interesting)
-
-        return by_system, ""
