@@ -116,6 +116,27 @@ def _parse_states(raw) -> List[str]:
     ]
 
 
+def _data_age_days(sys_rec: Dict[str, Any], today: Optional[date] = None) -> Optional[int]:
+    """Days since this row's real underlying data last changed, from
+    data_timestamp -- NOT snapshot_date, which is just the date WE last
+    wrote a row and gets re-stamped "today" on every poll even when the
+    source (EDSM in particular) hasn't actually refreshed. Confirmed
+    live: a system's data_timestamp frozen for 5+ days while snapshot_date
+    ticked forward daily, so a snapshot_date-based staleness check could
+    never fire regardless of true source age. Falls back to snapshot_date
+    only when data_timestamp is absent (e.g. a caller/test that never set
+    it), so older code paths don't silently break.
+    """
+    today = today or date.today()
+    raw = sys_rec.get("data_timestamp") or sys_rec.get("snapshot_date")
+    if not isinstance(raw, str) or not raw:
+        return None
+    try:
+        return (today - date.fromisoformat(raw[:10])).days
+    except ValueError:
+        return None
+
+
 # Always true regardless of a system's current state — a crisis-specific
 # remedy (e.g. Outbreak's medicine delivery) resolves that crisis mechanic,
 # it doesn't replace these as the actual Influence-moving activities.
@@ -1112,13 +1133,9 @@ class PlayerFactionPanel(QWidget):
                     buckets["retreat_risk"].append(s)
                     has_action = True
 
-            snapshot_date = s.get("snapshot_date")
-            if isinstance(snapshot_date, str):
-                try:
-                    if (today - date.fromisoformat(snapshot_date[:10])).days > 7:
-                        buckets["stale"].append(s)
-                except ValueError:
-                    pass
+            age_days = _data_age_days(s, today)
+            if age_days is not None and age_days > 7:
+                buckets["stale"].append(s)
 
             if not isinstance(s.get("influence"), (int, float)):
                 buckets["no_data"].append(s)
@@ -1799,8 +1816,10 @@ class PlayerFactionPanel(QWidget):
             self._csv_stale_flash_timer.start()
 
     def _update_data_freshness_label(self, systems: List[dict]) -> None:
-        """Per-system snapshot age breakdown — day-granularity only, since
-        that's all snapshot_date tracks (no exact BGS tick-time available)."""
+        """Per-system age breakdown from data_timestamp (the source's real
+        last-update time, not snapshot_date -- see _data_age_days()),
+        day-granularity only, since that's all data_timestamp's date
+        portion gives us here."""
         if not systems:
             self._data_freshness_label.setText("")
             return
@@ -1810,16 +1829,10 @@ class PlayerFactionPanel(QWidget):
         stale_count = 0   # 7+ days (matches the Stale Data bucket threshold)
         no_data_count = 0
         for s in systems:
-            snapshot_date = s.get("snapshot_date")
-            if not isinstance(snapshot_date, str):
+            age_days = _data_age_days(s, today)
+            if age_days is None:
                 no_data_count += 1
-                continue
-            try:
-                age_days = (today - date.fromisoformat(snapshot_date[:10])).days
-            except ValueError:
-                no_data_count += 1
-                continue
-            if age_days <= 0:
+            elif age_days <= 0:
                 today_count += 1
             elif age_days < 7:
                 recent_count += 1

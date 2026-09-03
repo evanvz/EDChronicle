@@ -790,7 +790,7 @@ class Repository:
             """
             SELECT fs.system_address, s.system_name, fs.influence, fs.faction_state,
                    fs.active_states, fs.pending_states, fs.recovering_states,
-                   fs.is_controlling, fs.my_reputation, fs.snapshot_date
+                   fs.is_controlling, fs.my_reputation, fs.snapshot_date, fs.data_timestamp
             FROM faction_snapshots fs
             LEFT JOIN systems s ON s.system_address = fs.system_address
             WHERE fs.faction_name = ?
@@ -856,7 +856,7 @@ class Repository:
             """
             SELECT fs.system_address, s.system_name, fs.influence, fs.faction_state,
                    fs.active_states, fs.pending_states, fs.recovering_states,
-                   fs.is_controlling, fs.my_reputation, fs.snapshot_date
+                   fs.is_controlling, fs.my_reputation, fs.snapshot_date, fs.data_timestamp
             FROM faction_snapshots fs
             LEFT JOIN systems s ON s.system_address = fs.system_address
             WHERE fs.faction_name = ? AND fs.system_address = ?
