@@ -809,10 +809,41 @@ class Repository:
             (faction_name,),
         ).fetchall()
 
+        systems_out = [dict(r) for r in systems]
+        for sys_dict in systems_out:
+            sys_dict["war_corroborated"] = self._war_corroborated(
+                sys_dict["system_address"], faction_name, sys_dict.get("faction_state"),
+                sys_dict.get("active_states"), sys_dict.get("snapshot_date"),
+            )
+
         return {
             "faction_name": faction_name,
-            "systems": [dict(r) for r in systems],
+            "systems": systems_out,
         }
+
+    def _war_corroborated(
+        self, system_address: int, faction_name: str, faction_state, active_states, snapshot_date,
+    ) -> Optional[bool]:
+        """None if this faction isn't in a War/CivilWar state at all (not
+        applicable). Otherwise True only if at least one OTHER faction in
+        the same system, on the same snapshot date, also shows a War/
+        CivilWar state -- a real BGS war always has two combatants sharing
+        it (see edsm_faction_lookup.py's derive_conflicts_from_factions_states,
+        which requires >=2 combatants for the same reason). False means a
+        one-sided claim -- confirmed live: EDSM can report a lone faction's
+        FactionState as "War" with a data_timestamp frozen for days and no
+        opposing faction anywhere in the same snapshot, which is not how a
+        real two-sided BGS war looks."""
+        if not _row_is_at_war(faction_state, active_states):
+            return None
+        siblings = self.db.conn.execute(
+            """
+            SELECT faction_state, active_states FROM faction_snapshots
+            WHERE system_address = ? AND faction_name != ? AND snapshot_date = ?
+            """,
+            (system_address, faction_name, snapshot_date),
+        ).fetchall()
+        return any(_row_is_at_war(r["faction_state"], r["active_states"]) for r in siblings)
 
     def get_player_faction_system_status(self, faction_name: str, system_address: int) -> Optional[dict]:
         """
@@ -841,7 +872,14 @@ class Repository:
             """,
             (faction_name, system_address),
         ).fetchone()
-        return dict(row) if row else None
+        if row is None:
+            return None
+        result = dict(row)
+        result["war_corroborated"] = self._war_corroborated(
+            system_address, faction_name, result.get("faction_state"),
+            result.get("active_states"), result.get("snapshot_date"),
+        )
+        return result
 
     def get_faction_predictions(self, faction_name: str) -> List[dict]:
         """

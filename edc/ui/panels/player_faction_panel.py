@@ -132,6 +132,19 @@ def _bgs_action_core(sys_rec: Dict[str, Any]) -> Tuple[str, str]:
     is_controlling = bool(sys_rec.get("is_controlling"))
 
     if "war" in active or "civilwar" in active:
+        # war_corroborated is None when this method's caller didn't attach
+        # it (defensive default: treat as corroborated, the old behavior)
+        # -- False means Repository._war_corroborated() checked and found
+        # no other faction in this system sharing a War/CivilWar state on
+        # the same snapshot date, which isn't how a real two-sided BGS war
+        # looks. Confirmed live: a lone faction can carry a "War" state
+        # EDSM simply hasn't refreshed in days, with nobody actually
+        # fighting it.
+        if sys_rec.get("war_corroborated") is False:
+            return (
+                "⚠ War reported for this faction — no opposing faction confirmed, may be stale EDSM data.",
+                "#FFB347",
+            )
         return ("⚔ War/Civil War active — combat kills for this faction help win it.", "#FF6B6B")
     if "election" in active:
         return ("🗳 Election in progress — trade/mission activity favors your faction's chances.", "#FFD93D")
@@ -1194,7 +1207,11 @@ class PlayerFactionPanel(QWidget):
         active_item = QTableWidgetItem(", ".join(active_names) if active_names else "—")
 
         active_lower = {n.lower() for n in active_names}
-        is_war = bool(active_lower & {"war", "civilwar"})
+        # A one-sided War/CivilWar claim (no opposing faction corroborates
+        # it -- see Repository._war_corroborated()) doesn't get the urgent
+        # red row highlight; it's downgraded the same way the Action
+        # column's message is.
+        is_war = bool(active_lower & {"war", "civilwar"}) and s.get("war_corroborated") is not False
         is_election = "election" in active_lower
         is_pirate_attack = "pirateattack" in active_lower
 
