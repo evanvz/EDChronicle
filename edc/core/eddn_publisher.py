@@ -109,6 +109,25 @@ def build_message(
                 for key in _FACTION_DISALLOWED:
                     f.pop(key, None)
 
+    # EDDN's Developers.md: "if the source data only has SystemAddress then
+    # you MUST check that it matches that from the prior Location, FSDJump
+    # or CarrierJump event before adding StarSystem and StarPos data... Drop
+    # the message entirely if it does not match. Apply similar logic if it
+    # is only the system's name that is already present." Our tracked
+    # star_system/star_pos/system_address (the caller's current-system
+    # state) are only valid to graft onto this event if the event's own
+    # identifiers, where present, actually agree -- a known journal-writing
+    # gap can otherwise leave our tracked state one system behind the event
+    # actually being processed.
+    existing_system_address = msg.get("SystemAddress")
+    if (isinstance(existing_system_address, int) and isinstance(system_address, int)
+            and existing_system_address != system_address):
+        return None
+    existing_star_system = msg.get("StarSystem")
+    if (isinstance(existing_star_system, str) and existing_star_system
+            and star_system and existing_star_system != star_system):
+        return None
+
     if not msg.get("StarSystem"):
         if not star_system:
             return None
@@ -373,8 +392,15 @@ class EddnPublisher:
 
     def __init__(self):
         self._commander: str = ""
-        self._horizons: bool = True
-        self._odyssey: bool = True
+        # None means "not yet known" -- per EDDN's Developers.md: "if you
+        # cannot determine a value do not include that key at all" (no
+        # `null`, and NOT even `false` as a placeholder). The only
+        # authoritative source for these is the journal's own LoadGame
+        # event; a hardcoded True default here would send a real but
+        # unverified claim before LoadGame has actually been observed
+        # this session.
+        self._horizons: Optional[bool] = None
+        self._odyssey: Optional[bool] = None
         self._gameversion: str = ""
         self._gamebuild: str = ""
         self._is_beta: bool = False
@@ -406,14 +432,17 @@ class EddnPublisher:
         if name.lower() == "fileheader":
             gv = event.get("gameversion")
             gb = event.get("build")
-            od = event.get("odyssey")
             if gv:
                 self._gameversion = gv
                 self._is_beta = "beta" in gv.lower()
             if gb:
                 self._gamebuild = gb
-            if isinstance(od, bool):
-                self._odyssey = od
+            # Fileheader's own "Odyssey" flag has different semantics from
+            # LoadGame's (it indicates a 4.0-vs-3.8 client, not whether the
+            # Odyssey expansion is actually owned/active -- confirmed by
+            # EDDN's own docs table: a Horizons-4.0 client with no Odyssey
+            # shows Fileheader Odyssey:true but LoadGame Odyssey:false).
+            # Not used here; LoadGame below is the only correct source.
             return
 
         if name == "Commander":
@@ -439,6 +468,14 @@ class EddnPublisher:
                 self._is_beta = "beta" in gv.lower()
             if gb:
                 self._gamebuild = gb
+
+    def _apply_horizons_odyssey(self, msg: Dict[str, Any]) -> None:
+        """Sets horizons/odyssey on msg only once actually known -- per
+        EDDN's Developers.md, omit the key entirely rather than guess."""
+        if self._horizons is not None:
+            msg["horizons"] = self._horizons
+        if self._odyssey is not None:
+            msg["odyssey"] = self._odyssey
 
     def maybe_publish(
         self,
@@ -488,8 +525,7 @@ class EddnPublisher:
         if msg is None:
             return
 
-        msg["horizons"] = self._horizons
-        msg["odyssey"] = self._odyssey
+        self._apply_horizons_odyssey(msg)
 
         payload = {
             "$schemaRef": _FSSBODYSIGNALS_SCHEMA_REF,
@@ -517,8 +553,7 @@ class EddnPublisher:
         if msg is None:
             return
 
-        msg["horizons"] = self._horizons
-        msg["odyssey"] = self._odyssey
+        self._apply_horizons_odyssey(msg)
 
         payload = {
             "$schemaRef": _COMMODITY_SCHEMA_REF,
@@ -546,8 +581,7 @@ class EddnPublisher:
         if msg is None:
             return
 
-        msg["horizons"] = self._horizons
-        msg["odyssey"] = self._odyssey
+        self._apply_horizons_odyssey(msg)
 
         payload = {
             "$schemaRef": _FCMATERIALS_SCHEMA_REF,
