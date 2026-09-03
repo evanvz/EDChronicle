@@ -1,7 +1,5 @@
 import logging
 
-from edc.core.footfall_predictor import predict_footfall
-
 logger = logging.getLogger(__name__)
 
 
@@ -132,11 +130,6 @@ class SystemDataLoader:
                     except Exception:
                         estimated_value = None
 
-                footfall_score, footfall_label = predict_footfall(
-                    row["updated_at"] if "updated_at" in row.keys() else None,
-                    row["was_mapped"] if "was_mapped" in row.keys() else None,
-                )
-
                 self.state.bodies[body_name] = {
                     "BodyID":        None,
                     "BodyName":      body_name,
@@ -151,8 +144,6 @@ class SystemDataLoader:
                     "Materials":     {},
                     "FirstFootfall": False,
                     "HasFootfall":   False,
-                    "FootfallEstimateScore": footfall_score,
-                    "FootfallEstimateLabel": footfall_label,
                     "SurfaceGravity":     row["surface_gravity"]     if "surface_gravity"     in row.keys() else None,
                     "Radius":             row["radius"]              if "radius"              in row.keys() else None,
                     "MassEM":             row["mass_em"]             if "mass_em"             in row.keys() else None,

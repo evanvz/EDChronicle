@@ -492,10 +492,6 @@ class ExplorationPanel(QWidget):
             first_footfall = bool(rec.get("FirstFootfall", False))
             has_footfall   = bool(rec.get("HasFootfall", False))
             was_footfalled = bool(rec.get("WasFootfalled", False))
-            footfall_estimate = (
-                (rec.get("FootfallEstimateScore"), rec.get("FootfallEstimateLabel"))
-                if rec.get("FootfallEstimateScore") is not None else None
-            )
 
             if isinstance(bio, int) and bio > 0:
                 bio_bodies += 1
@@ -511,7 +507,7 @@ class ExplorationPanel(QWidget):
                 body, pc_disp, dist, est, tf, was_mapped, dss_mapped,
                 first, bio, geo, human, guardian, thargoid, other_sig,
                 genuses, landable, volcanism, materials, min_value,
-                first_footfall, has_footfall, was_footfalled, footfall_estimate,
+                first_footfall, has_footfall, was_footfalled,
                 mining,
             )
             existing = self._body_cards.get(body)
@@ -580,7 +576,7 @@ class ExplorationPanel(QWidget):
         first, bio, geo, human, guardian, thargoid, other_sig,
         genuses, landable, volcanism, materials, min_value,
         first_footfall=False, has_footfall=False, was_footfalled=False,
-        footfall_estimate=None, mining=0
+        mining=0
     ):
         esc = self._esc
 
@@ -663,15 +659,6 @@ class ExplorationPanel(QWidget):
             badges.append(self._badge("Footfall", "#1a1a1a", "#AAAAAA"))
         elif was_footfalled:
             badges.append(self._badge("Already Footfalled", "#0a2a2a", "#5FB3B3"))
-        elif footfall_estimate and landable:
-            # Pre-visit estimate only (Spansh's own last-update/was_mapped
-            # signal, see footfall_predictor.py) -- shown only when no real
-            # journal-confirmed footfall status exists yet for this body,
-            # and only for a landable body -- First Footfall only exists
-            # for bodies you can actually set foot on, so the estimate is
-            # meaningless (and was previously shown) for stars/gas giants.
-            est_score, est_label = footfall_estimate
-            badges.append(self._badge(f"≈{est_score}% unclaimed?", "#1a1500", "#C9A227"))
 
         if badges:
             badge_lbl = QLabel(" ".join(badges))
