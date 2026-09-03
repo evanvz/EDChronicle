@@ -332,7 +332,7 @@ class Database:
         self._apply_version_migrations()
 
     # Bump this constant whenever a migration requires journals to be re-imported.
-    _REQUIRED_SCHEMA_VERSION = 9
+    _REQUIRED_SCHEMA_VERSION = 10
 
     def _apply_version_migrations(self):
         self.conn.execute(
@@ -356,6 +356,13 @@ class Database:
             #     Location/FSDJump events, which it never did before.
             # v9: body_signals.surface_mining_signals was added (Surface
             #     Mining, Update 4.4).
+            # v10: save_body() previously overwrote planet_class/landable/
+            #      distance_ls/estimated_value unconditionally, even on a
+            #      SAASignalsFound-only call with no cached body data --
+            #      confirmed live, nulled out a real planet_class/landable
+            #      from an older Scan whose journal file had since rotated
+            #      off disk. Now COALESCEd; re-import repairs already-
+            #      nulled rows.
             # Re-import all journals to backfill.
             self.conn.execute("DELETE FROM processed_journals")
             if current == 0:

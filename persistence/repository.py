@@ -189,13 +189,13 @@ class Repository:
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(system_address, body_id) DO UPDATE SET
                 body_name               = excluded.body_name,
-                planet_class            = excluded.planet_class,
+                planet_class            = COALESCE(excluded.planet_class, bodies.planet_class),
                 terraformable           = excluded.terraformable,
-                landable                = excluded.landable,
+                landable                = COALESCE(excluded.landable, bodies.landable),
                 was_mapped              = excluded.was_mapped,
                 dss_mapped              = excluded.dss_mapped,
-                estimated_value         = excluded.estimated_value,
-                distance_ls             = excluded.distance_ls,
+                estimated_value         = COALESCE(excluded.estimated_value, bodies.estimated_value),
+                distance_ls             = COALESCE(excluded.distance_ls, bodies.distance_ls),
                 volcanism               = COALESCE(excluded.volcanism, bodies.volcanism),
                 materials               = COALESCE(excluded.materials, bodies.materials),
                 mass_em                 = COALESCE(excluded.mass_em, bodies.mass_em),

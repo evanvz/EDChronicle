@@ -652,8 +652,6 @@ class ExplorationPanel(QWidget):
         badges = []
         if landable is True:
             badges.append(self._badge("Landable", "#1a3a1a", "#6BCB77", bold=True))
-        elif landable is False:
-            badges.append(self._badge("Not Landable", "#1a1a1a", "#666666"))
         if tf:
             badges.append(self._badge("Terraformable", "#2a1a3a", "#C77DFF", bold=True))
         if first is True:
