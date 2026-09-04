@@ -550,7 +550,37 @@ class EventEngine:
             if isinstance(new_system_address, int):
                 self.state.system_address = new_system_address
             if system_changed:
+                # Per-system data now clears on confirmed arrival, not on
+                # StartJump (engaging the FSD) -- a cancelled/interrupted
+                # jump previously wiped everything for a system you never
+                # actually left, since nothing ever re-populated it.
+                # system_allegiance/government/economy/security/population/
+                # factions/system_conflicts and the PowerPlay fields aren't
+                # cleared here -- they're unconditionally overwritten with
+                # real values from this same event a few lines below, so
+                # clearing first would just be a redundant no-op write.
                 self.state.resolved_body_ids.clear()
+                self.state.bodies.clear()
+                self.state.exo.clear()
+                self.state.body_id_to_name.clear()
+                self.state.bio_signals.clear()
+                self.state.human_signals.clear()
+                self.state.bio_genuses.clear()
+                self.state.geo_signals.clear()
+                self.state.thargoid_signals.clear()
+                self.state.other_signals.clear()
+                self.state.surface_mining_signals.clear()
+                self.state.non_body_count = None
+                self.state.system_signals = []
+                self.state.external_pois = []
+                self.state.system_body_count = None
+                self.state.fss_complete = False
+                try:
+                    self.state.pp_enemy_alerts.clear()
+                except Exception:
+                    self.state.pp_enemy_alerts = []
+                self.state.combat_contacts.clear()
+                self.state.combat_current_key = ""
             entry_body_id = event.get("BodyID")
             if isinstance(entry_body_id, int):
                 self.state.resolved_body_ids.add(entry_body_id)
@@ -625,63 +655,28 @@ class EventEngine:
             )
 
         elif name == "StartJump":
-            # Clear live per-system state as soon as hyperspace starts and show destination.
+            # Preview the destination while in transit -- deliberately NOT a
+            # data clear. Per-system state (bodies, signals, economy,
+            # combat contacts, ...) now only clears on confirmed arrival
+            # (FSDJump/Location, gated on the system actually changing) --
+            # standardized so a cancelled/interrupted jump (interdiction,
+            # mass lock, taking damage during the charge-up, manually
+            # aborting) never loses real data for a system you never
+            # actually left. Previously cleared here unconditionally on
+            # every StartJump, before it was known whether the jump would
+            # even complete.
             if event.get("JumpType") == "Hyperspace":
                 target = event.get("StarSystem")
                 star_class = event.get("StarClass")
 
-                # Clear per-system exploration / scan state
-                self.state.bodies.clear()
-                self.state.exo.clear()
-                self.state.body_id_to_name.clear()
-                self.state.resolved_body_ids.clear()
-                self.state.bio_signals.clear()
-                self.state.human_signals.clear()
-                self.state.bio_genuses.clear()
-                self.state.geo_signals.clear()
-                self.state.surface_mining_signals.clear()
-                self.state.non_body_count = None
-                self.state.system_signals = []
-                self.state.external_pois = []
-                self.state.system_body_count = None
-                self.state.fss_complete = False
-
-                # Clear per-system info
-                self.state.system_allegiance = None
-                self.state.system_government = None
-                self.state.system_economy = None
-                self.state.system_economy_secondary = None
-                self.state.system_state = None
-                self.state.system_security = None
-                self.state.population = None
-                self.state.controlling_faction = None
-                self.state.factions = []
-                self.state.system_conflicts = []
-
-                # Clear per-system PowerPlay info
-                self.state.system_controlling_power = None
-                self.state.system_powerplay_state = None
-                self.state.system_powers = []
-                self.state.system_powerplay_conflict_progress = {}
-                self.state.system_powerplay_control_progress = None
-                self.state.system_powerplay_reinforcement = None
-                self.state.system_powerplay_undermining = None
-
-                # Clear per-system combat / alerts
-                try:
-                    self.state.pp_enemy_alerts.clear()
-                except Exception:
-                    self.state.pp_enemy_alerts = []
-                self.state.combat_contacts.clear()
-                self.state.combat_current_key = ""
-
-                # Enter hyperspace transitional state
                 self.state.system = target or self.state.system
                 self.state.in_hyperspace = True
                 self.state.jump_star_class = star_class
                 self._apply_external_intel(self.state.system, None)
 
-                # Force UI refresh so old system info disappears immediately
+                # Refresh the PowerPlay panel so it picks up the destination
+                # name/in_hyperspace preview above -- underlying data is
+                # untouched, so this just re-renders what's still there.
                 msgs.append("refresh_powerplay")
 
                 if target:

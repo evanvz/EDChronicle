@@ -2827,9 +2827,14 @@ class MainWindow(QMainWindow):
                 # row needs checking, not a full rebuild of every tracked
                 # system (that's left to the coarse timer / tab-visibility).
                 self.player_faction_panel.refresh_single_system(incoming_system_address)
-
-        if name == "StartJump" and evt.get("JumpType") == "Hyperspace":
-            self._clear_all_panels()
+                # Refreshes overview/exploration/exobiology/combat/
+                # powerplay/intel from the now-current state -- standardized
+                # to fire on confirmed arrival (here), not on StartJump
+                # (engaging the FSD): a cancelled/interrupted jump previously
+                # cleared these panels for a system never actually left,
+                # since event_engine.py's own per-system state clear has
+                # the same fix (see its StartJump/FSDJump comments).
+                self._clear_all_panels()
 
         if name == "SupercruiseDestinationDrop":
             # Confirms an actual visit to this specific destination — a
@@ -5071,7 +5076,10 @@ class MainWindow(QMainWindow):
         self.overview_panel.refresh(self.state)
 
     def _clear_all_panels(self):
-        """Clear all system-specific UI panels on jump."""
+        """Re-renders all system-specific UI panels from current state --
+        called on confirmed system arrival (Location/FSDJump), not on
+        StartJump, so a cancelled/interrupted jump never wipes the display
+        for a system never actually left."""
         try:
             self.overview_panel.refresh(self.state)
         except Exception:
