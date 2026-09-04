@@ -319,6 +319,7 @@ class _StartupHistoryScanWorker(QObject):
     def run(self):
         result = {
             "active_bounties": {}, "active_fines": {}, "combat_unsold_total": None,
+            "active_combat_bonds": {},
             "squadron_rec": None, "carrier_rec": None, "active_missions": {},
             "bounty_last_commit": {}, "visited_megaships": set(),
         }
@@ -336,7 +337,7 @@ class _StartupHistoryScanWorker(QObject):
         except Exception:
             log.exception("Failed to scan journal history for active fines")
         try:
-            result["combat_unsold_total"] = scan_unredeemed_combat_total(path)
+            result["combat_unsold_total"], result["active_combat_bonds"] = scan_unredeemed_combat_total(path)
         except Exception:
             log.exception("Failed to scan journal history for unredeemed combat bonds")
         try:
@@ -2116,6 +2117,9 @@ class MainWindow(QMainWindow):
         combat_unsold_total = result["combat_unsold_total"]
         if combat_unsold_total is not None:
             self.state.combat_unsold_total = combat_unsold_total
+        active_combat_bonds = result.get("active_combat_bonds")
+        if active_combat_bonds is not None:
+            self.state.active_combat_bonds = active_combat_bonds
 
         squadron_rec = result["squadron_rec"]
         if squadron_rec:

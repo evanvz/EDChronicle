@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 
-from edc.core.bgs_conflicts import find_squadron_war_enemy
+from edc.core.bgs_conflicts import find_squadron_war_enemy, squadron_faction_name
 from edc.ui import formatting as fmt
 from edc.ui.style import CARD_STYLE, HDR_STYLE, card_style, hdr_style
 from edc.ui.panels.combat_bgs_status_panel import CombatBgsStatusPanel
@@ -665,18 +665,23 @@ class CombatPanel(QWidget):
             self.cz_table.setItem(r, 2, QTableWidgetItem(space))
             self.cz_table.setItem(r, 3, QTableWidgetItem(str(total)))
 
+        squadron_faction = squadron_faction_name(getattr(state, "factions", None))
+        active_bonds = getattr(state, "active_combat_bonds", None) or {}
+        outstanding = active_bonds.get(squadron_faction, 0) if squadron_faction else 0
+        bonds_txt = f" {outstanding:,} Cr in unredeemed combat bonds — " if outstanding else " "
+
         station = getattr(state, "closest_squadron_station", None)
         if isinstance(station, dict):
             dist = station.get("distance_ly")
             dist_txt = f"{dist:.1f} ly" if isinstance(dist, (int, float)) else "? ly"
             visited_txt, _ = fmt.relative_time(station.get("last_visited") or "")
             self.cz_station_note.setText(
-                f"Redeem bonds at a station your faction controls to count — closest known: "
+                f"Redeem bonds at a station your faction controls to count —{bonds_txt}closest known: "
                 f"{station.get('station_name') or '?'} ({station.get('system_name') or '?'}), {dist_txt}. "
                 f"Confirmed {visited_txt} — control can shift with BGS."
             )
         else:
             self.cz_station_note.setText(
-                "Redeem bonds at a station your squadron faction controls to count toward the war — "
+                f"Redeem bonds at a station your squadron faction controls to count toward the war —{bonds_txt}"
                 "no confirmed station known yet (dock somewhere it controls to record it)."
             )

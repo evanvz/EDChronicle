@@ -993,6 +993,21 @@ class EventEngine:
                         self.state.session_bounties += reward
                     except Exception:
                         pass
+                    # Per-faction, unlike combat_unsold_total above (which
+                    # lumps every combat reward -- bounty vouchers and
+                    # combat bonds alike -- into one running number). A
+                    # combat bond can only be redeemed at a station the
+                    # AwardingFaction controls (confirmed: via the Contacts
+                    # menu, not Interstellar Factors), so knowing which
+                    # faction each unredeemed bond belongs to is what lets
+                    # us point at the right station once the player has a
+                    # bond for a faction with no controlling presence in
+                    # their current system.
+                    awarding_faction = event.get("AwardingFaction")
+                    if isinstance(awarding_faction, str) and awarding_faction:
+                        bonds = dict(getattr(self.state, "active_combat_bonds", None) or {})
+                        bonds[awarding_faction] = bonds.get(awarding_faction, 0) + reward
+                        self.state.active_combat_bonds = bonds
                 kill_key = f"kill|{ts}|{cur_key}"
                 if kill_key not in self.state.counted_combat_keys:
                     self.state.counted_combat_keys.add(kill_key)
@@ -1216,6 +1231,17 @@ class EventEngine:
                     self.state.counted_combat_keys.clear()
                 except Exception:
                     pass
+
+                # active_combat_bonds only clears the specific faction just
+                # redeemed -- a real RedeemVoucher(Type="CombatBond") names
+                # exactly one faction per event, and other factions' bonds
+                # may still be genuinely outstanding.
+                if event.get("Type") == "CombatBond":
+                    redeemed_faction = event.get("Faction")
+                    if isinstance(redeemed_faction, str) and redeemed_faction:
+                        bonds = dict(getattr(self.state, "active_combat_bonds", None) or {})
+                        bonds.pop(redeemed_faction, None)
+                        self.state.active_combat_bonds = bonds
 
         elif name == "Scan":
             body = self._norm_text(event.get("BodyName"))

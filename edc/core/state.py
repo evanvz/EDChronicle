@@ -208,6 +208,12 @@ class GameState:
     exploration_unsold_total_est: int = 0
     exobiology_unsold_total_est: int = 0
 
+    # Unredeemed combat bond total per AwardingFaction (FactionKillBond) --
+    # unlike combat_unsold_total above, kept per-faction since a combat
+    # bond can only be redeemed at a station the awarding faction controls,
+    # not any station like a bounty voucher.
+    active_combat_bonds: Dict[str, int] = field(default_factory=dict)
+
     # Session dedupe sets (do not persist initially)
     counted_combat_keys: Set[str] = field(default_factory=set)
     counted_exploration_keys: Set[str] = field(default_factory=set)
