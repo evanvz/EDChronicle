@@ -81,6 +81,47 @@ def _predict_economies(planet_class: str, has_rings: bool) -> list[str]:
     return economies
 
 
+def _current_system_summary(state) -> Optional[tuple[str, str, str, str]]:
+    """Returns (system_name, occupied_text, occupied_color, economy_text)
+    for the "Current System" card, or None if there's no current system yet
+    (state.system unset). Pure function, no I/O -- independently testable.
+
+    Occupied/Unoccupied comes from state.population (live journal data, not
+    a guess). Economy: real state.system_economy when occupied (we're
+    physically there, no need to predict); the same body-attribute
+    prediction the candidate dialog uses when unoccupied (an uninhabited
+    system has no real economy to report)."""
+    system_name = getattr(state, "system", None) if state else None
+    if not system_name:
+        return None
+
+    population = getattr(state, "population", None)
+    if isinstance(population, int) and population > 0:
+        occupied_text, occupied_color = "Occupied", "#FF8080"
+        economy = _economy_display(getattr(state, "system_economy", "") or "")
+        secondary = _economy_display(getattr(state, "system_economy_secondary", "") or "")
+        if economy:
+            economy_text = economy + (f" / {secondary}" if secondary and secondary != economy else "")
+        else:
+            economy_text = "—"
+    elif population == 0:
+        occupied_text, occupied_color = "Unoccupied", "#6BCB77"
+        bodies = getattr(state, "bodies", None) or {}
+        economies: list[str] = []
+        for rec in bodies.values():
+            if not isinstance(rec, dict):
+                continue
+            for e in _predict_economies(rec.get("PlanetClass") or "", False):
+                if e not in economies:
+                    economies.append(e)
+        economy_text = f"Likely: {', '.join(economies)}" if economies else "not enough scanned yet"
+    else:
+        occupied_text, occupied_color = "—", "#9aa4b0"
+        economy_text = "—"
+
+    return system_name, occupied_text, occupied_color, economy_text
+
+
 def _aggregate_shopping_list(depots: list[dict]) -> list[tuple[str, int, int]]:
     """Sums still-needed amounts (required - provided, floored at 0) for
     every commodity across every incomplete tracked depot. Returns
@@ -496,6 +537,21 @@ class ColonisationPanel(QWidget):
         root.setContentsMargins(8, 6, 8, 8)
         root.setSpacing(6)
 
+        # ── Current system — one-line at-a-glance ────────────────────────────
+        # Purple accent (see edc/ui/style.py's CARD_VARIANTS) to stand out from
+        # the neutral-blue cards below -- this is "where you are", not a
+        # candidate/tracked-site row. Occupied/economy come straight from live
+        # journal state (state.population/system_economy), no lookup needed.
+        current_card = QFrame()
+        current_card.setStyleSheet(_card_style("purple"))
+        current_l = QVBoxLayout(current_card)
+        current_l.setContentsMargins(8, 5, 8, 5)
+        self._current_system_label = QLabel("Waiting for current system…")
+        self._current_system_label.setTextFormat(Qt.TextFormat.RichText)
+        self._current_system_label.setStyleSheet("background:transparent; border:none; font-size:12px;")
+        current_l.addWidget(self._current_system_label)
+        root.addWidget(current_card)
+
         # ── Colonisation construction — tracked sites ───────────────────────
         # Only ever populated from our own personal visits (no EDDN schema
         # exists for this event) — manually adding a site here lets you keep
@@ -663,7 +719,20 @@ class ColonisationPanel(QWidget):
 
     def refresh(self, state) -> None:
         self._last_state = state
+        self._refresh_current_system(state)
         self._refresh_depots(state)
+
+    def _refresh_current_system(self, state) -> None:
+        summary = _current_system_summary(state)
+        if summary is None:
+            self._current_system_label.setText("Waiting for current system…")
+            return
+        system_name, occupied_text, occupied_color, economy_text = summary
+        self._current_system_label.setText(
+            f'<b>CURRENT SYSTEM:</b> {escape(system_name)} &nbsp;—&nbsp; '
+            f'<span style="color:{occupied_color};font-weight:bold;">{escape(occupied_text)}</span> '
+            f'&nbsp;—&nbsp; {escape(economy_text)}'
+        )
 
     # ── Colonisation construction tracking ──────────────────────────────
 
