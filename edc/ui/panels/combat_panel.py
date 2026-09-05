@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
     QScrollArea,
     QFrame,
     QTabWidget,
+    QSizePolicy,
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
@@ -19,6 +20,30 @@ from edc.ui.style import CARD_STYLE, HDR_STYLE, card_style, hdr_style
 from edc.ui.panels.combat_bgs_status_panel import CombatBgsStatusPanel
 
 log = logging.getLogger(__name__)
+
+
+def _cz_station_note_text(squadron_faction, controlling_faction, bonds_txt, station):
+    """Where to redeem CZ combat bonds -- prefers the current system if its
+    controlling faction already matches the squadron faction (no travel
+    needed), else falls back to the closest known controlled station from
+    past Docked visits."""
+    if squadron_faction and controlling_faction and controlling_faction == squadron_faction:
+        return f"Redeem bonds here —{bonds_txt}this system's controlling faction is your squadron faction."
+
+    if isinstance(station, dict):
+        dist = station.get("distance_ly")
+        dist_txt = f"{dist:.1f} ly" if isinstance(dist, (int, float)) else "? ly"
+        visited_txt, _ = fmt.relative_time(station.get("last_visited") or "")
+        return (
+            f"Redeem bonds at a station your faction controls to count —{bonds_txt}closest known: "
+            f"{station.get('station_name') or '?'} ({station.get('system_name') or '?'}), {dist_txt}. "
+            f"Confirmed {visited_txt} — control can shift with BGS."
+        )
+
+    return (
+        f"Redeem bonds at a station your squadron faction controls to count toward the war —{bonds_txt}"
+        "no confirmed station known yet (dock somewhere it controls to record it)."
+    )
 
 
 class CombatPanel(QWidget):
@@ -215,6 +240,10 @@ class CombatPanel(QWidget):
 
         content_l.addWidget(self.massacre_card)
         self.massacre_card.setVisible(False)
+        # QSizePolicy.Preferred (the QFrame default) still lets the parent
+        # layout grow this card past its size hint to fill leftover scroll-
+        # area space -- Maximum caps it to exactly its content height.
+        self.massacre_card.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
 
         # ── Conflict Zone participation card (hidden if none this session) ──
         self.cz_card = QFrame()
@@ -646,6 +675,15 @@ class CombatPanel(QWidget):
                 status_item.setForeground(QColor("#60d060"))
             self.massacre_table.setItem(r, 4, status_item)
 
+        # Table's own sizeHint() ignores row count and stays large regardless
+        # of maximumHeight, so the parent layout still sizes the card off
+        # that stale hint and dumps the "freed" space onto the header label
+        # instead of shrinking the card. setFixedHeight locks the height the
+        # layout actually uses, not just a cap on growth.
+        row_h = self.massacre_table.verticalHeader().defaultSectionSize()
+        header_h = self.massacre_table.horizontalHeader().height()
+        self.massacre_table.setFixedHeight(header_h + row_h * len(rows) + 4)
+
     def _refresh_cz_card(self, state):
         cz_kills = getattr(state, "cz_kills", None) or {}
         rows = [(faction, tally) for faction, tally in cz_kills.items() if any(tally.values())]
@@ -670,18 +708,8 @@ class CombatPanel(QWidget):
         outstanding = active_bonds.get(squadron_faction, 0) if squadron_faction else 0
         bonds_txt = f" {outstanding:,} Cr in unredeemed combat bonds — " if outstanding else " "
 
+        controlling_faction = getattr(state, "controlling_faction", None)
         station = getattr(state, "closest_squadron_station", None)
-        if isinstance(station, dict):
-            dist = station.get("distance_ly")
-            dist_txt = f"{dist:.1f} ly" if isinstance(dist, (int, float)) else "? ly"
-            visited_txt, _ = fmt.relative_time(station.get("last_visited") or "")
-            self.cz_station_note.setText(
-                f"Redeem bonds at a station your faction controls to count —{bonds_txt}closest known: "
-                f"{station.get('station_name') or '?'} ({station.get('system_name') or '?'}), {dist_txt}. "
-                f"Confirmed {visited_txt} — control can shift with BGS."
-            )
-        else:
-            self.cz_station_note.setText(
-                f"Redeem bonds at a station your squadron faction controls to count toward the war —{bonds_txt}"
-                "no confirmed station known yet (dock somewhere it controls to record it)."
-            )
+        self.cz_station_note.setText(
+            _cz_station_note_text(squadron_faction, controlling_faction, bonds_txt, station)
+        )
