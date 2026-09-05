@@ -9,7 +9,10 @@ import json
 from pathlib import Path
 from typing import Any, Dict
 
-from edc.core.mission_events import MISSION_EVENT_NAMES, apply_mission_event
+from edc.core.mission_events import MISSION_EVENT_NAMES, apply_mission_event, credit_massacre_kill
+
+_SYSTEM_CHANGE_EVENTS = {"Location", "FSDJump", "CarrierJump"}
+_RELEVANT_EVENT_NAMES = MISSION_EVENT_NAMES | _SYSTEM_CHANGE_EVENTS | {"Bounty", "FactionKillBond"}
 
 
 def scan_active_missions(journal_dir: Path) -> Dict[int, Dict[str, Any]]:
@@ -18,19 +21,27 @@ def scan_active_missions(journal_dir: Path) -> Dict[int, Dict[str, Any]]:
     if not journal_dir.exists():
         return active
 
+    current_system = None
     for path in sorted(journal_dir.glob("Journal.*.log")):
         try:
             with path.open("r", encoding="utf-8", errors="replace") as f:
                 for line in f:
-                    if '"Mission' not in line:
+                    if '"Mission' not in line and '"Bounty"' not in line and '"FactionKillBond"' not in line \
+                            and '"Location"' not in line and '"FSDJump"' not in line and '"CarrierJump"' not in line:
                         continue
                     try:
                         event = json.loads(line)
                     except Exception:
                         continue
-                    if event.get("event") not in MISSION_EVENT_NAMES:
+                    name = event.get("event")
+                    if name not in _RELEVANT_EVENT_NAMES:
                         continue
-                    apply_mission_event(active, event)
+                    if name in _SYSTEM_CHANGE_EVENTS:
+                        current_system = event.get("StarSystem", current_system)
+                    elif name in ("Bounty", "FactionKillBond"):
+                        credit_massacre_kill(active, event.get("VictimFaction"), current_system)
+                    else:
+                        apply_mission_event(active, event)
         except OSError:
             continue
 

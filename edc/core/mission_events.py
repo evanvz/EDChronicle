@@ -46,3 +46,22 @@ def apply_mission_event(active: Dict[int, Dict[str, Any]], event: Dict[str, Any]
                 rec["destination_system"] = new_system
             if new_station:
                 rec["destination_station"] = new_station
+
+
+def credit_massacre_kill(active: Dict[int, Dict[str, Any]], victim_faction: Any, current_system: Any) -> None:
+    """One kill (Bounty or FactionKillBond -- a kill against a faction with
+    no individual bounty on the ship pays out as FactionKillBond only, never
+    fires Bounty at all) credits every currently-stacked massacre mission
+    against that faction in the mission's destination system simultaneously
+    -- real game behavior, not per-mission independent progress."""
+    if not isinstance(victim_faction, str) or not victim_faction:
+        return
+    for rec in (active or {}).values():
+        kill_count = rec.get("kill_count")
+        if (
+            isinstance(kill_count, int)
+            and rec.get("target_faction") == victim_faction
+            and rec.get("destination_system") == current_system
+            and rec.get("kills_credited", 0) < kill_count
+        ):
+            rec["kills_credited"] = rec.get("kills_credited", 0) + 1

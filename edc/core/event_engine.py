@@ -9,7 +9,7 @@ from .exo_values import ExoValueTable
 from .external_intel import ExternalIntel
 from edc.engine.handlers import exploration, exobio, inventory, powerplay, misc, fleet_carrier, mining, engineers
 from edc.core.squadron_events import SQUADRON_EVENT_NAMES, apply_squadron_event
-from edc.core.mission_events import MISSION_EVENT_NAMES, apply_mission_event
+from edc.core.mission_events import MISSION_EVENT_NAMES, apply_mission_event, credit_massacre_kill
 from edc.core.bgs_conflicts import find_squadron_war_enemy, squadron_faction_name, parse_powerplay_conflict_progress
 from edc.core.res_signals import res_tier_from_signal_name
 from edc.core.ship_loadout import has_any_weapon
@@ -931,20 +931,7 @@ class EventEngine:
             msgs.append(f"Cargo: {self.state.cargo_count} (Limpets {self.state.limpets})")
 
         elif name == "Bounty":
-            victim_faction = event.get("VictimFaction")
-            if isinstance(victim_faction, str) and victim_faction:
-                # One kill credits every currently-stacked massacre mission
-                # against that faction in this system simultaneously — real
-                # game behavior, not per-mission independent progress.
-                for rec in (self.state.active_missions or {}).values():
-                    kill_count = rec.get("kill_count")
-                    if (
-                        isinstance(kill_count, int)
-                        and rec.get("target_faction") == victim_faction
-                        and rec.get("destination_system") == self.state.system
-                        and rec.get("kills_credited", 0) < kill_count
-                    ):
-                        rec["kills_credited"] = rec.get("kills_credited", 0) + 1
+            credit_massacre_kill(self.state.active_missions, event.get("VictimFaction"), self.state.system)
 
             reward = event.get("TotalReward")
             if isinstance(reward, int):
@@ -979,6 +966,8 @@ class EventEngine:
                 pass
 
         elif name == "FactionKillBond":
+            credit_massacre_kill(self.state.active_missions, event.get("VictimFaction"), self.state.system)
+
             reward = event.get("Reward")
             if isinstance(reward, int):
                 ts = event.get("timestamp") or ""
