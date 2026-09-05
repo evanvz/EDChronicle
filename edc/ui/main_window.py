@@ -1125,6 +1125,21 @@ class MainWindow(QMainWindow):
             star_system = last_stop.get("StarSystem")
             self.state.route_destination_system = star_system if isinstance(star_system, str) and star_system else None
 
+    @staticmethod
+    def _read_journal_json_with_retry(path: Path, retries: int = 1, delay: float = 0.05):
+        """Cargo.json/ShipLocker.json are truncated then rewritten by the
+        game -- a read can land on an empty file mid-write (observed live:
+        JSONDecodeError "Expecting value: line 1 column 1"). Retry a couple
+        times on an empty read before giving up."""
+        text = ""
+        for attempt in range(retries + 1):
+            text = path.read_text(encoding="utf-8", errors="replace")
+            if text.strip():
+                break
+            if attempt < retries:
+                time.sleep(delay)
+        return json.loads(text)
+
     def _load_cargo_inventory(self):
         """
         Reads Cargo.json — per the journal manual, only the FIRST "Cargo"
@@ -1139,7 +1154,7 @@ class MainWindow(QMainWindow):
         try:
             if not cargo_path.exists():
                 return
-            data = json.loads(cargo_path.read_text(encoding="utf-8", errors="replace"))
+            data = MainWindow._read_journal_json_with_retry(cargo_path)
         except Exception:
             log.exception("Failed to read Cargo.json")
             return
@@ -1171,7 +1186,7 @@ class MainWindow(QMainWindow):
         try:
             if not path.exists():
                 return
-            data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+            data = MainWindow._read_journal_json_with_retry(path)
         except Exception:
             log.exception("Failed to read ShipLocker.json")
             return
