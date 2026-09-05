@@ -152,17 +152,32 @@ def test_own_squadron_faction_clean_ship_never_called_out():
     assert result is None
 
 
-def test_own_squadron_faction_wanted_ship_still_called_out():
-    # Confirmed live: 500k+ bounty Wanted ships belonging to our own
-    # squadron-aligned faction (that faction's own criminals) were being
-    # silently suppressed by the own-faction exclusion. Wanted means the
-    # faction itself has already flagged this ship -- not "ours" to
-    # protect just because the faction name matches.
+def test_own_squadron_faction_wanted_ship_never_called_out():
+    # By request: even though the faction's own bounty system has flagged
+    # this ship as Wanted (and there's no in-game penalty for engaging
+    # it), the player doesn't want their own faction's ships called out
+    # at all -- only an actual Hostile/Enemy LegalStatus overrides that.
     result = _callout_reason(
         hostile=False, enemy=False, wanted=True, power="", faction="Our Faction", pledged="",
         squadron_faction="Our Faction", ctrl="", system_powers=[], pp_state="",
     )
+    assert result is None
+
+
+def test_own_squadron_faction_hostile_ship_still_called_out():
+    result = _callout_reason(
+        hostile=True, enemy=False, wanted=False, power="", faction="Our Faction", pledged="",
+        squadron_faction="Our Faction", ctrl="", system_powers=[], pp_state="",
+    )
     assert result == "enemy"
+
+
+def test_own_power_wanted_ship_never_called_out():
+    result = _callout_reason(
+        hostile=False, enemy=False, wanted=True, power="Aisling Duval", faction="", pledged="Aisling Duval",
+        squadron_faction="", ctrl="Aisling Duval", system_powers=[], pp_state="",
+    )
+    assert result is None
 
 
 def test_own_power_hostile_ship_still_called_out():

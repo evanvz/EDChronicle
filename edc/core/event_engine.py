@@ -147,16 +147,16 @@ def _callout_reason(
     Removed; rank still affects phrase wording (CombatPhrases.ship_targeted's
     "High value target" clause).
 
-    Never fires for a Clean ship that's ours -- our pledged PowerPlay
-    power, or our squadron-aligned faction -- we don't shoot our own. But
-    that protection doesn't extend to a Hostile/Enemy/Wanted ship even
-    from our own faction/power: LegalStatus already means the game (or
-    that faction's own bounty system) has decided this one is fair game,
-    membership be damned (confirmed live: 500k+ bounty Wanted ships
-    belonging to our own squadron-aligned faction -- i.e. that faction's
-    own criminals -- were being silently suppressed here). Also never
-    fires for law enforcement/security faction ships, regardless of
-    category.
+    Never fires for a ship that's ours -- our pledged PowerPlay power, or
+    our squadron-aligned faction -- we don't shoot our own, Wanted or not
+    (by request: even though LegalStatus Wanted means that faction's own
+    bounty system has flagged the ship as fair game, and there's no in-
+    game penalty for engaging it, the player doesn't want their own
+    faction's ships called out at all). Hostile/Enemy is the one
+    exception -- that's the game itself deciding this specific ship is
+    fair game right now (e.g. a real CZ engagement), not just a standing
+    faction-wide bounty. Also never fires for law enforcement/security
+    faction ships, regardless of category.
     """
     if ship_has_weapons is False:
         return None
@@ -165,8 +165,7 @@ def _callout_reason(
     pledged_l = (pledged or "").strip().lower()
     is_own_power = bool(pledged_l and power_l and power_l == pledged_l)
     is_own_faction = bool(squadron_faction and faction and faction == squadron_faction)
-    legally_fair_game = hostile or enemy or wanted
-    if (is_own_power or is_own_faction) and not legally_fair_game:
+    if (is_own_power or is_own_faction) and not (hostile or enemy):
         return None
 
     faction_l = (faction or "").strip().lower()
