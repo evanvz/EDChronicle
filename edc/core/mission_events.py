@@ -51,9 +51,20 @@ def apply_mission_event(active: Dict[int, Dict[str, Any]], event: Dict[str, Any]
 def credit_massacre_kill(active: Dict[int, Dict[str, Any]], victim_faction: Any, current_system: Any) -> None:
     """One kill (Bounty or FactionKillBond -- a kill against a faction with
     no individual bounty on the ship pays out as FactionKillBond only, never
-    fires Bounty at all) credits every currently-stacked massacre mission
-    against that faction in the mission's destination system simultaneously
-    -- real game behavior, not per-mission independent progress."""
+    fires Bounty at all) credits exactly one currently-active massacre
+    mission against that faction in the mission's destination system --
+    the oldest-accepted one not yet at its kill_count.
+
+    Previously credited every stacked mission simultaneously, on the
+    assumption that's real game behavior. Confirmed wrong live: with two
+    stacked missions (32 and 20 kills) against the same faction/system,
+    21 kills after the second's acceptance made this code show it as
+    20/20 (ready to turn in) while the game itself only had it at 11/20.
+    The journal exposes no per-mission kill-credit signal at all (the
+    "Missions" event carries no progress field), so there's no way to
+    reconstruct the game's true per-mission split -- crediting one mission
+    at a time undercounts instead, which just means checking a bit early
+    rather than a wasted trip to a station that refuses the turn-in."""
     if not isinstance(victim_faction, str) or not victim_faction:
         return
     for rec in (active or {}).values():
@@ -65,3 +76,4 @@ def credit_massacre_kill(active: Dict[int, Dict[str, Any]], victim_faction: Any,
             and rec.get("kills_credited", 0) < kill_count
         ):
             rec["kills_credited"] = rec.get("kills_credited", 0) + 1
+            return

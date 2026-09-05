@@ -38,12 +38,27 @@ def test_faction_kill_bond_credits_matching_massacre_mission(tmp_path):
     assert engine.state.active_missions[1]["kills_credited"] == 1
 
 
-def test_faction_kill_bond_credits_every_stacked_mission_for_that_faction(tmp_path):
+def test_faction_kill_bond_credits_only_one_stacked_mission_per_kill(tmp_path):
+    # Not every stacked mission simultaneously -- confirmed wrong live
+    # (see credit_massacre_kill's docstring): a kill credits only the
+    # oldest-accepted matching mission not yet at its kill_count.
     engine = _engine(tmp_path)
     _accept_mission(engine, mission_id=1)
     _accept_mission(engine, mission_id=2)
 
     engine.process(_kill_bond(62295, "The Allied Commission"))
+
+    assert engine.state.active_missions[1]["kills_credited"] == 1
+    assert engine.state.active_missions[2]["kills_credited"] == 0
+
+
+def test_faction_kill_bond_moves_to_next_stacked_mission_once_first_is_capped(tmp_path):
+    engine = _engine(tmp_path)
+    _accept_mission(engine, mission_id=1, kill_count=1)
+    _accept_mission(engine, mission_id=2, kill_count=1)
+
+    engine.process(_kill_bond(62295, "The Allied Commission", ts="2026-09-04T18:43:23Z"))
+    engine.process(_kill_bond(41359, "The Allied Commission", ts="2026-09-04T18:49:38Z"))
 
     assert engine.state.active_missions[1]["kills_credited"] == 1
     assert engine.state.active_missions[2]["kills_credited"] == 1
