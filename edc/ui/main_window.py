@@ -390,12 +390,23 @@ class _EddnFlushWorker(QObject):
         db = Database(self._db_path)
         try:
             repo = Repository(db)
+            _t0 = time.perf_counter()
             write_buffers(
                 repo, self._coords, self._market, self._factions, self._stations,
                 self._codex, self._fcmaterials, self._carrier_access,
                 self._bgs_status, self._res_sites, self._body_signals, self._system_profiles,
                 self._body_scans,
             )
+            _elapsed_ms = (time.perf_counter() - _t0) * 1000
+            # Diagnostic for the 2026-09-06 investigation: two ~30s WAL
+            # checkpoint stalls (main then net, back to back) hit exactly
+            # busy_timeout's 30000ms ceiling, meaning something else held a
+            # lock on one of these files that long -- this worker's own
+            # batch write is the prime suspect (it holds a write transaction
+            # for however long write_buffers() takes) but wasn't timed, so
+            # there was no way to confirm or rule it out from the log alone.
+            if _elapsed_ms > 2000:
+                log.warning("EDDN flush write_buffers() took %.0fms", _elapsed_ms)
         except Exception:
             log.exception("Background EDDN flush failed")
         finally:
