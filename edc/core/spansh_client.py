@@ -18,6 +18,34 @@ _BODIES_TIMEOUT = 30
 _GOOD_RESERVE_LEVELS = ["Pristine", "Major"]
 
 
+def fetch_controlling_power(system_name: str) -> Optional[str]:
+    """Live single-system lookup for a system's current controlling Power.
+
+    EDSM's daily PowerPlay dump only covers systems that have (or recently
+    had) a power's presence, and misses plenty of real systems entirely
+    (confirmed live: a system with LIVE journal-confirmed enemy control had
+    zero rows anywhere in EDSM's dump). Spansh's own system database is
+    populated from EDDN traffic same as everything else it serves and
+    reliably carries "controlling_power" for any system with one, so this
+    is a fallback for exactly the systems EDSM's dump doesn't know about --
+    not a bulk/cached source, called per system name from a worker thread.
+    """
+    try:
+        resp = requests.post(
+            _SEARCH_URL,
+            json={"filters": {"name": {"value": system_name}}, "size": 1, "page": 0},
+            timeout=_TIMEOUT,
+        )
+        resp.raise_for_status()
+        results = resp.json().get("results") or []
+    except Exception as exc:
+        log.error("Spansh controlling-power lookup failed for %r: %s", system_name, exc)
+        return None
+    if not results or not isinstance(results[0], dict):
+        return None
+    return results[0].get("controlling_power") or None
+
+
 @dataclass
 class MiningRingResult:
     system_name:   str

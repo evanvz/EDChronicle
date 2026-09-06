@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Optional
+from typing import Dict, Optional
 
 from PyQt6.QtCore import Qt, QObject, QThread, QStringListModel, pyqtSignal
 from PyQt6.QtGui import QColor
@@ -236,6 +236,23 @@ class _NearSystemCoordsWorker(QObject):
         self.finished.emit(coords, self._system_name)
 
 
+class _SpanshPowerLookupWorker(QObject):
+    """Resolves controlling Power for a batch of system names EDSM's
+    PowerPlay dump has no data for at all -- see market_panel's
+    _filter_enemy_pp and spansh_client.fetch_controlling_power."""
+    finished = pyqtSignal(dict)  # {system_name: power_or_None}
+
+    def __init__(self, system_names: list):
+        super().__init__()
+        self._system_names = system_names
+
+    def run(self):
+        from edc.core.spansh_client import fetch_controlling_power
+
+        result = {name: fetch_controlling_power(name) for name in self._system_names}
+        self.finished.emit(result)
+
+
 class MarketPanel(QWidget):
     """
     Owns all widgets and refresh logic for the Market tab.
@@ -271,6 +288,14 @@ class MarketPanel(QWidget):
         self._search_worker: Optional[_MarketSearchWorker] = None
         self._coords_thread: Optional[QThread] = None
         self._coords_worker: Optional[_NearSystemCoordsWorker] = None
+        self._power_lookup_thread: Optional[QThread] = None
+        self._power_lookup_worker: Optional[_SpanshPowerLookupWorker] = None
+        # Live Spansh fallback for systems EDSM's PowerPlay dump doesn't
+        # cover at all (see _filter_enemy_pp) -- session-lifetime cache
+        # keyed by lowercased system name, since control doesn't flip fast
+        # enough to need re-checking within one run of the app.
+        self._spansh_power_cache: Dict[str, Optional[str]] = {}
+        self._spansh_power_pending: set = set()
         self._last_market_id_computed: Optional[int] = None
         self._last_results: Optional[list] = None
         self._last_search_desc = ("", 0, False)
@@ -1030,22 +1055,65 @@ class MarketPanel(QWidget):
 
     def _filter_enemy_pp(self, results: list) -> tuple[list, int]:
         """Drops entries in systems currently controlled by a Power other
-        than the player's own pledged one (from EDSM's daily PowerPlay
-        dump) — shared by the manual search and Trade Opportunities so one
-        checkbox governs both. A system with no known PowerPlay presence is
-        left in, not treated as enemy. Returns (kept, excluded_count)."""
-        if not self._exclude_enemy_pp_check.isChecked() or not self._my_power or not self._edsm_powerplay:
+        than the player's own pledged one — shared by the manual search and
+        Trade Opportunities so one checkbox governs both.
+
+        EDSM's daily PowerPlay dump is checked first; a system missing from
+        it entirely (confirmed live: real systems under live enemy control
+        with zero rows anywhere in EDSM's dump) falls back to the
+        self._spansh_power_cache populated by a live per-system Spansh
+        lookup (see _resolve_unknown_pp_systems). A system unresolved by
+        either source is left in, not treated as enemy, and queued for a
+        background Spansh lookup so the next render corrects it. Returns
+        (kept, excluded_count)."""
+        if not self._exclude_enemy_pp_check.isChecked() or not self._my_power:
             return results, 0
         kept = []
         excluded = 0
+        to_resolve = set()
         for r in results:
-            controller = self._edsm_powerplay.get_controller_by_name(r.get("system_name"))
-            controlling_power = (controller or {}).get("power") or ""
+            system_name = r.get("system_name")
+            controlling_power = ""
+            controller = self._edsm_powerplay.get_controller_by_name(system_name) if self._edsm_powerplay else None
+            if controller:
+                controlling_power = controller.get("power") or ""
+            elif isinstance(system_name, str) and system_name.strip():
+                key = system_name.strip().lower()
+                if key in self._spansh_power_cache:
+                    controlling_power = self._spansh_power_cache[key] or ""
+                elif key not in self._spansh_power_pending:
+                    to_resolve.add(system_name.strip())
             if controlling_power and controlling_power != self._my_power:
                 excluded += 1
             else:
                 kept.append(r)
+        if to_resolve:
+            self._resolve_unknown_pp_systems(to_resolve)
         return kept, excluded
+
+    def _resolve_unknown_pp_systems(self, system_names: set) -> None:
+        """Kicks off a background Spansh lookup for systems EDSM's dump has
+        no data for at all, then re-renders once resolved so a system that
+        turns out enemy-controlled gets excluded retroactively instead of
+        never being caught."""
+        for name in system_names:
+            self._spansh_power_pending.add(name.strip().lower())
+        self._power_lookup_thread = QThread()
+        self._power_lookup_worker = _SpanshPowerLookupWorker(list(system_names))
+        self._power_lookup_worker.moveToThread(self._power_lookup_thread)
+        self._power_lookup_thread.started.connect(self._power_lookup_worker.run)
+        self._power_lookup_worker.finished.connect(self._on_power_lookup_finished)
+        self._power_lookup_worker.finished.connect(self._power_lookup_thread.quit)
+        self._power_lookup_thread.start()
+
+    def _on_power_lookup_finished(self, resolved: dict) -> None:
+        for name, power in resolved.items():
+            key = name.strip().lower()
+            self._spansh_power_cache[key] = power
+            self._spansh_power_pending.discard(key)
+        if self._last_results is not None:
+            self._render_results()
+        self._render_trade_opportunities()
 
     def _cargo_qty_of(self, commodity_key: str) -> int:
         """Current cargo hold quantity for a normalized commodity name —
