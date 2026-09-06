@@ -1951,6 +1951,7 @@ class Repository:
             LEFT JOIN net.station_info si ON si.market_id = m.market_id
             WHERE m.commodity_name = ? AND m.sell_price IS NOT NULL
                   AND (m.station_type IS NULL OR m.station_type != 'FleetCarrier')
+                  AND (si.station_type IS NULL OR si.station_type != 'FleetCarrier')
                   AND m.last_updated >= ?
                   AND sc.x BETWEEN ? AND ? AND sc.y BETWEEN ? AND ? AND sc.z BETWEEN ? AND ?
             """,
@@ -2015,6 +2016,7 @@ class Repository:
             LEFT JOIN net.station_info si ON si.market_id = m.market_id
             WHERE m.commodity_name IN ({commodity_placeholders}) AND m.sell_price IS NOT NULL
                   AND (m.station_type IS NULL OR m.station_type != 'FleetCarrier')
+                  AND (si.station_type IS NULL OR si.station_type != 'FleetCarrier')
                   AND m.last_updated >= ?
                   AND sc.x BETWEEN ? AND ? AND sc.y BETWEEN ? AND ? AND sc.z BETWEEN ? AND ?
             """,
@@ -2136,6 +2138,7 @@ class Repository:
             WHERE m.commodity_name = ? AND m.buy_price IS NOT NULL AND m.buy_price > 0
                   AND m.stock IS NOT NULL AND m.stock > 0
                   AND (m.station_type IS NULL OR m.station_type != 'FleetCarrier')
+                  AND (si.station_type IS NULL OR si.station_type != 'FleetCarrier')
                   AND m.last_updated >= ?
                   AND sc.x BETWEEN ? AND ? AND sc.y BETWEEN ? AND ? AND sc.z BETWEEN ? AND ?
             """,
@@ -2201,6 +2204,7 @@ class Repository:
             WHERE (m.sell_price IS NOT NULL
                      OR (m.buy_price IS NOT NULL AND m.buy_price > 0 AND m.stock IS NOT NULL AND m.stock > 0))
                   AND (m.station_type IS NULL OR m.station_type != 'FleetCarrier')
+                  AND (si.station_type IS NULL OR si.station_type != 'FleetCarrier')
                   AND m.last_updated >= ?
                   AND sc.x BETWEEN ? AND ? AND sc.y BETWEEN ? AND ? AND sc.z BETWEEN ? AND ?
             """,
@@ -2276,6 +2280,7 @@ class Repository:
             WHERE (m.sell_price IS NOT NULL
                      OR (m.buy_price IS NOT NULL AND m.buy_price > 0 AND m.stock IS NOT NULL AND m.stock > 0))
                   AND (m.station_type IS NULL OR m.station_type != 'FleetCarrier')
+                  AND (si.station_type IS NULL OR si.station_type != 'FleetCarrier')
                   AND m.last_updated >= ?
                   AND m.system_name IN ({placeholders})
             """,

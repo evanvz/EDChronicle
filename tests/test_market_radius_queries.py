@@ -60,6 +60,28 @@ def test_search_market_prices_excludes_row_outside_radius(repo):
     assert results == []
 
 
+def test_search_market_prices_excludes_fleet_carrier_by_market_station_type(repo):
+    _seed_coords(repo, "Sol", 0.0, 0.0, 0.0)
+    _seed_market_row(repo, 1001, "gold", "Sol", station_type="FleetCarrier", sell_price=5000)
+
+    results = repo.search_market_prices("gold", 0.0, 0.0, 0.0, 50.0)
+    assert results == []
+
+
+def test_search_market_prices_excludes_fleet_carrier_by_station_info_type_even_if_market_type_blank(repo):
+    # Confirmed live: EDDN's commodity payload doesn't always carry
+    # stationType for carriers, leaving market_prices.station_type blank
+    # ('' not NULL) while our own Docked-event-sourced station_info still
+    # correctly knows it's a FleetCarrier -- must check both sources, not
+    # just the market row's own (unreliable) station_type.
+    _seed_coords(repo, "Sol", 0.0, 0.0, 0.0)
+    _seed_market_row(repo, 1001, "gold", "Sol", station_type="", sell_price=5000)
+    repo.save_station_info(1001, "XBZ-9TZ", "Sol", "FleetCarrier", None, None, None, "2026-08-12T00:00:00Z")
+
+    results = repo.search_market_prices("gold", 0.0, 0.0, 0.0, 50.0)
+    assert results == []
+
+
 def test_search_market_prices_excludes_stale_row(repo):
     _seed_coords(repo, "Sol", 0.0, 0.0, 0.0)
     _seed_market_row(repo, 1001, "gold", "Sol", sell_price=5000, last_updated="2026-01-01T00:00:00Z")
