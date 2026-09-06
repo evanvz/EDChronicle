@@ -909,7 +909,7 @@ class MainWindow(QMainWindow):
         except Exception:
             log.exception("Failed to save station info")
 
-    def _save_colonisation_depot(self, evt: dict):
+    def _save_colonisation_depot(self, evt: dict) -> bool:
         """
         ColonisationConstructionDepot only fires in our own journal when we
         personally dock at the depot and open its contribution screen — no
@@ -917,14 +917,21 @@ class MainWindow(QMainWindow):
         repo), so it can't be crowdsourced like market/station data. The
         event itself carries no system/station name, only MarketID — pulled
         from current state instead, same as the Market event's own handling.
+
+        Frontier fires this event every 15 seconds while docked regardless
+        of whether anything actually changed -- a dedup guard against the
+        last-seen (progress, resources) signature per MarketID skips the DB
+        write (and tells the caller to skip the panel refresh) on a repeat
+        tick with nothing new to show. Returns True if something changed
+        (and was saved), False if this was a no-op repeat.
         """
         market_id = evt.get("MarketID")
         if not isinstance(market_id, int):
-            return
+            return False
         system_name = getattr(self.state, "system", None) or ""
         station_name = getattr(self.state, "current_market_station", None) or ""
         if not system_name or not station_name:
-            return
+            return False
         system_address = getattr(self.state, "system_address", None)
 
         resources = []
@@ -938,6 +945,14 @@ class MainWindow(QMainWindow):
                 "payment": r.get("Payment"),
             })
 
+        progress = evt.get("ConstructionProgress")
+        complete = bool(evt.get("ConstructionComplete"))
+        resources_json = json.dumps(resources)
+        signature = (progress, complete, resources_json)
+        if self._colonisation_depot_last_seen.get(market_id) == signature:
+            return False
+        self._colonisation_depot_last_seen[market_id] = signature
+
         from datetime import datetime, timezone
         try:
             self.repo.save_colonisation_depot_visit(
@@ -945,13 +960,14 @@ class MainWindow(QMainWindow):
                 system_address=system_address,
                 system_name=system_name,
                 station_name=station_name,
-                progress=evt.get("ConstructionProgress"),
-                complete=bool(evt.get("ConstructionComplete")),
-                resources_json=json.dumps(resources),
+                progress=progress,
+                complete=complete,
+                resources_json=resources_json,
                 timestamp=evt.get("timestamp") or datetime.now(timezone.utc).isoformat(),
             )
         except Exception:
             log.exception("Failed to save colonisation depot data")
+        return True
 
     def _on_market_destination_selected(self, system_name: str, station_name: str, commodity: str, mode: str):
         """
@@ -1304,6 +1320,13 @@ class MainWindow(QMainWindow):
             self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
 
         self.state = GameState()
+
+        # ColonisationConstructionDepot fires every 15s while docked at a
+        # construction site regardless of whether anything actually changed
+        # (a known Frontier journal quirk) -- dedup guard so an unchanged
+        # tick doesn't repeat a DB write + two full panel refreshes for
+        # nothing.
+        self._colonisation_depot_last_seen: dict = {}
 
         # Canonical paths: app_dir for shipped assets, settings_dir for writable JSON/caches.
         app_dir = Path(getattr(self.cfg_store, "app_dir", Path.cwd()))
@@ -2768,8 +2791,8 @@ class MainWindow(QMainWindow):
             self._maybe_clear_pinned_destination(evt.get("StationName"))
 
         if name == "ColonisationConstructionDepot":
-            self._save_colonisation_depot(evt)
-            self._refresh_squadron()
+            if self._save_colonisation_depot(evt):
+                self._refresh_squadron()
 
         if name in MISSION_EVENT_NAMES:
             # active_missions itself updates immediately in event_engine.py,
