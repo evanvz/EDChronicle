@@ -25,11 +25,43 @@ Full feature list, architecture, and database schema: see [ARCHITECTURE.md](ARCH
 ## Screenshots
 
 ![Overview HUD](docs/screenshots/OverView%20Hud.png)
+
+**Exploration**
+
 ![Exploration](docs/screenshots/Exploration.png)
 ![Planets](docs/screenshots/Planets.png)
 ![Exobiology](docs/screenshots/Exobiology.png)
+![Intel](docs/screenshots/Intel.png)
+
+**Combat & PowerPlay**
+
 ![Combat](docs/screenshots/Combat.png)
+![Combat - System Status](docs/screenshots/Combat-System%20Status.png)
 ![PowerPlay](docs/screenshots/PowerPlay.png)
+![PowerPlay - System Status](docs/screenshots/PowerPlay-System%20Status.png)
+![PowerPlay - Target Finder](docs/screenshots/PowerPlay-Target%20Finder.png)
+![Squadron](docs/screenshots/Squadron.png)
+
+**Trade**
+
+![Market](docs/screenshots/Market.png)
+![Trade Routes](docs/screenshots/Trade%20Routes.png)
+![Mining](docs/screenshots/Mining.png)
+![Materials](docs/screenshots/Materials.png)
+![Engineering - Ships](docs/screenshots/Engineering-Ships.png)
+![Engineering - Suits & Weapons](docs/screenshots/Engineering-Suits_Weapons.png)
+![Engineers](docs/screenshots/Engineers.png)
+
+**Fleet & Faction**
+
+![Fleet Carrier](docs/screenshots/Fleet%20Carrier.png)
+![Player Faction](docs/screenshots/Player%20Faction.png)
+![Player Faction - System Properties](docs/screenshots/Player%20Faction%20-%20System%20Properties.png)
+![Colonisation](docs/screenshots/Colonisation.png)
+
+**Tools**
+
+![Voice Commands](docs/screenshots/Voice%20Cmds.png)
 ![Settings](docs/screenshots/Settings.png)
 
 ## How it works
