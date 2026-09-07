@@ -46,5 +46,14 @@ if errorlevel 1 (
 )
 
 echo.
+echo Creating desktop shortcut...
+powershell -NoProfile -Command "try { $ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut([Environment]::GetFolderPath('Desktop') + '\EDChronicle.lnk'); $s.TargetPath = '%~dp0launch.bat'; $s.WorkingDirectory = '%~dp0'; $s.IconLocation = '%~dp0assets\edc_icon.ico'; $s.WindowStyle = 7; $s.Save() } catch { exit 1 }"
+if errorlevel 1 (
+    echo WARNING: Could not create desktop shortcut. You can still run EDChronicle via launch.bat.
+) else (
+    echo Desktop shortcut created.
+)
+
+echo.
 echo Installation complete. Run launch.bat to start EDChronicle.
 pause

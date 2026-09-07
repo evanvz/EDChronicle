@@ -1313,7 +1313,10 @@ class MainWindow(QMainWindow):
         self.cfg = cfg
 
         self.setWindowTitle("EDChronicle")
-        self.setWindowIcon(QIcon("assets/edc_icon.ico"))
+        # Absolute path -- see the matching fix in app.py's app.setWindowIcon
+        # for why a relative one silently fails whenever cwd isn't the
+        # project root.
+        self.setWindowIcon(QIcon(str(Path(cfg_store.app_dir) / "assets" / "edc_icon.ico")))
         self.resize(1200, 700)
 
         if getattr(cfg, "always_on_top", False):

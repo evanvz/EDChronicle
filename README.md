@@ -49,7 +49,7 @@ Requires Python 3.10 or later — download from [python.org](https://www.python.
 install.bat
 ```
 
-This creates a Python virtual environment and installs all dependencies. Safe to run more than once.
+This creates a Python virtual environment, installs all dependencies, and adds an EDChronicle shortcut to your Desktop. Safe to run more than once.
 
 ## Running the application
 

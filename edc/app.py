@@ -83,7 +83,12 @@ def run():
 
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("EDChronicle")
     app = QApplication([])
-    app.setWindowIcon(QIcon("assets/edc_icon.ico"))
+    # Absolute path -- a relative one silently fails (QIcon.isNull(), no
+    # exception) whenever the process's cwd isn't the project root (a
+    # desktop shortcut's default "Start in" directory, an IDE run config,
+    # etc.), which is exactly what showed the default Python icon instead
+    # of ours in the taskbar rather than a real load error.
+    app.setWindowIcon(QIcon(str(base_dir / "assets" / "edc_icon.ico")))
 
     app.setStyle("Fusion")
 
