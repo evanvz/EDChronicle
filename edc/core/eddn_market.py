@@ -313,7 +313,23 @@ class EddnMarketCache:
 def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals=(), system_profiles=(), body_scans=()) -> None:
     """The actual writes — factored out so both the main-thread flush()
     (shutdown) and a background worker (periodic, see main_window.py) can
-    use the identical logic against whichever Repository they're given."""
+    use the identical logic against whichever Repository they're given.
+
+    Wrapped in one deferred_commit() block: the per-item loops below
+    (factions/bgs_status/res_sites/body_signals/system_profiles/body_scans
+    -- up to ~400 items combined per 45s flush tick at real EDDN volume)
+    each call a save method that commits internally via Database.execute()
+    -- confirmed live driving a ~30s WAL checkpoint stall (one commit,
+    and one fsync, per item instead of per flush). This collapses the
+    whole tick to a single commit at the end."""
+    with repo.db.deferred_commit():
+        _write_buffers_inner(
+            repo, coords, market, factions, stations, codex, fcmaterials,
+            carrier_access, bgs_status, res_sites, body_signals, system_profiles, body_scans,
+        )
+
+
+def _write_buffers_inner(repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals, system_profiles, body_scans) -> None:
     if coords:
         try:
             repo.save_system_coords_batch(coords)
@@ -363,17 +379,10 @@ def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, 
 
     # bgs_status/res_sites, unlike the `factions` loop above (rare -- gated
     # behind a squadron watch-list), are unconditional and network-wide, so
-    # a single flush tick can mean many individual commits here. Each
-    # save_system_bgs_status()/save_system_res_tiers() call commits
-    # internally via Database.execute() (unconditional self.conn.commit(),
-    # no way to opt out without changing that shared method's signature --
-    # confirmed by inspection, see persistence/database.py), and those two
-    # save methods have real per-row skip logic that a naive executemany()
-    # batch can't replicate, so batching this loop's commits is out of
-    # scope for this fix wave. One-commit-per-system here is intentionally
-    # accepted as consistent with the existing `factions` loop's risk
-    # profile above -- flagged as a follow-up if this proves to starve
-    # concurrent writers at real EDDN volume.
+    # a single flush tick can mean many items here -- each save method still
+    # commits internally via Database.execute() when called standalone, but
+    # the outer deferred_commit() in write_buffers() suppresses that for the
+    # whole tick, so this is one commit, not one per item.
     if bgs_status:
         for system_address, (system_name, conflicts, factions_list, timestamp) in bgs_status:
             try:

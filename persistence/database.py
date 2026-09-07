@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 
 
@@ -64,8 +65,29 @@ class Database:
     def execute(self, sql: str, params: tuple = ()):
         cur = self.conn.cursor()
         cur.execute(sql, params)
-        self.conn.commit()
+        if not getattr(self, "_defer_commit", False):
+            self.conn.commit()
         return cur
+
+    @contextmanager
+    def deferred_commit(self):
+        """Suppresses execute()'s per-call auto-commit for the duration,
+        doing one commit at the end instead -- for a loop of many small
+        per-item saves (each internally calling execute()) that would
+        otherwise commit -- and fsync -- once per item. Confirmed live:
+        EDDN flush loops (factions/bgs_status/etc, up to ~400 items per
+        45s tick) were driving a ~30s WAL checkpoint stall by doing exactly
+        that. Re-entrant-safe (a nested call is a no-op until the
+        outermost exits) so a helper already inside one of these blocks
+        can be called standalone elsewhere without double-committing."""
+        already_deferred = getattr(self, "_defer_commit", False)
+        self._defer_commit = True
+        try:
+            yield
+        finally:
+            if not already_deferred:
+                self._defer_commit = False
+                self.conn.commit()
 
     def executescript(self, sql: str):
         self.conn.executescript(sql)
