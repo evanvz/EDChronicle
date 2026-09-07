@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """Shared floating 'busy' indicator — used by any panel with a background
 search worker (Market, Mining, PowerPlay Target Finder, ...). Factored out
 once a third panel needed the identical widget, rather than duplicating it.

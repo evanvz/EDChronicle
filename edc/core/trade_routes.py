@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """Pure trade-loop-finding logic for the Trade Route Loop Planner — no Qt,
 no DB, just data in/data out so it's independently testable. See
 docs/superpowers/specs/2026-08-09-trade-route-loop-planner-design.md.

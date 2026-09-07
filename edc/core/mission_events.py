@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """Shared mission event handling — used by both the live event engine and
 mission_scanner.py (full journal-history replay at startup), so the two
 can't drift. Tracks currently-active (accepted, not yet completed/failed/

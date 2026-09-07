@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """Persistent background listener subscribing to EDDN's live relay for PowerPlay data.
 
 Runs on its own QThread for the lifetime of the app. Filters the

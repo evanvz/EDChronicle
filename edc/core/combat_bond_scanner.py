@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """One-shot full-history scan to reconstruct the currently unredeemed
 combat bond/bounty voucher total at app startup. Mirrors bounty_scanner.py's
 reasoning: this must survive app restarts and journal-file boundaries — an

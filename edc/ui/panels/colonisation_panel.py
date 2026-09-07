@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """Colonisation tab — tracked construction sites (squadron-wide projects,
 personal-visit-only since no EDDN schema exists for this event) and the
 nearby-unpopulated-system candidate finder. Split out of squadron_panel.py

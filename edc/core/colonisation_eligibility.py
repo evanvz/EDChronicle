@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """Colonisation eligibility lookups via EDSM's sphere-systems endpoint --
 answers "which nearby systems are unpopulated and thus colonisable" and
 "is this specific system eligible right now". Advisory only: EDSM's

@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """One-shot full-history scan to reconstruct currently active bounties at
 app startup. Bounties (CommitCrime with a Bounty field, cleared by
 PayBounties) must survive across app restarts and journal-file boundaries —

@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """BGS tick detection via tick.edcd.io -- a free public community service
 that detects and timestamps the game's actual daily BGS tick (faction
 state recalculation), instead of approximating it via a calendar-day

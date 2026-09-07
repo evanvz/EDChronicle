@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """GalNet news -- Frontier's official in-game lore news feed. Static
 display of the last few headlines, paged one at a time (matching the
 in-game "Local News" panel's own last-5, page-at-a-time behavior) --

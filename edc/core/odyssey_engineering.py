@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """Offline, advisory-only Odyssey (on-foot) suit/weapon engineering reference.
 
 Recipe data ported (not code reused) from jixxed/ed-odyssey-materials-helper

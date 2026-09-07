@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """EDDN publisher — contributes data back to the shared Elite Dangerous
 Data Network, the same feed Spansh/EDSM/Inara consume from. Two schemas:
 

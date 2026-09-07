@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """Squadron tab — name, rank, rank history, and trophies from journal-
 exposed squadron events. The game does not expose a member roster, chat,
 or wing-mission data to third-party tools, so that's not something this

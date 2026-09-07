@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """Shared BGS War/CivilWar conflict lookups and other small journal-event
 parsing helpers with no single natural owner — used across event_engine.py
 and its handler modules (edc/engine/handlers/*) so they don't drift out of

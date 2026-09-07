@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """Landing pad size determination — shared between the persistence layer
 (for ranking search results) and the UI layer (for display), so both agree
 on what "known" vs "unknown" means.

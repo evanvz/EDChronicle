@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """Passive service-health tracking via a logging.Handler -- observes
 WARNING+ records already flowing through the root logger from known
 EDSM/EDDN/tick-touching modules (see edc/utils/log.py's single root

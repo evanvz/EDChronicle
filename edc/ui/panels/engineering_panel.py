@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """Engineering panel — Ships (blueprint wishlist) and Suits & Weapons
 (Odyssey on-foot grade/module tracking) sub-tabs, each a master-detail
 split: wishlist on the left, materials + engineer info on the right."""

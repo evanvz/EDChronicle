@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """One-shot scan for the most recent Rank/Progress values at app startup.
 Both fire once at the start of every journal file (commander login) and
 again on promotion — but the app's live bootstrap only re-reads the tail

@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """Shared RES-tier parsing for FSSSignalDiscovered's ResourceExtraction
 signals -- used by both the live event engine (own journal, event_engine.py)
 and eddn_listener.py (network-wide), so the two can't drift."""

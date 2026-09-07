@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """Combat tab's System Status sub-panel -- radius search over
 system_bgs_status/system_res_sites (War/CivilWar conflicts, multi-state
 factions, RES tier presence), same self-contained radius-search shape as

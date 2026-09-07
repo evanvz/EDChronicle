@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """Buffers live EDDN commodity/3 messages and system-coordinate sightings
 in memory, flushing to SQLite periodically in a single batched transaction.
 

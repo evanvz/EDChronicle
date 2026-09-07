@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """On-demand EDSM system-factions lookup — used when manually adding a
 system to the Player Faction tab, to get real current faction data
 immediately instead of waiting on EDDN network traffic (EDDN only reports

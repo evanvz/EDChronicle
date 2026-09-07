@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """Player Faction panel — tracks your squadron-aligned minor faction across
 every system it has a presence in, with a recommended action per system.
 

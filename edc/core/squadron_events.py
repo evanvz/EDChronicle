@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """Shared squadron event handling — used by both the live event engine
 (applied to GameState) and squadron_scanner.py (applied to a plain dict
 during full journal-history replay at startup), so the two can't drift.

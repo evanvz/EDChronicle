@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """Trade Route Loop Planner — finds A<->B round trips (buy X at A, sell at
 B; buy Y at B, sell at A) within a radius of your current location. See
 docs/superpowers/specs/2026-08-09-trade-route-loop-planner-design.md.

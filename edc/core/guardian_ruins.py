@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """Canonn's crowdsourced list of every known Guardian ruin system -- a
 small, near-static galaxy-wide dataset (214 systems as of 2026-08-31),
 unlike PowerPlay control state which changes weekly. Cached to disk and

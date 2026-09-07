@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """Offline reference table of real rare goods and their one true canonical
 selling station (market_id) — sourced from EDCD/FDevIDs rare_commodity.csv
 (Frontier game data, no separate license grant; used non-commercially

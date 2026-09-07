@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """EDDN live PowerPlay cross-check — real-time cache fed by the EDDN relay.
 
 Unlike edsm_powerplay.py (a bounded daily dump), this is populated

@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """PowerPlay System Status tab — shows Frontier's own official PowerPlay
 data (control status + this cycle's Control Points tug-of-war) for two
 sets of systems:

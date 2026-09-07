@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """Parses a minor-faction system-presence CSV exported from Inara
 (faction page -> export). Used to seed a bulk system list for the Player
 Faction tab when a faction is present in hundreds of systems — too many

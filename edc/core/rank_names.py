@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """Rank-index -> display-name tables for the Rank/Progress journal events.
 Verified against the community Journal Manual (elite-journal.readthedocs.io).
 Combat/Trade/Explore/CQC/Soldier/Exobiologist top out at "Elite" (index 8)

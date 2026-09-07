@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """Frontier's own official PowerPlay data feed — first-party ground truth
 for which power currently controls a system, used to correct Spansh's
 crawl (which can lag reality) in the PowerPlay Finder.

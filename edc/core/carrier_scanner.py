@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """Full-history scan to reconstruct fleet carrier status (own + squadron's
 shared carrier) at app startup — same reasoning as bounty_scanner.py: the
 live bootstrap only re-reads the tail of the current journal, so a carrier

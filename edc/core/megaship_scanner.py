@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+
 """One-shot full-history scan to reconstruct which megaships have already
 been visited, at app startup — mirrors bounty_scanner.py's reasoning.
 A megaship's Ship Uplinks (the real merit source, confirmed by journal
