@@ -71,3 +71,19 @@ def test_no_exclusions_returns_closest_station(repo):
     _add_station(repo, 2, "Far", "SysFar", "Faction Y", 500.0, 0.0, 0.0)
     result = repo.find_closest_interstellar_factors(0.0, 0.0, 0.0, exclude_factions=None)
     assert result["station_name"] == "Near"
+
+
+def test_candidates_can_be_cached_and_reused_for_closest_pick(repo):
+    # get_facilitator_candidates()/closest_facilitator_from_candidates() is
+    # the split used by _refresh_bounty_status to cache the SQL query per
+    # exclude_factions set and only redo the cheap distance pass each tick.
+    _add_station(repo, 1, "Near", "SysNear", "Faction X", 0.0, 0.0, 0.0)
+    _add_station(repo, 2, "Far", "SysFar", "Faction Y", 500.0, 0.0, 0.0)
+    candidates = repo.get_facilitator_candidates(exclude_factions=None)
+    assert len(candidates) == 2
+
+    near = repo.closest_facilitator_from_candidates(candidates, 0.0, 0.0, 0.0)
+    assert near["station_name"] == "Near"
+
+    far = repo.closest_facilitator_from_candidates(candidates, 500.0, 0.0, 0.0)
+    assert far["station_name"] == "Far"

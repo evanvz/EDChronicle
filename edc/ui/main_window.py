@@ -1517,6 +1517,16 @@ class MainWindow(QMainWindow):
         self._codex_sightings_cache: dict = {}
         self._codex_sightings_cache_system: int | None = None
 
+        # _refresh_bounty_status() re-ran find_closest_interstellar_factors's
+        # O(24,783)-candidate SQL query on every 75ms-debounced HUD tick
+        # whenever a bounty was outstanding -- confirmed live (py-spy) as a
+        # multi-minute freeze during combat. The candidate set only depends
+        # on which factions are excluded, not the ship's position, so it's
+        # cached per exclude_factions set; only the cheap Python
+        # closest-distance pass is redone each tick.
+        self._if_candidates: list = []
+        self._if_candidates_key: frozenset = frozenset()
+
         # Canonical paths: app_dir for shipped assets, settings_dir for writable JSON/caches.
         app_dir = Path(getattr(self.cfg_store, "app_dir", Path.cwd()))
         settings_base = Path(getattr(self.cfg_store, "settings_dir", app_dir / "settings"))
@@ -5039,9 +5049,13 @@ class MainWindow(QMainWindow):
         x, y, z = self.state.system_x, self.state.system_y, self.state.system_z
         if not all(isinstance(v, (int, float)) for v in (x, y, z)):
             return
+        payable_key = frozenset(payable.keys())
         try:
-            self.state.closest_interstellar_factors = self.repo.find_closest_interstellar_factors(
-                x, y, z, exclude_factions=list(payable.keys())
+            if self._if_candidates_key != payable_key:
+                self._if_candidates = self.repo.get_facilitator_candidates(list(payable.keys()))
+                self._if_candidates_key = payable_key
+            self.state.closest_interstellar_factors = self.repo.closest_facilitator_from_candidates(
+                self._if_candidates, x, y, z, exclude_factions=list(payable.keys())
             )
         except Exception:
             log.exception("Failed to find closest Interstellar Factors station")
@@ -5077,9 +5091,21 @@ class MainWindow(QMainWindow):
         _EddnFlushWorker for why this moved off the main thread. The WAL
         checkpoint is a separate, much longer-cadence timer — see
         _on_wal_checkpoint_tick / _WalCheckpointWorker.
+
+        Also skips a tick while the WAL checkpoint worker is running --
+        confirmed live: this flush's own executemany() write and a
+        concurrent net.wal_checkpoint(TRUNCATE) landing at the same
+        moment (the two timers are on independent, uncoordinated
+        schedules -- 45s vs 5min -- so they periodically coincide) both
+        exceeded the 30s busy_timeout, one throwing "database is locked"
+        outright. The two timer callbacks are both main-thread QTimer
+        slots (never run concurrently with each other), so checking the
+        other worker's QThread.isRunning() here is race-free.
         """
         if self._flush_thread and self._flush_thread.isRunning():
             return  # previous flush still running — next tick will catch up
+        if self._wal_checkpoint_thread and self._wal_checkpoint_thread.isRunning():
+            return  # checkpoint in progress — avoid colliding on the same file
         coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals, system_profiles, body_scans = self.eddn_market_cache.pop_buffers()
         if not (coords or market or factions or stations or codex or fcmaterials or carrier_access or bgs_status or res_sites or body_signals or system_profiles or body_scans):
             return
@@ -5105,9 +5131,15 @@ class MainWindow(QMainWindow):
 
     def _on_wal_checkpoint_tick(self) -> None:
         """See _WalCheckpointWorker for why this is split off the 45s
-        market-flush cadence onto its own, much longer timer."""
+        market-flush cadence onto its own, much longer timer.
+
+        Also skips a tick while the EDDN flush worker is running -- see
+        _on_market_flush_tick's matching check for why (confirmed live
+        collision between these two independently-scheduled timers)."""
         if self._wal_checkpoint_thread and self._wal_checkpoint_thread.isRunning():
             return  # previous checkpoint still running — next tick will catch up
+        if self._flush_thread and self._flush_thread.isRunning():
+            return  # EDDN flush in progress — avoid colliding on the same file
         self._wal_checkpoint_worker = _WalCheckpointWorker(self.repo.db.db_path)
         self._wal_checkpoint_thread = QThread()
         self._wal_checkpoint_worker.moveToThread(self._wal_checkpoint_thread)

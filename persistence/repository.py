@@ -1643,17 +1643,27 @@ class Repository:
         self, x: float, y: float, z: float, exclude_factions: Optional[list[str]] = None,
     ) -> Optional[dict]:
         """
-        Closest known station (from our own past Docked visits) confirmed to
-        offer Interstellar Factors ("Facilitator" in StationServices), in a
-        SYSTEM where none of exclude_factions has any presence at all —
-        confirmed against Elite Dangerous's actual rule (cross-checked
-        multiple sources): Interstellar Factors refuses to clear a bounty
-        or fine if the issuing faction is present anywhere in that system,
-        not merely if it controls the specific station. A non-controlling
-        5%-influence minor presence still blocks it, so this checks every
+        Closest known station confirmed to offer Interstellar Factors
+        ("Facilitator" in StationServices), in a SYSTEM where none of
+        exclude_factions has any presence at all — confirmed against Elite
+        Dangerous's actual rule (cross-checked multiple sources):
+        Interstellar Factors refuses to clear a bounty or fine if the
+        issuing faction is present anywhere in that system, not merely if
+        it controls the specific station. A non-controlling 5%-influence
+        minor presence still blocks it, so this checks every
         faction_snapshots row for the system, not just station_faction.
         Distance computed in Python against system_coords, same pattern as
-        search_market_prices — dataset is bounded to stations we've visited.
+        search_market_prices. station_info is galaxy-wide (EDDN-crowdsourced
+        Docked sightings from every commander, not just personal visits --
+        confirmed live: 24,783 Facilitator-service rows on a real DB, not
+        "our own past visits" as this docstring previously claimed).
+
+        The exclusion is computed as a single set of blocked system names
+        up front, not a per-candidate-row correlated subquery -- confirmed
+        live as a multi-minute freeze on the UI thread otherwise (a
+        correlated NOT EXISTS re-scanning faction_snapshots once per
+        candidate station, ~24,783 times, each with its own nested
+        correlated MAX(snapshot_date) lookup).
 
         Interstellar Factors presence is BGS-driven (only spawns in Low
         Security/Anarchy stations, and disappears if the system's security
@@ -1665,17 +1675,29 @@ class Repository:
         looks clear here even if that faction is quietly present but never
         personally observed or EDDN-reported there.
         """
+        candidates = self.get_facilitator_candidates(exclude_factions)
+        return self.closest_facilitator_from_candidates(candidates, x, y, z, exclude_factions)
+
+    def get_facilitator_candidates(
+        self, exclude_factions: Optional[list[str]] = None,
+    ) -> list:
+        """
+        The SQL half of find_closest_interstellar_factors, split out so a
+        caller (the 75ms-debounced HUD refresh) can cache this per
+        exclude_factions set instead of re-running it every tick -- the
+        distance-to-candidates step below is cheap and can be redone fresh
+        each time against the ship's current position.
+        """
         excluded = [f.strip() for f in (exclude_factions or []) if f]
-        excluded_lower = {f.lower() for f in excluded}
 
         if excluded:
             placeholders = ",".join("?" for _ in excluded)
             exclusion_clause = f"""
-                AND NOT EXISTS (
-                    SELECT 1 FROM systems sy
-                    JOIN faction_snapshots fs ON fs.system_address = sy.system_address
-                    WHERE sy.system_name = si.system_name
-                      AND fs.faction_name IN ({placeholders})
+                AND si.system_name NOT IN (
+                    SELECT sy.system_name
+                    FROM faction_snapshots fs
+                    JOIN systems sy ON sy.system_address = fs.system_address
+                    WHERE fs.faction_name IN ({placeholders})
                       AND fs.snapshot_date = (
                           SELECT MAX(snapshot_date) FROM faction_snapshots fs2
                           WHERE fs2.system_address = fs.system_address AND fs2.faction_name = fs.faction_name
@@ -1687,7 +1709,7 @@ class Repository:
             exclusion_clause = ""
             params = ()
 
-        rows = self.db.conn.execute(
+        return self.db.conn.execute(
             f"""
             SELECT si.market_id, si.station_name, si.system_name, si.station_faction,
                    si.station_type, si.pads_small, si.pads_medium, si.pads_large,
@@ -1700,9 +1722,15 @@ class Repository:
             params,
         ).fetchall()
 
+    def closest_facilitator_from_candidates(
+        self, candidates: list, x: float, y: float, z: float,
+        exclude_factions: Optional[list[str]] = None,
+    ) -> Optional[dict]:
+        excluded_lower = {f.strip().lower() for f in (exclude_factions or []) if f}
+
         best = None
         best_dist = None
-        for r in rows:
+        for r in candidates:
             # Belt-and-suspenders alongside the SQL system-presence
             # exclusion above: covers a station whose own station_faction
             # we know (from a personal Docked visit) even in a system
