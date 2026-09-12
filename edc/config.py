@@ -51,6 +51,7 @@ class AppConfig:
     eddn_contribute_enabled: bool = True
     market_search_radius_ly: int = 100
     last_market_prune_date: Optional[str] = None
+    search_indexes_ensured: bool = False
 
     def __post_init__(self):
         if self.tts_events is None:
@@ -191,6 +192,7 @@ class ConfigStore:
                 eddn_contribute_enabled=bool(data.get("eddn_contribute_enabled", True)),
                 market_search_radius_ly=int(data.get("market_search_radius_ly", 100) or 100),
                 last_market_prune_date=data.get("last_market_prune_date"),
+                search_indexes_ensured=bool(data.get("search_indexes_ensured", False)),
             )
             if isinstance(data.get("tts_events"), dict):
                 cfg.tts_events.update(data["tts_events"])
@@ -226,6 +228,7 @@ class ConfigStore:
                         "eddn_contribute_enabled": bool(getattr(cfg, "eddn_contribute_enabled", True)),
                         "market_search_radius_ly": int(getattr(cfg, "market_search_radius_ly", 100) or 100),
                         "last_market_prune_date": getattr(cfg, "last_market_prune_date", None),
+                        "search_indexes_ensured": bool(getattr(cfg, "search_indexes_ensured", False)),
                     },
                     indent=2,
                 ),

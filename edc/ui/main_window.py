@@ -263,6 +263,40 @@ class _MarketPruneWorker(QObject):
         )
 
 
+class _SearchIndexWorker(QObject):
+    """
+    One-shot: builds the market_prices/system_coords search indexes that
+    speed up Market/Trade Route Loop Planner radius queries -- confirmed
+    live as a 48.7s full table scan at 13.4M rows dropping to 6.2s once
+    indexed (see Database.ensure_market_prices_indexes' docstring).
+    Previously these only ever got built via Settings' manual "Compact
+    Database Now" button (_MarketVacuumWorker) -- most installs never
+    click that, leaving every search on an unindexed table indefinitely.
+    CREATE INDEX IF NOT EXISTS makes every run after the first an instant
+    no-op, but the first build takes ~2+ minutes at this scale, so this
+    still must never run on the UI thread. Opens its own connection per
+    the project's cross-thread SQLite rule.
+    """
+    finished = pyqtSignal()
+
+    def __init__(self, db_path):
+        super().__init__()
+        self._db_path = db_path
+
+    def run(self):
+        from persistence.database import Database
+
+        db = Database(self._db_path)
+        try:
+            db.ensure_market_prices_indexes()
+            db.ensure_system_coords_indexes()
+        except Exception:
+            log.exception("Search index build failed")
+        finally:
+            db.close()
+        self.finished.emit()
+
+
 class _MarketVacuumWorker(QObject):
     """
     User-triggered only (Settings' "Compact Database Now") — reclaims disk
@@ -416,6 +450,58 @@ class _EddnFlushWorker(QObject):
         finally:
             db.close()
         self.finished.emit()
+
+
+class _SpanshSaveWorker(QObject):
+    """
+    Persists Spansh-enriched body data off the UI thread -- same
+    Database.execute()-auto-commits-per-call problem as the EDDN flush
+    above, but this one ran synchronously on the UI thread itself, not
+    just a background worker: confirmed live as the freeze reported
+    2026-08-27, never actually fixed until now (some systems return
+    hundreds of bodies from Spansh). Opens its own connection per the
+    project's cross-thread SQLite rule.
+    """
+    finished = pyqtSignal(int)  # system_address
+
+    def __init__(self, db_path, system_address, bodies):
+        super().__init__()
+        self._db_path = db_path
+        self._system_address = system_address
+        self._bodies = bodies
+
+    def run(self):
+        from persistence.database import Database
+        from persistence.repository import Repository
+
+        db = Database(self._db_path)
+        try:
+            repo = Repository(db)
+            with db.deferred_commit():
+                for b in self._bodies:
+                    repo.save_spansh_body(
+                        system_address=self._system_address,
+                        body_name=b["name"],
+                        planet_class=b.get("planet_class"),
+                        distance_ls=b.get("distance_ls"),
+                        estimated_value=b.get("estimated_value"),
+                        landable=b.get("landable"),
+                        surface_gravity=b.get("surface_gravity"),
+                        radius=b.get("radius"),
+                        mass_em=b.get("mass_em"),
+                        surface_temperature=b.get("surface_temperature"),
+                        surface_pressure=b.get("surface_pressure"),
+                        atmosphere_type=b.get("atmosphere_type"),
+                        volcanism=b.get("volcanism"),
+                        tidal_lock=b.get("tidal_lock"),
+                        was_mapped=b.get("was_mapped"),
+                        updated_at=b.get("updated_at"),
+                    )
+        except Exception:
+            log.exception("Failed to save Spansh-enriched bodies for address %s", self._system_address)
+        finally:
+            db.close()
+        self.finished.emit(self._system_address)
 
 
 class _WalCheckpointWorker(QObject):
@@ -653,13 +739,17 @@ class MainWindow(QMainWindow):
         controlling = (getattr(self.state, "controlling_faction", None) or "").strip()
         today = date.today().isoformat()
         try:
-            for f in factions:
-                if not isinstance(f, dict):
-                    continue
-                is_controlling = bool(controlling) and f.get("Name") == controlling
-                self.repo.save_faction_snapshot(
-                    system_address, f, today, is_controlling, event_timestamp, "journal",
-                )
+            # Two auto-committing execute() calls per faction (upsert +
+            # 30-day-retention delete, see save_faction_snapshot) -- one
+            # commit for the whole system's faction list instead.
+            with self.repo.db.deferred_commit():
+                for f in factions:
+                    if not isinstance(f, dict):
+                        continue
+                    is_controlling = bool(controlling) and f.get("Name") == controlling
+                    self.repo.save_faction_snapshot(
+                        system_address, f, today, is_controlling, event_timestamp, "journal",
+                    )
         except Exception:
             log.exception("Failed to save faction snapshots")
 
@@ -715,23 +805,39 @@ class MainWindow(QMainWindow):
         self._save_system_coords_from_state(system_name, event_timestamp)
 
     def _save_ring_data(self):
+        """
+        rings accumulates every ring scanned this session in the system --
+        re-saving all of them on every Scan/SAASignalsFound/SAAScanComplete
+        event is O(n^2) across a scan burst (each auto-commits via
+        Database.execute()). _ring_last_seen skips a ring whose signature
+        hasn't changed since the last time it was saved.
+        """
         system_address = getattr(self.state, "system_address", None)
         rings = getattr(self.state, "rings", None) or {}
         if not isinstance(system_address, int) or not rings:
             return
         try:
-            for ring_name, rec in rings.items():
-                if not isinstance(rec, dict) or rec.get("system_address") != system_address:
-                    continue
-                self.repo.save_ring(
-                    system_address=system_address,
-                    ring_name=ring_name,
-                    parent_body=rec.get("parent_body"),
-                    ring_class=rec.get("ring_class") or "",
-                    distance_ls=rec.get("distance_ls"),
-                    scanned=bool(rec.get("scanned")),
-                    hotspots=rec.get("hotspots") or None,
-                )
+            with self.repo.db.deferred_commit():
+                for ring_name, rec in rings.items():
+                    if not isinstance(rec, dict) or rec.get("system_address") != system_address:
+                        continue
+                    key = (system_address, ring_name)
+                    signature = (
+                        rec.get("parent_body"), rec.get("ring_class"), rec.get("distance_ls"),
+                        bool(rec.get("scanned")), rec.get("hotspots"),
+                    )
+                    if self._ring_last_seen.get(key) == signature:
+                        continue
+                    self._ring_last_seen[key] = signature
+                    self.repo.save_ring(
+                        system_address=system_address,
+                        ring_name=ring_name,
+                        parent_body=rec.get("parent_body"),
+                        ring_class=rec.get("ring_class") or "",
+                        distance_ls=rec.get("distance_ls"),
+                        scanned=bool(rec.get("scanned")),
+                        hotspots=rec.get("hotspots") or None,
+                    )
         except Exception:
             log.exception("Failed to save ring data")
 
@@ -751,51 +857,87 @@ class MainWindow(QMainWindow):
         bodies = getattr(self.state, "bodies", None) or {}
         if not isinstance(system_address, int) or not bodies:
             return
-        for body_name, rec in bodies.items():
-            if not isinstance(rec, dict):
-                continue
-            body_id = rec.get("BodyID")
-            planet_class = rec.get("PlanetClass")
-            if not isinstance(body_id, int) or not isinstance(planet_class, str) or not planet_class:
-                continue
-            try:
-                materials = rec.get("Materials")
-                materials_json = json.dumps(materials) if isinstance(materials, dict) and materials else None
-                atmo_comp = rec.get("AtmosphereComposition")
-                atmo_comp_json = json.dumps(atmo_comp) if isinstance(atmo_comp, list) and atmo_comp else None
-                comp = rec.get("Composition")
-                comp_json = json.dumps(comp) if isinstance(comp, dict) and comp else None
-                tidal_lock = rec.get("TidalLock")
-                first_discovered = rec.get("FirstDiscovered")
+        # bodies accumulates every body scanned this session in the system
+        # -- re-saving all of them on every Scan/SAASignalsFound/
+        # SAAScanComplete event is O(n^2) across a scan burst (each
+        # auto-commits via Database.execute()). _body_last_seen skips a
+        # body whose full field signature hasn't changed since last saved.
+        with self.repo.db.deferred_commit():
+            for body_name, rec in bodies.items():
+                if not isinstance(rec, dict):
+                    continue
+                body_id = rec.get("BodyID")
+                planet_class = rec.get("PlanetClass")
+                if not isinstance(body_id, int) or not isinstance(planet_class, str) or not planet_class:
+                    continue
+                try:
+                    materials = rec.get("Materials")
+                    materials_json = json.dumps(materials) if isinstance(materials, dict) and materials else None
+                    atmo_comp = rec.get("AtmosphereComposition")
+                    atmo_comp_json = json.dumps(atmo_comp) if isinstance(atmo_comp, list) and atmo_comp else None
+                    comp = rec.get("Composition")
+                    comp_json = json.dumps(comp) if isinstance(comp, dict) and comp else None
+                    tidal_lock = rec.get("TidalLock")
+                    first_discovered = rec.get("FirstDiscovered")
 
-                self.repo.save_body(
-                    system_address=system_address,
-                    body_id=body_id,
-                    body_name=body_name,
-                    planet_class=planet_class,
-                    terraformable=int(bool(rec.get("Terraformable"))),
-                    landable=rec.get("Landable"),
-                    was_mapped=int(bool(rec.get("WasMapped"))),
-                    dss_mapped=int(bool(rec.get("DSSMapped"))),
-                    estimated_value=rec.get("EstimatedValue"),
-                    distance_ls=rec.get("DistanceLS"),
-                    volcanism=rec.get("Volcanism") or None,
-                    materials=materials_json,
-                    mass_em=rec.get("MassEM"),
-                    radius=rec.get("Radius"),
-                    surface_gravity=rec.get("SurfaceGravity"),
-                    surface_temperature=rec.get("SurfaceTemperature"),
-                    surface_pressure=rec.get("SurfacePressure"),
-                    atmosphere_type=rec.get("AtmosphereType") or None,
-                    atmosphere=rec.get("Atmosphere") or None,
-                    atmosphere_composition=atmo_comp_json,
-                    composition=comp_json,
-                    tidal_lock=int(bool(tidal_lock)) if tidal_lock is not None else None,
-                    first_discovered=int(bool(first_discovered)) if first_discovered is not None else None,
-                    was_footfalled=int(bool(rec.get("WasFootfalled"))),
-                )
-            except Exception:
-                log.exception("Failed to save body data for %s", body_name)
+                    terraformable = int(bool(rec.get("Terraformable")))
+                    landable = rec.get("Landable")
+                    was_mapped = int(bool(rec.get("WasMapped")))
+                    dss_mapped = int(bool(rec.get("DSSMapped")))
+                    estimated_value = rec.get("EstimatedValue")
+                    distance_ls = rec.get("DistanceLS")
+                    volcanism = rec.get("Volcanism") or None
+                    mass_em = rec.get("MassEM")
+                    radius = rec.get("Radius")
+                    surface_gravity = rec.get("SurfaceGravity")
+                    surface_temperature = rec.get("SurfaceTemperature")
+                    surface_pressure = rec.get("SurfacePressure")
+                    atmosphere_type = rec.get("AtmosphereType") or None
+                    atmosphere = rec.get("Atmosphere") or None
+                    tidal_lock_val = int(bool(tidal_lock)) if tidal_lock is not None else None
+                    first_discovered_val = int(bool(first_discovered)) if first_discovered is not None else None
+                    was_footfalled = int(bool(rec.get("WasFootfalled")))
+
+                    key = (system_address, body_id)
+                    signature = (
+                        planet_class, terraformable, landable, was_mapped, dss_mapped,
+                        estimated_value, distance_ls, volcanism, materials_json, mass_em,
+                        radius, surface_gravity, surface_temperature, surface_pressure,
+                        atmosphere_type, atmosphere, atmo_comp_json, comp_json,
+                        tidal_lock_val, first_discovered_val, was_footfalled,
+                    )
+                    if self._body_last_seen.get(key) == signature:
+                        continue
+                    self._body_last_seen[key] = signature
+
+                    self.repo.save_body(
+                        system_address=system_address,
+                        body_id=body_id,
+                        body_name=body_name,
+                        planet_class=planet_class,
+                        terraformable=terraformable,
+                        landable=landable,
+                        was_mapped=was_mapped,
+                        dss_mapped=dss_mapped,
+                        estimated_value=estimated_value,
+                        distance_ls=distance_ls,
+                        volcanism=volcanism,
+                        materials=materials_json,
+                        mass_em=mass_em,
+                        radius=radius,
+                        surface_gravity=surface_gravity,
+                        surface_temperature=surface_temperature,
+                        surface_pressure=surface_pressure,
+                        atmosphere_type=atmosphere_type,
+                        atmosphere=atmosphere,
+                        atmosphere_composition=atmo_comp_json,
+                        composition=comp_json,
+                        tidal_lock=tidal_lock_val,
+                        first_discovered=first_discovered_val,
+                        was_footfalled=was_footfalled,
+                    )
+                except Exception:
+                    log.exception("Failed to save body data for %s", body_name)
 
     def _save_resolved_bodies(self):
         """
@@ -812,13 +954,22 @@ class MainWindow(QMainWindow):
         resolved = getattr(self.state, "resolved_body_ids", None) or set()
         if not isinstance(system_address, int) or not resolved:
             return
-        for body_id in resolved:
-            if not isinstance(body_id, int):
-                continue
-            try:
-                self.repo.save_resolved_body(system_address, body_id)
-            except Exception:
-                log.exception("Failed to save resolved body %s", body_id)
+        # resolved_body_ids accumulates every resolved body this session --
+        # re-saving all of them on every event is O(n^2) across a scan
+        # burst. "Resolved" is a permanent one-time fact, so a plain
+        # presence set (not a signature) is enough to skip an already-saved id.
+        with self.repo.db.deferred_commit():
+            for body_id in resolved:
+                if not isinstance(body_id, int):
+                    continue
+                key = (system_address, body_id)
+                if key in self._resolved_body_saved:
+                    continue
+                try:
+                    self.repo.save_resolved_body(system_address, body_id)
+                    self._resolved_body_saved.add(key)
+                except Exception:
+                    log.exception("Failed to save resolved body %s", body_id)
 
     def _save_codex_entries(self):
         """
@@ -835,29 +986,41 @@ class MainWindow(QMainWindow):
         exo = getattr(self.state, "exo", None) or {}
         if not isinstance(system_address, int) or not exo:
             return
-        for rec in exo.values():
-            if not isinstance(rec, dict) or (rec.get("LastScanType") or "").upper() != "CODEX":
-                continue
-            body_id = rec.get("BodyID")
-            genus = rec.get("Genus")
-            species = rec.get("Species") or rec.get("CodexName") or ""
-            variant = rec.get("Variant") or ""
-            if not isinstance(body_id, int) or not genus or not species or not variant:
-                continue
-            try:
-                self.repo.save_codex_entry(
-                    system_address=system_address,
-                    body_id=body_id,
-                    genus=genus,
-                    species=species,
-                    variant=variant,
-                    codex_entry_id=rec.get("CodexEntryID"),
-                    codex_name=rec.get("CodexName"),
-                    base_value=rec.get("BaseValue") if isinstance(rec.get("BaseValue"), int) else None,
-                    is_phenomena=int(bool(rec.get("IsPhenomena"))),
-                )
-            except Exception:
-                log.exception("Failed to save codex entry for genus %s", genus)
+        # exo accumulates every codex-scanned record this session -- re-
+        # saving all of them on every CodexEntry event is O(n^2) across a
+        # burst. _codex_entry_last_seen skips a record whose signature
+        # hasn't changed since last saved.
+        with self.repo.db.deferred_commit():
+            for rec in exo.values():
+                if not isinstance(rec, dict) or (rec.get("LastScanType") or "").upper() != "CODEX":
+                    continue
+                body_id = rec.get("BodyID")
+                genus = rec.get("Genus")
+                species = rec.get("Species") or rec.get("CodexName") or ""
+                variant = rec.get("Variant") or ""
+                if not isinstance(body_id, int) or not genus or not species or not variant:
+                    continue
+                key = (system_address, body_id, genus, species, variant)
+                base_value = rec.get("BaseValue") if isinstance(rec.get("BaseValue"), int) else None
+                is_phenomena = int(bool(rec.get("IsPhenomena")))
+                signature = (rec.get("CodexEntryID"), base_value, is_phenomena)
+                if self._codex_entry_last_seen.get(key) == signature:
+                    continue
+                self._codex_entry_last_seen[key] = signature
+                try:
+                    self.repo.save_codex_entry(
+                        system_address=system_address,
+                        body_id=body_id,
+                        genus=genus,
+                        species=species,
+                        variant=variant,
+                        codex_entry_id=rec.get("CodexEntryID"),
+                        codex_name=rec.get("CodexName"),
+                        base_value=base_value,
+                        is_phenomena=is_phenomena,
+                    )
+                except Exception:
+                    log.exception("Failed to save codex entry for genus %s", genus)
 
     def _load_persisted_rings(self, system_address: int) -> None:
         """
@@ -1335,6 +1498,25 @@ class MainWindow(QMainWindow):
         # nothing.
         self._colonisation_depot_last_seen: dict = {}
 
+        # Scan/SAASignalsFound/SAAScanComplete re-save the FULL
+        # session-accumulated ring/body/resolved-body/codex collections on
+        # every single event, not just what changed -- an O(n^2) pattern
+        # across a scan burst (confirmed live: each auto-commits via
+        # Database.execute()). Same dedup-guard shape as
+        # _colonisation_depot_last_seen above, one map per collection.
+        self._ring_last_seen: dict = {}
+        self._body_last_seen: dict = {}
+        self._resolved_body_saved: set = set()
+        self._codex_entry_last_seen: dict = {}
+
+        # _compute_action_state() re-queried get_codex_species_sightings_
+        # for_system() on every 75ms-debounced HUD refresh even when the
+        # system hadn't changed -- cached per system_address (a system
+        # change is a natural cache miss; the EDDN flush's finished signal
+        # separately invalidates it, see _on_eddn_flush_finished).
+        self._codex_sightings_cache: dict = {}
+        self._codex_sightings_cache_system: int | None = None
+
         # Canonical paths: app_dir for shipped assets, settings_dir for writable JSON/caches.
         app_dir = Path(getattr(self.cfg_store, "app_dir", Path.cwd()))
         settings_base = Path(getattr(self.cfg_store, "settings_dir", app_dir / "settings"))
@@ -1439,6 +1621,8 @@ class MainWindow(QMainWindow):
         self._guardian_ruins_worker: _GuardianRuinsRefreshWorker | None = None
         self._market_prune_thread: QThread | None = None
         self._market_prune_worker: _MarketPruneWorker | None = None
+        self._search_index_thread: QThread | None = None
+        self._search_index_worker: _SearchIndexWorker | None = None
         self._market_vacuum_thread: QThread | None = None
         self._market_vacuum_worker: _MarketVacuumWorker | None = None
 
@@ -2090,6 +2274,7 @@ class MainWindow(QMainWindow):
         self._maybe_start_fdev_powerplay_refresh()
         self._maybe_start_guardian_ruins_refresh()
         self._maybe_start_market_prune()
+        self._maybe_start_search_index_build()
         self._start_eddn_listener()
         # Always running, not just when today's initial check found the
         # cache stale -- see the timer's own comment: date.today() moves
@@ -2121,6 +2306,12 @@ class MainWindow(QMainWindow):
         self._replaying: bool = False  # True during journal bootstrap; suppresses all TTS
         self._enrich_thread: QThread | None = None
         self._enrich_worker: _SpanshEnrichWorker | None = None
+        self._spansh_save_thread: QThread | None = None
+        self._spansh_save_worker: _SpanshSaveWorker | None = None
+        # One-slot last-wins queue: if enrichment finishes while a save is
+        # still running, keep the newest (system_address, bodies) and start
+        # it when the current save finishes -- do not drop the payload.
+        self._spansh_save_pending: tuple[int, list] | None = None
         self._ring_gap_thread: QThread | None = None
         self._ring_gap_worker: _SpanshRingWorker | None = None
 
@@ -2386,6 +2577,31 @@ class MainWindow(QMainWindow):
         self.cfg.last_market_prune_date = date.today().isoformat()
         self.cfg_store.save(self.cfg)
 
+    def _maybe_start_search_index_build(self):
+        """One-shot, not once/day like the prune worker -- CREATE INDEX IF
+        NOT EXISTS makes every run after the first an instant no-op, so
+        there's nothing to re-check daily. search_indexes_ensured just
+        skips even that no-op check (and the worker/thread spin-up) on
+        every future startup once it's confirmed done."""
+        if getattr(self.cfg, "search_indexes_ensured", False):
+            return
+        if self._search_index_thread and self._search_index_thread.isRunning():
+            return
+
+        log.info("Building market_prices/system_coords search indexes in background (first run only)")
+        self._search_index_worker = _SearchIndexWorker(self.repo.db.db_path)
+        self._search_index_thread = QThread()
+        self._search_index_worker.moveToThread(self._search_index_thread)
+        self._search_index_thread.started.connect(self._search_index_worker.run)
+        self._search_index_worker.finished.connect(self._on_search_index_build_finished)
+        self._search_index_worker.finished.connect(self._search_index_thread.quit)
+        self._search_index_thread.start()
+
+    def _on_search_index_build_finished(self) -> None:
+        log.info("Search index build complete")
+        self.cfg.search_indexes_ensured = True
+        self.cfg_store.save(self.cfg)
+
     def _on_compact_db_clicked(self) -> None:
         if self._market_vacuum_thread and self._market_vacuum_thread.isRunning():
             return
@@ -2504,46 +2720,39 @@ class MainWindow(QMainWindow):
         self._enrich_worker.finished.connect(self._enrich_thread.quit)
         self._enrich_thread.start()
 
+    def _start_spansh_save(self, system_address: int, bodies: list) -> None:
+        """Kick a Spansh body-save worker. Caller must ensure no save is running."""
+        self._spansh_save_worker = _SpanshSaveWorker(self.repo.db.db_path, system_address, bodies)
+        self._spansh_save_thread = QThread()
+        self._spansh_save_worker.moveToThread(self._spansh_save_thread)
+        self._spansh_save_thread.started.connect(self._spansh_save_worker.run)
+        self._spansh_save_worker.finished.connect(self._on_spansh_saved)
+        self._spansh_save_worker.finished.connect(self._spansh_save_thread.quit)
+        self._spansh_save_thread.start()
+
     def _on_spansh_enrichment(self, bodies: list, error: str, system_address: int):
         if error:
             log.warning("Spansh enrichment failed: %s", error)
         current_address = getattr(self.state, "system_address", None)
-        log.info("Spansh enrichment result: bodies=%d error=%r current_addr=%s worker_addr=%s",
-                 len(bodies), error, current_address, system_address)
         if current_address != system_address or not bodies:
-            log.info("Spansh enrichment discarded: addr mismatch or empty")
             return
-        # Diagnostic timing -- per-body save_spansh_body() + the state
-        # merge/card rebuild below all run synchronously on the main
-        # thread for however many bodies Spansh returned (some systems
-        # have hundreds). Temporary: remove once the freeze reported
-        # 2026-08-27 is diagnosed.
-        _t0 = time.perf_counter()
-        saved = 0
-        for b in bodies:
-            self.repo.save_spansh_body(
-                system_address=system_address,
-                body_name=b["name"],
-                planet_class=b.get("planet_class"),
-                distance_ls=b.get("distance_ls"),
-                estimated_value=b.get("estimated_value"),
-                landable=b.get("landable"),
-                surface_gravity=b.get("surface_gravity"),
-                radius=b.get("radius"),
-                mass_em=b.get("mass_em"),
-                surface_temperature=b.get("surface_temperature"),
-                surface_pressure=b.get("surface_pressure"),
-                atmosphere_type=b.get("atmosphere_type"),
-                volcanism=b.get("volcanism"),
-                tidal_lock=b.get("tidal_lock"),
-                was_mapped=b.get("was_mapped"),
-                updated_at=b.get("updated_at"),
-            )
-            saved += 1
-        _elapsed_ms = (time.perf_counter() - _t0) * 1000
-        log.info("Spansh enrichment saved %d/%d bodies for address %d (%.0fms)",
-                 saved, len(bodies), system_address, _elapsed_ms)
-        self.system_data_loader.merge_new_spansh_bodies(system_address)
+        if self._spansh_save_thread and self._spansh_save_thread.isRunning():
+            # Last-wins: keep newest payload for when the current save finishes.
+            self._spansh_save_pending = (system_address, bodies)
+            return
+        self._start_spansh_save(system_address, bodies)
+
+    def _on_spansh_saved(self, system_address: int):
+        if getattr(self.state, "system_address", None) == system_address:
+            self.system_data_loader.merge_new_spansh_bodies(system_address)
+        pending = self._spansh_save_pending
+        self._spansh_save_pending = None
+        if not pending:
+            return
+        pending_address, pending_bodies = pending
+        if getattr(self.state, "system_address", None) != pending_address or not pending_bodies:
+            return
+        self._start_spansh_save(pending_address, pending_bodies)
 
     def _maybe_start_ring_hotspot_check(self):
         system_address = getattr(self.state, "system_address", None)
@@ -4882,8 +5091,17 @@ class MainWindow(QMainWindow):
         self._flush_thread = QThread()
         self._flush_worker.moveToThread(self._flush_thread)
         self._flush_thread.started.connect(self._flush_worker.run)
+        self._flush_worker.finished.connect(self._on_eddn_flush_finished)
         self._flush_worker.finished.connect(self._flush_thread.quit)
         self._flush_thread.start()
+
+    def _on_eddn_flush_finished(self) -> None:
+        # This flush may have written new codex_species_sightings rows
+        # (other commanders') for the current system -- force
+        # _compute_action_state()'s cache to refetch on its next call
+        # rather than staying stale until some unrelated event happens to
+        # trigger a refresh.
+        self._codex_sightings_cache_system = None
 
     def _on_wal_checkpoint_tick(self) -> None:
         """See _WalCheckpointWorker for why this is split off the 45s
@@ -5211,10 +5429,13 @@ class MainWindow(QMainWindow):
         # personally running a DSS, unlike the generic genus-range guess
         # below that's all we have for a body nobody's reported yet.
         system_address = getattr(self.state, "system_address", None)
-        codex_sightings = (
-            self.repo.get_codex_species_sightings_for_system(system_address)
-            if isinstance(system_address, int) else {}
-        )
+        if isinstance(system_address, int):
+            if self._codex_sightings_cache_system != system_address:
+                self._codex_sightings_cache = self.repo.get_codex_species_sightings_for_system(system_address)
+                self._codex_sightings_cache_system = system_address
+            codex_sightings = self._codex_sightings_cache
+        else:
+            codex_sightings = {}
         confirmed_species: list[tuple[str, Optional[int]]] = []
 
         for _body, rec in (self.state.bodies or {}).items():

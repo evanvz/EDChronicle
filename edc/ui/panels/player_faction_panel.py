@@ -1036,7 +1036,20 @@ class PlayerFactionPanel(QWidget):
     def refresh(self, state=None) -> None:
         self._last_state = state
         try:
+            _t0 = time.perf_counter()
             overview = self._repo.get_player_faction_overview()
+            _elapsed_ms = (time.perf_counter() - _t0) * 1000
+            # Diagnostic: get_player_faction_overview() has a correlated
+            # MAX(snapshot_date) subquery plus a per-system Python loop
+            # calling _war_corroborated()/_election_corroborated() (each
+            # likely its own query) -- a real N+1 pattern for a faction
+            # tracked across many systems. This runs synchronously on
+            # whichever thread calls refresh() (the UI thread, per every
+            # current caller) on a 20-min timer plus every mission-driven
+            # refresh. No measurement existed to confirm whether it's
+            # actually slow enough to matter before "fixing" it.
+            if _elapsed_ms > 500:
+                log.warning("get_player_faction_overview() took %.0fms", _elapsed_ms)
         except Exception:
             log.exception("Failed to load player faction overview")
             overview = None
