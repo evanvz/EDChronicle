@@ -20,6 +20,13 @@ def repo(tmp_path):
 
 
 _FRESH_TIMESTAMP = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+# save_faction_snapshot() runs a rolling 30-day retention delete right
+# after every insert (see its own docstring: "confirmed live: it was
+# deleted in the same breath it got inserted") -- a hardcoded literal
+# snapshot_date here ages past that window as real time passes and the
+# fixture silently stops working. Computed relative to "now" for the
+# same reason _FRESH_TIMESTAMP already is.
+_FRESH_SNAPSHOT_DATE = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
 def _save(repo, system_address, system_name, faction_name, government=None,
@@ -35,7 +42,7 @@ def _save(repo, system_address, system_name, faction_name, government=None,
     if active_states is not None:
         faction["ActiveStates"] = active_states
     repo.save_faction_snapshot(
-        system_address, faction, "2026-08-12", is_controlling,
+        system_address, faction, _FRESH_SNAPSHOT_DATE, is_controlling,
         data_timestamp, "journal",
     )
 
@@ -98,15 +105,21 @@ def test_non_controlling_faction_is_ignored(repo):
 def test_only_latest_snapshot_date_used(repo):
     # Older row (different snapshot_date) says Anarchy; only the newest
     # row's classification should count. Use save_faction_snapshot twice
-    # with different snapshot_date values via direct calls.
+    # with different snapshot_date values via direct calls. Both dates
+    # must stay within the 30-day retention window (see
+    # save_faction_snapshot's own retention delete) or they'd both be
+    # deleted immediately, passing this test for the wrong reason.
+    now = datetime.now(timezone.utc)
+    older_date = (now - timedelta(days=3)).strftime("%Y-%m-%d")
+    newer_date = (now - timedelta(days=1)).strftime("%Y-%m-%d")
     repo.save_system_name_if_missing(8, "Changed System")
     repo.save_faction_snapshot(
-        8, {"Name": "Faction H", "Government": "Anarchy"}, "2026-08-10",
-        True, "2026-08-10T00:00:00Z", "journal",
+        8, {"Name": "Faction H", "Government": "Anarchy"}, older_date,
+        True, older_date + "T00:00:00Z", "journal",
     )
     repo.save_faction_snapshot(
-        8, {"Name": "Faction H", "Government": "Democracy"}, "2026-08-12",
-        True, "2026-08-12T00:00:00Z", "journal",
+        8, {"Name": "Faction H", "Government": "Democracy"}, newer_date,
+        True, newer_date + "T00:00:00Z", "journal",
     )
     result = repo.get_odyssey_farming_candidates()
     assert result == []
@@ -133,10 +146,11 @@ def test_limit_caps_results(repo):
 
 
 def test_returns_data_timestamp_field(repo):
+    ts = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     _save(repo, 11, "Timestamped", "Faction K", government="Anarchy",
-          data_timestamp="2026-08-11T10:00:00Z")
+          data_timestamp=ts)
     result = repo.get_odyssey_farming_candidates()
-    assert result[0]["data_timestamp"] == "2026-08-11T10:00:00Z"
+    assert result[0]["data_timestamp"] == ts
 
 
 def test_bgs_state_signal_ranks_above_anarchy_only(repo):
