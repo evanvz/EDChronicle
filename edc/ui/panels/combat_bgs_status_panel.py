@@ -16,7 +16,7 @@ from PyQt6.QtCore import Qt, QObject, QThread, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QSpinBox,
-    QTableWidget, QTableWidgetItem, QHeaderView,
+    QTableWidget, QTableWidgetItem, QHeaderView, QComboBox,
 )
 
 from edc.ui import formatting as fmt
@@ -25,6 +25,25 @@ from edc.ui.style import LABEL_STYLE as _LABEL_STYLE
 log = logging.getLogger(__name__)
 _ACCENT_BG = QColor(26, 58, 90)   # squadron-relevant row highlight
 _ACCENT_FG = QColor(255, 179, 71)
+_RAID_BG = QColor(58, 42, 10)     # Civil Unrest / Infrastructure Failure row highlight
+_RAID_FG = QColor(255, 200, 120)
+
+# (dropdown label, matcher) -- matcher(row) decides whether a row passes
+# the filter. "row" is one merged dict from _merge_results().
+_STATUS_FILTERS = [
+    ("All", lambda row: True),
+    ("War / Civil War", lambda row: bool(row["conflicts"])),
+    ("Civil Unrest", lambda row: _has_state(row, "civilunrest")),
+    ("Infrastructure Failure", lambda row: _has_state(row, "infrastructurefailure")),
+]
+
+
+def _has_state(row: Dict[str, Any], state: str) -> bool:
+    for f in row["faction_states"]:
+        for s in (f.get("active_states") or []):
+            if isinstance(s, dict) and str(s.get("State", "")).strip().lower() == state:
+                return True
+    return False
 
 
 class _SearchWorker(QObject):
@@ -124,6 +143,7 @@ class CombatBgsStatusPanel(QWidget):
         self._pp_power: str = ""
         self._search_thread: Optional[QThread] = None
         self._search_worker: Optional[_SearchWorker] = None
+        self._last_rows: List[Dict[str, Any]] = []
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 8)
@@ -152,8 +172,17 @@ class CombatBgsStatusPanel(QWidget):
         )
         self._search_btn.clicked.connect(self._start_search)
 
+        status_label = QLabel("Status:")
+        status_label.setStyleSheet(_LABEL_STYLE)
+        self._status_filter = QComboBox()
+        self._status_filter.addItems([label for label, _ in _STATUS_FILTERS])
+        self._status_filter.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
+        self._status_filter.currentIndexChanged.connect(self._render_results)
+
         row.addWidget(range_label)
         row.addWidget(self._range_spin)
+        row.addWidget(status_label)
+        row.addWidget(self._status_filter)
         row.addWidget(self._search_btn)
         row.addStretch(1)
         root.addLayout(row)
@@ -215,11 +244,24 @@ class CombatBgsStatusPanel(QWidget):
 
     def _on_search_finished(self, bgs_results: list, res_results: list) -> None:
         self._search_btn.setEnabled(True)
-        rows = _merge_results(bgs_results, res_results)
-        self._status_label.setText(
-            f"Found {len(rows)} system{'s' if len(rows) != 1 else ''} with active War/CivilWar, "
-            f"multi-state factions, or RES presence within {self._range_spin.value()} ly of {self._system}."
-        )
+        self._last_rows = _merge_results(bgs_results, res_results)
+        self._render_results()
+
+    def _render_results(self) -> None:
+        """Re-applies the status filter to the last search's results
+        without re-querying -- the full faction-state data per system is
+        already in memory, so switching the dropdown is instant."""
+        label, matcher = _STATUS_FILTERS[self._status_filter.currentIndex()]
+        rows = [r for r in self._last_rows if matcher(r)]
+
+        if self._last_rows:
+            suffix = "" if label == "All" else f" matching '{label}'"
+            self._status_label.setText(
+                f"Found {len(rows)} system{'s' if len(rows) != 1 else ''}{suffix} "
+                f"(of {len(self._last_rows)} with active War/CivilWar, Civil Unrest, "
+                f"Infrastructure Failure, multi-state factions, or RES presence) "
+                f"within {self._range_spin.value()} ly of {self._system}."
+            )
 
         self._table.setRowCount(len(rows))
         for r, row in enumerate(rows):
@@ -230,6 +272,7 @@ class CombatBgsStatusPanel(QWidget):
                     or any(c.get("faction1") in relevant_names or c.get("faction2") in relevant_names for c in row["conflicts"])
                 )
             )
+            is_raid_opportunity = _has_state(row, "civilunrest") or _has_state(row, "infrastructurefailure")
             age_txt, _ = fmt.relative_time(row.get("data_timestamp") or "")
 
             items = [
@@ -243,5 +286,11 @@ class CombatBgsStatusPanel(QWidget):
                 if is_squadron_relevant:
                     item.setBackground(_ACCENT_BG)
                     item.setForeground(_ACCENT_FG)
+                elif is_raid_opportunity:
+                    item.setBackground(_RAID_BG)
+                    item.setForeground(_RAID_FG)
                 self._table.setItem(r, c, item)
-            self._table.item(r, 0).setToolTip(f"Last confirmed {age_txt}")
+            tooltip = f"Last confirmed {age_txt}"
+            if is_raid_opportunity:
+                tooltip += " — Civil Unrest/Infrastructure Failure: settlements here likely lightly defended"
+            self._table.item(r, 0).setToolTip(tooltip)

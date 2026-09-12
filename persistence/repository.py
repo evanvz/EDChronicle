@@ -9,7 +9,7 @@ from typing import List, Optional
 
 from .database import Database
 from edc.core.station_pads import effective_pad_size
-from edc.core.bgs_conflicts import is_multistate_faction
+from edc.core.bgs_conflicts import has_raid_opportunity_state, is_multistate_faction
 
 # 21 days, not the original 14 -- this data now lives in the disposable
 # cache DB (network_cache.db), not the personal one, so there's no
@@ -533,8 +533,11 @@ class Repository:
     ) -> None:
         """
         Upserts current War/CivilWar conflicts and multi-state factions for
-        a system -- skipped entirely if there's nothing combat/BGS-relevant
-        to show. Freshness-guarded like save_faction_snapshot: whichever
+        a system, plus any faction in Civil Unrest or Infrastructure
+        Failure even alone (not multi-state) -- both indicate reduced/no
+        settlement security, the signal behind finding an abandoned
+        settlement to raid. Skipped entirely if there's nothing combat/
+        BGS-relevant to show. Freshness-guarded like save_faction_snapshot: whichever
         pipeline (own journal vs EDDN) has the more recent underlying data
         wins regardless of write order.
         """
@@ -557,7 +560,7 @@ class Repository:
         for f in (factions or []):
             if not isinstance(f, dict):
                 continue
-            if is_multistate_faction(f):
+            if is_multistate_faction(f) or has_raid_opportunity_state(f):
                 multistate_factions.append({
                     "name": f.get("Name"), "faction_state": f.get("FactionState"),
                     "active_states": f.get("ActiveStates"), "pending_states": f.get("PendingStates"),

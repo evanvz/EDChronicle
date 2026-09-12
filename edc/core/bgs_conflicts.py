@@ -28,6 +28,26 @@ def is_multistate_faction(faction: dict) -> bool:
     return total >= 2
 
 
+# Settlements owned by a faction in one of these states run with reduced
+# or no security (confirmed via community reporting -- Civil Unrest often
+# still burning, Infrastructure Failure just dark -- both lootable), the
+# real-world signal behind "find an abandoned/lightly-defended settlement
+# to raid." Worth tracking even as a faction's ONLY active state, unlike
+# is_multistate_faction() above which requires 2+ combined.
+_RAID_OPPORTUNITY_STATES = {"civilunrest", "infrastructurefailure"}
+
+
+def has_raid_opportunity_state(faction: dict) -> bool:
+    """True if this faction is in Civil Unrest or Infrastructure Failure,
+    in any of ActiveStates/PendingStates/RecoveringStates, alone or
+    combined with anything else."""
+    for bucket in ("ActiveStates", "PendingStates", "RecoveringStates"):
+        for s in (faction.get(bucket) or []):
+            if isinstance(s, dict) and str(s.get("State", "")).strip().lower() in _RAID_OPPORTUNITY_STATES:
+                return True
+    return False
+
+
 def squadron_faction_name(factions: List[dict]) -> Optional[str]:
     """Name of the squadron-aligned faction (SquadronFaction:true in the
     journal's Factions[] array), or None if not currently known."""

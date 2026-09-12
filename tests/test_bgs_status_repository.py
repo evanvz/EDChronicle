@@ -73,6 +73,27 @@ def test_save_excludes_faction_with_only_one_state_total(repo):
     assert row is None
 
 
+def test_save_includes_civil_unrest_even_as_only_state(repo):
+    # Civil Unrest/Infrastructure Failure indicate reduced/no settlement
+    # security -- worth tracking even alone, unlike ordinary single states
+    # (see test_save_excludes_faction_with_only_one_state_total above).
+    factions = [{"Name": "A", "ActiveStates": [{"State": "CivilUnrest"}], "PendingStates": [], "RecoveringStates": []}]
+    repo.save_system_bgs_status(1, "Sol", conflicts=[], factions=factions,
+                                 data_timestamp="2026-08-23T00:00:00Z", source="journal")
+    row = repo.db.conn.execute("SELECT * FROM system_bgs_status WHERE system_address = 1").fetchone()
+    stored = json.loads(row["faction_states"])
+    assert len(stored) == 1 and stored[0]["name"] == "A"
+
+
+def test_save_includes_infrastructure_failure_even_as_only_state(repo):
+    factions = [{"Name": "A", "ActiveStates": [{"State": "InfrastructureFailure"}], "PendingStates": [], "RecoveringStates": []}]
+    repo.save_system_bgs_status(1, "Sol", conflicts=[], factions=factions,
+                                 data_timestamp="2026-08-23T00:00:00Z", source="journal")
+    row = repo.db.conn.execute("SELECT * FROM system_bgs_status WHERE system_address = 1").fetchone()
+    stored = json.loads(row["faction_states"])
+    assert len(stored) == 1 and stored[0]["name"] == "A"
+
+
 def test_save_includes_faction_with_two_states_in_same_bucket(repo):
     factions = [{"Name": "A", "ActiveStates": [{"State": "War"}, {"State": "Outbreak"}], "PendingStates": [], "RecoveringStates": []}]
     repo.save_system_bgs_status(1, "Sol", conflicts=[], factions=factions,
