@@ -320,9 +320,14 @@ class ExplorationPanel(QWidget):
             # Show body count hint instead
             total    = getattr(state, "system_body_count", None)
             resolved = len(getattr(state, "resolved_body_ids", set()) or set())
-            fss_done = getattr(state, "fss_complete", False)
             if isinstance(total, int) and total > 0:
-                if fss_done:
+                # fss_complete means the FSS spectrum sweep found every
+                # non-body signal source (FSSDiscoveryScan Progress >= 1.0)
+                # -- confirmed live it does NOT mean every body has been
+                # individually scanned (a fully-honked system with zero
+                # Scan events still showed "All bodies discovered" here).
+                # Compare the real resolved count against total instead.
+                if resolved >= total:
                     self.system_signals_box.setText(
                         f'<span style="color:#6BCB77;">All {total} bodies discovered</span>'
                     )
