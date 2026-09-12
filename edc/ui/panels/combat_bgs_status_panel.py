@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional
 from PyQt6.QtCore import Qt, QObject, QThread, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QSpinBox,
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QSpinBox,
     QTableWidget, QTableWidgetItem, QHeaderView, QComboBox,
 )
 
@@ -24,8 +24,10 @@ from edc.ui.style import LABEL_STYLE as _LABEL_STYLE
 
 log = logging.getLogger(__name__)
 _ACCENT_BG = QColor(26, 58, 90)   # squadron-relevant row highlight
+_ACCENT_BG_ALT = QColor(20, 46, 72)   # alternating shade -- see _render_results
 _ACCENT_FG = QColor(255, 179, 71)
 _RAID_BG = QColor(58, 42, 10)     # Civil Unrest / Infrastructure Failure row highlight
+_RAID_BG_ALT = QColor(46, 33, 8)      # alternating shade -- see _render_results
 _RAID_FG = QColor(255, 200, 120)
 
 # (dropdown label, matcher) -- matcher(row) decides whether a row passes
@@ -198,12 +200,21 @@ class CombatBgsStatusPanel(QWidget):
         self._table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
         self._table.verticalHeader().setVisible(False)
         self._table.setSortingEnabled(False)
+        self._table.setToolTip("Click the System cell to copy its name to the clipboard.")
+        self._table.cellClicked.connect(self._on_cell_clicked)
         self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self._table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self._table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         self._table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         root.addWidget(self._table, 1)
+
+    def _on_cell_clicked(self, row: int, column: int) -> None:
+        if column != 0:  # System
+            return
+        item = self._table.item(row, column)
+        if item and item.text():
+            QApplication.clipboard().setText(item.text())
 
     def refresh(self, state) -> None:
         self._system = (getattr(state, "system", None) or "").strip()
@@ -282,12 +293,22 @@ class CombatBgsStatusPanel(QWidget):
                 QTableWidgetItem(_faction_states_text(row["faction_states"])),
                 QTableWidgetItem(", ".join(row["tiers"])),
             ]
+            # A QTableWidget::item stylesheet border (tried first) silently
+            # drops setBackground()/setForeground() entirely in this Qt
+            # version -- same gotcha already documented for the app's
+            # global stylesheet. Alternating shades give a visible row
+            # boundary without touching the item stylesheet at all --
+            # needed because a fully-highlighted view (e.g. filtered to
+            # Civil Unrest, every row matching) otherwise shows zero
+            # separation between rows: the solid fill paints over the
+            # table's native gridlines completely.
+            odd = r % 2 == 1
             for c, item in enumerate(items):
                 if is_squadron_relevant:
-                    item.setBackground(_ACCENT_BG)
+                    item.setBackground(_ACCENT_BG_ALT if odd else _ACCENT_BG)
                     item.setForeground(_ACCENT_FG)
                 elif is_raid_opportunity:
-                    item.setBackground(_RAID_BG)
+                    item.setBackground(_RAID_BG_ALT if odd else _RAID_BG)
                     item.setForeground(_RAID_FG)
                 self._table.setItem(r, c, item)
             tooltip = f"Last confirmed {age_txt}"
