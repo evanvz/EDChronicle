@@ -880,6 +880,19 @@ class EventEngine:
             # reflects the ship you're currently flying. Used to caveat
             # enemy-contact alerts with "you have no weapons fitted" when
             # relevant (e.g. flying an unarmed hauler/explorer).
+            #
+            # state.ship itself was only ever set from Commander/LoadGame
+            # (both session-start-only) -- confirmed live: swapping ships
+            # mid-session (ShipyardSwap + this event both fire correctly)
+            # left the header still showing the old ship indefinitely,
+            # despite this handler's own comment already claiming it
+            # "always reflects the ship you're currently flying."
+            ship = event.get("Ship")
+            if isinstance(ship, str) and ship:
+                self.state.ship = ship
+            ship_id = event.get("ShipID")
+            if isinstance(ship_id, int):
+                self.state.ship_id = ship_id
             self.state.ship_has_weapons = has_any_weapon(event.get("Modules"))
             cargo_cap = event.get("CargoCapacity")
             if isinstance(cargo_cap, int):
