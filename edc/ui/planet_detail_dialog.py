@@ -299,25 +299,14 @@ class PlanetDetailDialog(QDialog):
             if geo:
                 sig_parts.append(f'<span style="color:#FFB347;">🌋 Geological: {geo}</span>')
             if human:
-                human_cats = {"Station", "Installation", "NavBeacon", "USS", "Megaship", "Wreckage"}
-                sys_sigs = getattr(state, "system_signals", []) or []
-                human_named = []
-                seen_names = set()
-                for s in sys_sigs:
-                    if not isinstance(s, dict) or s.get("Category") not in human_cats:
-                        continue
-                    nm = (s.get("SignalName") or "").strip()
-                    if nm and nm not in seen_names:
-                        seen_names.add(nm)
-                        human_named.append(nm)
-                human_detail = ""
-                if human_named:
-                    human_detail = (
-                        f'<br><span style="color:#3a6a99;font-size:12px;">'
-                        f'&nbsp;&nbsp;{_esc(", ".join(human_named[:10]))}</span>'
-                    )
+                # No name list here -- FSSSignalDiscovered (state.system_signals)
+                # carries no BodyName/BodyID in the raw journal at all, so any
+                # named signal shown here would just be every human-category
+                # signal in the whole SYSTEM, misattributed to this body. The
+                # only body-scoped data we have is this count, from
+                # SAASignalsFound/FSSBodySignals.
                 sig_parts.append(
-                    f'<span style="color:#4D96FF;">⚠ Human: {human}</span>{human_detail}'
+                    f'<span style="color:#4D96FF;">⚠ Human: {human}</span>'
                 )
             if other_sig:
                 sig_parts.append(
