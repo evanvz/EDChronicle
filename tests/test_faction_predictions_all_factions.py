@@ -2,6 +2,8 @@
 get_all_faction_predictions_for_system() -- real SQLite (temp file), no
 mocks, matching this repo's established pattern (see
 tests/test_active_war_opponent.py)."""
+from datetime import datetime, timezone
+
 import pytest
 
 from persistence.database import Database
@@ -17,6 +19,14 @@ def repo(tmp_path):
     return Repository(db)
 
 
+# save_faction_snapshot() runs a rolling 30-day retention delete right
+# after every insert (see its own docstring: "confirmed live: it was
+# deleted in the same breath it got inserted") -- a hardcoded literal
+# snapshot_date ages past that window as real time passes and the
+# fixture silently stops working. Computed relative to "now" instead.
+_TODAY = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
 def _faction(name, influence, faction_state=None, active_states=None):
     f = {"Name": name, "Influence": influence, "Government": "Democracy", "Allegiance": "Federation"}
     if faction_state is not None:
@@ -26,7 +36,8 @@ def _faction(name, influence, faction_state=None, active_states=None):
     return f
 
 
-def _save(repo, system_address, faction, snapshot_date="2026-08-13", is_controlling=True):
+def _save(repo, system_address, faction, snapshot_date=None, is_controlling=True):
+    snapshot_date = snapshot_date or _TODAY
     repo.save_faction_snapshot(system_address, faction, snapshot_date, is_controlling, snapshot_date, "edsm")
 
 

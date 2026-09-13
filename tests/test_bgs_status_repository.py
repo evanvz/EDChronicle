@@ -180,7 +180,7 @@ def test_search_bgs_status_near_filters_by_radius(repo):
 
 def test_search_res_sites_near_returns_tiers(repo):
     _seed_coords(repo, "Near", 0.0, 0.0, 0.0)
-    repo.save_system_res_tiers(1, "Near", tiers=["Hazardous"], data_timestamp="2026-08-23T00:00:00Z", source="journal")
+    repo.save_system_res_tiers(1, "Near", tiers=["Hazardous"], data_timestamp=_ts_days_ago(1), source="journal")
     results = repo.search_res_sites_near(0.0, 0.0, 0.0, radius_ly=50.0)
     assert results[0]["tiers"] == ["Hazardous"]
     assert results[0]["distance_ly"] == 0.0

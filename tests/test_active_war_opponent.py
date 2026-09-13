@@ -2,6 +2,8 @@
 player_faction_panel._format_forecast()'s active-war rendering -- real
 SQLite (temp file), not mocks, matching this repo's established pattern
 (see tests/test_faction_snapshot_freshness.py)."""
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 from persistence.database import Database
@@ -18,6 +20,15 @@ def repo(tmp_path):
     return Repository(db)
 
 
+# save_faction_snapshot() runs a rolling 30-day retention delete right
+# after every insert (see its own docstring: "confirmed live: it was
+# deleted in the same breath it got inserted") -- a hardcoded literal
+# snapshot_date ages past that window as real time passes and the
+# fixture silently stops working. Computed relative to "now" instead.
+_TODAY = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+_OLDER_DATE = (datetime.now(timezone.utc) - timedelta(days=20)).strftime("%Y-%m-%d")
+
+
 def _faction(name, influence, faction_state=None, active_states=None):
     f = {"Name": name, "Influence": influence, "Government": "Democracy", "Allegiance": "Federation"}
     if faction_state is not None:
@@ -27,7 +38,8 @@ def _faction(name, influence, faction_state=None, active_states=None):
     return f
 
 
-def _save(repo, system_address, faction, snapshot_date="2026-08-13", is_controlling=True):
+def _save(repo, system_address, faction, snapshot_date=None, is_controlling=True):
+    snapshot_date = snapshot_date or _TODAY
     repo.save_faction_snapshot(system_address, faction, snapshot_date, is_controlling, snapshot_date, "edsm")
 
 
@@ -89,9 +101,9 @@ def test_stale_rival_snapshot_is_ignored_in_favor_of_same_date_rival(repo):
     # Regression: a departed faction's old War snapshot (higher influence,
     # much older date) must not outrank a rival whose War snapshot is from
     # the SAME date as our own latest snapshot.
-    _save(repo, 1, _faction("Our Faction", 0.6, faction_state="War"), snapshot_date="2026-08-13")
-    _save(repo, 1, _faction("Stale Rival", 0.45, faction_state="War"), snapshot_date="2026-07-24")
-    _save(repo, 1, _faction("Current Rival", 0.2, faction_state="War"), snapshot_date="2026-08-13")
+    _save(repo, 1, _faction("Our Faction", 0.6, faction_state="War"), snapshot_date=_TODAY)
+    _save(repo, 1, _faction("Stale Rival", 0.45, faction_state="War"), snapshot_date=_OLDER_DATE)
+    _save(repo, 1, _faction("Current Rival", 0.2, faction_state="War"), snapshot_date=_TODAY)
     predictions = repo.get_faction_predictions("Our Faction")
     assert predictions[0]["active_war"] == {"faction_name": "Current Rival", "influence": 0.2}
 
