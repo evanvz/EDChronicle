@@ -38,7 +38,7 @@ from PyQt6.QtGui import QTextCursor, QColor, QIcon, QKeySequence
 from pathlib import Path
 
 from edc.core.state import GameState
-from edc.core.event_engine import EventEngine, _engage_risk, _callout_reason
+from edc.core.event_engine import EventEngine, _engage_risk, _callout_reason, in_my_pp_space
 from edc.core.ring_signals import RING_NAME_RE
 from edc.core.journal_watcher import JournalWatcher
 from edc.ui.watcher_controller import WatcherController
@@ -4164,7 +4164,18 @@ class MainWindow(QMainWindow):
             only, not a gating decision."""
             if wanted and isinstance(bounty, int) and bounty >= 500_000:
                 return CombatPhrases.wanted_target_scan()
-            if reason == "enemy" and pledged and power and power.strip().lower() != pledged.strip().lower():
+            # reason == "enemy" also covers plain LegalStatus Hostile/Enemy
+            # and a Wanted-rank match -- neither implies any PowerPlay
+            # stake here, so this must independently re-check we actually
+            # have PP presence in this system before using the PP wording
+            # (confirmed live: a Li Yong-Rui CZ ship got "enemy of the
+            # cause" phrasing in a system our pledged power had zero
+            # presence in, purely because its power differed from ours).
+            if (
+                reason == "enemy" and pledged and power
+                and power.strip().lower() != pledged.strip().lower()
+                and in_my_pp_space(pledged, ctrl, system_powers, pp_state)
+            ):
                 return CombatPhrases.powerplay_enemy_scan()
             return CombatPhrases.high_value_contact_scan()
 

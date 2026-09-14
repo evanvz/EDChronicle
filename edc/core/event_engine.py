@@ -181,16 +181,31 @@ def _callout_reason(
     if wanted and _wanted_rank_meets_player(pilot_rank, player_combat_rank):
         return "enemy"
 
-    in_my_pp_space = bool(pledged_l and (
+    if in_my_pp_space(pledged, ctrl, system_powers, pp_state) and bool(pledged_l and power_l and power_l != pledged_l):
+        return "enemy"
+
+    return None
+
+
+def in_my_pp_space(pledged: str, ctrl: str, system_powers: list, pp_state: str) -> bool:
+    """
+    True if our pledged PowerPlay power has actual stake in this system --
+    controls it, is one of the contesting powers, or the system is
+    Contested. Shared with main_window._handle_combat_quip's _wording(),
+    which independently needs this same gate: reason == "enemy" from
+    _callout_reason() also covers plain LegalStatus Hostile/Enemy and a
+    Wanted-rank match, neither of which implies any PowerPlay stake here
+    at all -- confirmed live, a Li Yong-Rui CZ ship in a system where the
+    player's own pledged power had zero presence still got the "enemy of
+    the cause" PowerPlay phrasing, purely because its power differed from
+    ours, with no check that we had any PP reason to care in this system.
+    """
+    pledged_l = (pledged or "").strip().lower()
+    return bool(pledged_l and (
         (ctrl or "").strip().lower() == pledged_l
         or pledged_l in [p.strip().lower() for p in (system_powers or [])]
         or (pp_state or "").strip().lower() == "contested"
     ))
-    pp_enemy = bool(pledged_l and power_l and power_l != pledged_l)
-    if in_my_pp_space and pp_enemy:
-        return "enemy"
-
-    return None
 
 
 class EventEngine:
