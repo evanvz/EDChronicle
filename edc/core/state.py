@@ -189,9 +189,15 @@ class GameState:
     materials_encoded_loc: Dict[str, str] = field(default_factory=dict)
 
     # Odyssey (on-foot) inventory snapshot (journal-derived)
-    shiplocker_items: Dict[str, int] = field(default_factory=dict)        # internal name -> count
+    shiplocker_items: Dict[str, int] = field(default_factory=dict)        # internal name -> count (flat, all 4 categories merged)
     shiplocker_localised: Dict[str, str] = field(default_factory=dict)    # internal name -> display
     shiplocker_last_update: Optional[str] = None                          # journal timestamp
+    # Same counts as shiplocker_items, but split by the game's own storage
+    # category ("Assets"/"Goods"/"Consumables"/"Data" -- matching the
+    # ShipLocker journal event's Components/Items/Consumables/Data arrays
+    # respectively) since each category has its own independent 1000-slot
+    # cap in-game -- the flat merge above can't show that breakdown.
+    shiplocker_by_category: Dict[str, Dict[str, int]] = field(default_factory=dict)
 
     # Odyssey (on-foot) backpack snapshot -- separate from the ship
     # locker; carried on the commander's person, not stored on the ship.

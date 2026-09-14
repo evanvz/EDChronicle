@@ -61,7 +61,23 @@ class SystemDataLoader:
         """
         if not isinstance(system_address, int):
             return
+        # Diagnostic: confirmed live (2026-09-13) that the Exploration tab
+        # stayed empty after honking in a system, only fixing itself on an
+        # app restart -- load_current_system_data() (what a restart runs)
+        # does this exact same merge, so the two paths aren't actually
+        # different, but something in the live chain (this call, or the
+        # worker/signal leading to it) apparently didn't complete or
+        # didn't repaint. No exception was ever logged for it, so this
+        # logs hard evidence of what this call itself actually did, to
+        # confirm whether it's this step or an earlier one (the save
+        # worker's finished signal never firing/arriving) if it recurs.
+        before = len(self.state.bodies)
         self._merge_spansh_bodies_into_state(system_address)
+        after = len(self.state.bodies)
+        logger.info(
+            "merge_new_spansh_bodies: system_address=%s bodies %d -> %d",
+            system_address, before, after,
+        )
         self._refresh_exploration()
 
     def _merge_spansh_bodies_into_state(self, system_address: int) -> None:

@@ -3,6 +3,7 @@
 # See the LICENSE file in the project root for full terms.
 
 import logging
+from PyQt6.QtCore import pyqtSignal, Qt
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -20,6 +21,14 @@ from edc.ui.style import CARD_STYLE
 
 log = logging.getLogger(__name__)
 
+# ShipLocker storage categories -- each has its own independent 1000-slot
+# cap in-game (confirmed against the in-game Storage screen), separate
+# from the Backpack's own ~30-slot on-person limit. Shown as clickable
+# capacity cards rather than in the Raw/Manufactured/Encoded dropdown
+# below, since a shared per-category pool doesn't fit that table's shape.
+ODYSSEY_STORAGE_CATEGORIES = ["Assets", "Goods", "Consumables", "Data"]
+SHIPLOCKER_CATEGORY_CAPACITY = 1000
+
 
 class MaterialsPanel(QWidget):
     """
@@ -27,6 +36,12 @@ class MaterialsPanel(QWidget):
     Receives state and item_catalog via refresh().
     Knows nothing about main_window or repo.
     """
+
+    # Emitted with the category name ("Assets"/"Goods"/"Consumables"/"Data")
+    # when its capacity card is clicked -- main_window owns opening the
+    # detail dialog (needs odyssey_engineering, which this panel doesn't
+    # have), same shape as ExplorationPanel.body_clicked.
+    storage_category_clicked = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -50,8 +65,15 @@ class MaterialsPanel(QWidget):
         )
         layout.addWidget(hdr)
 
+        storage_row = QHBoxLayout()
+        storage_row.setSpacing(6)
+        self._storage_cards: dict = {}
+        for category in ODYSSEY_STORAGE_CATEGORIES:
+            storage_row.addWidget(self._build_storage_card(category))
+        layout.addLayout(storage_row)
+
         self.inv_kind = QComboBox()
-        self.inv_kind.addItems(["Raw", "Manufactured", "Encoded", "Odyssey"])
+        self.inv_kind.addItems(["Raw", "Manufactured", "Encoded"])
         self.inv_kind.currentTextChanged.connect(self._on_filter_changed)
 
         self.inv_filter = QLineEdit()
@@ -114,6 +136,36 @@ class MaterialsPanel(QWidget):
         self._state = None
         self._item_catalog = None
 
+    def _build_storage_card(self, category: str) -> QFrame:
+        card = QFrame()
+        card.setStyleSheet(
+            "QFrame { background: #14181f; border: 1px solid #2a2f3a; border-radius: 4px; }"
+            "QFrame:hover { border-color: #4da3ff; }"
+        )
+        card.setCursor(Qt.CursorShape.PointingHandCursor)
+        v = QVBoxLayout(card)
+        v.setContentsMargins(10, 6, 10, 6)
+        v.setSpacing(2)
+        name_lbl = QLabel(category.upper())
+        name_lbl.setStyleSheet(
+            "color: #4da3ff; font-size:11px; font-weight: bold; "
+            "letter-spacing: 1px; background: transparent; border: none;"
+        )
+        cap_lbl = QLabel("0/1000")
+        cap_lbl.setStyleSheet("color: #cccccc; font-size:13px; background: transparent; border: none;")
+        v.addWidget(name_lbl)
+        v.addWidget(cap_lbl)
+        card.mousePressEvent = lambda ev, c=category: self.storage_category_clicked.emit(c)
+        self._storage_cards[category] = cap_lbl
+        return card
+
+    def refresh_storage_cards(self, state) -> None:
+        by_category = getattr(state, "shiplocker_by_category", {}) or {}
+        for category, cap_lbl in self._storage_cards.items():
+            counts = by_category.get(category, {}) or {}
+            total = sum(v for v in counts.values() if isinstance(v, int))
+            cap_lbl.setText(f"{total}/{SHIPLOCKER_CATEGORY_CAPACITY}")
+
     def _on_filter_changed(self):
         if self._state is not None:
             self.refresh(self._state, self._item_catalog)
@@ -121,6 +173,7 @@ class MaterialsPanel(QWidget):
     def refresh(self, state, item_catalog):
         self._state = state
         self._item_catalog = item_catalog
+        self.refresh_storage_cards(state)
         try:
             kind = self.inv_kind.currentText()
             filt = (self.inv_filter.text() or "").strip().lower()
@@ -132,36 +185,17 @@ class MaterialsPanel(QWidget):
                 src = getattr(state, "materials_manufactured", {}) or {}
             elif kind == "Encoded":
                 src = getattr(state, "materials_encoded", {}) or {}
-            elif kind == "Odyssey":
-                sl = getattr(state, "shiplocker_items", {}) or {}
-                bp = getattr(state, "backpack_items", {}) or {}
-                src = {}
-                for k, v in sl.items():
-                    src[k] = src.get(k, 0) + v
-                for k, v in bp.items():
-                    src[k] = src.get(k, 0) + v
 
             if not isinstance(src, dict) or not src:
-                if kind == "Odyssey":
-                    self.inv_summary.setText(
-                        "No ShipLocker inventory loaded yet.\n"
-                        "Tip: open the on-foot inventory/locker screen "
-                        "or relog so a 'ShipLocker' journal event is emitted."
-                    )
-                else:
-                    self.inv_summary.setText(
-                        "No materials inventory loaded yet.\n"
-                        "Tip: open the in-game Inventory/Materials screen "
-                        "or relog so a 'Materials' journal event is emitted."
-                    )
+                self.inv_summary.setText(
+                    "No materials inventory loaded yet.\n"
+                    "Tip: open the in-game Inventory/Materials screen "
+                    "or relog so a 'Materials' journal event is emitted."
+                )
                 self.inv_table.setRowCount(0)
                 return
 
-            if kind == "Odyssey":
-                localised = dict(getattr(state, "backpack_localised", {}) or {})
-                localised.update(getattr(state, "shiplocker_localised", {}) or {})
-            else:
-                localised = getattr(state, "materials_localised", {}) or {}
+            localised = getattr(state, "materials_localised", {}) or {}
             if not isinstance(localised, dict):
                 localised = {}
 
@@ -197,11 +231,7 @@ class MaterialsPanel(QWidget):
                 self.inv_table.setItem(r, 2, QTableWidgetItem(str(cnt)))
             self.inv_table.setSortingEnabled(True)
 
-            ts = (
-                getattr(state, "shiplocker_last_update", None)
-                if kind == "Odyssey"
-                else getattr(state, "materials_last_update", None)
-            )
+            ts = getattr(state, "materials_last_update", None)
             ts_txt = (
                 f"Updated: {ts}"
                 if isinstance(ts, str) and ts.strip()

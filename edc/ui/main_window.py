@@ -462,7 +462,15 @@ class _SpanshSaveWorker(QObject):
     hundreds of bodies from Spansh). Opens its own connection per the
     project's cross-thread SQLite rule.
     """
-    finished = pyqtSignal(int)  # system_address
+    # object, not int -- a SystemAddress routinely exceeds the 32-bit
+    # signed C++ int range pyqtSignal(int) marshals through, silently
+    # wrapping to a garbage negative value (confirmed live: system_address
+    # arrived at _on_spansh_saved() as -1979804974 for a real address of
+    # 2282942796498). That broke the address-match guard there, so the
+    # merge never ran and the Exploration tab silently never got the
+    # Spansh-backfilled bodies. Same fix already applied to the sibling
+    # _SpanshEnrichWorker/_SpanshRingWorker above -- just missed here.
+    finished = pyqtSignal(object)  # system_address
 
     def __init__(self, db_path, system_address, bodies):
         super().__init__()
@@ -1388,14 +1396,24 @@ class MainWindow(QMainWindow):
         if not isinstance(data, dict):
             return
 
+        # Journal array name -> the label the game's own Storage screen
+        # uses for it (Items="Goods", Components="Assets"), so the
+        # Materials panel's category breakdown matches what's on screen.
+        category_labels = {
+            "Items": "Goods", "Components": "Assets",
+            "Data": "Data", "Consumables": "Consumables",
+        }
         counts: dict = {}
         loc: dict = {}
-        for category in ("Items", "Components", "Data", "Consumables"):
+        by_category: dict = {}
+        for category, label in category_labels.items():
             c, l = self.engine._parse_shiplocker_items(data.get(category))
             counts.update(c)
             loc.update(l)
+            by_category[label] = c
         self.state.shiplocker_items = counts
         self.state.shiplocker_localised = loc
+        self.state.shiplocker_by_category = by_category
 
     def _load_backpack_inventory(self):
         """
@@ -2012,6 +2030,7 @@ class MainWindow(QMainWindow):
         self.intel_panel = IntelPanel(self.repo)
 
         self.materials_panel = MaterialsPanel()
+        self.materials_panel.storage_category_clicked.connect(self._open_odyssey_storage_detail)
 
         # Voice Commands tab
         _vc_config_path = app_dir / "settings" / "voice_commands.json"
@@ -2753,7 +2772,15 @@ class MainWindow(QMainWindow):
         self._start_spansh_save(system_address, bodies)
 
     def _on_spansh_saved(self, system_address: int):
-        if getattr(self.state, "system_address", None) == system_address:
+        # Diagnostic (2026-09-13): confirms the save worker's finished
+        # signal actually arrived and which branch it took -- see
+        # merge_new_spansh_bodies's own log line for what happened next.
+        current_address = getattr(self.state, "system_address", None)
+        log.info(
+            "_on_spansh_saved: system_address=%s current_state_address=%s",
+            system_address, current_address,
+        )
+        if current_address == system_address:
             self.system_data_loader.merge_new_spansh_bodies(system_address)
         pending = self._spansh_save_pending
         self._spansh_save_pending = None
@@ -5329,6 +5356,11 @@ class MainWindow(QMainWindow):
             return
         from edc.ui.planet_detail_dialog import PlanetDetailDialog
         dlg = PlanetDetailDialog(body_name, rec, self.state, self)
+        dlg.exec()
+
+    def _open_odyssey_storage_detail(self, category: str):
+        from edc.ui.odyssey_storage_dialog import OdysseyStorageDialog
+        dlg = OdysseyStorageDialog(category, self.state, self.odyssey_engineering, self)
         dlg.exec()
 
     def _refresh_exploration(self):

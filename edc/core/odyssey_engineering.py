@@ -192,3 +192,62 @@ class OdysseyEngineeringTable:
         """Number of distinct suit + weapon modules this engineer offers."""
         self._load(force=False)
         return self._engineer_module_counts.get(engineer_name, 0)
+
+    # ── Reverse lookup: what does a material get used for? ──────────────────
+
+    def materials_usage_index(self) -> Dict[str, List[str]]:
+        """
+        material symbol (lower) -> list of human-readable upgrades that
+        consume it, across suit/weapon grade upgrades and suit/weapon
+        modules -- lets the Materials UI answer "what is this loot item
+        actually for?" for the on-foot Odyssey items (Assets/Goods/
+        Consumables/Data) a commander picks up in the field.
+        """
+        self._load(force=False)
+        index: Dict[str, List[str]] = {}
+
+        def add(material: Any, label: str) -> None:
+            if not isinstance(material, str) or not material:
+                return
+            key = material.lower()
+            labels = index.setdefault(key, [])
+            if label not in labels:
+                labels.append(label)
+
+        for suit_name, grades in self._suits.items():
+            if not isinstance(grades, dict):
+                continue
+            for grade, reqs in grades.items():
+                if not isinstance(reqs, dict):
+                    continue
+                for material in reqs:
+                    add(material, f"{suit_name} Suit — Grade {grade}")
+
+        for weapon_name, grades in self._weapons.items():
+            if not isinstance(grades, dict):
+                continue
+            for grade, reqs in grades.items():
+                if not isinstance(reqs, dict):
+                    continue
+                for material in reqs:
+                    add(material, f"{weapon_name} Weapon — Grade {grade}")
+
+        for key, rec in self._suit_modules.items():
+            if not isinstance(rec, dict):
+                continue
+            display = rec.get("display_name") or key
+            mats = rec.get("materials")
+            if isinstance(mats, dict):
+                for material in mats:
+                    add(material, f"{display} (Suit Mod)")
+
+        for key, rec in self._weapon_modules.items():
+            if not isinstance(rec, dict):
+                continue
+            display = rec.get("display_name") or key
+            mats = rec.get("materials")
+            if isinstance(mats, dict):
+                for material in mats:
+                    add(material, f"{display} (Weapon Mod)")
+
+        return index
