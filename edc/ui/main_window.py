@@ -1701,6 +1701,21 @@ class MainWindow(QMainWindow):
         self._edsm_powerplay_retry_timer.setInterval(10 * 60 * 1000)
         self._edsm_powerplay_retry_timer.timeout.connect(self._maybe_start_edsm_powerplay_refresh)
 
+        # Same "session left running past midnight" gap as the EDSM/FDev/
+        # Guardian retry timers above, for market_prices/fleet_carrier_
+        # materials/system_bgs_status/system_res_sites pruning --
+        # _maybe_start_market_prune() was previously only ever called once
+        # at startup, so a session left open for multiple days (confirmed
+        # live: 3.5GB network_cache.db, 13.8M market_prices rows after a
+        # few days unattended) never re-ran the once/day prune past its
+        # first day. date.today() inside moves at midnight regardless of
+        # session length, so this needs to keep polling for the rest of
+        # the session -- cheap since the cfg-date guard makes a
+        # not-actually-a-new-day tick a no-op.
+        self._market_prune_retry_timer = QTimer(self)
+        self._market_prune_retry_timer.setInterval(10 * 60 * 1000)
+        self._market_prune_retry_timer.timeout.connect(self._maybe_start_market_prune)
+
         # Same daily-refresh pattern as EDSM's cache above, for Frontier's
         # own official PowerPlay feed -- see fdev_powerplay.py.
         self._fdev_powerplay_retry_timer = QTimer(self)
@@ -2312,6 +2327,7 @@ class MainWindow(QMainWindow):
         self._edsm_powerplay_retry_timer.start()
         self._fdev_powerplay_retry_timer.start()
         self._guardian_ruins_retry_timer.start()
+        self._market_prune_retry_timer.start()
         if auto_start:
             self._auto_start_if_configured()
 
