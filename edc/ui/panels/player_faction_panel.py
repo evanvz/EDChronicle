@@ -637,7 +637,6 @@ class PlayerFactionPanel(QWidget):
         self._last_csv_names: set = set()
         self._refresh_all_thread: Optional[QThread] = None
         self._refresh_all_worker: Optional["_FactionRefreshWorker"] = None
-        self._auto_refresh_checked: bool = False
         self._pending_tick: Optional[str] = None
         self._latest_known_tick: Optional[str] = None
         # Populated once per bulk rebuild (not on every single-system
@@ -1768,15 +1767,23 @@ class PlayerFactionPanel(QWidget):
     # ── Full EDSM refresh (all systems, all factions) ────────────────────
 
     def _maybe_auto_refresh_all(self) -> None:
-        """Called once per session, the first time a squadron-aligned
-        faction is known — auto-starts the full refresh if it hasn't
-        completed yet today (local calendar day), matching the BGS's own
-        once-a-day tick rather than a rolling 24h window. A session that
-        closes before the refresh finishes never calls mark_refreshed(),
-        so the next launch that same day retries it."""
-        if self._auto_refresh_checked or not self._refresh_tracker or not self._faction_name:
+        """Re-checked on every call (this panel's refresh() runs off a
+        recurring 20-min timer) -- auto-starts the full refresh if it
+        hasn't completed yet today (local calendar day), matching the
+        BGS's own once-a-day tick rather than a rolling 24h window. A
+        session that closes before the refresh finishes never calls
+        mark_refreshed(), so the next check that same day retries it.
+
+        No longer gated by a permanent one-shot latch -- that made this
+        run exactly once per app lifetime instead of once per day,
+        silently starving a session left running for days (confirmed
+        live). _start_refresh_all()'s own "already running" and "already
+        fresh today" checks below already make a redundant call here a
+        cheap no-op, so nothing else needs to change to call this
+        repeatedly.
+        """
+        if not self._refresh_tracker or not self._faction_name:
             return
-        self._auto_refresh_checked = True
         self._check_csv_staleness()
         last = self._refresh_tracker.last_refresh()
         self._update_refresh_status_label(last)
