@@ -2,6 +2,8 @@
 raw data fetch, the pure tag-derivation function, and the pure
 merge/filter/sort function. No Qt/QApplication needed for the pure
 functions (matches tests/test_farming_guide_matching.py's pattern)."""
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 from persistence.database import Database
@@ -21,6 +23,15 @@ def repo(tmp_path):
     return Repository(db)
 
 
+# save_faction_snapshot() runs a rolling 30-day retention delete right
+# after every insert (see its own docstring: "confirmed live: it was
+# deleted in the same breath it got inserted") -- a hardcoded literal
+# snapshot_date ages past that window as real time passes and the
+# fixture silently stops working. Computed relative to "now" instead.
+_TODAY = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+_OLDER_DATE = (datetime.now(timezone.utc) - timedelta(days=5)).strftime("%Y-%m-%d")
+
+
 def _seed_system(repo, system_address, system_name, x, y, z):
     repo.db.execute(
         "INSERT INTO systems (system_address, system_name) VALUES (?, ?)",
@@ -32,8 +43,9 @@ def _seed_system(repo, system_address, system_name, x, y, z):
 def _seed_snapshot(
     repo, system_address, faction_name="Test Faction", government="Democracy",
     allegiance="Independent", faction_state="None", active_states=None,
-    is_controlling=True, snapshot_date="2026-08-15",
+    is_controlling=True, snapshot_date=None,
 ):
+    snapshot_date = snapshot_date or _TODAY
     faction = {
         "Name": faction_name,
         "Government": government,
@@ -70,8 +82,8 @@ def test_excludes_non_controlling_faction(repo):
 
 def test_only_most_recent_snapshot_date_returned(repo):
     _seed_system(repo, 1, "Sol", 0.0, 0.0, 0.0)
-    _seed_snapshot(repo, 1, faction_state="War", is_controlling=True, snapshot_date="2026-08-10")
-    _seed_snapshot(repo, 1, faction_state="Boom", is_controlling=True, snapshot_date="2026-08-15")
+    _seed_snapshot(repo, 1, faction_state="War", is_controlling=True, snapshot_date=_OLDER_DATE)
+    _seed_snapshot(repo, 1, faction_state="Boom", is_controlling=True, snapshot_date=_TODAY)
 
     rows = repo.get_controlling_faction_snapshots_with_coords()
     assert len(rows) == 1
