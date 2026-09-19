@@ -362,8 +362,6 @@ def run():
     }
 
     """)
-    win = MainWindow(cfg_store, cfg, auto_start=False)
-
     import_runner = None
     try:
         journal_dir = Path(cfg.journal_dir)
@@ -387,16 +385,25 @@ def run():
         full VACUUM again. Switching modes itself needs exactly one full
         VACUUM (SQLite only applies an auto_vacuum change on the next one)
         -- that's the slow, file-rewriting, exclusive-lock operation this
-        runs here, on its own, BEFORE the journal importer's thread starts
-        (see SplashScreen._start_vacuum_thread's docstring for why:
-        running it concurrently with another writer is the exact freeze
-        this sequencing avoids). Only happens once per database file ever
-        -- every startup after that sees auto_vacuum already at 2
-        (INCREMENTAL) and this is a near-instant PRAGMA check, no VACUUM,
-        no visible splash message. Ongoing reclaiming afterward is cheap
-        incremental_vacuum() calls piggybacked on the existing daily
-        market-prune cycle (main_window._maybe_start_market_prune),
-        not here.
+        runs here, on its own, BEFORE MainWindow is even constructed.
+
+        MainWindow's own __init__ starts background threads (EDDN listener/
+        publisher, TTS, EDSM faction lookups) that open their own
+        connections and start writing to these exact db files immediately
+        -- confirmed live: constructing MainWindow first, then running this
+        vacuum from the splash screen, still produced repeated "database is
+        locked" errors and an 80s EDDN flush stall, because those threads
+        were already running and writing while this held its exclusive
+        lock. MainWindow is now only constructed by on_vacuum_done() below,
+        strictly after this returns, so nothing else has ever opened a
+        writing connection yet.
+
+        Only happens once per database file ever -- every startup after
+        that sees auto_vacuum already at 2 (INCREMENTAL) and this is a
+        near-instant PRAGMA check, no VACUUM, no visible splash message.
+        Ongoing reclaiming afterward is cheap incremental_vacuum() calls
+        piggybacked on the existing daily market-prune cycle
+        (main_window._maybe_start_market_prune), not here.
         """
         db_path = default_app_dir() / "data" / "edhelper.db"
         db = Database(db_path)
@@ -412,7 +419,13 @@ def run():
         finally:
             db.close()
 
+    win_box = []  # MainWindow is constructed by on_vacuum_done(), not here
+
+    def on_vacuum_done():
+        win_box.append(MainWindow(cfg_store, cfg, auto_start=False))
+
     def _launch():
+        win = win_box[0]
         win.show()
         win.raise_()
         win.activateWindow()
@@ -422,7 +435,10 @@ def run():
         # Queued last so it runs after the startup steps above have completed.
         QTimer.singleShot(0, win.notify_startup_complete)
 
-    splash = SplashScreen(on_done=_launch, import_runner=import_runner, vacuum_runner=vacuum_runner)
+    splash = SplashScreen(
+        on_done=_launch, import_runner=import_runner,
+        vacuum_runner=vacuum_runner, on_vacuum_done=on_vacuum_done,
+    )
     splash.show()
 
     app.exec()

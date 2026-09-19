@@ -356,7 +356,7 @@ class _BackgroundCanvas(QWidget):
 
 class SplashScreen(QWidget):
 
-    def __init__(self, on_done, import_runner=None, vacuum_runner=None):
+    def __init__(self, on_done, import_runner=None, vacuum_runner=None, on_vacuum_done=None):
         super().__init__()
         self._on_done = on_done
         self._line_index = 0
@@ -369,17 +369,25 @@ class SplashScreen(QWidget):
         self._import_done = False
 
         # One-time incremental-auto-vacuum switch (see vacuum_runner's own
-        # docstring in app.py) -- runs BEFORE the journal importer starts,
-        # never concurrently with it: both open connections to the same
-        # db files, and VACUUM holds an exclusive lock that would otherwise
-        # contend with the importer's writes (the exact freeze this
-        # sequencing avoids). Runs on every startup, but is a near-instant
-        # PRAGMA check once the one-time switch has already happened, so
-        # this costs nothing on every startup after the first.
+        # docstring in app.py) -- runs BEFORE MainWindow is even
+        # constructed, never concurrently with its background threads
+        # (EDDN/TTS/EDSM) or the journal importer: all of those open
+        # connections to the same db files, and VACUUM holds an exclusive
+        # lock that would otherwise contend with their writes (confirmed
+        # live: constructing MainWindow before this ran still produced
+        # repeated "database is locked" errors and an 80s EDDN flush
+        # stall). on_vacuum_done() -- called on this (the GUI) thread, not
+        # the vacuum_runner's background thread, since it constructs a
+        # QWidget -- is what actually builds MainWindow, strictly after
+        # vacuum_runner returns. Runs on every startup, but is a near-
+        # instant PRAGMA check once the one-time switch has already
+        # happened, so this costs nothing on every startup after the first.
         self._vacuum_runner = vacuum_runner
+        self._on_vacuum_done = on_vacuum_done
         self._vacuum_thread: threading.Thread | None = None
         self._vacuum_status = ""
         self._vacuum_done = vacuum_runner is None
+        self._vacuum_done_handled = False
 
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
@@ -444,8 +452,13 @@ class SplashScreen(QWidget):
 
         if self._vacuum_runner is not None:
             self._start_vacuum_thread()
-        elif self._import_runner is not None:
-            self._start_import_thread()
+        else:
+            # Nothing to wait for -- proceed immediately, same as the
+            # vacuum thread's completion would, so on_vacuum_done()/import
+            # still start right away rather than waiting on the ~8-10s
+            # cosmetic boot animation (see _poll_import(), which is what
+            # actually detects vacuum completion either way).
+            self._handle_vacuum_done_once()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -490,15 +503,33 @@ class SplashScreen(QWidget):
             except Exception:
                 log.exception("Database vacuum check failed in splash thread")
             finally:
+                # Only flips the flag -- what happens next (constructing
+                # MainWindow via on_vacuum_done, then starting the import
+                # thread) must run on the GUI thread, not here. See
+                # _wait_for_vacuum(), which polls this on a QTimer.
                 self._vacuum_done = True
-                if self._import_runner is not None:
-                    self._start_import_thread()
 
         self._vacuum_thread = threading.Thread(target=_run, daemon=True)
         self._vacuum_thread.start()
 
     def _on_vacuum_status(self, message: str):
         self._vacuum_status = message
+
+    def _handle_vacuum_done_once(self):
+        """Constructs MainWindow (on_vacuum_done, GUI-thread only -- it's a
+        QWidget) and starts the journal importer, strictly after the
+        one-time vacuum has finished. Called from _poll_import() the
+        moment vacuum_done flips, not gated on the boot animation
+        finishing, so import still starts immediately/concurrently with
+        it on a normal (already-switched, near-instant) startup -- same
+        timing as before vacuum_runner existed."""
+        if self._vacuum_done_handled:
+            return
+        self._vacuum_done_handled = True
+        if self._on_vacuum_done is not None:
+            self._on_vacuum_done()
+        if self._import_runner is not None:
+            self._start_import_thread()
 
     def _start_import_thread(self):
         def _run():
@@ -517,6 +548,8 @@ class SplashScreen(QWidget):
         self._import_total = total
 
     def _poll_import(self):
+        if self._vacuum_done and not self._vacuum_done_handled:
+            self._handle_vacuum_done_once()
         if not self._vacuum_done:
             if self._vacuum_status:
                 self._import_label.setVisible(True)
@@ -534,13 +567,29 @@ class SplashScreen(QWidget):
                 self._import_label.setText(f"> IMPORTING JOURNALS... [ {current} / {total} ]")
 
     def _finish(self):
+        # One-time cleanup -- must run exactly once, not on every retry
+        # below. _canvas.stop() calls QTimer.deleteLater() on its tick
+        # timer; calling it again on a later retry hits an already-deleted
+        # C++ object and crashes unhandled (confirmed live: the splash
+        # screen got stuck forever, never reaching _launch(), when this
+        # used to be re-run every 200ms while waiting on the vacuum step).
         self._cursor_timer.stop()
         self._line_timer.stop()
         self._canvas.stop()
+        self._wait_for_vacuum()
 
+    def _wait_for_vacuum(self):
+        """_poll_import() is what normally triggers on_vacuum_done()/the
+        import thread the moment vacuum finishes; this also calls the
+        same idempotent handler directly to close a timing gap (this
+        QTimer firing before that one's next 150ms tick has processed a
+        vacuum_done flip that just happened), so _import_thread is never
+        checked before it's had a chance to actually be created."""
         if not self._vacuum_done:
-            QTimer.singleShot(200, self._finish)
-        elif self._import_thread is not None:
+            QTimer.singleShot(200, self._wait_for_vacuum)
+            return
+        self._handle_vacuum_done_once()
+        if self._import_thread is not None:
             self._wait_for_import()
         else:
             QTimer.singleShot(300, self._launch)
