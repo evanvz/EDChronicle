@@ -125,6 +125,29 @@ def test_enable_incremental_auto_vacuum_targets_requested_schema(tmp_path):
     db.close()
 
 
+def test_incremental_vacuum_is_a_safe_noop_before_mode_switch(tmp_path):
+    # incremental_vacuum() now runs unconditionally every day from
+    # _MarketPruneWorker (main_window.py), on installs that haven't hit
+    # app.py's one-time vacuum_runner yet (auto_vacuum still NONE) --
+    # SQLite's own PRAGMA semantics make this a no-op rather than an
+    # error in that mode, which is what makes calling it unconditionally
+    # safe.
+    db = Database(tmp_path / "edhelper.db")
+    db.executescript(SCHEMA_SQL)
+    db.run_migrations()
+    db.incremental_vacuum(schema="net")  # must not raise
+    db.close()
+
+
+def test_incremental_vacuum_reclaims_after_mode_switch(tmp_path):
+    db = Database(tmp_path / "edhelper.db")
+    db.executescript(SCHEMA_SQL)
+    db.run_migrations()
+    db.enable_incremental_auto_vacuum(schema="net")
+    db.incremental_vacuum(schema="net")  # must not raise once switched
+    db.close()
+
+
 def test_ensure_market_prices_indexes_targets_net_schema(tmp_path):
     db = Database(tmp_path / "edhelper.db")
     db.executescript(SCHEMA_SQL)

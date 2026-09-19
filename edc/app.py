@@ -379,6 +379,39 @@ def run():
     except Exception:
         log.exception("Could not prepare journal import runner")
 
+    def vacuum_runner(status_callback):
+        """
+        One-time switch to SQLite's incremental auto-vacuum mode, so the
+        network cache (net.*, fed unbounded by EDDN) and personal database
+        can reclaim disk space freed by pruning without ever needing a
+        full VACUUM again. Switching modes itself needs exactly one full
+        VACUUM (SQLite only applies an auto_vacuum change on the next one)
+        -- that's the slow, file-rewriting, exclusive-lock operation this
+        runs here, on its own, BEFORE the journal importer's thread starts
+        (see SplashScreen._start_vacuum_thread's docstring for why:
+        running it concurrently with another writer is the exact freeze
+        this sequencing avoids). Only happens once per database file ever
+        -- every startup after that sees auto_vacuum already at 2
+        (INCREMENTAL) and this is a near-instant PRAGMA check, no VACUUM,
+        no visible splash message. Ongoing reclaiming afterward is cheap
+        incremental_vacuum() calls piggybacked on the existing daily
+        market-prune cycle (main_window._maybe_start_market_prune),
+        not here.
+        """
+        db_path = default_app_dir() / "data" / "edhelper.db"
+        db = Database(db_path)
+        try:
+            for schema, label in (("main", "personal database"), ("net", "network cache")):
+                mode = db.conn.execute(f"PRAGMA {schema}.auto_vacuum").fetchone()[0]
+                if mode != 2:
+                    status_callback(f"OPTIMIZING {label.upper()} (ONE-TIME, PLEASE WAIT)...")
+                db.enable_incremental_auto_vacuum(schema=schema)
+                db.incremental_vacuum(schema=schema)
+        except Exception:
+            log.exception("One-time database vacuum-mode switch failed")
+        finally:
+            db.close()
+
     def _launch():
         win.show()
         win.raise_()
@@ -389,7 +422,7 @@ def run():
         # Queued last so it runs after the startup steps above have completed.
         QTimer.singleShot(0, win.notify_startup_complete)
 
-    splash = SplashScreen(on_done=_launch, import_runner=import_runner)
+    splash = SplashScreen(on_done=_launch, import_runner=import_runner, vacuum_runner=vacuum_runner)
     splash.show()
 
     app.exec()

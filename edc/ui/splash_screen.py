@@ -356,7 +356,7 @@ class _BackgroundCanvas(QWidget):
 
 class SplashScreen(QWidget):
 
-    def __init__(self, on_done, import_runner=None):
+    def __init__(self, on_done, import_runner=None, vacuum_runner=None):
         super().__init__()
         self._on_done = on_done
         self._line_index = 0
@@ -367,6 +367,19 @@ class SplashScreen(QWidget):
         self._import_current = 0
         self._import_total = 0
         self._import_done = False
+
+        # One-time incremental-auto-vacuum switch (see vacuum_runner's own
+        # docstring in app.py) -- runs BEFORE the journal importer starts,
+        # never concurrently with it: both open connections to the same
+        # db files, and VACUUM holds an exclusive lock that would otherwise
+        # contend with the importer's writes (the exact freeze this
+        # sequencing avoids). Runs on every startup, but is a near-instant
+        # PRAGMA check once the one-time switch has already happened, so
+        # this costs nothing on every startup after the first.
+        self._vacuum_runner = vacuum_runner
+        self._vacuum_thread: threading.Thread | None = None
+        self._vacuum_status = ""
+        self._vacuum_done = vacuum_runner is None
 
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
@@ -429,7 +442,9 @@ class SplashScreen(QWidget):
         self._import_poll.timeout.connect(self._poll_import)
         self._import_poll.start(150)
 
-        if self._import_runner is not None:
+        if self._vacuum_runner is not None:
+            self._start_vacuum_thread()
+        elif self._import_runner is not None:
             self._start_import_thread()
 
     def mousePressEvent(self, event):
@@ -468,6 +483,23 @@ class SplashScreen(QWidget):
         jitter = random.randint(-50, 50)
         self._line_timer.start(delay + jitter)
 
+    def _start_vacuum_thread(self):
+        def _run():
+            try:
+                self._vacuum_runner(self._on_vacuum_status)
+            except Exception:
+                log.exception("Database vacuum check failed in splash thread")
+            finally:
+                self._vacuum_done = True
+                if self._import_runner is not None:
+                    self._start_import_thread()
+
+        self._vacuum_thread = threading.Thread(target=_run, daemon=True)
+        self._vacuum_thread.start()
+
+    def _on_vacuum_status(self, message: str):
+        self._vacuum_status = message
+
     def _start_import_thread(self):
         def _run():
             try:
@@ -485,6 +517,11 @@ class SplashScreen(QWidget):
         self._import_total = total
 
     def _poll_import(self):
+        if not self._vacuum_done:
+            if self._vacuum_status:
+                self._import_label.setVisible(True)
+                self._import_label.setText(f"> {self._vacuum_status}")
+            return
         if self._import_thread is None:
             return
         total = self._import_total
@@ -501,7 +538,9 @@ class SplashScreen(QWidget):
         self._line_timer.stop()
         self._canvas.stop()
 
-        if self._import_thread is not None:
+        if not self._vacuum_done:
+            QTimer.singleShot(200, self._finish)
+        elif self._import_thread is not None:
             self._wait_for_import()
         else:
             QTimer.singleShot(300, self._launch)

@@ -209,14 +209,17 @@ class _MarketPruneWorker(QObject):
     so this must never run on the UI thread. Opens its own connection per
     the project's cross-thread SQLite rule.
 
-    Deliberately does NOT also VACUUM/reclaim disk space here. VACUUM
-    needs an EXCLUSIVE lock on the whole file — running it automatically
-    on every startup blocked the main thread's own routine journal writes
-    (a different connection to the same file) while it held that lock,
-    confirmed live as an app freeze for as long as VACUUM took to rewrite
-    a multi-GB database. Reclaiming space is now Settings' explicit
-    "Compact Database Now" button (_MarketVacuumWorker) instead, so it
-    only ever runs when the user has chosen to eat that cost right now.
+    Also reclaims space freed by the deletes above via incremental_vacuum()
+    -- cheap and safe to run here unlike a full VACUUM (see app.py's
+    vacuum_runner docstring for that one-time switch, done separately at
+    startup before this worker's thread exists): once a database is in
+    incremental auto-vacuum mode, incremental_vacuum() only walks already-
+    freed pages in small batches and is a no-op if the mode switch hasn't
+    happened yet, so calling it unconditionally on every daily prune is
+    always safe. This is what makes ongoing space reclaiming fully
+    automatic -- Settings' "Compact Database Now" button
+    (_MarketVacuumWorker) still exists for an on-demand run, but nothing
+    requires clicking it anymore.
     """
     finished = pyqtSignal(int)  # deleted_count (market_prices + fleet_carrier_materials combined)
 
@@ -255,6 +258,12 @@ class _MarketPruneWorker(QObject):
                 log.info("Pruned %d stale system_res_sites rows", deleted_res_sites)
             except Exception:
                 log.exception("System RES sites prune failed")
+            try:
+                for schema in ("main", "net"):
+                    db.incremental_vacuum(schema=schema)
+                log.info("Incremental vacuum complete")
+            except Exception:
+                log.exception("Incremental vacuum failed")
         finally:
             db.close()
         self.finished.emit(
@@ -299,12 +308,13 @@ class _SearchIndexWorker(QObject):
 
 class _MarketVacuumWorker(QObject):
     """
-    User-triggered only (Settings' "Compact Database Now") — reclaims disk
-    space freed by pruning. See _MarketPruneWorker's docstring for why this
-    is never run automatically: VACUUM holds an exclusive lock on the
-    whole file for as long as it takes to rewrite it, which blocks any
-    other connection's writes (including the main thread's routine
-    journal-driven saves) for that entire duration.
+    Settings' "Compact Database Now" button — an on-demand version of the
+    same reclaim _MarketPruneWorker now already does automatically every
+    day (see its docstring). Kept for whenever the user wants it done
+    right now rather than waiting for the next daily prune, and as the
+    one-time incremental-auto-vacuum-mode switch's manual fallback if
+    app.py's startup vacuum_runner didn't get a chance to run it yet
+    (e.g. the app was force-closed during that one-time switch).
     """
     finished = pyqtSignal(bool, str)  # (ok, message)
 
