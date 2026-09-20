@@ -562,16 +562,25 @@ class _FactionRefreshWorker(QObject):
 
                     snapshot_date = date.today().isoformat()
                     present_names = set()
-                    for faction in result["factions"]:
-                        is_controlling = bool(faction.pop("is_controlling", False))
-                        data_timestamp = faction.pop("LastUpdate", None)
-                        repo.save_faction_snapshot(
-                            result["system_address"], faction, snapshot_date, is_controlling,
-                            data_timestamp, "edsm",
-                        )
-                        name = (faction.get("Name") or "").strip().lower()
-                        if name:
-                            present_names.add(name)
+                    # One commit for this system's whole faction list instead
+                    # of one per faction (save_faction_snapshot auto-commits
+                    # internally) -- scoped per-system, not around the whole
+                    # multi-minute refresh loop, since that loop's own
+                    # time.sleep(0.3)-per-system EDSM rate-limit would
+                    # otherwise hold one transaction open for the entire
+                    # run, blocking every other writer (EDDN flush, journal
+                    # saves) the whole time.
+                    with repo.db.deferred_commit():
+                        for faction in result["factions"]:
+                            is_controlling = bool(faction.pop("is_controlling", False))
+                            data_timestamp = faction.pop("LastUpdate", None)
+                            repo.save_faction_snapshot(
+                                result["system_address"], faction, snapshot_date, is_controlling,
+                                data_timestamp, "edsm",
+                            )
+                            name = (faction.get("Name") or "").strip().lower()
+                            if name:
+                                present_names.add(name)
 
                     # Catch-up layer for the Combat > System Status tab,
                     # which otherwise only ever sees War/CivilWar status

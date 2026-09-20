@@ -712,27 +712,33 @@ class MainWindow(QMainWindow):
             sys_addr = getattr(self.state, "system_address", None)
             if not isinstance(sys_addr, int):
                 return
-            for rec in (self.state.exo or {}).values():
-                if not isinstance(rec, dict) or not rec.get("Complete"):
-                    continue
-                if rec.get("DBSaved"):
-                    continue
-                body_name = rec.get("BodyName") or ""
-                genus     = rec.get("Genus") or ""
-                species   = rec.get("Species") or ""
-                variant   = rec.get("Variant") or ""
-                samples   = int(rec.get("Samples") or 3)
-                if not (body_name and genus and species and variant):
-                    continue
-                self.repo.save_exobiology(
-                    system_address=sys_addr,
-                    body_name=body_name,
-                    genus=genus,
-                    species=species,
-                    variant=variant,
-                    samples=samples,
-                )
-                rec["DBSaved"] = True
+            # DBSaved already bounds live play to 0-1 new items per tick,
+            # but a bootstrap replay of historical journals can mature many
+            # species to Complete in one burst -- one commit for all of
+            # them instead of one per species (save_exobiology auto-commits
+            # internally).
+            with self.repo.db.deferred_commit():
+                for rec in (self.state.exo or {}).values():
+                    if not isinstance(rec, dict) or not rec.get("Complete"):
+                        continue
+                    if rec.get("DBSaved"):
+                        continue
+                    body_name = rec.get("BodyName") or ""
+                    genus     = rec.get("Genus") or ""
+                    species   = rec.get("Species") or ""
+                    variant   = rec.get("Variant") or ""
+                    samples   = int(rec.get("Samples") or 3)
+                    if not (body_name and genus and species and variant):
+                        continue
+                    self.repo.save_exobiology(
+                        system_address=sys_addr,
+                        body_name=body_name,
+                        genus=genus,
+                        species=species,
+                        variant=variant,
+                        samples=samples,
+                    )
+                    rec["DBSaved"] = True
         except Exception:
             pass
 
