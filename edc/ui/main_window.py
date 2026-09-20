@@ -4371,7 +4371,13 @@ class MainWindow(QMainWindow):
         if not bodies:
             return
 
-        if events.get("Scan", False):
+        # Confirmed live: this fired for a ship with no Detailed Surface
+        # Scanner fitted at all -- nothing to actually act on the callout
+        # with. Same "unknown vs confirmed absent" posture as the
+        # ship_has_weapons check elsewhere: suppress only on a confirmed
+        # False (a real Loadout already seen this session with no DSS),
+        # not on None (no Loadout event yet).
+        if events.get("Scan", False) and getattr(self.state, "ship_has_dss", None) is not False:
             threshold = int(getattr(self.cfg, "min_planet_value_100k", 5) or 5) * 100_000
             hv_count = sum(
                 1 for rec in bodies.values()

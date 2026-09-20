@@ -35,6 +35,12 @@ class GameState:
     # assumed False by default, since "unknown" and "confirmed unarmed" are
     # different things for the enemy-alert caveat that reads this.
     ship_has_weapons: Optional[bool] = None
+    # Same "unknown vs confirmed absent" reasoning as ship_has_weapons
+    # above -- used to suppress the "high value planets, worth mapping"
+    # TTS callout when the current ship has no Detailed Surface Scanner
+    # fitted (confirmed live: the callout fired for a ship with no DSS at
+    # all, nothing to actually act on it with).
+    ship_has_dss: Optional[bool] = None
     # From Loadout's CargoCapacity — always reflects the ship currently
     # being flown, for the Trade Route Loop Planner's profit-per-loop math.
     cargo_capacity: Optional[int] = None

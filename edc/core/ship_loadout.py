@@ -40,3 +40,18 @@ def has_any_weapon(modules: List[Any]) -> bool:
         if any(sub in item for sub in _WEAPON_NAME_SUBSTRINGS):
             return True
     return False
+
+
+def has_detailed_surface_scanner(modules: List[Any]) -> bool:
+    """Returns True if a Detailed Surface Scanner (the DSS probe launcher
+    used to map a body) is fitted anywhere in a Loadout event's Modules
+    array. Confirmed against real journal data: internal name
+    "int_detailedsurfacescanner_tiny" -- DSS has no size/class variants,
+    unlike weapons, so no slot-pattern restriction is needed here."""
+    for m in (modules or []):
+        if not isinstance(m, dict):
+            continue
+        item = str(m.get("Item") or "").lower()
+        if "detailedsurfacescanner" in item:
+            return True
+    return False

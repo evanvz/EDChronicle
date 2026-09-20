@@ -16,7 +16,7 @@ from edc.core.squadron_events import SQUADRON_EVENT_NAMES, apply_squadron_event
 from edc.core.mission_events import MISSION_EVENT_NAMES, apply_mission_event, credit_massacre_kill
 from edc.core.bgs_conflicts import find_squadron_war_enemy, squadron_faction_name, parse_powerplay_conflict_progress
 from edc.core.res_signals import res_tier_from_signal_name
-from edc.core.ship_loadout import has_any_weapon
+from edc.core.ship_loadout import has_any_weapon, has_detailed_surface_scanner
 from edc.core.ring_signals import RING_NAME_RE as _RING_NAME_RE, parse_ring_hotspots
 
 log = logging.getLogger("edc.event_engine")
@@ -909,6 +909,7 @@ class EventEngine:
             if isinstance(ship_id, int):
                 self.state.ship_id = ship_id
             self.state.ship_has_weapons = has_any_weapon(event.get("Modules"))
+            self.state.ship_has_dss = has_detailed_surface_scanner(event.get("Modules"))
             cargo_cap = event.get("CargoCapacity")
             if isinstance(cargo_cap, int):
                 self.state.cargo_capacity = cargo_cap
