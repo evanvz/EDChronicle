@@ -77,6 +77,7 @@ def test_enrichment_while_save_running_stashes_pending_last_wins():
         repo=SimpleNamespace(db=SimpleNamespace(db_path="unused.db")),
         _spansh_save_thread=_BusyThread(),
         _spansh_save_pending=None,
+        _spansh_enrich_pending=None,
         _start_spansh_save=lambda addr, bodies: started.append((addr, bodies)),
     )
     bodies_a = [_body("A")]
@@ -118,4 +119,66 @@ def test_on_spansh_saved_drops_pending_if_system_changed():
     MainWindow._on_spansh_saved(fake_self, 123)
     assert merged == []
     assert fake_self._spansh_save_pending is None
+    assert started == []
+
+
+# --- Enrich (fetch) step's own last-wins queue, _spansh_enrich_pending ---
+#
+# Confirmed live (2026-09-20): a rapid A->B jump inside the ~3s Spansh
+# round-trip previously dropped B's fetch entirely (the busy-thread guard
+# in _maybe_start_spansh_enrichment returned with nothing queued) and
+# threw away A's completed-but-now-irrelevant result in
+# _on_spansh_enrichment. Not a freeze/crash -- self-heals on a later
+# revisit -- but wastes an API call and leaves B Spansh-blank until then.
+
+
+class _BusyEnrichThread:
+    def isRunning(self):
+        return True
+
+
+def test_enrichment_check_while_enrich_running_stashes_pending_last_wins():
+    started = []
+    fake_self = SimpleNamespace(
+        state=SimpleNamespace(system="Sol", system_address=123),
+        repo=SimpleNamespace(
+            count_real_bodies=lambda addr: 0,
+            count_spansh_bodies=lambda addr: 0,
+        ),
+        _enrich_thread=_BusyEnrichThread(),
+        _spansh_enrich_pending=None,
+        _start_spansh_enrich=lambda name, addr: started.append((name, addr)),
+    )
+    MainWindow._maybe_start_spansh_enrichment(fake_self)
+    assert started == []
+    assert fake_self._spansh_enrich_pending == ("Sol", 123)
+
+
+def test_on_spansh_enrichment_starts_pending_for_still_current_system():
+    started = []
+    fake_self = SimpleNamespace(
+        state=SimpleNamespace(system_address=456),  # already jumped away from the just-finished system
+        _spansh_save_thread=None,
+        _spansh_save_pending=None,
+        _start_spansh_save=lambda addr, bodies: None,
+        _spansh_enrich_pending=("Wolf 359", 456),
+        _start_spansh_enrich=lambda name, addr: started.append((name, addr)),
+    )
+    MainWindow._on_spansh_enrichment(fake_self, [_body("Discarded")], "", 123)
+    assert fake_self._spansh_enrich_pending is None
+    assert started == [("Wolf 359", 456)]
+
+
+def test_on_spansh_enrichment_drops_pending_if_jumped_again():
+    started = []
+    fake_self = SimpleNamespace(
+        state=SimpleNamespace(system_address=999),  # jumped past B to a third system already
+        _spansh_save_thread=None,
+        _spansh_save_pending=None,
+        _start_spansh_save=lambda addr, bodies: None,
+        _spansh_enrich_pending=("Wolf 359", 456),
+        _start_spansh_enrich=lambda name, addr: started.append((name, addr)),
+    )
+    MainWindow._on_spansh_enrichment(fake_self, [_body("Discarded")], "", 123)
+    assert fake_self._spansh_enrich_pending is None
     assert started == []

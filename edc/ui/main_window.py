@@ -2367,6 +2367,15 @@ class MainWindow(QMainWindow):
         self._replaying: bool = False  # True during journal bootstrap; suppresses all TTS
         self._enrich_thread: QThread | None = None
         self._enrich_worker: _SpanshEnrichWorker | None = None
+        # One-slot last-wins queue for the enrich (fetch) step, mirroring
+        # _spansh_save_pending below -- a rapid A->B jump inside the ~3s
+        # Spansh round-trip previously just silently dropped B's fetch
+        # (the busy-thread guard returned with no retry scheduled) and
+        # threw away A's completed-but-now-irrelevant result. Confirmed
+        # live (2026-09-20): not a freeze/crash, self-heals on revisit,
+        # but wastes an API call and leaves B's Exploration tab
+        # personal-scan-only until then.
+        self._spansh_enrich_pending: tuple[str, int] | None = None  # (system_name, system_address)
         self._spansh_save_thread: QThread | None = None
         self._spansh_save_worker: _SpanshSaveWorker | None = None
         # One-slot last-wins queue: if enrichment finishes while a save is
@@ -2770,8 +2779,17 @@ class MainWindow(QMainWindow):
             return
 
         if self._enrich_thread and self._enrich_thread.isRunning():
+            # Last-wins: keep the newest (system_name, system_address) so
+            # it starts the moment the in-flight fetch's finished signal
+            # arrives, instead of silently never retrying until the
+            # player happens to revisit this system later.
+            self._spansh_enrich_pending = (system_name, system_address)
             return
 
+        self._start_spansh_enrich(system_name, system_address)
+
+    def _start_spansh_enrich(self, system_name: str, system_address: int) -> None:
+        """Kick a Spansh enrich (fetch) worker. Caller must ensure no enrich is running."""
         log.info("Spansh enrich starting for %r (%d)", system_name, system_address)
         self._enrich_worker = _SpanshEnrichWorker(system_name, system_address)
         self._enrich_thread = QThread()
@@ -2795,13 +2813,26 @@ class MainWindow(QMainWindow):
         if error:
             log.warning("Spansh enrichment failed: %s", error)
         current_address = getattr(self.state, "system_address", None)
-        if current_address != system_address or not bodies:
+        if current_address == system_address and bodies:
+            if self._spansh_save_thread and self._spansh_save_thread.isRunning():
+                # Last-wins: keep newest payload for when the current save finishes.
+                self._spansh_save_pending = (system_address, bodies)
+            else:
+                self._start_spansh_save(system_address, bodies)
+
+        # A rapid jump away from system_address while this fetch was still
+        # in flight may have queued a newer system's enrich request (see
+        # _maybe_start_spansh_enrichment) -- start it now that the thread
+        # slot this just occupied is free again, whether or not the
+        # fetch above was actually usable.
+        pending = self._spansh_enrich_pending
+        self._spansh_enrich_pending = None
+        if not pending:
             return
-        if self._spansh_save_thread and self._spansh_save_thread.isRunning():
-            # Last-wins: keep newest payload for when the current save finishes.
-            self._spansh_save_pending = (system_address, bodies)
+        pending_name, pending_address = pending
+        if getattr(self.state, "system_address", None) != pending_address:
             return
-        self._start_spansh_save(system_address, bodies)
+        self._start_spansh_enrich(pending_name, pending_address)
 
     def _on_spansh_saved(self, system_address: int):
         # Diagnostic (2026-09-13): confirms the save worker's finished
