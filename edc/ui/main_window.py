@@ -2822,17 +2822,39 @@ class MainWindow(QMainWindow):
 
         # A rapid jump away from system_address while this fetch was still
         # in flight may have queued a newer system's enrich request (see
-        # _maybe_start_spansh_enrichment) -- start it now that the thread
-        # slot this just occupied is free again, whether or not the
-        # fetch above was actually usable.
+        # _maybe_start_spansh_enrichment) -- start it once the thread slot
+        # this just occupied is actually free, whether or not the fetch
+        # above was usable.
+        #
+        # Deferred via QTimer.singleShot(0, ...) rather than called
+        # directly here -- confirmed live (2026-09-20) as a Qt fatal crash
+        # ("QThread: Destroyed while thread '' is still running") calling
+        # _start_spansh_enrich() synchronously from this slot: this method
+        # is the FIRST of two slots connected to the same worker.finished
+        # signal (the second being self._enrich_thread.quit, bound to the
+        # thread that just finished). Starting a new enrich here
+        # reassigns self._enrich_thread/self._enrich_worker to brand-new
+        # objects *before* that still-pending quit() slot for the OLD
+        # thread has run its course, racing the old thread's own
+        # shutdown. Deferring to the next event-loop tick lets that
+        # signal's dispatch (including the old thread's quit) fully
+        # unwind first.
         pending = self._spansh_enrich_pending
         self._spansh_enrich_pending = None
         if not pending:
             return
         pending_name, pending_address = pending
-        if getattr(self.state, "system_address", None) != pending_address:
+        QTimer.singleShot(0, lambda: self._retry_pending_spansh_enrich(pending_name, pending_address))
+
+    def _retry_pending_spansh_enrich(self, system_name: str, system_address: int) -> None:
+        if getattr(self.state, "system_address", None) != system_address:
             return
-        self._start_spansh_enrich(pending_name, pending_address)
+        if self._enrich_thread and self._enrich_thread.isRunning():
+            # Another enrich already started in the interim -- let it run;
+            # if it's for a different system, this one is simply dropped
+            # rather than re-queued indefinitely.
+            return
+        self._start_spansh_enrich(system_name, system_address)
 
     def _on_spansh_saved(self, system_address: int):
         # Diagnostic (2026-09-13): confirms the save worker's finished
@@ -2845,14 +2867,26 @@ class MainWindow(QMainWindow):
         )
         if current_address == system_address:
             self.system_data_loader.merge_new_spansh_bodies(system_address)
+        # Deferred for the same reason as _retry_pending_spansh_enrich
+        # above -- this is the first of two slots on the same
+        # worker.finished signal (the second, self._spansh_save_thread.quit,
+        # is still pending against the OLD thread when this runs), and
+        # this file already has one confirmed-live crash from starting a
+        # new QThread synchronously in that position.
         pending = self._spansh_save_pending
         self._spansh_save_pending = None
         if not pending:
             return
         pending_address, pending_bodies = pending
-        if getattr(self.state, "system_address", None) != pending_address or not pending_bodies:
+        QTimer.singleShot(0, lambda: self._retry_pending_spansh_save(pending_address, pending_bodies))
+
+    def _retry_pending_spansh_save(self, system_address: int, bodies: list) -> None:
+        if getattr(self.state, "system_address", None) != system_address or not bodies:
             return
-        self._start_spansh_save(pending_address, pending_bodies)
+        if self._spansh_save_thread and self._spansh_save_thread.isRunning():
+            self._spansh_save_pending = (system_address, bodies)
+            return
+        self._start_spansh_save(system_address, bodies)
 
     def _maybe_start_ring_hotspot_check(self):
         system_address = getattr(self.state, "system_address", None)
