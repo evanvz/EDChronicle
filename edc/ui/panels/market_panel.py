@@ -275,7 +275,8 @@ class MarketPanel(QWidget):
     # until they actually reach it.
     destination_selected = pyqtSignal(str, str, str, str)
 
-    def __init__(self, repo, rare_table=None, guardian_tb_table=None, edsm_powerplay=None, parent=None):
+    def __init__(self, repo, rare_table=None, guardian_tb_table=None, guardian_unlocks_table=None,
+                 edsm_powerplay=None, parent=None):
         super().__init__(parent)
         self._repo = repo
         self._rare_table = rare_table
@@ -284,6 +285,8 @@ class MarketPanel(QWidget):
         self._my_power: Optional[str] = None
         self._rare_dialog: Optional["_RareGoodsDialog"] = None
         self._guardian_tb_dialog: Optional["_GuardianTechBrokerDialog"] = None
+        self._guardian_unlocks_table = guardian_unlocks_table
+        self._guardian_unlocks_dialog: Optional["_GuardianUnlocksDialog"] = None
         self._system: str = ""
         self._ref_x: float = 0.0
         self._ref_y: float = 0.0
@@ -506,6 +509,19 @@ class MarketPanel(QWidget):
         )
         self._guardian_tb_btn.clicked.connect(self._open_guardian_tb_dialog)
         service_row.addWidget(self._guardian_tb_btn)
+
+        self._guardian_unlocks_btn = QPushButton("Guardian Unlock Requirements…")
+        self._guardian_unlocks_btn.setStyleSheet(
+            "QPushButton { background:#0d2a1a; color:#7CFCA0; border:1px solid #2a5a3a;"
+            " border-radius:3px; padding:3px 10px; font-weight:bold; }"
+            "QPushButton:hover { background:#1a4a2a; }"
+        )
+        self._guardian_unlocks_btn.setToolTip(
+            "Material/commodity batch needed to unlock each Guardian module at the "
+            "Technology Broker, and how much of it you're currently short."
+        )
+        self._guardian_unlocks_btn.clicked.connect(self._open_guardian_unlocks_dialog)
+        service_row.addWidget(self._guardian_unlocks_btn)
 
         self._service_dialogs: dict = {}
         for tags, label, (bg, fg) in _CONCOURSE_SERVICES:
@@ -942,6 +958,14 @@ class MarketPanel(QWidget):
         self._guardian_tb_dialog.show()
         self._guardian_tb_dialog.raise_()
         self._guardian_tb_dialog.activateWindow()
+
+    def _open_guardian_unlocks_dialog(self) -> None:
+        if self._guardian_unlocks_dialog is None:
+            self._guardian_unlocks_dialog = _GuardianUnlocksDialog(self)
+        self._guardian_unlocks_dialog.refresh_results()
+        self._guardian_unlocks_dialog.show()
+        self._guardian_unlocks_dialog.raise_()
+        self._guardian_unlocks_dialog.activateWindow()
 
     def _open_service_dialog(self, tags: list, label: str) -> None:
         key = ",".join(tags)
@@ -1540,3 +1564,109 @@ class _GuardianTechBrokerDialog(QDialog):
         item = self._table.item(row, column)
         if item and item.text():
             QApplication.clipboard().setText(item.text())
+
+
+class _GuardianUnlocksDialog(QDialog):
+    """
+    Non-modal detail window listing every Guardian Technology Broker unlock
+    recipe (see guardian_technology_broker.py) with a live shortfall against
+    the commander's current holdings -- 'material' ingredients are checked
+    against state.materials_raw/manufactured/encoded (Materials journal
+    event), 'commodity' ingredients against state.cargo_inventory (Cargo
+    journal event), since Guardian unlocks mix both ingredient kinds.
+    """
+
+    def __init__(self, panel: "MarketPanel"):
+        super().__init__(None)
+        self.setStyleSheet("QDialog { background:#080f18; color:#c8c8c8; }")
+        self._panel = panel
+        self.setWindowTitle("Guardian Technology Broker — Unlock Requirements")
+        self.resize(760, 500)
+
+        layout = QVBoxLayout(self)
+
+        self._status_label = QLabel("")
+        self._status_label.setStyleSheet("color:#888888; font-size:11px; background:transparent; border:none;")
+        layout.addWidget(self._status_label)
+
+        self._table = QTableWidget()
+        self._table.setColumnCount(2)
+        self._table.setHorizontalHeaderLabels(["Unlock", "Ingredients (held / needed)"])
+        self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self._table.verticalHeader().setVisible(False)
+        self._table.setWordWrap(True)
+        self._table.setAlternatingRowColors(True)
+        self._table.setStyleSheet(
+            "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
+            " gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
+            "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
+            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
+            "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
+        )
+        h = self._table.horizontalHeader()
+        h.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self._table, 1)
+
+        note = QLabel(
+            "Advisory only, from an offline recipe reference (see settings/"
+            "guardian_technology_broker.json for sourcing) -- not confirmed against "
+            "live game data. Green quantities are fully held; red are short."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
+        layout.addWidget(note)
+
+    def _held_count(self, symbol: str, kind: str) -> int:
+        state = self._panel._last_state
+        if kind == "commodity":
+            cargo = getattr(state, "cargo_inventory", None) or []
+            total = 0
+            for c in cargo:
+                if isinstance(c, dict) and normalize_commodity_name(c.get("Name") or "") == symbol:
+                    total += int(c.get("Count") or 0)
+            return total
+        for attr in ("materials_raw", "materials_manufactured", "materials_encoded"):
+            src = getattr(state, attr, None) or {}
+            if symbol in src:
+                return int(src.get(symbol, 0))
+        return 0
+
+    def refresh_results(self) -> None:
+        table = self._panel._guardian_unlocks_table
+        names = table.unlock_names() if table is not None else []
+        self._status_label.setText(f"{len(names)} known unlock recipe{'s' if len(names) != 1 else ''}.")
+
+        self._table.setSortingEnabled(False)
+        _rows(self._table, len(names))
+        for row, name in enumerate(names):
+            ingredients = table.ingredients(name)
+            parts = []
+            all_ready = True
+            for ing in ingredients:
+                symbol = ing.get("symbol") or ""
+                kind = ing.get("kind") or "material"
+                needed = int(ing.get("quantity") or 0)
+                held = self._held_count(normalize_commodity_name(symbol) if kind == "commodity" else symbol.lower(), kind)
+                display = ing.get("display_name") or symbol
+                short = held < needed
+                all_ready = all_ready and not short
+                colour = "#E85D5D" if short else "#6BCB77"
+                parts.append(f'<span style="color:{colour};">{display}: {held}/{needed}</span>')
+            ingredients_item = QTableWidgetItem()
+            ingredients_widget = QLabel(", ".join(parts) if parts else "—")
+            ingredients_widget.setWordWrap(True)
+            ingredients_widget.setTextFormat(Qt.TextFormat.RichText)
+            ingredients_widget.setStyleSheet("background:transparent; border:none; padding:2px;")
+
+            name_item = QTableWidgetItem(name)
+            if all_ready and ingredients:
+                name_item.setForeground(QColor("#6BCB77"))
+
+            self._table.setItem(row, 0, name_item)
+            self._table.setItem(row, 1, ingredients_item)
+            self._table.setCellWidget(row, 1, ingredients_widget)
+        self._table.resizeRowsToContents()
+        self._table.setSortingEnabled(True)

@@ -87,6 +87,7 @@ from edc.core.eddn_market import EddnMarketCache, write_buffers
 from edc.core.station_pads import extract_station_info
 from edc.core.rare_commodities import RareCommodityTable
 from edc.core.guardian_tech_broker_stations import GuardianTechBrokerTable
+from edc.core.guardian_technology_broker import GuardianTechnologyBrokerTable
 from edc.core.fdevids_names import ShipNameTable
 from edc.core.bounty_scanner import scan_active_bounties_with_dates
 from edc.core.fine_scanner import scan_active_fines
@@ -1684,6 +1685,7 @@ class MainWindow(QMainWindow):
         self.experimental_effects = ExperimentalEffectsTable(settings_base)
         self.rare_commodities = RareCommodityTable(settings_base)
         self.guardian_tech_broker_stations = GuardianTechBrokerTable(settings_base)
+        self.guardian_technology_broker = GuardianTechnologyBrokerTable(settings_base)
         self.ship_names = ShipNameTable(settings_base)
         self.engineering_wishlist_store = EngineeringWishlist(data_dir / "engineering_wishlist.json")
         self.odyssey_engineering = OdysseyEngineeringTable(settings_base)
@@ -2042,6 +2044,7 @@ class MainWindow(QMainWindow):
         self.market_panel = MarketPanel(
             self.repo, self.rare_commodities,
             guardian_tb_table=self.guardian_tech_broker_stations,
+            guardian_unlocks_table=self.guardian_technology_broker,
             edsm_powerplay=self.edsm_powerplay,
         )
         self.trade_route_panel = TradeRoutePanel(self.repo, edsm_powerplay=self.edsm_powerplay)

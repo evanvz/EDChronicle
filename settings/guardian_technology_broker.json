@@ -1,0 +1,963 @@
+{
+  "last_updated": "2026-09-21",
+  "source": "Recipe data ported (not code reused) from msarilar/EDEngineer (MIT licensed) blueprints.json -- https://github.com/msarilar/EDEngineer. Guardian Technology Broker unlocks filtered by Type==\"Guardian\" and Engineers==[\"@Technology\"]. Ingredient symbols cross-referenced against this app's own settings/engineering_blueprints.json materials catalog and against msarilar/EDEngineer's entryData.json (FormattedName field) for the market-commodity ingredients not tracked as engineering materials.",
+  "note": "Guardian Technology Broker unlocks are one-time module unlocks (trade this exact material/commodity batch once to make the module purchasable at Outfitting), not repeatable Grade 1-5 engineering upgrades like settings/odyssey_engineering.json or settings/engineering_blueprints.json. 'kind': 'material' ingredients are tracked in this app's materials inventory (Materials journal event); 'kind': 'commodity' ingredients are cargo-hold items bought/hauled from markets (Cargo journal event), not materials.",
+  "unlocks": {
+    "Guardian Gauss Cannon (Fixed, Medium)": {
+      "ingredients": [
+        {
+          "symbol": "guardian_weaponblueprint",
+          "display_name": "Guardian Weapon Blueprint Segment",
+          "kind": "material",
+          "quantity": 1
+        },
+        {
+          "symbol": "guardian_powercell",
+          "display_name": "Guardian Power Cell",
+          "kind": "material",
+          "quantity": 18
+        },
+        {
+          "symbol": "guardian_techcomponent",
+          "display_name": "Guardian Technology Component",
+          "kind": "material",
+          "quantity": 20
+        },
+        {
+          "symbol": "manganese",
+          "display_name": "Manganese",
+          "kind": "material",
+          "quantity": 15
+        },
+        {
+          "symbol": "magneticemittercoil",
+          "display_name": "Magnetic Emitter Coil",
+          "kind": "commodity",
+          "quantity": 6
+        }
+      ]
+    },
+    "Guardian Gauss Cannon (Fixed, Small)": {
+      "ingredients": [
+        {
+          "symbol": "guardian_weaponblueprint",
+          "display_name": "Guardian Weapon Blueprint Segment",
+          "kind": "material",
+          "quantity": 1
+        },
+        {
+          "symbol": "guardian_powerconduit",
+          "display_name": "Guardian Power Conduit",
+          "kind": "material",
+          "quantity": 12
+        },
+        {
+          "symbol": "guardian_sentinel_wreckagecomponents",
+          "display_name": "Guardian Wreckage Components",
+          "kind": "material",
+          "quantity": 12
+        },
+        {
+          "symbol": "guardian_sentinel_weaponparts",
+          "display_name": "Guardian Sentinel Weapon Parts",
+          "kind": "material",
+          "quantity": 15
+        }
+      ]
+    },
+    "Guardian Hull Reinforcement": {
+      "ingredients": [
+        {
+          "symbol": "guardian_moduleblueprint",
+          "display_name": "Guardian Module Blueprint Segment",
+          "kind": "material",
+          "quantity": 1
+        },
+        {
+          "symbol": "guardian_sentinel_wreckagecomponents",
+          "display_name": "Guardian Wreckage Components",
+          "kind": "material",
+          "quantity": 21
+        },
+        {
+          "symbol": "ancientculturaldata",
+          "display_name": "Pattern Beta Obelisk Data",
+          "kind": "material",
+          "quantity": 16
+        },
+        {
+          "symbol": "ancienthistoricaldata",
+          "display_name": "Pattern Gamma Obelisk Data",
+          "kind": "material",
+          "quantity": 16
+        },
+        {
+          "symbol": "reinforcedmountingplate",
+          "display_name": "Reinforced Mounting Plate",
+          "kind": "commodity",
+          "quantity": 12
+        }
+      ]
+    },
+    "Guardian Module Reinforcement": {
+      "ingredients": [
+        {
+          "symbol": "guardian_moduleblueprint",
+          "display_name": "Guardian Module Blueprint Segment",
+          "kind": "material",
+          "quantity": 1
+        },
+        {
+          "symbol": "guardian_sentinel_wreckagecomponents",
+          "display_name": "Guardian Wreckage Components",
+          "kind": "material",
+          "quantity": 18
+        },
+        {
+          "symbol": "ancienttechnologicaldata",
+          "display_name": "Pattern Epsilon Obelisk Data",
+          "kind": "material",
+          "quantity": 15
+        },
+        {
+          "symbol": "guardian_powerconduit",
+          "display_name": "Guardian Power Conduit",
+          "kind": "material",
+          "quantity": 20
+        },
+        {
+          "symbol": "reinforcedmountingplate",
+          "display_name": "Reinforced Mounting Plate",
+          "kind": "commodity",
+          "quantity": 9
+        }
+      ]
+    },
+    "Guardian Plasma Charger (Fixed, Large)": {
+      "ingredients": [
+        {
+          "symbol": "guardian_weaponblueprint",
+          "display_name": "Guardian Weapon Blueprint Segment",
+          "kind": "material",
+          "quantity": 1
+        },
+        {
+          "symbol": "guardian_powerconduit",
+          "display_name": "Guardian Power Conduit",
+          "kind": "material",
+          "quantity": 28
+        },
+        {
+          "symbol": "guardian_sentinel_weaponparts",
+          "display_name": "Guardian Sentinel Weapon Parts",
+          "kind": "material",
+          "quantity": 20
+        },
+        {
+          "symbol": "chromium",
+          "display_name": "Chromium",
+          "kind": "material",
+          "quantity": 28
+        },
+        {
+          "symbol": "micro-weavecoolinghoses",
+          "display_name": "Micro-Weave Cooling Hoses",
+          "kind": "commodity",
+          "quantity": 10
+        }
+      ]
+    },
+    "Guardian Plasma Charger (Fixed, Medium)": {
+      "ingredients": [
+        {
+          "symbol": "guardian_weaponblueprint",
+          "display_name": "Guardian Weapon Blueprint Segment",
+          "kind": "material",
+          "quantity": 1
+        },
+        {
+          "symbol": "guardian_powerconduit",
+          "display_name": "Guardian Power Conduit",
+          "kind": "material",
+          "quantity": 19
+        },
+        {
+          "symbol": "guardian_sentinel_weaponparts",
+          "display_name": "Guardian Sentinel Weapon Parts",
+          "kind": "material",
+          "quantity": 16
+        },
+        {
+          "symbol": "chromium",
+          "display_name": "Chromium",
+          "kind": "material",
+          "quantity": 14
+        },
+        {
+          "symbol": "micro-weavecoolinghoses",
+          "display_name": "Micro-Weave Cooling Hoses",
+          "kind": "commodity",
+          "quantity": 8
+        }
+      ]
+    },
+    "Guardian Plasma Charger (Fixed, Small)": {
+      "ingredients": [
+        {
+          "symbol": "guardian_weaponblueprint",
+          "display_name": "Guardian Weapon Blueprint Segment",
+          "kind": "material",
+          "quantity": 1
+        },
+        {
+          "symbol": "guardian_powercell",
+          "display_name": "Guardian Power Cell",
+          "kind": "material",
+          "quantity": 12
+        },
+        {
+          "symbol": "guardian_sentinel_weaponparts",
+          "display_name": "Guardian Sentinel Weapon Parts",
+          "kind": "material",
+          "quantity": 12
+        },
+        {
+          "symbol": "guardian_techcomponent",
+          "display_name": "Guardian Technology Component",
+          "kind": "material",
+          "quantity": 15
+        }
+      ]
+    },
+    "Guardian Plasma Charger (Turreted, Large)": {
+      "ingredients": [
+        {
+          "symbol": "guardian_weaponblueprint",
+          "display_name": "Guardian Weapon Blueprint Segment",
+          "kind": "material",
+          "quantity": 2
+        },
+        {
+          "symbol": "guardian_powerconduit",
+          "display_name": "Guardian Power Conduit",
+          "kind": "material",
+          "quantity": 26
+        },
+        {
+          "symbol": "guardian_sentinel_weaponparts",
+          "display_name": "Guardian Sentinel Weapon Parts",
+          "kind": "material",
+          "quantity": 24
+        },
+        {
+          "symbol": "chromium",
+          "display_name": "Chromium",
+          "kind": "material",
+          "quantity": 26
+        },
+        {
+          "symbol": "articulationmotors",
+          "display_name": "Articulation Motors",
+          "kind": "commodity",
+          "quantity": 10
+        }
+      ]
+    },
+    "Guardian Plasma Charger (Turreted, Medium)": {
+      "ingredients": [
+        {
+          "symbol": "guardian_weaponblueprint",
+          "display_name": "Guardian Weapon Blueprint Segment",
+          "kind": "material",
+          "quantity": 2
+        },
+        {
+          "symbol": "guardian_powerconduit",
+          "display_name": "Guardian Power Conduit",
+          "kind": "material",
+          "quantity": 21
+        },
+        {
+          "symbol": "guardian_sentinel_weaponparts",
+          "display_name": "Guardian Sentinel Weapon Parts",
+          "kind": "material",
+          "quantity": 20
+        },
+        {
+          "symbol": "chromium",
+          "display_name": "Chromium",
+          "kind": "material",
+          "quantity": 16
+        },
+        {
+          "symbol": "articulationmotors",
+          "display_name": "Articulation Motors",
+          "kind": "commodity",
+          "quantity": 8
+        }
+      ]
+    },
+    "Guardian Plasma Charger (Turreted, Small)": {
+      "ingredients": [
+        {
+          "symbol": "guardian_weaponblueprint",
+          "display_name": "Guardian Weapon Blueprint Segment",
+          "kind": "material",
+          "quantity": 1
+        },
+        {
+          "symbol": "guardian_powercell",
+          "display_name": "Guardian Power Cell",
+          "kind": "material",
+          "quantity": 12
+        },
+        {
+          "symbol": "guardian_techcomponent",
+          "display_name": "Guardian Technology Component",
+          "kind": "material",
+          "quantity": 12
+        },
+        {
+          "symbol": "guardian_sentinel_weaponparts",
+          "display_name": "Guardian Sentinel Weapon Parts",
+          "kind": "material",
+          "quantity": 15
+        }
+      ]
+    },
+    "Guardian Hybrid Power Plant": {
+      "ingredients": [
+        {
+          "symbol": "guardian_moduleblueprint",
+          "display_name": "Guardian Module Blueprint Segment",
+          "kind": "material",
+          "quantity": 1
+        },
+        {
+          "symbol": "guardian_powerconduit",
+          "display_name": "Guardian Power Conduit",
+          "kind": "material",
+          "quantity": 18
+        },
+        {
+          "symbol": "ancienttechnologicaldata",
+          "display_name": "Pattern Epsilon Obelisk Data",
+          "kind": "material",
+          "quantity": 21
+        },
+        {
+          "symbol": "heatresistantceramics",
+          "display_name": "Heat Resistant Ceramics",
+          "kind": "material",
+          "quantity": 15
+        },
+        {
+          "symbol": "powergridassembly",
+          "display_name": "Energy Grid Assembly",
+          "kind": "commodity",
+          "quantity": 10
+        }
+      ]
+    },
+    "Guardian FSD Booster": {
+      "ingredients": [
+        {
+          "symbol": "guardian_moduleblueprint",
+          "display_name": "Guardian Module Blueprint Segment",
+          "kind": "material",
+          "quantity": 1
+        },
+        {
+          "symbol": "guardian_powercell",
+          "display_name": "Guardian Power Cell",
+          "kind": "material",
+          "quantity": 21
+        },
+        {
+          "symbol": "guardian_techcomponent",
+          "display_name": "Guardian Technology Component",
+          "kind": "material",
+          "quantity": 21
+        },
+        {
+          "symbol": "focuscrystals",
+          "display_name": "Focus Crystals",
+          "kind": "material",
+          "quantity": 24
+        },
+        {
+          "symbol": "hnshockmount",
+          "display_name": "HN Shock Mount",
+          "kind": "commodity",
+          "quantity": 8
+        }
+      ]
+    },
+    "Guardian Power Distributor": {
+      "ingredients": [
+        {
+          "symbol": "guardian_moduleblueprint",
+          "display_name": "Guardian Module Blueprint Segment",
+          "kind": "material",
+          "quantity": 1
+        },
+        {
+          "symbol": "ancientbiologicaldata",
+          "display_name": "Pattern Alpha Obelisk Data",
+          "kind": "material",
+          "quantity": 20
+        },
+        {
+          "symbol": "guardian_powercell",
+          "display_name": "Guardian Power Cell",
+          "kind": "material",
+          "quantity": 24
+        },
+        {
+          "symbol": "phasealloys",
+          "display_name": "Phase Alloys",
+          "kind": "material",
+          "quantity": 18
+        },
+        {
+          "symbol": "heatsinkinterlink",
+          "display_name": "Heatsink Interlink",
+          "kind": "commodity",
+          "quantity": 6
+        }
+      ]
+    },
+    "Guardian Shard Cannon (Fixed, Large)": {
+      "ingredients": [
+        {
+          "symbol": "guardian_techcomponent",
+          "display_name": "Guardian Technology Component",
+          "kind": "material",
+          "quantity": 28
+        },
+        {
+          "symbol": "guardian_weaponblueprint",
+          "display_name": "Guardian Weapon Blueprint Segment",
+          "kind": "material",
+          "quantity": 1
+        },
+        {
+          "symbol": "guardian_sentinel_wreckagecomponents",
+          "display_name": "Guardian Wreckage Components",
+          "kind": "material",
+          "quantity": 20
+        },
+        {
+          "symbol": "carbon",
+          "display_name": "Carbon",
+          "kind": "material",
+          "quantity": 20
+        },
+        {
+          "symbol": "microcontrollers",
+          "display_name": "Micro Controllers",
+          "kind": "commodity",
+          "quantity": 18
+        }
+      ]
+    },
+    "Guardian Shard Cannon (Fixed, Medium)": {
+      "ingredients": [
+        {
+          "symbol": "guardian_techcomponent",
+          "display_name": "Guardian Technology Component",
+          "kind": "material",
+          "quantity": 18
+        },
+        {
+          "symbol": "guardian_weaponblueprint",
+          "display_name": "Guardian Weapon Blueprint Segment",
+          "kind": "material",
+          "quantity": 1
+        },
+        {
+          "symbol": "guardian_sentinel_wreckagecomponents",
+          "display_name": "Guardian Wreckage Components",
+          "kind": "material",
+          "quantity": 20
+        },
+        {
+          "symbol": "carbon",
+          "display_name": "Carbon",
+          "kind": "material",
+          "quantity": 14
+        },
+        {
+          "symbol": "powertransferconduits",
+          "display_name": "Power Transfer Bus",
+          "kind": "commodity",
+          "quantity": 12
+        }
+      ]
+    },
+    "Guardian Shard Cannon (Fixed, Small)": {
+      "ingredients": [
+        {
+          "symbol": "guardian_weaponblueprint",
+          "display_name": "Guardian Weapon Blueprint Segment",
+          "kind": "material",
+          "quantity": 1
+        },
+        {
+          "symbol": "guardian_powerconduit",
+          "display_name": "Guardian Power Conduit",
+          "kind": "material",
+          "quantity": 12
+        },
+        {
+          "symbol": "guardian_techcomponent",
+          "display_name": "Guardian Technology Component",
+          "kind": "material",
+          "quantity": 12
+        },
+        {
+          "symbol": "guardian_sentinel_weaponparts",
+          "display_name": "Guardian Sentinel Weapon Parts",
+          "kind": "material",
+          "quantity": 15
+        }
+      ]
+    },
+    "Guardian Shard Cannon (Turreted, Large)": {
+      "ingredients": [
+        {
+          "symbol": "guardian_weaponblueprint",
+          "display_name": "Guardian Weapon Blueprint Segment",
+          "kind": "material",
+          "quantity": 2
+        },
+        {
+          "symbol": "guardian_sentinel_wreckagecomponents",
+          "display_name": "Guardian Wreckage Components",
+          "kind": "material",
+          "quantity": 20
+        },
+        {
+          "symbol": "guardian_techcomponent",
+          "display_name": "Guardian Technology Component",
+          "kind": "material",
+          "quantity": 26
+        },
+        {
+          "symbol": "carbon",
+          "display_name": "Carbon",
+          "kind": "material",
+          "quantity": 28
+        },
+        {
+          "symbol": "microcontrollers",
+          "display_name": "Micro Controllers",
+          "kind": "commodity",
+          "quantity": 12
+        }
+      ]
+    },
+    "Guardian Shard Cannon (Turreted, Medium)": {
+      "ingredients": [
+        {
+          "symbol": "guardian_weaponblueprint",
+          "display_name": "Guardian Weapon Blueprint Segment",
+          "kind": "material",
+          "quantity": 2
+        },
+        {
+          "symbol": "guardian_sentinel_wreckagecomponents",
+          "display_name": "Guardian Wreckage Components",
+          "kind": "material",
+          "quantity": 16
+        },
+        {
+          "symbol": "guardian_techcomponent",
+          "display_name": "Guardian Technology Component",
+          "kind": "material",
+          "quantity": 20
+        },
+        {
+          "symbol": "carbon",
+          "display_name": "Carbon",
+          "kind": "material",
+          "quantity": 15
+        },
+        {
+          "symbol": "microcontrollers",
+          "display_name": "Micro Controllers",
+          "kind": "commodity",
+          "quantity": 12
+        }
+      ]
+    },
+    "Guardian Shard Cannon (Turreted, Small)": {
+      "ingredients": [
+        {
+          "symbol": "guardian_weaponblueprint",
+          "display_name": "Guardian Weapon Blueprint Segment",
+          "kind": "material",
+          "quantity": 1
+        },
+        {
+          "symbol": "guardian_powerconduit",
+          "display_name": "Guardian Power Conduit",
+          "kind": "material",
+          "quantity": 12
+        },
+        {
+          "symbol": "guardian_sentinel_weaponparts",
+          "display_name": "Guardian Sentinel Weapon Parts",
+          "kind": "material",
+          "quantity": 12
+        },
+        {
+          "symbol": "guardian_techcomponent",
+          "display_name": "Guardian Technology Component",
+          "kind": "material",
+          "quantity": 15
+        }
+      ]
+    },
+    "Guardian Shield Reinforcement": {
+      "ingredients": [
+        {
+          "symbol": "guardian_moduleblueprint",
+          "display_name": "Guardian Module Blueprint Segment",
+          "kind": "material",
+          "quantity": 1
+        },
+        {
+          "symbol": "guardian_powercell",
+          "display_name": "Guardian Power Cell",
+          "kind": "material",
+          "quantity": 17
+        },
+        {
+          "symbol": "guardian_techcomponent",
+          "display_name": "Guardian Technology Component",
+          "kind": "material",
+          "quantity": 20
+        },
+        {
+          "symbol": "ancientlanguagedata",
+          "display_name": "Pattern Delta Obelisk Data",
+          "kind": "material",
+          "quantity": 24
+        },
+        {
+          "symbol": "diagnosticsensor",
+          "display_name": "Hardware Diagnostic Sensor",
+          "kind": "commodity",
+          "quantity": 8
+        }
+      ]
+    },
+    "Modified Gauss Cannon (Fixed, Medium)": {
+      "ingredients": [
+        {
+          "symbol": "guardian_weaponblueprint",
+          "display_name": "Guardian Weapon Blueprint Segment",
+          "kind": "material",
+          "quantity": 1
+        },
+        {
+          "symbol": "guardian_powercell",
+          "display_name": "Guardian Power Cell",
+          "kind": "material",
+          "quantity": 5
+        },
+        {
+          "symbol": "guardian_techcomponent",
+          "display_name": "Guardian Technology Component",
+          "kind": "material",
+          "quantity": 5
+        },
+        {
+          "symbol": "niobium",
+          "display_name": "Niobium",
+          "kind": "material",
+          "quantity": 4
+        },
+        {
+          "symbol": "thermalcoolingunits",
+          "display_name": "Thermal Cooling Units",
+          "kind": "commodity",
+          "quantity": 2
+        }
+      ]
+    },
+    "Modified Gauss Cannon (Fixed, Small)": {
+      "ingredients": [
+        {
+          "symbol": "guardian_weaponblueprint",
+          "display_name": "Guardian Weapon Blueprint Segment",
+          "kind": "material",
+          "quantity": 1
+        },
+        {
+          "symbol": "guardian_powerconduit",
+          "display_name": "Guardian Power Conduit",
+          "kind": "material",
+          "quantity": 3
+        },
+        {
+          "symbol": "guardian_sentinel_wreckagecomponents",
+          "display_name": "Guardian Wreckage Components",
+          "kind": "material",
+          "quantity": 3
+        },
+        {
+          "symbol": "guardian_sentinel_weaponparts",
+          "display_name": "Guardian Sentinel Weapon Parts",
+          "kind": "material",
+          "quantity": 4
+        },
+        {
+          "symbol": "niobium",
+          "display_name": "Niobium",
+          "kind": "material",
+          "quantity": 2
+        }
+      ]
+    },
+    "Modified Shard Cannon (Fixed, Medium)": {
+      "ingredients": [
+        {
+          "symbol": "guardian_techcomponent",
+          "display_name": "Guardian Technology Component",
+          "kind": "material",
+          "quantity": 5
+        },
+        {
+          "symbol": "guardian_weaponblueprint",
+          "display_name": "Guardian Weapon Blueprint Segment",
+          "kind": "material",
+          "quantity": 1
+        },
+        {
+          "symbol": "guardian_sentinel_wreckagecomponents",
+          "display_name": "Guardian Wreckage Components",
+          "kind": "material",
+          "quantity": 5
+        },
+        {
+          "symbol": "germanium",
+          "display_name": "Germanium",
+          "kind": "material",
+          "quantity": 4
+        },
+        {
+          "symbol": "powerconverter",
+          "display_name": "Power Converter",
+          "kind": "commodity",
+          "quantity": 2
+        }
+      ]
+    },
+    "Modified Shard Cannon (Fixed, Small)": {
+      "ingredients": [
+        {
+          "symbol": "guardian_weaponblueprint",
+          "display_name": "Guardian Weapon Blueprint Segment",
+          "kind": "material",
+          "quantity": 1
+        },
+        {
+          "symbol": "guardian_powerconduit",
+          "display_name": "Guardian Power Conduit",
+          "kind": "material",
+          "quantity": 3
+        },
+        {
+          "symbol": "guardian_sentinel_wreckagecomponents",
+          "display_name": "Guardian Wreckage Components",
+          "kind": "material",
+          "quantity": 3
+        },
+        {
+          "symbol": "guardian_sentinel_weaponparts",
+          "display_name": "Guardian Sentinel Weapon Parts",
+          "kind": "material",
+          "quantity": 4
+        },
+        {
+          "symbol": "germanium",
+          "display_name": "Germanium",
+          "kind": "material",
+          "quantity": 2
+        }
+      ]
+    },
+    "Modified Plasma Charger (Fixed, Medium)": {
+      "ingredients": [
+        {
+          "symbol": "guardian_powerconduit",
+          "display_name": "Guardian Power Conduit",
+          "kind": "material",
+          "quantity": 5
+        },
+        {
+          "symbol": "guardian_weaponblueprint",
+          "display_name": "Guardian Weapon Blueprint Segment",
+          "kind": "material",
+          "quantity": 1
+        },
+        {
+          "symbol": "guardian_sentinel_weaponparts",
+          "display_name": "Guardian Sentinel Weapon Parts",
+          "kind": "material",
+          "quantity": 5
+        },
+        {
+          "symbol": "arsenic",
+          "display_name": "Arsenic",
+          "kind": "material",
+          "quantity": 4
+        },
+        {
+          "symbol": "powertransferconduits",
+          "display_name": "Power Transfer Bus",
+          "kind": "commodity",
+          "quantity": 2
+        }
+      ]
+    },
+    "Modified Plasma Charger (Fixed, Small)": {
+      "ingredients": [
+        {
+          "symbol": "guardian_weaponblueprint",
+          "display_name": "Guardian Weapon Blueprint Segment",
+          "kind": "material",
+          "quantity": 1
+        },
+        {
+          "symbol": "guardian_powercell",
+          "display_name": "Guardian Power Cell",
+          "kind": "material",
+          "quantity": 3
+        },
+        {
+          "symbol": "guardian_techcomponent",
+          "display_name": "Guardian Technology Component",
+          "kind": "material",
+          "quantity": 4
+        },
+        {
+          "symbol": "guardian_sentinel_weaponparts",
+          "display_name": "Guardian Sentinel Weapon Parts",
+          "kind": "material",
+          "quantity": 3
+        },
+        {
+          "symbol": "arsenic",
+          "display_name": "Arsenic",
+          "kind": "material",
+          "quantity": 2
+        }
+      ]
+    },
+    "Javelin (Fighter)": {
+      "ingredients": [
+        {
+          "symbol": "guardian_powercell",
+          "display_name": "Guardian Power Cell",
+          "kind": "material",
+          "quantity": 25
+        },
+        {
+          "symbol": "guardian_sentinel_wreckagecomponents",
+          "display_name": "Guardian Wreckage Components",
+          "kind": "material",
+          "quantity": 18
+        },
+        {
+          "symbol": "guardian_vesselblueprint",
+          "display_name": "Guardian Vessel Blueprint Segment",
+          "kind": "material",
+          "quantity": 1
+        },
+        {
+          "symbol": "ancienttechnologicaldata",
+          "display_name": "Pattern Epsilon Obelisk Data",
+          "kind": "material",
+          "quantity": 26
+        },
+        {
+          "symbol": "guardian_techcomponent",
+          "display_name": "Guardian Technology Component",
+          "kind": "material",
+          "quantity": 25
+        }
+      ]
+    },
+    "Lance (Fighter)": {
+      "ingredients": [
+        {
+          "symbol": "guardian_powercell",
+          "display_name": "Guardian Power Cell",
+          "kind": "material",
+          "quantity": 25
+        },
+        {
+          "symbol": "guardian_sentinel_weaponparts",
+          "display_name": "Guardian Sentinel Weapon Parts",
+          "kind": "material",
+          "quantity": 18
+        },
+        {
+          "symbol": "guardian_vesselblueprint",
+          "display_name": "Guardian Vessel Blueprint Segment",
+          "kind": "material",
+          "quantity": 1
+        },
+        {
+          "symbol": "ancienttechnologicaldata",
+          "display_name": "Pattern Epsilon Obelisk Data",
+          "kind": "material",
+          "quantity": 26
+        },
+        {
+          "symbol": "guardian_techcomponent",
+          "display_name": "Guardian Technology Component",
+          "kind": "material",
+          "quantity": 25
+        }
+      ]
+    },
+    "Trident (Fighter)": {
+      "ingredients": [
+        {
+          "symbol": "guardian_powercell",
+          "display_name": "Guardian Power Cell",
+          "kind": "material",
+          "quantity": 25
+        },
+        {
+          "symbol": "guardian_vesselblueprint",
+          "display_name": "Guardian Vessel Blueprint Segment",
+          "kind": "material",
+          "quantity": 1
+        },
+        {
+          "symbol": "ancienttechnologicaldata",
+          "display_name": "Pattern Epsilon Obelisk Data",
+          "kind": "material",
+          "quantity": 26
+        },
+        {
+          "symbol": "ancientculturaldata",
+          "display_name": "Pattern Beta Obelisk Data",
+          "kind": "material",
+          "quantity": 18
+        },
+        {
+          "symbol": "guardian_techcomponent",
+          "display_name": "Guardian Technology Component",
+          "kind": "material",
+          "quantity": 25
+        }
+      ]
+    }
+  }
+}
