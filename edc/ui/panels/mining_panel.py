@@ -463,6 +463,8 @@ class MiningPanel(QWidget):
             self._repo.db.db_path, qty_by_commodity, display_by_commodity,
             self._ref_x, self._ref_y, self._ref_z, self._market_radius_ly, self._current_market_id,
         )
+        if self._cargo_thread is not None:
+            self._cargo_thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
         self._cargo_thread = QThread()
         self._cargo_worker.moveToThread(self._cargo_thread)
         self._cargo_thread.started.connect(self._cargo_worker.run)
@@ -573,6 +575,8 @@ class MiningPanel(QWidget):
             ref_x=self._ref_x, ref_y=self._ref_y, ref_z=self._ref_z,
             range_ly=self._range_spin.value(),
         )
+        if self._thread is not None:
+            self._thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
         self._thread = QThread()
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)

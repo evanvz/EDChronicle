@@ -453,6 +453,8 @@ class PowerplayFinderPanel(QWidget):
             range_ly=self._range_spin.value(),
             facility=self._facility_key(),
         )
+        if self._thread is not None:
+            self._thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
         self._thread = QThread()
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)

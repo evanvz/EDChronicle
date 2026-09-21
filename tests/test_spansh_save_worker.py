@@ -256,3 +256,109 @@ def test_retry_pending_spansh_enrich_starts_when_thread_free():
     )
     MainWindow._retry_pending_spansh_enrich(fake_self, "Wolf 359", 456)
     assert started == [("Wolf 359", 456)]
+
+
+# --- _start_spansh_enrich / _start_spansh_save: old-thread teardown race ---
+#
+# Confirmed live (2026-09-21, a different crash site than the one above):
+# a caller can correctly observe isRunning() == False on the OLD thread and
+# still race its C++-level teardown -- isRunning() going False only means
+# quit() was requested/processed, not that Qt's internal "still running"
+# flag has fully settled. Reassigning self._enrich_thread / self.
+# _spansh_save_thread at that moment drops the last Python reference to
+# the old QThread; a reference cycle formed by the worker.finished.connect
+# calls (self -> worker -> Qt connection -> bound slot -> self) can delay
+# that object's actual collection to an arbitrary later moment (CPython's
+# cyclic GC), well past when some OTHER unrelated new thread happens to be
+# starting -- producing the exact same "QThread: Destroyed while thread ''
+# is still running" fatal. Fix: call .wait() on the old thread (a no-op if
+# it's genuinely already stopped) before dropping the reference.
+
+
+class _TrackedThread:
+    """Fake old QThread -- records whether .wait() was called, and in
+    what order relative to the new thread being constructed."""
+    def __init__(self, calls):
+        self._calls = calls
+
+    def wait(self):
+        self._calls.append("old.wait")
+
+
+class _FakeNewThread:
+    """Fake replacement QThread() -- swallows all the wiring calls
+    _start_spansh_enrich/_start_spansh_save make on a freshly constructed
+    QThread, without spinning a real background thread. `.started` stands
+    in for the real pyqtSignal (only `.connect()` is ever called on it)."""
+    def __init__(self, *a, **kw):
+        self.started = self
+
+    def connect(self, *a, **kw):
+        pass
+
+    def start(self):
+        pass
+
+    def quit(self):
+        pass
+
+
+class _FakeWorker:
+    """Fake replacement worker -- swallows moveToThread (which requires a
+    real QThread C++ instance, incompatible with _FakeNewThread) and
+    `.finished` (only `.connect()` is ever called on it)."""
+    def __init__(self, *a, **kw):
+        self.finished = self
+
+    def moveToThread(self, *a, **kw):
+        pass
+
+    def connect(self, *a, **kw):
+        pass
+
+    def run(self):
+        pass
+
+
+def test_start_spansh_enrich_waits_on_old_thread_before_reassigning():
+    calls = []
+    old_thread = _TrackedThread(calls)
+    fake_self = SimpleNamespace(_enrich_thread=old_thread, _enrich_worker=None, _on_spansh_enrichment=lambda *a: None)
+    with patch("edc.ui.main_window.QThread", return_value=_FakeNewThread()), \
+         patch("edc.ui.main_window._SpanshEnrichWorker", return_value=_FakeWorker()):
+        MainWindow._start_spansh_enrich(fake_self, "Sol", 123)
+    assert calls == ["old.wait"]
+    assert fake_self._enrich_thread is not old_thread
+
+
+def test_start_spansh_enrich_skips_wait_when_no_old_thread():
+    fake_self = SimpleNamespace(_enrich_thread=None, _enrich_worker=None, _on_spansh_enrichment=lambda *a: None)
+    with patch("edc.ui.main_window.QThread", return_value=_FakeNewThread()), \
+         patch("edc.ui.main_window._SpanshEnrichWorker", return_value=_FakeWorker()):
+        MainWindow._start_spansh_enrich(fake_self, "Sol", 123)  # must not raise
+
+
+def test_start_spansh_save_waits_on_old_thread_before_reassigning():
+    calls = []
+    old_thread = _TrackedThread(calls)
+    fake_self = SimpleNamespace(
+        _spansh_save_thread=old_thread, _spansh_save_worker=None,
+        repo=SimpleNamespace(db=SimpleNamespace(db_path="unused.db")),
+        _on_spansh_saved=lambda *a: None,
+    )
+    with patch("edc.ui.main_window.QThread", return_value=_FakeNewThread()), \
+         patch("edc.ui.main_window._SpanshSaveWorker", return_value=_FakeWorker()):
+        MainWindow._start_spansh_save(fake_self, 123, [_body("A")])
+    assert calls == ["old.wait"]
+    assert fake_self._spansh_save_thread is not old_thread
+
+
+def test_start_spansh_save_skips_wait_when_no_old_thread():
+    fake_self = SimpleNamespace(
+        _spansh_save_thread=None, _spansh_save_worker=None,
+        repo=SimpleNamespace(db=SimpleNamespace(db_path="unused.db")),
+        _on_spansh_saved=lambda *a: None,
+    )
+    with patch("edc.ui.main_window.QThread", return_value=_FakeNewThread()), \
+         patch("edc.ui.main_window._SpanshSaveWorker", return_value=_FakeWorker()):
+        MainWindow._start_spansh_save(fake_self, 123, [_body("A")])  # must not raise

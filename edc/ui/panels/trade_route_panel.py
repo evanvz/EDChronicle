@@ -444,6 +444,8 @@ class TradeRoutePanel(QWidget):
             self._edsm_powerplay, self._faction_only_check.isChecked(), squadron_faction_name,
             self._pad_filter_combo.currentData(),
         )
+        if self._thread is not None:
+            self._thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
         self._thread = QThread()
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
@@ -545,6 +547,8 @@ class TradeRoutePanel(QWidget):
         self._p2p_worker = _PointToPointWorker(
             self._repo.db.db_path, self._origin_items, destination, self._cargo_capacity,
         )
+        if self._p2p_thread is not None:
+            self._p2p_thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
         self._p2p_thread = QThread()
         self._p2p_worker.moveToThread(self._p2p_thread)
         self._p2p_thread.started.connect(self._p2p_worker.run)

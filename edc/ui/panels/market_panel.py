@@ -821,6 +821,8 @@ class MarketPanel(QWidget):
         self._trade_worker = _TradeOpportunityWorker(
             self._repo.db.db_path, items, market_id, station, ref_x, ref_y, ref_z, radius_ly,
         )
+        if self._trade_thread is not None:
+            self._trade_thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
         self._trade_thread = QThread()
         self._trade_worker.moveToThread(self._trade_thread)
         self._trade_thread.started.connect(self._trade_worker.run)
@@ -1011,6 +1013,8 @@ class MarketPanel(QWidget):
         self._table.setRowCount(0)
         self._search_loading_spinner.start_over(self)
         self._coords_worker = _NearSystemCoordsWorker(self._repo.db.db_path, near_name)
+        if self._coords_thread is not None:
+            self._coords_thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
         self._coords_thread = QThread()
         self._coords_worker.moveToThread(self._coords_thread)
         self._coords_thread.started.connect(self._coords_worker.run)
@@ -1043,6 +1047,8 @@ class MarketPanel(QWidget):
         self._search_worker = _MarketSearchWorker(
             self._repo.db.db_path, commodity, raw, ref_x, ref_y, ref_z, radius, buy_mode,
         )
+        if self._search_thread is not None:
+            self._search_thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
         self._search_thread = QThread()
         self._search_worker.moveToThread(self._search_thread)
         self._search_thread.started.connect(self._search_worker.run)
@@ -1151,6 +1157,8 @@ class MarketPanel(QWidget):
         never being caught."""
         for name in system_names:
             self._spansh_power_pending.add(name.strip().lower())
+        if self._power_lookup_thread is not None:
+            self._power_lookup_thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
         self._power_lookup_thread = QThread()
         self._power_lookup_worker = _SpanshPowerLookupWorker(list(system_names))
         self._power_lookup_worker.moveToThread(self._power_lookup_thread)

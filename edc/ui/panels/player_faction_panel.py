@@ -1493,6 +1493,8 @@ class PlayerFactionPanel(QWidget):
         self._stations_refresh_btn.setEnabled(False)
 
         self._station_worker = _EdsmStationLookupWorker(self._repo.db.db_path, system_name)
+        if self._station_thread is not None:
+            self._station_thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
         self._station_thread = QThread()
         self._station_worker.moveToThread(self._station_thread)
         self._station_thread.started.connect(self._station_worker.run)
@@ -1577,6 +1579,8 @@ class PlayerFactionPanel(QWidget):
         self._add_system_status.setText(f"Looking up {system_name} on EDSM…")
 
         self._lookup_worker = _EdsmFactionLookupWorker(system_name)
+        if self._lookup_thread is not None:
+            self._lookup_thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
         self._lookup_thread = QThread()
         self._lookup_worker.moveToThread(self._lookup_thread)
         self._lookup_thread.started.connect(self._lookup_worker.run)
@@ -1706,6 +1710,8 @@ class PlayerFactionPanel(QWidget):
         self._stale_frame.setVisible(False)
 
         self._csv_worker = _CsvImportWorker(self._repo.db.db_path, rows, self._faction_name)
+        if self._csv_thread is not None:
+            self._csv_thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
         self._csv_thread = QThread()
         self._csv_worker.moveToThread(self._csv_thread)
         self._csv_thread.started.connect(self._csv_worker.run)
@@ -1949,6 +1955,8 @@ class PlayerFactionPanel(QWidget):
         self._refresh_status_label.setText(f"Refreshing 0 / {len(system_names)}…")
 
         self._refresh_all_worker = _FactionRefreshWorker(self._repo.db.db_path, system_names, self._faction_name)
+        if self._refresh_all_thread is not None:
+            self._refresh_all_thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
         self._refresh_all_thread = QThread()
         self._refresh_all_worker.moveToThread(self._refresh_all_thread)
         self._refresh_all_thread.started.connect(self._refresh_all_worker.run)
@@ -2289,6 +2297,8 @@ class _FactionBucketDialog(QDialog):
         self._route_mode: bool = False
         self._route_leg_distances: Dict[str, float] = {}
         self._route_position: Dict[str, int] = {}
+        self._recheck_thread: Optional[QThread] = None
+        self._recheck_worker: Optional[_FactionRefreshWorker] = None
         self.setWindowTitle(f"Player Faction — {label}")
         self.resize(900, 500)
 
@@ -2481,11 +2491,15 @@ class _FactionBucketDialog(QDialog):
         names = [s.get("system_name") for s in self._all_systems if s.get("system_name")]
         if not names:
             return
+        if self._recheck_thread and self._recheck_thread.isRunning():
+            return  # _recheck_btn is disabled while running, but guard anyway
         self._recheck_btn.setEnabled(False)
         self._recheck_status.setText(f"Rechecking 0 / {len(names)}…")
         self._recheck_worker = _FactionRefreshWorker(
             self._panel._repo.db.db_path, names, self._panel._faction_name
         )
+        if self._recheck_thread is not None:
+            self._recheck_thread.wait()  # old-thread teardown race -- see _start_spansh_enrich's docstring
         self._recheck_thread = QThread()
         self._recheck_worker.moveToThread(self._recheck_thread)
         self._recheck_thread.started.connect(self._recheck_worker.run)

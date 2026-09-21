@@ -372,6 +372,8 @@ class _RavenColonialDialog(QDialog):
         if self._thread and self._thread.isRunning():
             return
         self._worker = worker
+        if self._thread is not None:
+            self._thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
         self._thread = QThread()
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
@@ -434,6 +436,8 @@ class _RavenColonialDialog(QDialog):
         if self._sources_thread and self._sources_thread.isRunning():
             return
         self._sources_worker = _RavenColonialSourcesWorker(self._panel._repo.db.db_path, list(remaining.keys()), x, y, z)
+        if self._sources_thread is not None:
+            self._sources_thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
         self._sources_thread = QThread()
         self._sources_worker.moveToThread(self._sources_thread)
         self._sources_thread.started.connect(self._sources_worker.run)

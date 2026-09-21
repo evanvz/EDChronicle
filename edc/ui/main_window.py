@@ -2692,6 +2692,8 @@ class MainWindow(QMainWindow):
             "other database activity while it runs. Don't close the app."
         )
         self._market_vacuum_worker = _MarketVacuumWorker(self.repo.db.db_path)
+        if self._market_vacuum_thread is not None:
+            self._market_vacuum_thread.wait()  # old-thread teardown race -- see _start_spansh_enrich's docstring
         self._market_vacuum_thread = QThread()
         self._market_vacuum_worker.moveToThread(self._market_vacuum_thread)
         self._market_vacuum_thread.started.connect(self._market_vacuum_worker.run)
@@ -2748,6 +2750,8 @@ class MainWindow(QMainWindow):
         z = float(getattr(self.state, "system_z", 0.0) or 0.0)
 
         self._canonn_worker = _CanonnRefreshWorker(self.canonn_client, system_name, odyssey, cmdr, x, y, z)
+        if self._canonn_thread is not None:
+            self._canonn_thread.wait()  # old-thread teardown race -- see _start_spansh_enrich's docstring
         self._canonn_thread = QThread()
         self._canonn_worker.moveToThread(self._canonn_thread)
         self._canonn_thread.started.connect(self._canonn_worker.run)
@@ -2800,7 +2804,31 @@ class MainWindow(QMainWindow):
         self._start_spansh_enrich(system_name, system_address)
 
     def _start_spansh_enrich(self, system_name: str, system_address: int) -> None:
-        """Kick a Spansh enrich (fetch) worker. Caller must ensure no enrich is running."""
+        """Kick a Spansh enrich (fetch) worker. Caller must ensure no enrich is running
+        (isRunning() == False) before calling this.
+
+        That check alone isn't quite enough to safely drop the reference to
+        the OLD self._enrich_thread below, though: isRunning() going False
+        only means the old thread's quit() was requested and processed --
+        Qt's own internal "still running" teardown flag can settle a hair
+        later than that. Reassigning self._enrich_thread here drops the
+        last Python reference to the old QThread; if a reference cycle
+        (self -> worker -> Qt connection -> bound slot -> self, formed by
+        the .connect() calls below) delays that object's actual collection
+        to CPython's unpredictable cyclic GC pass instead of immediate
+        refcounting, the old QThread's C++ destructor can end up running at
+        a totally arbitrary later moment -- confirmed live (2026-09-21) as
+        a "QThread: Destroyed while thread '' is still running" fatal, a
+        different crash site than the one fixed 2026-09-20 (see
+        _on_spansh_enrichment's docstring) but the same underlying class of
+        bug. .wait() blocks until Qt confirms the thread has ACTUALLY,
+        fully stopped -- a no-op if it already has (the overwhelmingly
+        common case here, since callers already checked isRunning()), so
+        this costs nothing in the normal case while closing the race
+        entirely in the rare one.
+        """
+        if self._enrich_thread is not None:
+            self._enrich_thread.wait()
         log.info("Spansh enrich starting for %r (%d)", system_name, system_address)
         self._enrich_worker = _SpanshEnrichWorker(system_name, system_address)
         self._enrich_thread = QThread()
@@ -2811,7 +2839,11 @@ class MainWindow(QMainWindow):
         self._enrich_thread.start()
 
     def _start_spansh_save(self, system_address: int, bodies: list) -> None:
-        """Kick a Spansh body-save worker. Caller must ensure no save is running."""
+        """Kick a Spansh body-save worker. Caller must ensure no save is running.
+        See _start_spansh_enrich's docstring for why the .wait() below is needed
+        even after that check -- same race, same fix, other thread pair."""
+        if self._spansh_save_thread is not None:
+            self._spansh_save_thread.wait()
         self._spansh_save_worker = _SpanshSaveWorker(self.repo.db.db_path, system_address, bodies)
         self._spansh_save_thread = QThread()
         self._spansh_save_worker.moveToThread(self._spansh_save_thread)
@@ -2909,6 +2941,8 @@ class MainWindow(QMainWindow):
             return
 
         self._ring_gap_worker = _SpanshRingWorker(system_address)
+        if self._ring_gap_thread is not None:
+            self._ring_gap_thread.wait()  # old-thread teardown race -- see _start_spansh_enrich's docstring
         self._ring_gap_thread = QThread()
         self._ring_gap_worker.moveToThread(self._ring_gap_thread)
         self._ring_gap_thread.started.connect(self._ring_gap_worker.run)
@@ -3843,6 +3877,8 @@ class MainWindow(QMainWindow):
         self._voice_cmd_worker = VoiceCommandListener(self._voice_cmd_models_dir)
         # Push current ship commands into the listener before starting
         self._sync_ship_commands_to_listener()
+        if self._voice_cmd_thread is not None:
+            self._voice_cmd_thread.wait()  # old-thread teardown race -- see _start_spansh_enrich's docstring
         self._voice_cmd_thread = QThread()
         self._voice_cmd_worker.moveToThread(self._voice_cmd_thread)
         self._voice_cmd_thread.started.connect(self._voice_cmd_worker.run)
@@ -5266,6 +5302,8 @@ class MainWindow(QMainWindow):
             self.repo.db.db_path, coords, market, factions, stations, codex, fcmaterials, carrier_access,
             bgs_status, res_sites, body_signals, system_profiles, body_scans,
         )
+        if self._flush_thread is not None:
+            self._flush_thread.wait()  # old-thread teardown race -- see _start_spansh_enrich's docstring
         self._flush_thread = QThread()
         self._flush_worker.moveToThread(self._flush_thread)
         self._flush_thread.started.connect(self._flush_worker.run)
@@ -5293,6 +5331,8 @@ class MainWindow(QMainWindow):
         if self._flush_thread and self._flush_thread.isRunning():
             return  # EDDN flush in progress — avoid colliding on the same file
         self._wal_checkpoint_worker = _WalCheckpointWorker(self.repo.db.db_path)
+        if self._wal_checkpoint_thread is not None:
+            self._wal_checkpoint_thread.wait()  # old-thread teardown race -- see _start_spansh_enrich's docstring
         self._wal_checkpoint_thread = QThread()
         self._wal_checkpoint_worker.moveToThread(self._wal_checkpoint_thread)
         self._wal_checkpoint_thread.started.connect(self._wal_checkpoint_worker.run)
@@ -5312,6 +5352,8 @@ class MainWindow(QMainWindow):
             return
 
         self._coords_backfill_worker = _CoordsBackfillWorker(self.repo.db.db_path, faction_name)
+        if self._coords_backfill_thread is not None:
+            self._coords_backfill_thread.wait()  # old-thread teardown race -- see _start_spansh_enrich's docstring
         self._coords_backfill_thread = QThread()
         self._coords_backfill_worker.moveToThread(self._coords_backfill_thread)
         self._coords_backfill_thread.started.connect(self._coords_backfill_worker.run)
@@ -5336,6 +5378,8 @@ class MainWindow(QMainWindow):
         if self._server_status_thread and self._server_status_thread.isRunning():
             return
         self._server_status_worker = _ServerStatusWorker()
+        if self._server_status_thread is not None:
+            self._server_status_thread.wait()  # old-thread teardown race -- see _start_spansh_enrich's docstring
         self._server_status_thread = QThread()
         self._server_status_worker.moveToThread(self._server_status_thread)
         self._server_status_thread.started.connect(self._server_status_worker.run)
@@ -5361,6 +5405,8 @@ class MainWindow(QMainWindow):
         if self._galnet_thread and self._galnet_thread.isRunning():
             return
         self._galnet_worker = _GalnetNewsWorker()
+        if self._galnet_thread is not None:
+            self._galnet_thread.wait()  # old-thread teardown race -- see _start_spansh_enrich's docstring
         self._galnet_thread = QThread()
         self._galnet_worker.moveToThread(self._galnet_thread)
         self._galnet_thread.started.connect(self._galnet_worker.run)
@@ -5393,6 +5439,8 @@ class MainWindow(QMainWindow):
         if self._bgs_tick_thread and self._bgs_tick_thread.isRunning():
             return  # previous check still running -- next timer firing will catch up
         self._bgs_tick_worker = _BgsTickCheckWorker()
+        if self._bgs_tick_thread is not None:
+            self._bgs_tick_thread.wait()  # old-thread teardown race -- see _start_spansh_enrich's docstring
         self._bgs_tick_thread = QThread()
         self._bgs_tick_worker.moveToThread(self._bgs_tick_thread)
         self._bgs_tick_thread.started.connect(self._bgs_tick_worker.run)
@@ -5413,6 +5461,8 @@ class MainWindow(QMainWindow):
         self._colonisation_candidates_worker = _ColonisationCandidatesWorker(
             system_name, self._get_completed_colony_names()
         )
+        if self._colonisation_candidates_thread is not None:
+            self._colonisation_candidates_thread.wait()  # old-thread teardown race -- see _start_spansh_enrich's docstring
         self._colonisation_candidates_thread = QThread()
         self._colonisation_candidates_worker.moveToThread(self._colonisation_candidates_thread)
         self._colonisation_candidates_thread.started.connect(self._colonisation_candidates_worker.run)
@@ -5442,6 +5492,8 @@ class MainWindow(QMainWindow):
         self._colonisation_check_worker = _ColonisationEligibilityCheckWorker(
             system_name.strip(), self._get_completed_colony_names()
         )
+        if self._colonisation_check_thread is not None:
+            self._colonisation_check_thread.wait()  # old-thread teardown race -- see _start_spansh_enrich's docstring
         self._colonisation_check_thread = QThread()
         self._colonisation_check_worker.moveToThread(self._colonisation_check_thread)
         self._colonisation_check_thread.started.connect(self._colonisation_check_worker.run)

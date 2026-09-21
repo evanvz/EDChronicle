@@ -246,6 +246,8 @@ class CombatBgsStatusPanel(QWidget):
         self._search_worker = _SearchWorker(
             self._repo.db.db_path, self._ref_x, self._ref_y, self._ref_z, self._range_spin.value(),
         )
+        if self._search_thread is not None:
+            self._search_thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
         self._search_thread = QThread()
         self._search_worker.moveToThread(self._search_thread)
         self._search_thread.started.connect(self._search_worker.run)
