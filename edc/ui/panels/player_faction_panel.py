@@ -141,6 +141,19 @@ def _data_age_days(sys_rec: Dict[str, Any], today: Optional[date] = None) -> Opt
         return None
 
 
+def _stale_suffix(sys_rec: Dict[str, Any]) -> str:
+    """", may be stale EDSM data" -> quantified with the actual age when
+    known, e.g. ", EDSM data unchanged for 18 days" -- confirmed live
+    (2026-09-21): a commander cross-checking EDSM/Inara by hand for a
+    single-faction War claim is exactly the case _data_age_days() (keyed
+    off data_timestamp, not snapshot_date -- see its own docstring for
+    why) already exists to answer without that manual round-trip."""
+    age = _data_age_days(sys_rec)
+    if age is None or age < 1:
+        return ", may be stale EDSM data"
+    return f", EDSM data unchanged for {age} day{'s' if age != 1 else ''}"
+
+
 # Always true regardless of a system's current state — a crisis-specific
 # remedy (e.g. Outbreak's medicine delivery) resolves that crisis mechanic,
 # it doesn't replace these as the actual Influence-moving activities.
@@ -167,7 +180,8 @@ def _bgs_action_core(sys_rec: Dict[str, Any]) -> Tuple[str, str]:
         # fighting it.
         if sys_rec.get("war_corroborated") is False:
             return (
-                "⚠ War reported for this faction — no opposing faction confirmed, may be stale EDSM data.",
+                f"⚠ War reported for this faction — no opposing faction confirmed"
+                f"{_stale_suffix(sys_rec)}.",
                 "#FFB347",
             )
         return ("⚔ War/Civil War active — combat kills for this faction help win it.", "#FF6B6B")
@@ -177,7 +191,8 @@ def _bgs_action_core(sys_rec: Dict[str, Any]) -> Tuple[str, str]:
         # state.
         if sys_rec.get("election_corroborated") is False:
             return (
-                "⚠ Election reported for this faction — no contesting faction confirmed, may be stale EDSM data.",
+                f"⚠ Election reported for this faction — no contesting faction confirmed"
+                f"{_stale_suffix(sys_rec)}.",
                 "#FFB347",
             )
         return ("🗳 Election in progress — trade/mission activity favors your faction's chances.", "#FFD93D")

@@ -93,6 +93,28 @@ def test_bgs_action_core_downgrades_uncorroborated_war():
     assert color == "#FFB347"
 
 
+def test_bgs_action_core_quantifies_staleness_from_data_timestamp():
+    # Confirmed live (2026-09-21): a commander shouldn't have to manually
+    # cross-check EDSM/Inara to judge how stale an uncorroborated War
+    # claim is -- _data_age_days() (keyed off data_timestamp) already
+    # has the answer.
+    from datetime import date, timedelta
+    stale_date = (date.today() - timedelta(days=18)).isoformat() + "T00:00:00Z"
+    sys_rec = {
+        "faction_state": "War", "war_corroborated": False, "is_controlling": True,
+        "data_timestamp": stale_date,
+    }
+    text, _color = _bgs_action_core(sys_rec)
+    assert "EDSM data unchanged for 18 days" in text
+    assert "may be stale EDSM data" not in text
+
+
+def test_bgs_action_core_falls_back_to_generic_phrasing_without_a_timestamp():
+    sys_rec = {"faction_state": "War", "war_corroborated": False, "is_controlling": True}
+    text, _color = _bgs_action_core(sys_rec)
+    assert "may be stale EDSM data" in text
+
+
 def test_bgs_action_core_keeps_full_message_when_corroborated():
     sys_rec = {"faction_state": "War", "war_corroborated": True, "is_controlling": True}
     text, color = _bgs_action_core(sys_rec)
