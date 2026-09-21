@@ -1,0 +1,255 @@
+{
+  "last_updated": "2026-09-21",
+  "source": "https://elitedangerousutilities.azurewebsites.net/customtable/display?id=technology+brokers (community-aggregated from EDDB+EDSM; Guardian Tech Broker column, TB(G))",
+  "note": "Technology Broker station assignments are static once established (not BGS-dynamic), so this list should stay valid unless Frontier relocates one. Spot-checked against a known real location (Shinrarta Dezhra / Jameson Memorial, present in this list) for correctness before use.",
+  "stations": [
+    {
+      "system_name": "EZ Aquarii",
+      "station_name": "Magnus Gateway"
+    },
+    {
+      "system_name": "Luyten's Star",
+      "station_name": "Spirit of Laelaps"
+    },
+    {
+      "system_name": "Bhritzameno",
+      "station_name": "Feynman Terminal"
+    },
+    {
+      "system_name": "EQ Pegasi",
+      "station_name": "Merbold Ring"
+    },
+    {
+      "system_name": "Saktsak",
+      "station_name": "Bursch Enterprise"
+    },
+    {
+      "system_name": "Carener",
+      "station_name": "Butz Port"
+    },
+    {
+      "system_name": "Ross 490",
+      "station_name": "Dunyach Enterprise"
+    },
+    {
+      "system_name": "LHS 3885",
+      "station_name": "Alvarado Ring"
+    },
+    {
+      "system_name": "Ross 695",
+      "station_name": "Bresnik Orbital"
+    },
+    {
+      "system_name": "LHS 235",
+      "station_name": "Shatalov Gateway"
+    },
+    {
+      "system_name": "LHS 215",
+      "station_name": "Spring Gateway"
+    },
+    {
+      "system_name": "LFT 69",
+      "station_name": "Anning Enterprise"
+    },
+    {
+      "system_name": "LHS 115",
+      "station_name": "Aleksandrov Gateway"
+    },
+    {
+      "system_name": "LHS 262",
+      "station_name": "Boodt Port"
+    },
+    {
+      "system_name": "Bolg",
+      "station_name": "Moxon's Mojo"
+    },
+    {
+      "system_name": "Segais",
+      "station_name": "Bates Orbital"
+    },
+    {
+      "system_name": "LHS 2037",
+      "station_name": "Meikle Dock"
+    },
+    {
+      "system_name": "GQ Virginis",
+      "station_name": "Ray Enterprise"
+    },
+    {
+      "system_name": "DS Leonis",
+      "station_name": "Grandin Terminal"
+    },
+    {
+      "system_name": "LHS 2106",
+      "station_name": "Gooch Vision"
+    },
+    {
+      "system_name": "Fionn",
+      "station_name": "Currie Enterprise"
+    },
+    {
+      "system_name": "LHS 3577",
+      "station_name": "Elgin Terminal"
+    },
+    {
+      "system_name": "LFT 174",
+      "station_name": "Berezovoy Gateway"
+    },
+    {
+      "system_name": "LHS 1197",
+      "station_name": "Chretien Terminal"
+    },
+    {
+      "system_name": "LP 390-16",
+      "station_name": "Readdy Orbital"
+    },
+    {
+      "system_name": "LHS 28",
+      "station_name": "Flade Enterprise"
+    },
+    {
+      "system_name": "Iota Piscium",
+      "station_name": "Virts City"
+    },
+    {
+      "system_name": "ZZ Piscium",
+      "station_name": "Buffett Survey"
+    },
+    {
+      "system_name": "Alrai",
+      "station_name": "Bounds Hub"
+    },
+    {
+      "system_name": "BD+41 1865",
+      "station_name": "Cori City"
+    },
+    {
+      "system_name": "G 190-28",
+      "station_name": "Guidoni Dock"
+    },
+    {
+      "system_name": "Kunggi",
+      "station_name": "Vesalius City"
+    },
+    {
+      "system_name": "LHS 20",
+      "station_name": "Ohm City"
+    },
+    {
+      "system_name": "LU Velorum",
+      "station_name": "Miletus Station"
+    },
+    {
+      "system_name": "LHS 1212",
+      "station_name": "Bramah Port"
+    },
+    {
+      "system_name": "AZ Cancri",
+      "station_name": "Fisher Station"
+    },
+    {
+      "system_name": "LP 906-9",
+      "station_name": "Hertz Orbital"
+    },
+    {
+      "system_name": "Mbooni",
+      "station_name": "Prospect's Deep"
+    },
+    {
+      "system_name": "LP 908-11",
+      "station_name": "So-yeon City"
+    },
+    {
+      "system_name": "BD+75 58",
+      "station_name": "Stephenson Station"
+    },
+    {
+      "system_name": "Kokojina",
+      "station_name": "Ali Ring"
+    },
+    {
+      "system_name": "Kachian",
+      "station_name": "Goddard Station"
+    },
+    {
+      "system_name": "Wu Kuku",
+      "station_name": "Al Saud Terminal"
+    },
+    {
+      "system_name": "LHS 1663",
+      "station_name": "Frobisher City"
+    },
+    {
+      "system_name": "LFT 926",
+      "station_name": "Meredith City"
+    },
+    {
+      "system_name": "BD+27 1739",
+      "station_name": "Dyomin Terminal"
+    },
+    {
+      "system_name": "Ross 878",
+      "station_name": "Jakes Enterprise"
+    },
+    {
+      "system_name": "45 c Bootis",
+      "station_name": "Ride Hub"
+    },
+    {
+      "system_name": "16 c Ursae Majoris",
+      "station_name": "Daimler Station"
+    },
+    {
+      "system_name": "Shinrarta Dezhra",
+      "station_name": "Jameson Memorial"
+    },
+    {
+      "system_name": "Skollung",
+      "station_name": "Melvin Hub"
+    },
+    {
+      "system_name": "Zosia",
+      "station_name": "Sharp Enterprise"
+    },
+    {
+      "system_name": "LHS 2651",
+      "station_name": "Kennan Dock"
+    },
+    {
+      "system_name": "Mazahuanses",
+      "station_name": "Messerschmid Orbital"
+    },
+    {
+      "system_name": "9 Ceti",
+      "station_name": "Fanning Vision"
+    },
+    {
+      "system_name": "Apala",
+      "station_name": "Wilson City"
+    },
+    {
+      "system_name": "LP 580-33",
+      "station_name": "Shkaplerov Ring"
+    },
+    {
+      "system_name": "LTT 1349",
+      "station_name": "Lundwall City"
+    },
+    {
+      "system_name": "HR 6828",
+      "station_name": "Celsius Hub"
+    },
+    {
+      "system_name": "LP 685-43",
+      "station_name": "Lie Ring"
+    },
+    {
+      "system_name": "V749 Herculis",
+      "station_name": "Pauling Gateway"
+    },
+    {
+      "system_name": "Ross 112",
+      "station_name": "Egan Orbital"
+    }
+  ]
+}

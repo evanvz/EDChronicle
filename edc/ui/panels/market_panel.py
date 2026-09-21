@@ -275,13 +275,15 @@ class MarketPanel(QWidget):
     # until they actually reach it.
     destination_selected = pyqtSignal(str, str, str, str)
 
-    def __init__(self, repo, rare_table=None, edsm_powerplay=None, parent=None):
+    def __init__(self, repo, rare_table=None, guardian_tb_table=None, edsm_powerplay=None, parent=None):
         super().__init__(parent)
         self._repo = repo
         self._rare_table = rare_table
+        self._guardian_tb_table = guardian_tb_table
         self._edsm_powerplay = edsm_powerplay
         self._my_power: Optional[str] = None
         self._rare_dialog: Optional["_RareGoodsDialog"] = None
+        self._guardian_tb_dialog: Optional["_GuardianTechBrokerDialog"] = None
         self._system: str = ""
         self._ref_x: float = 0.0
         self._ref_y: float = 0.0
@@ -490,6 +492,21 @@ class MarketPanel(QWidget):
         self._rare_goods_btn.clicked.connect(self._open_rare_goods_dialog)
         service_row.addWidget(self._rare_goods_btn)
 
+        self._guardian_tb_btn = QPushButton("Guardian Technology Broker…")
+        self._guardian_tb_btn.setStyleSheet(
+            "QPushButton { background:#0d2a1a; color:#7CFCA0; border:1px solid #2a5a3a;"
+            " border-radius:3px; padding:3px 10px; font-weight:bold; }"
+            "QPushButton:hover { background:#1a4a2a; }"
+        )
+        self._guardian_tb_btn.setToolTip(
+            "Frontier's own StationServices data has no Guardian/Human sub-type for "
+            "\"techBroker\" -- this uses a curated station list instead, cross-referenced "
+            "against actual EDDN sightings (a listed station we've never seen reported is "
+            "omitted, not guessed)."
+        )
+        self._guardian_tb_btn.clicked.connect(self._open_guardian_tb_dialog)
+        service_row.addWidget(self._guardian_tb_btn)
+
         self._service_dialogs: dict = {}
         for tags, label, (bg, fg) in _CONCOURSE_SERVICES:
             btn = QPushButton(f"{label}…")
@@ -498,7 +515,7 @@ class MarketPanel(QWidget):
                 " border-radius:3px; padding:3px 10px; font-weight:bold; }"
                 f"QPushButton:hover {{ background:{fg}; color:{bg}; }}"
             )
-            btn.setToolTip(f"Known stations (from your own past dockings) offering {label}, closest first.")
+            btn.setToolTip(f"Galaxy-wide EDDN-reported stations offering {label}, closest first.")
             btn.clicked.connect(lambda _checked=False, t=tags, l=label: self._open_service_dialog(t, l))
             service_row.addWidget(btn)
 
@@ -918,6 +935,14 @@ class MarketPanel(QWidget):
         self._rare_dialog.raise_()
         self._rare_dialog.activateWindow()
 
+    def _open_guardian_tb_dialog(self) -> None:
+        if self._guardian_tb_dialog is None:
+            self._guardian_tb_dialog = _GuardianTechBrokerDialog(self)
+        self._guardian_tb_dialog.refresh_results()
+        self._guardian_tb_dialog.show()
+        self._guardian_tb_dialog.raise_()
+        self._guardian_tb_dialog.activateWindow()
+
     def _open_service_dialog(self, tags: list, label: str) -> None:
         key = ",".join(tags)
         dlg = self._service_dialogs.get(key)
@@ -1328,9 +1353,10 @@ class _RareGoodsDialog(QDialog):
 
 class _StationServiceDialog(QDialog):
     """
-    Non-modal detail window listing every known station (from our own past
-    dockings) offering a given set of StationServices tags, closest first —
-    same pattern as _RareGoodsDialog, generalized to any Concourse/ship
+    Non-modal detail window listing every known station (galaxy-wide
+    EDDN-reported data, not just our own dockings) offering a given set of
+    StationServices tags, closest first — same pattern as _RareGoodsDialog,
+    generalized to any Concourse/ship
     service rather than a specific commodity list.
     """
 
@@ -1374,9 +1400,9 @@ class _StationServiceDialog(QDialog):
         layout.addWidget(self._table, 1)
 
         note = QLabel(
-            "Bounded to stations you've personally docked at — Frontier's journal doesn't "
-            "expose station services for anywhere you haven't visited. Services can change "
-            "over time (BGS/security/faction shifts) — check \"Last Visited\" before flying somewhere."
+            "Galaxy-wide EDDN-reported station data (from every commander, not just your own "
+            "dockings) — \"Last Visited\" is whenever that was last confirmed, not necessarily by "
+            "you. Services can change over time (BGS/security/faction shifts), so check that date."
         )
         note.setWordWrap(True)
         note.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
@@ -1410,6 +1436,102 @@ class _StationServiceDialog(QDialog):
             self._table.setItem(row, 2, system_item)
             self._table.setItem(row, 3, dist_item)
             self._table.setItem(row, 4, visited_item)
+        self._table.setSortingEnabled(True)
+
+    def _on_cell_clicked(self, row: int, column: int) -> None:
+        if column not in (0, 2):  # Station, System
+            return
+        item = self._table.item(row, column)
+        if item and item.text():
+            QApplication.clipboard().setText(item.text())
+
+
+class _GuardianTechBrokerDialog(QDialog):
+    """
+    Non-modal detail window listing every Guardian Technology Broker
+    station from the curated reference list (see
+    guardian_tech_broker_stations.py) that EDDN has actually reported
+    station data for — see Repository.get_known_guardian_tech_broker_
+    stations. Same shape as _StationServiceDialog, but sourced from a
+    curated list instead of a StationServices tag, since Frontier's own
+    data has no Guardian/Human sub-type for "techBroker" to filter on.
+    """
+
+    def __init__(self, panel: "MarketPanel"):
+        super().__init__(None)
+        self.setStyleSheet("QDialog { background:#080f18; color:#c8c8c8; }")
+        self._panel = panel
+        self.setWindowTitle("Guardian Technology Broker")
+        self.resize(700, 450)
+
+        layout = QVBoxLayout(self)
+
+        self._status_label = QLabel("")
+        self._status_label.setStyleSheet("color:#888888; font-size:11px; background:transparent; border:none;")
+        layout.addWidget(self._status_label)
+
+        self._table = QTableWidget()
+        self._table.setColumnCount(4)
+        self._table.setHorizontalHeaderLabels(["Station", "Pad", "System", "Dist (ly)"])
+        self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self._table.verticalHeader().setVisible(False)
+        self._table.setAlternatingRowColors(True)
+        self._table.setStyleSheet(
+            "QTableWidget { background:#080f18; alternate-background-color:#0a1520;"
+            " gridline-color:#1e3a5a; border:1px solid #1e3a5a; }"
+            "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
+            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
+            "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
+        )
+        h = self._table.horizontalHeader()
+        h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        h.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        h.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        self._table.setToolTip("Click a Station or System cell to copy its name to the clipboard.")
+        self._table.cellClicked.connect(self._on_cell_clicked)
+        layout.addWidget(self._table, 1)
+
+        note = QLabel(
+            "Curated station list (Guardian/Human aren't distinguished in Frontier's own "
+            "StationServices data) cross-referenced against actual EDDN station sightings — a "
+            "listed station we've never seen reported is omitted, not guessed."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
+        layout.addWidget(note)
+
+    def refresh_results(self) -> None:
+        table = self._panel._guardian_tb_table
+        rows = (
+            self._panel._repo.get_known_guardian_tech_broker_stations(
+                table.all(), self._panel._ref_x, self._panel._ref_y, self._panel._ref_z,
+            )
+            if table is not None else []
+        )
+        self._status_label.setText(f"{len(rows)} known station{'s' if len(rows) != 1 else ''}.")
+
+        self._table.setSortingEnabled(False)
+        _rows(self._table, len(rows))
+        for row, r in enumerate(rows):
+            station_item = QTableWidgetItem(r.get("station_name") or "—")
+            pad_item = QTableWidgetItem(r.get("pad_size") or pad_size_hint(r.get("station_type")))
+            system_item = QTableWidgetItem(r.get("system_name") or "—")
+            dist_value = r.get("distance_ly")
+            dist_text = f"{dist_value:.1f}" if isinstance(dist_value, (int, float)) else "—"
+            dist_item = _NumericTableWidgetItem(dist_text, dist_value if isinstance(dist_value, (int, float)) else float("inf"))
+            if pad_item.text() == "?":
+                pad_item.setForeground(QColor("#888888"))
+                pad_item.setToolTip("Landing pad size unknown for this station type")
+            for it in (pad_item, dist_item):
+                it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            self._table.setItem(row, 0, station_item)
+            self._table.setItem(row, 1, pad_item)
+            self._table.setItem(row, 2, system_item)
+            self._table.setItem(row, 3, dist_item)
         self._table.setSortingEnabled(True)
 
     def _on_cell_clicked(self, row: int, column: int) -> None:

@@ -1758,10 +1758,12 @@ class Repository:
         self, x: float, y: float, z: float, faction_name: str,
     ) -> Optional[dict]:
         """
-        Closest known station (from our own past Docked visits) controlled
-        by faction_name — e.g. for redeeming combat bonds/bounty vouchers
-        somewhere that actually credits that faction's BGS influence.
-        Same bounded-to-visited-stations caveat as find_closest_interstellar_factors.
+        Closest known station (galaxy-wide EDDN-reported station data, not
+        just our own past Docked visits — see find_closest_interstellar_
+        factors's own docstring for the confirmed live case this was
+        wrongly assumed to be visit-only) controlled by faction_name —
+        e.g. for redeeming combat bonds/bounty vouchers somewhere that
+        actually credits that faction's BGS influence.
         """
         target = (faction_name or "").strip().lower()
         if not target:
@@ -1864,12 +1866,14 @@ class Repository:
         self, x: float, y: float, z: float, service_tags: list[str],
     ) -> list[dict]:
         """
-        Every known station (from our own past Docked visits) whose
-        StationServices includes ALL of service_tags (e.g. "pioneersupplies"
-        alone finds Pioneer Supplies kiosks generally, but buying something
-        like E-Breach specifically also requires "blackmarket" present at
-        the same station — pass both when that distinction matters). Same
-        bounded-to-visited-stations caveat as find_closest_interstellar_factors.
+        Every known station (galaxy-wide EDDN-reported station data, not
+        just our own past Docked visits — see find_closest_interstellar_
+        factors's own docstring for the confirmed live case this was
+        wrongly assumed to be visit-only) whose StationServices includes
+        ALL of service_tags (e.g. "pioneersupplies" alone finds Pioneer
+        Supplies kiosks generally, but buying something like E-Breach
+        specifically also requires "blackmarket" present at the same
+        station — pass both when that distinction matters).
         """
         where_clause = " AND ".join(["si.station_services LIKE ?"] * len(service_tags))
         params = [f'%"{tag}"%' for tag in service_tags]
@@ -1952,6 +1956,53 @@ class Repository:
                 rec.get("station_type"), rec.get("pads_small"), rec.get("pads_medium"), rec.get("pads_large")
             )
             results.append(rec)
+        return results
+
+    def get_known_guardian_tech_broker_stations(
+        self, stations: list[dict], x: float, y: float, z: float,
+    ) -> list[dict]:
+        """
+        Cross-references the curated Guardian Technology Broker station
+        list (see guardian_tech_broker_stations.py's own docstring for why
+        a curated list is needed at all -- StationServices has no Guardian/
+        Human sub-type) against net.station_info -- a station on the list
+        we've never actually seen reported via EDDN is simply omitted, not
+        guessed, same reasoning as get_known_rare_goods(). Matched
+        case-insensitively on (system_name, station_name): EDDN-reported
+        casing occasionally differs from the reference list's.
+        """
+        if not stations:
+            return []
+        by_key: dict[tuple[str, str], dict] = {
+            (s["system_name"].strip().lower(), s["station_name"].strip().lower()): s
+            for s in stations if s.get("system_name") and s.get("station_name")
+        }
+        placeholders = ",".join("(?,?)" for _ in by_key)
+        params = [v for key in by_key for v in key]
+        rows = self.db.conn.execute(
+            f"""
+            SELECT si.market_id, si.station_name, si.station_type, si.system_name,
+                   si.last_visited, si.pads_small, si.pads_medium, si.pads_large,
+                   c.x, c.y, c.z
+            FROM net.station_info si
+            LEFT JOIN system_coords c ON c.system_name = si.system_name
+            WHERE (LOWER(si.system_name), LOWER(si.station_name)) IN ({placeholders})
+            """,
+            params,
+        ).fetchall()
+
+        results = []
+        for r in rows:
+            rec = dict(r)
+            if r["x"] is not None and r["y"] is not None and r["z"] is not None:
+                rec["distance_ly"] = ((r["x"] - x) ** 2 + (r["y"] - y) ** 2 + (r["z"] - z) ** 2) ** 0.5
+            else:
+                rec["distance_ly"] = None
+            rec["pad_size"] = effective_pad_size(
+                rec.get("station_type"), rec.get("pads_small"), rec.get("pads_medium"), rec.get("pads_large")
+            )
+            results.append(rec)
+        results.sort(key=lambda r: r["distance_ly"] if r["distance_ly"] is not None else float("inf"))
         return results
 
     def search_market_prices(
