@@ -13,12 +13,12 @@ from __future__ import annotations
 
 import logging
 from html import escape
-from typing import Optional
+from typing import Dict, Optional
 
 from PyQt6.QtCore import Qt, QThread, QObject, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QComboBox,
     QTableWidget, QTableWidgetItem, QHeaderView, QFrame, QDialog, QApplication,
 )
 
@@ -26,8 +26,10 @@ from edc.ui.style import (
     CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, PRIMARY_BUTTON_STYLE as _BTN_STYLE,
     TABLE_STYLE as _TABLE_STYLE,
     card_style as _card_style, hdr_style as _hdr_style,
+    set_table_empty_message as _empty, set_table_rows as _rows,
 )
 from edc.core.spansh_client import SpanshClient
+from edc.core import raven_colonial
 from edc.ui.formatting import clean_token
 
 log = logging.getLogger(__name__)
@@ -186,6 +188,318 @@ class _SystemDetailWorker(QObject):
         self.finished.emit(bodies, error, rings, mining_signals, system_info)
 
 
+class _RavenColonialWorker(QObject):
+    """One-shot background fetch of a Raven Colonial build project --
+    network I/O never runs on the UI thread. Emits the raw project dict (or
+    None if not found/failed) plus an error string for the "no project"
+    vs "request failed" distinction the dialog needs to word its message
+    correctly."""
+    finished = pyqtSignal(object, str)  # project dict or None, error
+
+    def __init__(self, build_id: Optional[str] = None,
+                 system_address: Optional[int] = None, market_id: Optional[int] = None):
+        super().__init__()
+        self._build_id = build_id
+        self._system_address = system_address
+        self._market_id = market_id
+
+    def run(self):
+        try:
+            if self._build_id:
+                project = raven_colonial.get_project(self._build_id)
+            else:
+                project = raven_colonial.get_project_for_station(self._system_address, self._market_id)
+            error = "" if project is not None else "No Raven Colonial build found."
+        except Exception as exc:
+            project = None
+            error = str(exc)
+        self.finished.emit(project, error)
+
+
+class _RavenColonialSourcesWorker(QObject):
+    """One-shot background fetch of nearby buy sources for every
+    still-needed commodity on a Raven Colonial build -- runs
+    search_market_buy_prices per commodity (local SQLite, not network) so
+    the dialog can show "nearest place to buy" without a per-row click.
+    Pad-size filtering is applied client-side afterwards (see
+    _RavenColonialDialog._render_table) so changing the pad selector
+    doesn't need a re-fetch -- all candidate rows within radius are kept,
+    not just the best one."""
+    finished = pyqtSignal(dict)  # commodity symbol -> list[dict] (rows, distance_ly + pad_size already computed)
+
+    def __init__(self, db_path, commodities: list, x: float, y: float, z: float, radius_ly: float = 100.0):
+        super().__init__()
+        self._db_path = db_path
+        self._commodities = commodities
+        self._x, self._y, self._z = x, y, z
+        self._radius_ly = radius_ly
+
+    def run(self):
+        from persistence.database import Database
+        from persistence.repository import Repository
+
+        db = Database(self._db_path)
+        results = {}
+        try:
+            repo = Repository(db)
+            for symbol in self._commodities:
+                try:
+                    rows = repo.search_market_buy_prices(symbol, self._x, self._y, self._z, self._radius_ly)
+                except Exception:
+                    log.exception("Nearest-source lookup failed for %r", symbol)
+                    rows = []
+                rows.sort(key=lambda r: r.get("distance_ly", float("inf")))
+                results[symbol] = rows
+        finally:
+            db.close()
+        self.finished.emit(results)
+
+
+_PAD_RANK = {"S": 1, "M": 2, "L": 3}
+
+
+class _RavenColonialDialog(QDialog):
+    """Non-modal, read-only view of a Raven Colonial squad build project --
+    see edc/core/raven_colonial.py for why this only ever reads (never
+    pushes our own data to a third-party platform). Opened either
+    pre-fetched via a depot's own (system_address, market_id) -- auto-detect,
+    since Raven Colonial has no project for most stations -- or with a
+    pasted build link/id for viewing someone else's shared build.
+
+    Once a build loads, also finds the nearest place to buy each still-
+    needed commodity, filtered to stations the selected ship can actually
+    land at -- defaults to the commander's currently-flown ship
+    (state.ship, via ShipPadSizeTable) with a dropdown to check a
+    different ship/pad size."""
+
+    def __init__(self, panel: "ColonisationPanel"):
+        super().__init__(None)
+        self.setStyleSheet("QDialog { background:#080f18; color:#c8c8c8; }")
+        self._panel = panel
+        self._thread: Optional[QThread] = None
+        self._worker: Optional[_RavenColonialWorker] = None
+        self._sources_thread: Optional[QThread] = None
+        self._sources_worker: Optional[_RavenColonialSourcesWorker] = None
+        self._project: Optional[dict] = None
+        self._sources_by_commodity: Dict[str, list] = {}
+        self.setWindowTitle("Raven Colonial — Squad Build")
+        self.resize(760, 520)
+
+        layout = QVBoxLayout(self)
+
+        paste_row = QHBoxLayout()
+        self._paste_edit = QLineEdit()
+        self._paste_edit.setPlaceholderText("Paste a ravencolonial.com build link or id…")
+        self._paste_edit.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
+        self._paste_edit.returnPressed.connect(self._on_load_clicked)
+        load_btn = QPushButton("Load")
+        load_btn.setStyleSheet(_BTN_STYLE)
+        load_btn.clicked.connect(self._on_load_clicked)
+        paste_row.addWidget(self._paste_edit, 1)
+        paste_row.addWidget(load_btn)
+        layout.addLayout(paste_row)
+
+        pad_row = QHBoxLayout()
+        pad_label = QLabel("Landing pad:")
+        pad_label.setStyleSheet("color:#9aa4b0; background:transparent; border:none;")
+        pad_row.addWidget(pad_label)
+        self._pad_combo = QComboBox()
+        self._pad_combo.addItem("Auto (current ship)", None)
+        self._pad_combo.addItem("Small", "S")
+        self._pad_combo.addItem("Medium", "M")
+        self._pad_combo.addItem("Large", "L")
+        self._pad_combo.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
+        self._pad_combo.currentIndexChanged.connect(self._render_table)
+        pad_row.addWidget(self._pad_combo)
+        self._pad_auto_label = QLabel("")
+        self._pad_auto_label.setStyleSheet("color:#888888; font-size:11px; background:transparent; border:none;")
+        pad_row.addWidget(self._pad_auto_label)
+        pad_row.addStretch(1)
+        layout.addLayout(pad_row)
+
+        self._status_label = QLabel("")
+        self._status_label.setWordWrap(True)
+        self._status_label.setStyleSheet("color:#888888; font-size:11px; background:transparent; border:none;")
+        layout.addWidget(self._status_label)
+
+        self._header_label = QLabel("")
+        self._header_label.setWordWrap(True)
+        self._header_label.setStyleSheet("color:#FFB347; font-size:14px; font-weight:bold; background:transparent; border:none;")
+        layout.addWidget(self._header_label)
+
+        self._table = QTableWidget()
+        self._table.setColumnCount(3)
+        self._table.setHorizontalHeaderLabels(["Commodity", "Still Needed", "Nearest Source (pad)"])
+        self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._table.verticalHeader().setVisible(False)
+        self._table.setAlternatingRowColors(True)
+        self._table.setStyleSheet(_TABLE_STYLE)
+        th = self._table.horizontalHeader()
+        th.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        th.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        th.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self._table, 1)
+
+        self._commanders_label = QLabel("")
+        self._commanders_label.setWordWrap(True)
+        self._commanders_label.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
+        layout.addWidget(self._commanders_label)
+
+        note = QLabel(
+            "Build progress is read-only, live from Raven Colonial's public API (community "
+            "platform, not EDDN) -- EDChronicle never pushes data there. Nearest-source lookups "
+            "are this app's own EDDN-derived market data, within 100 ly of your current system."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
+        layout.addWidget(note)
+
+    def load_for_station(self, system_address: int, market_id: int) -> None:
+        self._paste_edit.clear()
+        self._status_label.setText("Looking up Raven Colonial build for this station…")
+        self._start_fetch(_RavenColonialWorker(system_address=system_address, market_id=market_id))
+
+    def _on_load_clicked(self) -> None:
+        build_id = raven_colonial.parse_build_id(self._paste_edit.text())
+        if not build_id:
+            self._status_label.setText("Could not find a build id in that text.")
+            return
+        self._status_label.setText("Loading…")
+        self._start_fetch(_RavenColonialWorker(build_id=build_id))
+
+    def _start_fetch(self, worker: "_RavenColonialWorker") -> None:
+        if self._thread and self._thread.isRunning():
+            return
+        self._worker = worker
+        self._thread = QThread()
+        self._worker.moveToThread(self._thread)
+        self._thread.started.connect(self._worker.run)
+        self._worker.finished.connect(self._on_fetched)
+        self._worker.finished.connect(self._thread.quit)
+        self._thread.start()
+
+    def _current_ship_pad(self) -> Optional[str]:
+        state = self._panel._last_state
+        table = self._panel._ship_pad_table
+        if table is None or state is None:
+            return None
+        return table.pad_size_for(getattr(state, "ship", None))
+
+    def _effective_pad_filter(self) -> Optional[str]:
+        override = self._pad_combo.currentData()
+        if override:
+            return override
+        return self._current_ship_pad()
+
+    def _on_fetched(self, project, error: str) -> None:
+        self._project = project
+        self._sources_by_commodity = {}
+        if project is None:
+            self._status_label.setText(error or "No Raven Colonial build found.")
+            self._header_label.setText("")
+            self._commanders_label.setText("")
+            _empty(self._table, "")
+            return
+
+        self._status_label.setText("")
+        build_name = project.get("buildName") or "—"
+        system_name = project.get("systemName") or "—"
+        build_type = project.get("buildType") or "—"
+        complete = "Complete" if project.get("complete") else "In progress"
+        self._header_label.setText(f"{build_name} — {system_name} ({build_type}) — {complete}")
+
+        commanders = project.get("commanders") or {}
+        if commanders:
+            names = ", ".join(sorted(commanders.keys()))
+            self._commanders_label.setText(f"Commanders on this build: {names}")
+        else:
+            self._commanders_label.setText("")
+
+        self._render_table()
+        self._start_sources_fetch()
+
+    def _remaining_commodities(self) -> Dict[str, float]:
+        if not self._project:
+            return {}
+        commodities = self._project.get("commodities") or {}
+        return {sym: qty for sym, qty in commodities.items() if isinstance(qty, (int, float)) and qty > 0}
+
+    def _start_sources_fetch(self) -> None:
+        remaining = self._remaining_commodities()
+        state = self._panel._last_state
+        x, y, z = getattr(state, "system_x", None), getattr(state, "system_y", None), getattr(state, "system_z", None)
+        if not remaining or x is None or y is None or z is None:
+            return
+        if self._sources_thread and self._sources_thread.isRunning():
+            return
+        self._sources_worker = _RavenColonialSourcesWorker(self._panel._repo.db.db_path, list(remaining.keys()), x, y, z)
+        self._sources_thread = QThread()
+        self._sources_worker.moveToThread(self._sources_thread)
+        self._sources_thread.started.connect(self._sources_worker.run)
+        self._sources_worker.finished.connect(self._on_sources_fetched)
+        self._sources_worker.finished.connect(self._sources_thread.quit)
+        self._sources_thread.start()
+
+    def _on_sources_fetched(self, sources: dict) -> None:
+        self._sources_by_commodity = sources
+        self._render_table()
+
+    def _best_source_for(self, symbol: str):
+        rows = self._sources_by_commodity.get(symbol) or []
+        min_pad = self._effective_pad_filter()
+        if not min_pad:
+            return rows[0] if rows else None
+        min_rank = _PAD_RANK[min_pad]
+        for r in rows:
+            pad = r.get("pad_size")
+            if pad in _PAD_RANK and _PAD_RANK[pad] >= min_rank:
+                return r
+        return None
+
+    def _render_table(self) -> None:
+        remaining = self._remaining_commodities()
+        rows = sorted(remaining.items(), key=lambda kv: -kv[1])
+
+        ship_pad = self._current_ship_pad()
+        override = self._pad_combo.currentData()
+        if override:
+            self._pad_auto_label.setText("")
+        elif ship_pad:
+            self._pad_auto_label.setText(f"(current ship needs {ship_pad})")
+        else:
+            self._pad_auto_label.setText("(current ship's pad size unknown — showing all)")
+
+        self._table.setSortingEnabled(False)
+        _rows(self._table, len(rows))
+        for row, (symbol, qty) in enumerate(rows):
+            name_item = QTableWidgetItem(clean_token(symbol))
+            qty_item = QTableWidgetItem(f"{qty:,.0f}")
+            qty_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            best = self._best_source_for(symbol)
+            if best is not None:
+                source_text = (
+                    f"{best.get('station_name') or '—'} ({best.get('system_name') or '—'}) — "
+                    f"{best.get('distance_ly', 0):.1f} ly [{best.get('pad_size') or '?'}]"
+                )
+                source_item = QTableWidgetItem(source_text)
+            elif symbol in self._sources_by_commodity:
+                source_item = QTableWidgetItem("No matching source within 100 ly.")
+                source_item.setForeground(QColor("#888888"))
+            else:
+                source_item = QTableWidgetItem("Looking up…")
+                source_item.setForeground(QColor("#888888"))
+
+            self._table.setItem(row, 0, name_item)
+            self._table.setItem(row, 1, qty_item)
+            self._table.setItem(row, 2, source_item)
+        self._table.setSortingEnabled(True)
+        if not rows:
+            complete = self._project.get("complete") if self._project else False
+            _empty(self._table, "Nothing still needed — build complete." if complete else "No shortfall data.")
+
+
 class _ColonisationDetailDialog(QDialog):
     """Non-modal detail window for one construction site — full resource
     breakdown, with a per-commodity button to jump to Market tab and search
@@ -216,6 +530,14 @@ class _ColonisationDetailDialog(QDialog):
             lambda: QApplication.clipboard().setText(depot.get("station_name") or "")
         )
         hdr_row.addWidget(copy_station_btn)
+        if depot.get("system_address") and depot.get("market_id"):
+            raven_btn = QPushButton("Raven Colonial")
+            raven_btn.setStyleSheet(_BTN_STYLE)
+            raven_btn.setToolTip("Look up this station's squad build on Raven Colonial (read-only).")
+            raven_btn.clicked.connect(
+                lambda: self._open_raven_for_station(depot["system_address"], depot["market_id"])
+            )
+            hdr_row.addWidget(raven_btn)
         layout.addLayout(hdr_row)
 
         progress = depot.get("progress")
@@ -305,6 +627,10 @@ class _ColonisationDetailDialog(QDialog):
                 table.setCellWidget(row, 4, btn)
 
         layout.addWidget(table, 1)
+
+    def _open_raven_for_station(self, system_address: int, market_id: int) -> None:
+        self._panel._open_raven_dialog()
+        self._panel._raven_dialog.load_for_station(system_address, market_id)
 
     @staticmethod
     def _find_closest_trailblazer(panel: "ColonisationPanel", system_name: Optional[str]) -> Optional[dict]:
@@ -527,15 +853,17 @@ class ColonisationPanel(QWidget):
     buy_search_requested = pyqtSignal(str)
     eligibility_check_requested = pyqtSignal(str)  # system name to check
 
-    def __init__(self, repo, parent=None):
+    def __init__(self, repo, ship_pad_table=None, parent=None):
         super().__init__(parent)
         self._repo = repo
+        self._ship_pad_table = ship_pad_table
         self._depots: list = []
         self._depot_dialogs: dict = {}
         self._last_state = None
         self._colonisation_candidates: list = []
         self._colonisation_candidates_system: Optional[str] = None
         self._detail_dialogs: dict = {}
+        self._raven_dialog: Optional["_RavenColonialDialog"] = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 8)
@@ -593,6 +921,14 @@ class ColonisationPanel(QWidget):
         add_row.addWidget(self._depot_system_edit, 1)
         add_row.addWidget(self._depot_station_edit, 1)
         add_row.addWidget(add_btn)
+        raven_btn = QPushButton("Raven Colonial…")
+        raven_btn.setStyleSheet(_BTN_STYLE)
+        raven_btn.setToolTip(
+            "View a squad's shared Raven Colonial build (community platform, read-only) -- "
+            "paste a ravencolonial.com build link or id."
+        )
+        raven_btn.clicked.connect(self._open_raven_dialog)
+        add_row.addWidget(raven_btn)
         colon_l.addLayout(add_row)
 
         self._depot_table = QTableWidget()
@@ -882,6 +1218,13 @@ class ColonisationPanel(QWidget):
         dlg.show()
         dlg.raise_()
         dlg.activateWindow()
+
+    def _open_raven_dialog(self) -> None:
+        if self._raven_dialog is None:
+            self._raven_dialog = _RavenColonialDialog(self)
+        self._raven_dialog.show()
+        self._raven_dialog.raise_()
+        self._raven_dialog.activateWindow()
 
     # ── Colonisation candidates ─────────────────────────────────────────
 
