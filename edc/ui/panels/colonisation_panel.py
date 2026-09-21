@@ -266,11 +266,21 @@ class _RavenColonialDialog(QDialog):
     since Raven Colonial has no project for most stations -- or with a
     pasted build link/id for viewing someone else's shared build.
 
+    Commodity table mirrors the website's own layout as closely as the
+    data allows -- category-grouped (EDCD/FDevIDs commodity.csv's own
+    category field, see commodity_categories.py), Need + Assigned columns
+    (the latter inverted from the project's own commander->commodities
+    map). NOT replicated: the site's delivery-rate chart and "system
+    effects" block, neither reachable from any documented Raven Colonial
+    endpoint (confirmed via njthomson/SrvSurvey's own client, the only
+    reference available) -- not guessing at undocumented API surface.
+
     Once a build loads, also finds the nearest place to buy each still-
     needed commodity, filtered to stations the selected ship can actually
     land at -- defaults to the commander's currently-flown ship
     (state.ship, via ShipPadSizeTable) with a dropdown to check a
-    different ship/pad size."""
+    different ship/pad size. This lookup is EDChronicle's own addition,
+    not something the website itself offers."""
 
     def __init__(self, panel: "ColonisationPanel"):
         super().__init__(None)
@@ -283,7 +293,7 @@ class _RavenColonialDialog(QDialog):
         self._project: Optional[dict] = None
         self._sources_by_commodity: Dict[str, list] = {}
         self.setWindowTitle("Raven Colonial — Squad Build")
-        self.resize(760, 520)
+        self.resize(820, 560)
 
         layout = QVBoxLayout(self)
 
@@ -327,9 +337,14 @@ class _RavenColonialDialog(QDialog):
         self._header_label.setStyleSheet("color:#FFB347; font-size:14px; font-weight:bold; background:transparent; border:none;")
         layout.addWidget(self._header_label)
 
+        self._info_label = QLabel("")
+        self._info_label.setWordWrap(True)
+        self._info_label.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
+        layout.addWidget(self._info_label)
+
         self._table = QTableWidget()
-        self._table.setColumnCount(3)
-        self._table.setHorizontalHeaderLabels(["Commodity", "Still Needed", "Nearest Source (pad)"])
+        self._table.setColumnCount(4)
+        self._table.setHorizontalHeaderLabels(["Commodity", "Need", "Assigned", "Nearest Source (pad)"])
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._table.verticalHeader().setVisible(False)
@@ -339,12 +354,8 @@ class _RavenColonialDialog(QDialog):
         th.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         th.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         th.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        th.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self._table, 1)
-
-        self._commanders_label = QLabel("")
-        self._commanders_label.setWordWrap(True)
-        self._commanders_label.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
-        layout.addWidget(self._commanders_label)
 
         note = QLabel(
             "Build progress is read-only, live from Raven Colonial's public API (community "
@@ -400,7 +411,7 @@ class _RavenColonialDialog(QDialog):
         if project is None:
             self._status_label.setText(error or "No Raven Colonial build found.")
             self._header_label.setText("")
-            self._commanders_label.setText("")
+            self._info_label.setText("")
             _empty(self._table, "")
             return
 
@@ -411,12 +422,23 @@ class _RavenColonialDialog(QDialog):
         complete = "Complete" if project.get("complete") else "In progress"
         self._header_label.setText(f"{build_name} — {system_name} ({build_type}) — {complete}")
 
+        sum_need = project.get("sumNeed")
+        max_need = project.get("maxNeed")
+        progress_text = "progress unknown"
+        if isinstance(sum_need, (int, float)) and isinstance(max_need, (int, float)) and max_need > 0:
+            pct = max(0.0, min(100.0, (1 - sum_need / max_need) * 100))
+            progress_text = f"{pct:.0f}% delivered"
+
+        architect = project.get("architectName") or "unknown"
+        ready_count = len(project.get("ready") or [])
+        fc_count = len(project.get("linkedFC") or [])
         commanders = project.get("commanders") or {}
-        if commanders:
-            names = ", ".join(sorted(commanders.keys()))
-            self._commanders_label.setText(f"Commanders on this build: {names}")
-        else:
-            self._commanders_label.setText("")
+        cmdr_text = f"{len(commanders)} commander{'s' if len(commanders) != 1 else ''}" if commanders else "no commanders listed"
+
+        self._info_label.setText(
+            f"Architect: {architect}  •  {progress_text}  •  Ready on Fleet Carriers: {ready_count}  "
+            f"•  Linked Fleet Carriers: {fc_count}  •  {cmdr_text}"
+        )
 
         self._render_table()
         self._start_sources_fetch()
@@ -426,6 +448,21 @@ class _RavenColonialDialog(QDialog):
             return {}
         commodities = self._project.get("commodities") or {}
         return {sym: qty for sym, qty in commodities.items() if isinstance(qty, (int, float)) and qty > 0}
+
+    def _assigned_commanders(self) -> Dict[str, list]:
+        """commodity symbol -> sorted list of commander names assigned to
+        deliver it -- inverted from the project's own commander->[commodities]
+        map (the shape Raven Colonial's API actually returns)."""
+        commanders = (self._project or {}).get("commanders") or {}
+        assigned: Dict[str, list] = {}
+        for cmdr, symbols in commanders.items():
+            if not isinstance(symbols, list):
+                continue
+            for sym in symbols:
+                assigned.setdefault(sym, []).append(cmdr)
+        for names in assigned.values():
+            names.sort()
+        return assigned
 
     def _start_sources_fetch(self) -> None:
         remaining = self._remaining_commodities()
@@ -461,9 +498,26 @@ class _RavenColonialDialog(QDialog):
                 return r
         return None
 
+    def _grouped_rows(self, remaining: Dict[str, float]) -> list:
+        """[(category, [(symbol, display_name, qty), ...]), ...], category-
+        grouped and alphabetized both ways to match the website's own
+        layout -- falls back to "Other" for any symbol not in our
+        category reference (a commodity too new for the pinned FDevIDs
+        snapshot, omitted rather than silently miscategorized)."""
+        cat_table = self._panel._commodity_categories
+        by_category: Dict[str, list] = {}
+        for symbol, qty in remaining.items():
+            category = (cat_table.category_for(symbol) if cat_table else None) or "Other"
+            display = (cat_table.display_name_for(symbol) if cat_table else None) or clean_token(symbol)
+            by_category.setdefault(category, []).append((symbol, display, qty))
+        for entries in by_category.values():
+            entries.sort(key=lambda e: e[1])
+        return sorted(by_category.items(), key=lambda kv: kv[0])
+
     def _render_table(self) -> None:
         remaining = self._remaining_commodities()
-        rows = sorted(remaining.items(), key=lambda kv: -kv[1])
+        grouped = self._grouped_rows(remaining)
+        assigned = self._assigned_commanders()
 
         ship_pad = self._current_ship_pad()
         override = self._pad_combo.currentData()
@@ -474,32 +528,52 @@ class _RavenColonialDialog(QDialog):
         else:
             self._pad_auto_label.setText("(current ship's pad size unknown — showing all)")
 
+        total_rows = sum(1 + len(entries) for _, entries in grouped)  # +1 per category header row
         self._table.setSortingEnabled(False)
-        _rows(self._table, len(rows))
-        for row, (symbol, qty) in enumerate(rows):
-            name_item = QTableWidgetItem(clean_token(symbol))
-            qty_item = QTableWidgetItem(f"{qty:,.0f}")
-            qty_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        _rows(self._table, total_rows)
 
-            best = self._best_source_for(symbol)
-            if best is not None:
-                source_text = (
-                    f"{best.get('station_name') or '—'} ({best.get('system_name') or '—'}) — "
-                    f"{best.get('distance_ly', 0):.1f} ly [{best.get('pad_size') or '?'}]"
-                )
-                source_item = QTableWidgetItem(source_text)
-            elif symbol in self._sources_by_commodity:
-                source_item = QTableWidgetItem("No matching source within 100 ly.")
-                source_item.setForeground(QColor("#888888"))
-            else:
-                source_item = QTableWidgetItem("Looking up…")
-                source_item.setForeground(QColor("#888888"))
+        row = 0
+        for category, entries in grouped:
+            self._table.setSpan(row, 0, 1, self._table.columnCount())
+            header_item = QTableWidgetItem(category.upper())
+            header_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+            header_item.setBackground(QColor("#12324d"))
+            header_item.setForeground(QColor("#8CC8FF"))
+            font = header_item.font()
+            font.setBold(True)
+            header_item.setFont(font)
+            self._table.setItem(row, 0, header_item)
+            row += 1
 
-            self._table.setItem(row, 0, name_item)
-            self._table.setItem(row, 1, qty_item)
-            self._table.setItem(row, 2, source_item)
-        self._table.setSortingEnabled(True)
-        if not rows:
+            for symbol, display, qty in entries:
+                name_item = QTableWidgetItem(display)
+                qty_item = QTableWidgetItem(f"{qty:,.0f}")
+                qty_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                assigned_item = QTableWidgetItem(", ".join(assigned.get(symbol, [])) or "—")
+
+                best = self._best_source_for(symbol)
+                if best is not None:
+                    source_text = (
+                        f"{best.get('station_name') or '—'} ({best.get('system_name') or '—'}) — "
+                        f"{best.get('distance_ly', 0):.1f} ly [{best.get('pad_size') or '?'}]"
+                    )
+                    source_item = QTableWidgetItem(source_text)
+                elif symbol in self._sources_by_commodity:
+                    source_item = QTableWidgetItem("No matching source within 100 ly.")
+                    source_item.setForeground(QColor("#888888"))
+                else:
+                    source_item = QTableWidgetItem("Looking up…")
+                    source_item.setForeground(QColor("#888888"))
+
+                self._table.setItem(row, 0, name_item)
+                self._table.setItem(row, 1, qty_item)
+                self._table.setItem(row, 2, assigned_item)
+                self._table.setItem(row, 3, source_item)
+                row += 1
+        # Sorting stays off -- category header rows use setSpan(), and
+        # user-driven column sort would scramble those spanned rows in
+        # among the data rows instead of respecting the grouping.
+        if not grouped:
             complete = self._project.get("complete") if self._project else False
             _empty(self._table, "Nothing still needed — build complete." if complete else "No shortfall data.")
 
@@ -857,10 +931,11 @@ class ColonisationPanel(QWidget):
     buy_search_requested = pyqtSignal(str)
     eligibility_check_requested = pyqtSignal(str)  # system name to check
 
-    def __init__(self, repo, ship_pad_table=None, parent=None):
+    def __init__(self, repo, ship_pad_table=None, commodity_categories=None, parent=None):
         super().__init__(parent)
         self._repo = repo
         self._ship_pad_table = ship_pad_table
+        self._commodity_categories = commodity_categories
         self._depots: list = []
         self._depot_dialogs: dict = {}
         self._last_state = None

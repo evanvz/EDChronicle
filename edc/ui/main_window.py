@@ -89,6 +89,7 @@ from edc.core.rare_commodities import RareCommodityTable
 from edc.core.guardian_tech_broker_stations import GuardianTechBrokerTable
 from edc.core.guardian_technology_broker import GuardianTechnologyBrokerTable
 from edc.core.ship_pad_sizes import ShipPadSizeTable
+from edc.core.commodity_categories import CommodityCategoryTable
 from edc.core.fdevids_names import ShipNameTable
 from edc.core.bounty_scanner import scan_active_bounties_with_dates
 from edc.core.fine_scanner import scan_active_fines
@@ -1688,6 +1689,7 @@ class MainWindow(QMainWindow):
         self.guardian_tech_broker_stations = GuardianTechBrokerTable(settings_base)
         self.guardian_technology_broker = GuardianTechnologyBrokerTable(settings_base)
         self.ship_pad_sizes = ShipPadSizeTable(settings_base)
+        self.commodity_categories = CommodityCategoryTable(settings_base)
         self.ship_names = ShipNameTable(settings_base)
         self.engineering_wishlist_store = EngineeringWishlist(data_dir / "engineering_wishlist.json")
         self.odyssey_engineering = OdysseyEngineeringTable(settings_base)
@@ -2061,7 +2063,9 @@ class MainWindow(QMainWindow):
         self.squadron_panel = SquadronPanel(self.repo)
 
         # Colonisation tab
-        self.colonisation_panel = ColonisationPanel(self.repo, ship_pad_table=self.ship_pad_sizes)
+        self.colonisation_panel = ColonisationPanel(
+            self.repo, ship_pad_table=self.ship_pad_sizes, commodity_categories=self.commodity_categories,
+        )
         self.colonisation_panel.buy_search_requested.connect(self._on_squadron_buy_search_requested)
         self.colonisation_panel.eligibility_check_requested.connect(self._on_check_colonisation_eligibility_clicked)
 
