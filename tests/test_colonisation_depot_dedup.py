@@ -8,13 +8,22 @@ from types import SimpleNamespace
 from edc.ui.main_window import MainWindow
 
 
-def _fake_self(system="Sol", station="Orbital Depot"):
+def _fake_self(system="Sol", station="Orbital Depot", is_new=False):
     saved = []
+    spoken = []
+
+    def _save(**kw):
+        saved.append(kw)
+        return is_new
+
     return SimpleNamespace(
         state=SimpleNamespace(system=system, current_market_station=station, system_address=123),
-        repo=SimpleNamespace(save_colonisation_depot_visit=lambda **kw: saved.append(kw)),
+        repo=SimpleNamespace(save_colonisation_depot_visit=_save),
+        tts=SimpleNamespace(speak=lambda text, **kw: spoken.append(text)),
+        _feedback_tts_scale=lambda: 1.0,
         _colonisation_depot_last_seen={},
         _saved=saved,
+        _spoken=spoken,
     )
 
 
@@ -69,3 +78,21 @@ def test_missing_system_or_station_returns_false():
     changed = MainWindow._save_colonisation_depot(fake_self, _depot_event())
     assert changed is False
     assert fake_self._saved == []
+
+
+# --- New-site callout: fires only when save_colonisation_depot_visit
+# reports a brand new row (never tracked before), not on an ordinary
+# progress update -- see save_colonisation_depot_visit's own docstring.
+
+def test_new_site_triggers_tts_callout():
+    fake_self = _fake_self(system="Sol", station="Orbital Construction Site: Test", is_new=True)
+    MainWindow._save_colonisation_depot(fake_self, _depot_event())
+    assert len(fake_self._spoken) == 1
+    assert "Orbital Construction Site: Test" in fake_self._spoken[0]
+    assert "Sol" in fake_self._spoken[0]
+
+
+def test_existing_site_update_does_not_trigger_callout():
+    fake_self = _fake_self(is_new=False)
+    MainWindow._save_colonisation_depot(fake_self, _depot_event())
+    assert fake_self._spoken == []

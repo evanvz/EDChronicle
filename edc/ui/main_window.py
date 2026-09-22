@@ -1150,7 +1150,7 @@ class MainWindow(QMainWindow):
 
         from datetime import datetime, timezone
         try:
-            self.repo.save_colonisation_depot_visit(
+            is_new = self.repo.save_colonisation_depot_visit(
                 market_id=market_id,
                 system_address=system_address,
                 system_name=system_name,
@@ -1160,6 +1160,16 @@ class MainWindow(QMainWindow):
                 resources_json=resources_json,
                 timestamp=evt.get("timestamp") or datetime.now(timezone.utc).isoformat(),
             )
+            if is_new:
+                # First time we've ever seen this market_id -- no manual
+                # "Add" step needed at all, this happens automatically on
+                # dock; the callout exists so that's obvious in the moment
+                # instead of a silent DB write the player has no reason to
+                # go looking for.
+                self.tts.speak(
+                    f"New colonisation site tracked: {station_name} in {system_name}.",
+                    priority=4, volume_scale=self._feedback_tts_scale(),
+                )
         except Exception:
             log.exception("Failed to save colonisation depot data")
         return True

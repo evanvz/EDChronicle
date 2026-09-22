@@ -943,6 +943,7 @@ class ColonisationPanel(QWidget):
         self._colonisation_candidates_system: Optional[str] = None
         self._detail_dialogs: dict = {}
         self._raven_dialog: Optional["_RavenColonialDialog"] = None
+        self._known_sites: list = []
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 8)
@@ -980,12 +981,33 @@ class ColonisationPanel(QWidget):
         colon_l.addWidget(colon_hdr)
 
         colon_note = QLabel(
-            "Progress only updates when you personally dock at the site — add one before "
-            "visiting to keep a checklist, or it appears automatically once you dock there."
+            "Docking at a site tracks it automatically, real name and progress included — no "
+            "need to add it yourself. Adding one below is only for a checklist before you've "
+            "visited; it must match the real station name EXACTLY (pick from Known Sites below, "
+            "once you've docked there at least once) or your dock won't be recognised as the "
+            "same site and a second, correctly-named row will appear instead."
         )
         colon_note.setWordWrap(True)
         colon_note.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
         colon_l.addWidget(colon_note)
+
+        known_sites_row = QHBoxLayout()
+        self._known_sites_combo = QComboBox()
+        self._known_sites_combo.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
+        self._known_sites_combo.setToolTip(
+            "Stations you've personally docked at whose name marks them as a construction site -- "
+            "picking one fills in the fields below exactly, avoiding a typo that would stop the app "
+            "matching it to the real site once you dock (see the note above)."
+        )
+        self._known_sites_combo.activated.connect(self._on_known_site_selected)
+        known_sites_refresh_btn = QPushButton("⟳")
+        known_sites_refresh_btn.setToolTip("Refresh this list from your dock history.")
+        known_sites_refresh_btn.setStyleSheet(_BTN_STYLE)
+        known_sites_refresh_btn.setFixedWidth(28)
+        known_sites_refresh_btn.clicked.connect(self._refresh_known_sites_combo)
+        known_sites_row.addWidget(self._known_sites_combo, 1)
+        known_sites_row.addWidget(known_sites_refresh_btn)
+        colon_l.addLayout(known_sites_row)
 
         add_row = QHBoxLayout()
         self._depot_system_edit = QLineEdit()
@@ -1136,6 +1158,8 @@ class ColonisationPanel(QWidget):
 
         root.addWidget(cand_card, 1)
 
+        self._refresh_known_sites_combo()
+
     def refresh(self, state) -> None:
         self._last_state = state
         self._refresh_current_system(state)
@@ -1273,6 +1297,31 @@ class ColonisationPanel(QWidget):
         self._depot_system_edit.clear()
         self._depot_station_edit.clear()
         self._refresh_depots(self._last_state)
+
+    def _refresh_known_sites_combo(self) -> None:
+        try:
+            self._known_sites = self._repo.get_known_construction_sites()
+        except Exception:
+            log.exception("Failed to load known construction sites")
+            self._known_sites = []
+
+        self._known_sites_combo.blockSignals(True)
+        self._known_sites_combo.clear()
+        self._known_sites_combo.addItem(
+            f"Known sites from your dock history ({len(self._known_sites)})…", None
+        )
+        for site in self._known_sites:
+            label = f"{site['station_name']} — {site['system_name']}"
+            self._known_sites_combo.addItem(label, site)
+        self._known_sites_combo.setCurrentIndex(0)
+        self._known_sites_combo.blockSignals(False)
+
+    def _on_known_site_selected(self, index: int) -> None:
+        site = self._known_sites_combo.itemData(index)
+        if not site:
+            return
+        self._depot_system_edit.setText(site["system_name"])
+        self._depot_station_edit.setText(site["station_name"])
 
     def _on_depot_cell_clicked(self, row: int, column: int) -> None:
         if row < 0 or row >= len(self._depots):

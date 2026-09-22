@@ -2437,14 +2437,20 @@ class Repository:
     def save_colonisation_depot_visit(
         self, market_id: int, system_address, system_name: str, station_name: str,
         progress, complete: bool, resources_json: str, timestamp: str,
-    ) -> None:
+    ) -> bool:
         """Upserts real visit data — matches an existing row by market_id
         first (a revisit), then by system+station name for a manually-added
         row not yet visited (fills in the real market_id), else inserts a
-        new row (a depot found by visiting, never manually added first)."""
+        new row (a depot found by visiting, never manually added first).
+
+        Returns True if this market_id had never been tracked before (a
+        brand new row was inserted) -- the caller uses this to fire a
+        one-time "new site tracked" callout, distinct from the ordinary
+        progress-update case."""
         row = self.db.conn.execute(
             "SELECT id FROM colonisation_depots WHERE market_id = ?", (market_id,)
         ).fetchone()
+        is_new = row is None
         if row is None:
             row = self.db.conn.execute(
                 "SELECT id FROM colonisation_depots WHERE market_id IS NULL "
@@ -2471,6 +2477,27 @@ class Repository:
                  progress, int(bool(complete)), resources_json, timestamp),
             )
         self.db.conn.commit()
+        return is_new
+
+    def get_known_construction_sites(self) -> list[dict]:
+        """Distinct (system_name, station_name) pairs for stations we've
+        personally docked at whose name marks them as a colonisation
+        construction site -- sourced from our own station_info (written on
+        every Docked event regardless of EDDN), since Frontier's
+        ColonisationConstructionDepot event itself has no EDDN schema and
+        can't be crowdsourced. Used to autocomplete the manual "add a
+        squadron site" fields so a typo can't create an orphaned row that
+        a real visit's exact station name will never match (see
+        save_colonisation_depot_visit)."""
+        rows = self.db.conn.execute(
+            """
+            SELECT DISTINCT system_name, station_name
+            FROM net.station_info
+            WHERE station_name LIKE '%Construction Site%'
+            ORDER BY system_name, station_name
+            """
+        ).fetchall()
+        return [{"system_name": r["system_name"], "station_name": r["station_name"]} for r in rows]
 
     def find_closest_trailblazer(self, x: float, y: float, z: float) -> Optional[dict]:
         """
