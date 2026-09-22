@@ -110,6 +110,23 @@ class ExobiologyPanel(QWidget):
         except Exception:
             return ""
 
+    def _short_body_name(self, body_name, system_name):
+        """Frontier's own BodyName is always "<system> <suffix>" (e.g.
+        "HIP 105879 3 d"), but Canonn's getSystemPoi API returns body
+        names WITHOUT the system prefix ("3 d") -- confirmed live
+        2026-09-22 against a real system (HIP 105879) with real Canonn
+        data present, where the un-stripped comparison silently matched
+        nothing at all despite both sides having the right data. Strips
+        the known system-name prefix so canonn_species_by_body's keys
+        (built from Canonn's own short form) and our own body names line
+        up; falls back to the untouched name if the prefix isn't there
+        (a body we haven't resolved a system name for yet)."""
+        name = self._norm_text(body_name)
+        sys_name = self._norm_text(system_name)
+        if sys_name and name.lower().startswith(sys_name.lower() + " "):
+            return name[len(sys_name) + 1:].strip()
+        return name
+
     def _variant_color(self, v):
         if not isinstance(v, str):
             return ""
@@ -495,7 +512,9 @@ class ExobiologyPanel(QWidget):
                 genus_txt = f"{bio} exobiological signals"
                 status_txt = f"NEEDS DSS (Bio: {bio})"
 
-                canonn_species = canonn_species_by_body.get(self._norm_text(body).strip().lower()) or []
+                canonn_species = canonn_species_by_body.get(
+                    self._short_body_name(body, getattr(state, "system", None)).lower()
+                ) or []
                 sp_hint = ""
                 base_hint = ""
                 if canonn_species:
