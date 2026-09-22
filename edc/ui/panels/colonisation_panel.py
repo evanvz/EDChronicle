@@ -15,10 +15,10 @@ import logging
 from html import escape
 from typing import Dict, Optional
 
-from PyQt6.QtCore import Qt, QThread, QObject, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, QObject, QStringListModel, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QComboBox,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QComboBox, QCompleter,
     QTableWidget, QTableWidgetItem, QHeaderView, QFrame, QDialog, QApplication,
 )
 
@@ -1013,9 +1013,18 @@ class ColonisationPanel(QWidget):
         self._depot_system_edit = QLineEdit()
         self._depot_system_edit.setPlaceholderText("System name")
         self._depot_system_edit.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
+        self._depot_system_edit.textChanged.connect(self._on_depot_system_text_changed)
         self._depot_station_edit = QLineEdit()
         self._depot_station_edit.setPlaceholderText("Station/site name")
         self._depot_station_edit.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
+        self._depot_station_completer = QCompleter([])
+        self._depot_station_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self._depot_station_completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        self._depot_station_completer.popup().setStyleSheet(
+            "QAbstractItemView { background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;"
+            " selection-background-color:#1a3a5a; selection-color:#FFB347; }"
+        )
+        self._depot_station_edit.setCompleter(self._depot_station_completer)
         add_btn = QPushButton("Add")
         add_btn.setStyleSheet(_BTN_STYLE)
         add_btn.clicked.connect(self._on_add_depot_clicked)
@@ -1161,9 +1170,16 @@ class ColonisationPanel(QWidget):
         self._refresh_known_sites_combo()
 
     def refresh(self, state) -> None:
+        system_name = getattr(state, "system", None)
+        system_changed = system_name != getattr(self._last_state, "system", None)
         self._last_state = state
         self._refresh_current_system(state)
         self._refresh_depots(state)
+        if system_changed:
+            # Cheap in-memory re-filter of the already-fetched known-sites
+            # cache -- no DB hit, safe to run on every system change even
+            # though refresh() itself can fire often.
+            self._rebuild_known_sites_combo_for_system(system_name)
 
     def _refresh_current_system(self, state) -> None:
         summary = _current_system_summary(state)
@@ -1299,20 +1315,32 @@ class ColonisationPanel(QWidget):
         self._refresh_depots(self._last_state)
 
     def _refresh_known_sites_combo(self) -> None:
+        """Re-fetches the full (all-systems) known-sites list from the DB
+        -- the ⟳ button's job, and once at construction. Cheap enough to
+        call from refresh() too (guarded so it only re-queries on an
+        actual system change, see refresh())."""
         try:
             self._known_sites = self._repo.get_known_construction_sites()
         except Exception:
             log.exception("Failed to load known construction sites")
             self._known_sites = []
+        self._rebuild_known_sites_combo_for_system(getattr(self._last_state, "system", None))
+
+    def _rebuild_known_sites_combo_for_system(self, system_name) -> None:
+        """Filters the cached (already-fetched) known-sites list down to
+        the current system only -- a squad tracking sites across many
+        systems doesn't need every one of them cluttering this combo when
+        only the current system's sites are ever relevant to "add a site
+        here". Pure in-memory filter, no DB hit."""
+        system_key = (system_name or "").strip().lower()
+        matches = [s for s in self._known_sites if s["system_name"].strip().lower() == system_key] if system_key else []
 
         self._known_sites_combo.blockSignals(True)
         self._known_sites_combo.clear()
-        self._known_sites_combo.addItem(
-            f"Known sites from your dock history ({len(self._known_sites)})…", None
-        )
-        for site in self._known_sites:
-            label = f"{site['station_name']} — {site['system_name']}"
-            self._known_sites_combo.addItem(label, site)
+        label = f"Known sites in {system_name} ({len(matches)})…" if system_key else "Known sites — waiting for current system…"
+        self._known_sites_combo.addItem(label, None)
+        for site in matches:
+            self._known_sites_combo.addItem(site["station_name"], site)
         self._known_sites_combo.setCurrentIndex(0)
         self._known_sites_combo.blockSignals(False)
 
@@ -1322,6 +1350,23 @@ class ColonisationPanel(QWidget):
             return
         self._depot_system_edit.setText(site["system_name"])
         self._depot_station_edit.setText(site["station_name"])
+
+    def _on_depot_system_text_changed(self, text: str) -> None:
+        """Manual-add flow: once the typed system name exactly matches a
+        system we have known sites for, offer their station names in the
+        station field's own completer -- a system can have more than one
+        construction site (multiple ports being built at once), so this
+        narrows the picker instead of leaving it to a full free-text
+        guess."""
+        system_key = text.strip().lower()
+        if not system_key:
+            self._depot_station_completer.setModel(None)
+            return
+        names = sorted({
+            s["station_name"] for s in self._known_sites
+            if s["system_name"].strip().lower() == system_key
+        })
+        self._depot_station_completer.setModel(QStringListModel(names))
 
     def _on_depot_cell_clicked(self, row: int, column: int) -> None:
         if row < 0 or row >= len(self._depots):
