@@ -15,7 +15,7 @@ import logging
 from html import escape
 from typing import Dict, Optional
 
-from PyQt6.QtCore import Qt, QThread, QObject, QStringListModel, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, QObject, QStringListModel, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QComboBox, QCompleter,
@@ -309,6 +309,38 @@ class _RavenColonialDialog(QDialog):
         paste_row.addWidget(load_btn)
         layout.addLayout(paste_row)
 
+        site_link = QLabel('<a href="https://ravencolonial.com" style="color:#8CC8FF;">https://ravencolonial.com</a>')
+        site_link.setOpenExternalLinks(True)
+        site_link.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
+        site_link.setStyleSheet("font-size:11px; background:transparent; border:none;")
+        layout.addWidget(site_link)
+
+        pin_row = QHBoxLayout()
+        self._pin_label = QLabel("")
+        self._pin_label.setStyleSheet("color:#888888; font-size:11px; background:transparent; border:none;")
+        pin_row.addWidget(self._pin_label, 1)
+        refresh_btn = QPushButton("⟳ Refresh")
+        refresh_btn.setStyleSheet(_BTN_STYLE)
+        refresh_btn.setToolTip("Re-fetch the currently loaded build's latest progress.")
+        refresh_btn.clicked.connect(self._on_refresh_clicked)
+        pin_row.addWidget(refresh_btn)
+        self._unpin_btn = QPushButton("Unpin")
+        self._unpin_btn.setStyleSheet(_BTN_STYLE)
+        self._unpin_btn.setToolTip("Stop remembering this build -- it won't reopen automatically next time.")
+        self._unpin_btn.setEnabled(False)
+        self._unpin_btn.clicked.connect(self._on_unpin_clicked)
+        pin_row.addWidget(self._unpin_btn)
+        layout.addLayout(pin_row)
+
+        # Auto-refreshes whatever's currently loaded every 2 minutes while
+        # this dialog exists, on top of the refresh-on-open (see
+        # showEvent) and manual Refresh button -- a squad build's numbers
+        # move as often as anyone docks and delivers, not something a
+        # one-shot load stays accurate for very long.
+        self._refresh_timer = QTimer(self)
+        self._refresh_timer.setInterval(2 * 60 * 1000)
+        self._refresh_timer.timeout.connect(self._on_auto_refresh_tick)
+
         pad_row = QHBoxLayout()
         pad_label = QLabel("Landing pad:")
         pad_label.setStyleSheet("color:#9aa4b0; background:transparent; border:none;")
@@ -366,10 +398,57 @@ class _RavenColonialDialog(QDialog):
         note.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
         layout.addWidget(note)
 
+        self._load_pinned_build()
+
+    def showEvent(self, event) -> None:
+        """Refresh-on-open: whatever's already loaded (pinned or not) gets
+        a fresh fetch every time this dialog is reopened, on top of the
+        interval timer and the manual Refresh button."""
+        super().showEvent(event)
+        if self._project:
+            self._on_refresh_clicked()
+        elif not (self._thread and self._thread.isRunning()):
+            self._load_pinned_build()
+
+    def _load_pinned_build(self) -> None:
+        store = self._panel._raven_pin_store
+        build_id = store.load() if store else None
+        if not build_id:
+            return
+        self._status_label.setText("Loading your pinned build…")
+        self._start_fetch(_RavenColonialWorker(build_id=build_id))
+
     def load_for_station(self, system_address: int, market_id: int) -> None:
         self._paste_edit.clear()
         self._status_label.setText("Looking up Raven Colonial build for this station…")
         self._start_fetch(_RavenColonialWorker(system_address=system_address, market_id=market_id))
+
+    def _on_refresh_clicked(self) -> None:
+        build_id = (self._project or {}).get("buildId")
+        if not build_id:
+            self._load_pinned_build()
+            return
+        self._status_label.setText("Refreshing…")
+        self._start_fetch(_RavenColonialWorker(build_id=build_id))
+
+    def _on_auto_refresh_tick(self) -> None:
+        build_id = (self._project or {}).get("buildId")
+        if build_id:
+            self._start_fetch(_RavenColonialWorker(build_id=build_id))
+
+    def _on_unpin_clicked(self) -> None:
+        store = self._panel._raven_pin_store
+        if store:
+            store.clear()
+        self._refresh_timer.stop()
+        self._project = None
+        self._sources_by_commodity = {}
+        self._unpin_btn.setEnabled(False)
+        self._pin_label.setText("")
+        self._header_label.setText("")
+        self._info_label.setText("")
+        self._status_label.setText("Unpinned.")
+        _empty(self._table, "")
 
     def _on_load_clicked(self) -> None:
         build_id = raven_colonial.parse_build_id(self._paste_edit.text())
@@ -439,6 +518,16 @@ class _RavenColonialDialog(QDialog):
             f"Architect: {architect}  •  {progress_text}  •  Ready on Fleet Carriers: {ready_count}  "
             f"•  Linked Fleet Carriers: {fc_count}  •  {cmdr_text}"
         )
+
+        build_id = project.get("buildId")
+        store = self._panel._raven_pin_store
+        if build_id and store:
+            store.save(build_id)
+        self._unpin_btn.setEnabled(True)
+        from datetime import datetime
+        self._pin_label.setText(f"Pinned — auto-refreshes every 2 min. Last refreshed {datetime.now().strftime('%H:%M:%S')}.")
+        if not self._refresh_timer.isActive():
+            self._refresh_timer.start()
 
         self._render_table()
         self._start_sources_fetch()
@@ -931,11 +1020,12 @@ class ColonisationPanel(QWidget):
     buy_search_requested = pyqtSignal(str)
     eligibility_check_requested = pyqtSignal(str)  # system name to check
 
-    def __init__(self, repo, ship_pad_table=None, commodity_categories=None, parent=None):
+    def __init__(self, repo, ship_pad_table=None, commodity_categories=None, raven_pin_store=None, parent=None):
         super().__init__(parent)
         self._repo = repo
         self._ship_pad_table = ship_pad_table
         self._commodity_categories = commodity_categories
+        self._raven_pin_store = raven_pin_store
         self._depots: list = []
         self._depot_dialogs: dict = {}
         self._last_state = None

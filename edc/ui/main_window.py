@@ -72,6 +72,7 @@ from edc.core.engineering_wishlist import EngineeringWishlist
 from edc.core.odyssey_engineering import OdysseyEngineeringTable
 from edc.core.odyssey_wishlist import OdysseyWishlist
 from edc.core.market_destination import MarketDestinationStore
+from edc.core.raven_colonial_pin import RavenColonialPinStore
 from edc.core.megaship_tracker import MegashipTracker
 from edc.core import service_health
 from edc.core.mission_events import MISSION_EVENT_NAMES
@@ -1705,6 +1706,7 @@ class MainWindow(QMainWindow):
         self.odyssey_engineering = OdysseyEngineeringTable(settings_base)
         self.odyssey_wishlist_store = OdysseyWishlist(data_dir / "odyssey_engineering_wishlist.json")
         self.market_destination_store = MarketDestinationStore(data_dir / "market_destination.json")
+        self.raven_colonial_pin_store = RavenColonialPinStore(data_dir / "raven_colonial_pin.json")
         self.megaship_tracker = MegashipTracker(data_dir / "megaships_seen.json")
         # Visited megaships filled in by _StartupHistoryScanWorker (see its
         # kickoff below) -- confirmed live ~1.9s against a 899-file journal,
@@ -2075,6 +2077,7 @@ class MainWindow(QMainWindow):
         # Colonisation tab
         self.colonisation_panel = ColonisationPanel(
             self.repo, ship_pad_table=self.ship_pad_sizes, commodity_categories=self.commodity_categories,
+            raven_pin_store=self.raven_colonial_pin_store,
         )
         self.colonisation_panel.buy_search_requested.connect(self._on_squadron_buy_search_requested)
         self.colonisation_panel.eligibility_check_requested.connect(self._on_check_colonisation_eligibility_clicked)
