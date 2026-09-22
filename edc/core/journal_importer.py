@@ -110,6 +110,12 @@ class JournalImporter:
         self.bodies_by_name: dict[str, CachedBody] = {}
         self.system_visits: dict[int, SystemVisit] = {}
 
+        # MarketID -> (system_address, system_name, station_name), filled by
+        # every historical Docked event -- ColonisationConstructionDepot
+        # events carry only a bare MarketID (see _handle_colonisation_
+        # construction_depot), same limitation as the live path.
+        self._station_by_market_id: dict[int, tuple[int | None, str, str]] = {}
+
     def import_all(self, progress_callback=None) -> None:
         if not self.journal_dir.exists():
             log.warning("Journal directory not found: %s", self.journal_dir)
@@ -188,6 +194,8 @@ class JournalImporter:
             self._handle_disembark(event)
         elif name == "Docked":
             self._handle_docked(event)
+        elif name == "ColonisationConstructionDepot":
+            self._handle_colonisation_construction_depot(event)
         elif name == "CodexEntry":
             self._handle_codex_entry(event)
 
@@ -713,6 +721,56 @@ class JournalImporter:
             last_visited=info["timestamp"],
             station_services=info["station_services"],
             station_faction=info["station_faction"],
+        )
+        if info["system_name"] and info["station_name"]:
+            self._station_by_market_id[info["market_id"]] = (
+                event.get("SystemAddress"), info["system_name"], info["station_name"],
+            )
+
+    def _handle_colonisation_construction_depot(self, event: dict[str, Any]) -> None:
+        """Historical-replay counterpart to MainWindow._save_colonisation_
+        depot -- without this, a construction site only ever gets tracked
+        if you happen to dock there again while EDChronicle is actively
+        running (confirmed live 2026-09-22: docking at a site whose
+        ColonisationConstructionDepot events predate the app's startup, or
+        arrived before the live watcher attached, left it permanently
+        stuck on a manually-added "Not yet visited" row -- this event has
+        no EDDN schema, so backfill is the only other way in).
+
+        The event itself carries only MarketID, same as live -- resolved
+        against _station_by_market_id, filled by every historical Docked
+        event. A depot whose Docked event isn't in the scanned journal
+        range (journal rotated out, or docked before EDChronicle was ever
+        installed) simply can't be resolved and is skipped, same as the
+        live path returning False when state lacks a current station."""
+        market_id = event.get("MarketID")
+        if not isinstance(market_id, int):
+            return
+        cached = self._station_by_market_id.get(market_id)
+        if cached is None:
+            return
+        system_address, system_name, station_name = cached
+
+        resources = []
+        for r in (event.get("ResourcesRequired") or []):
+            if not isinstance(r, dict):
+                continue
+            resources.append({
+                "name": r.get("Name_Localised") or r.get("Name") or "",
+                "required": r.get("RequiredAmount"),
+                "provided": r.get("ProvidedAmount"),
+                "payment": r.get("Payment"),
+            })
+
+        self.repo.save_colonisation_depot_visit(
+            market_id=market_id,
+            system_address=system_address,
+            system_name=system_name,
+            station_name=station_name,
+            progress=event.get("ConstructionProgress"),
+            complete=bool(event.get("ConstructionComplete")),
+            resources_json=json.dumps(resources),
+            timestamp=_parse_journal_timestamp(event.get("timestamp")) or datetime.now(timezone.utc).isoformat(),
         )
 
     def _handle_scan_organic(self, event: dict[str, Any]) -> None:
