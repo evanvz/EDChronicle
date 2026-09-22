@@ -711,6 +711,12 @@ class MainWindow(QMainWindow):
         if isinstance(system_address, int):
             self._load_persisted_rings(system_address)
             self._maybe_start_ring_hotspot_check()
+            # Same gap as above, same fix -- Canonn refresh was only ever
+            # wired into the live Location/FSDJump handler, never this
+            # startup path, so a launch straight into a previously-visited
+            # system (confirmed live 2026-09-22, game not even running)
+            # never fetched Canonn's species/signal intel for it at all.
+            self._maybe_start_canonn_refresh()
 
     def _save_exobiology_to_db(self):
         try:
