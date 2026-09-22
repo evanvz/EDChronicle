@@ -375,18 +375,26 @@ class _RavenColonialDialog(QDialog):
         layout.addWidget(self._info_label)
 
         self._table = QTableWidget()
-        self._table.setColumnCount(4)
-        self._table.setHorizontalHeaderLabels(["Commodity", "Need", "Assigned", "Nearest Source (pad)"])
+        self._table.setColumnCount(8)
+        self._table.setHorizontalHeaderLabels(
+            ["Commodity", "Need", "Assigned", "Source Station", "Pad", "Source System", "Dist (ly)", "Stock"]
+        )
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._table.verticalHeader().setVisible(False)
         self._table.setAlternatingRowColors(True)
         self._table.setStyleSheet(_TABLE_STYLE)
+        self._table.setToolTip("Click a Source Station or Source System cell to copy its name to the clipboard.")
+        self._table.cellClicked.connect(self._on_table_cell_clicked)
         th = self._table.horizontalHeader()
         th.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         th.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         th.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         th.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        th.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        th.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
+        th.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
+        th.setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)
         layout.addWidget(self._table, 1)
 
         note = QLabel(
@@ -642,22 +650,42 @@ class _RavenColonialDialog(QDialog):
 
                 best = self._best_source_for(symbol)
                 if best is not None:
-                    source_text = (
-                        f"{best.get('station_name') or '—'} ({best.get('system_name') or '—'}) — "
-                        f"{best.get('distance_ly', 0):.1f} ly [{best.get('pad_size') or '?'}]"
-                    )
-                    source_item = QTableWidgetItem(source_text)
-                elif symbol in self._sources_by_commodity:
-                    source_item = QTableWidgetItem("No matching source within 100 ly.")
-                    source_item.setForeground(QColor("#888888"))
+                    stock = best.get("stock")
+                    stock_known = isinstance(stock, (int, float))
+                    short = stock_known and stock < qty
+                    colour = QColor("#FF6B6B") if short else None
+
+                    station_item = QTableWidgetItem(best.get("station_name") or "—")
+                    pad_item = QTableWidgetItem(best.get("pad_size") or "?")
+                    pad_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                    system_item = QTableWidgetItem(best.get("system_name") or "—")
+                    dist_value = best.get("distance_ly")
+                    dist_text = f"{dist_value:.1f}" if isinstance(dist_value, (int, float)) else "—"
+                    dist_item = QTableWidgetItem(dist_text)
+                    dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                    stock_text = f"{stock:,.0f}" + (" (short)" if short else "") if stock_known else "unknown"
+                    stock_item = QTableWidgetItem(stock_text)
+                    stock_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                    if colour:
+                        for it in (station_item, pad_item, system_item, dist_item, stock_item):
+                            it.setForeground(colour)
                 else:
-                    source_item = QTableWidgetItem("Looking up…")
-                    source_item.setForeground(QColor("#888888"))
+                    placeholder = "No matching source within 100 ly." if symbol in self._sources_by_commodity else "Looking up…"
+                    station_item = QTableWidgetItem(placeholder)
+                    station_item.setForeground(QColor("#888888"))
+                    pad_item = QTableWidgetItem("")
+                    system_item = QTableWidgetItem("")
+                    dist_item = QTableWidgetItem("")
+                    stock_item = QTableWidgetItem("")
 
                 self._table.setItem(row, 0, name_item)
                 self._table.setItem(row, 1, qty_item)
                 self._table.setItem(row, 2, assigned_item)
-                self._table.setItem(row, 3, source_item)
+                self._table.setItem(row, 3, station_item)
+                self._table.setItem(row, 4, pad_item)
+                self._table.setItem(row, 5, system_item)
+                self._table.setItem(row, 6, dist_item)
+                self._table.setItem(row, 7, stock_item)
                 row += 1
         # Sorting stays off -- category header rows use setSpan(), and
         # user-driven column sort would scramble those spanned rows in
@@ -665,6 +693,13 @@ class _RavenColonialDialog(QDialog):
         if not grouped:
             complete = self._project.get("complete") if self._project else False
             _empty(self._table, "Nothing still needed — build complete." if complete else "No shortfall data.")
+
+    def _on_table_cell_clicked(self, row: int, column: int) -> None:
+        if column not in (3, 5):  # Source Station, Source System
+            return
+        item = self._table.item(row, column)
+        if item and item.text() and item.text() not in ("—", "No matching source within 100 ly.", "Looking up…"):
+            QApplication.clipboard().setText(item.text())
 
 
 class _ColonisationDetailDialog(QDialog):
