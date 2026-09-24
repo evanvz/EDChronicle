@@ -21,6 +21,7 @@ misrepresent when expansion actually triggers.
 """
 from __future__ import annotations
 
+import json
 import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -39,6 +40,44 @@ from edc.core.edsm_faction_lookup import fetch_system_factions, ERROR_BLOCKED, E
 log = logging.getLogger("edc.faction_expansion")
 
 _EXPANSION_THRESHOLD = 75.0
+
+
+def _parse_states(raw) -> List[str]:
+    """Parses a faction_snapshots active_states/pending_states JSON column
+    (a list of {"State": ..., "Trend": ...} dicts) into a flat list of
+    State strings. Duplicated from player_faction_panel.py's identical
+    helper rather than imported -- that module already imports FROM this
+    one (FactionExpansionDialog), so importing back would be circular."""
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw) if isinstance(raw, str) else raw
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(data, list):
+        return []
+    return [
+        str(s.get("State"))
+        for s in data
+        if isinstance(s, dict) and s.get("State")
+    ]
+
+
+def _is_expanding(latest_snapshot: Optional[Dict[str, Any]]) -> bool:
+    """True if the faction's most recent snapshot shows Frontier's own
+    "Expansion" BGS state -- either as the primary faction_state or
+    listed in active_states (both are real places EDSM's data puts it,
+    kept as two checks rather than assuming one). This is the actual
+    trigger signal: once expansion is active, influence decays a little
+    per day for about a week until it either completes or fails, so the
+    push needs to continue rather than stop the moment 75% is crossed."""
+    if not latest_snapshot:
+        return False
+    state = (latest_snapshot.get("faction_state") or "").strip().lower()
+    if state == "expansion":
+        return True
+    active = {s.lower() for s in _parse_states(latest_snapshot.get("active_states"))}
+    return "expansion" in active
 
 
 class _ExpansionLookupWorker(QObject):
@@ -244,6 +283,15 @@ class FactionExpansionDialog(QDialog):
         self._refresh_timer.setInterval(2 * 60 * 1000)
         self._refresh_timer.timeout.connect(self._on_auto_refresh_tick)
 
+        self._expansion_banner = QLabel("")
+        self._expansion_banner.setWordWrap(True)
+        self._expansion_banner.setStyleSheet(
+            "background:#2a1a00; color:#FFB347; border:1px solid #5a3a00; border-radius:4px;"
+            " padding:6px; font-weight:bold;"
+        )
+        self._expansion_banner.setVisible(False)
+        layout.addWidget(self._expansion_banner)
+
         # ── Influence card ───────────────────────────────────────────────
         inf_card = QFrame()
         inf_card.setStyleSheet(_CARD_STYLE)
@@ -344,6 +392,7 @@ class FactionExpansionDialog(QDialog):
         self._system_address = None
         self._tracked_system_name = None
         self._untrack_btn.setEnabled(False)
+        self._expansion_banner.setVisible(False)
         self._header_label.setText("")
         self._influence_label.setText("No data yet.")
         self._trend_widget.set_points([])
@@ -449,6 +498,18 @@ class FactionExpansionDialog(QDialog):
             if gap > 0 else
             f"{pct:.1f}% influence{delta_txt}  —  ✅ at or above the {_EXPANSION_THRESHOLD:.0f}% expansion threshold"
         )
+
+        latest = history[0] if history else None
+        if _is_expanding(latest):
+            self._expansion_banner.setText(
+                "🚧 EXPANSION IN PROGRESS — Frontier's own BGS state for this faction here is "
+                "\"Expansion\". It lasts about a week; influence drifts down a little each day "
+                "until it completes, so keep running missions/trading/etc. for this faction here "
+                "or the push can fail before it finishes."
+            )
+            self._expansion_banner.setVisible(True)
+        else:
+            self._expansion_banner.setVisible(False)
 
         # PowerPlay
         fdev = getattr(self._panel, "_fdev_powerplay", None)
