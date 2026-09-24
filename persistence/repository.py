@@ -2565,37 +2565,57 @@ class Repository:
         rows = self.db.execute(query, params).fetchall()
         return [dict(r) for r in rows]
 
-    def record_faction_mission_completion(self, system_address: int, faction_name: str, completed_at: str) -> None:
+    def record_faction_mission_completion(
+        self, system_address: int, faction_name: str, completed_at: str, influence_tier: Optional[str] = None,
+    ) -> None:
         """One row per MissionCompleted credited to faction_name in
         system_address -- see mission_events.py's docstring for why this
         can't be reconstructed from active_missions after the fact (the
-        completing mission's record is discarded the moment it completes)."""
+        completing mission's record is discarded the moment it completes).
+
+        influence_tier is Frontier's own qualitative "+" to "+++++"
+        indicator (no exact point value is ever exposed by the game),
+        captured by the caller from the pre-completion active_missions
+        record -- may be None for a mission that predates this column, or
+        whose Accepted record didn't carry one."""
         self.db.execute(
-            "INSERT INTO faction_mission_completions (system_address, faction_name, completed_at) VALUES (?, ?, ?)",
-            (system_address, faction_name, completed_at),
+            "INSERT INTO faction_mission_completions (system_address, faction_name, completed_at, influence_tier) "
+            "VALUES (?, ?, ?, ?)",
+            (system_address, faction_name, completed_at, influence_tier),
         )
 
     def get_faction_mission_completion_counts(self, system_address: int, faction_name: str) -> dict:
-        """{"today": int, "last_7_days": int} -- completed_at is an ISO
-        UTC timestamp string, so a lexicographic >= comparison against
-        another ISO timestamp works directly, no date parsing needed."""
+        """{"today": int, "last_7_days": int, "weighted_today": int,
+        "weighted_last_7_days": int} -- completed_at is an ISO UTC
+        timestamp string, so a lexicographic >= comparison against
+        another ISO timestamp works directly, no date parsing needed.
+        The weighted figures sum each completion's influence_tier length
+        (e.g. "+++" -> 3) -- Frontier's own rough relative-impact signal,
+        not a real point total; a completion with no tier on record
+        contributes 0 to the weighted sum but still counts toward the
+        plain count."""
         from datetime import datetime, timezone, timedelta
 
         now = datetime.now(timezone.utc)
         today_start = now.strftime("%Y-%m-%dT00:00:00")
         week_start = (now - timedelta(days=7)).isoformat()
 
-        today = self.db.execute(
-            "SELECT COUNT(*) AS c FROM faction_mission_completions "
-            "WHERE system_address = ? AND faction_name = ? AND completed_at >= ?",
-            (system_address, faction_name, today_start),
-        ).fetchone()["c"]
-        last_7_days = self.db.execute(
-            "SELECT COUNT(*) AS c FROM faction_mission_completions "
-            "WHERE system_address = ? AND faction_name = ? AND completed_at >= ?",
-            (system_address, faction_name, week_start),
-        ).fetchone()["c"]
-        return {"today": today, "last_7_days": last_7_days}
+        def _query(since: str) -> tuple:
+            rows = self.db.execute(
+                "SELECT influence_tier FROM faction_mission_completions "
+                "WHERE system_address = ? AND faction_name = ? AND completed_at >= ?",
+                (system_address, faction_name, since),
+            ).fetchall()
+            count = len(rows)
+            weighted = sum(len(r["influence_tier"]) for r in rows if isinstance(r["influence_tier"], str))
+            return count, weighted
+
+        today, weighted_today = _query(today_start)
+        last_7_days, weighted_last_7_days = _query(week_start)
+        return {
+            "today": today, "last_7_days": last_7_days,
+            "weighted_today": weighted_today, "weighted_last_7_days": weighted_last_7_days,
+        }
 
     def get_odyssey_farming_candidates(self, limit: int = 20) -> list[dict]:
         """

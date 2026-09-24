@@ -281,6 +281,13 @@ class Database:
             )""",
             """CREATE INDEX IF NOT EXISTS idx_faction_mission_completions_lookup
                ON faction_mission_completions (system_address, faction_name, completed_at)""",
+            # Frontier's own qualitative "+" to "+++++" influence-impact
+            # indicator, set at MissionAccepted -- no exact point value is
+            # ever exposed, this is the closest real signal there is for
+            # "how much did this mission actually matter". A separate
+            # ALTER since the table above may already exist without it on
+            # an install that ran migrations once between the two commits.
+            "ALTER TABLE faction_mission_completions ADD COLUMN influence_tier TEXT",
         ]
         cache_migrations = [
             "ALTER TABLE net.spansh_bodies ADD COLUMN surface_gravity REAL",

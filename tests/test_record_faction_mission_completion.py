@@ -23,7 +23,22 @@ def test_completed_mission_is_recorded():
     MainWindow._record_faction_mission_completion(fake_self, evt)
     assert fake_self._saved == [{
         "system_address": 12345, "faction_name": "Elite United Worlds", "completed_at": "2026-09-24T10:00:00Z",
+        "influence_tier": None,
     }]
+
+
+def test_influence_tier_is_passed_through_when_given():
+    fake_self = _fake_self()
+    evt = {"event": "MissionCompleted", "Faction": "Elite United Worlds", "timestamp": "2026-09-24T10:00:00Z"}
+    MainWindow._record_faction_mission_completion(fake_self, evt, "+++")
+    assert fake_self._saved[0]["influence_tier"] == "+++"
+
+
+def test_non_string_influence_tier_is_normalized_to_none():
+    fake_self = _fake_self()
+    evt = {"event": "MissionCompleted", "Faction": "Elite United Worlds", "timestamp": "2026-09-24T10:00:00Z"}
+    MainWindow._record_faction_mission_completion(fake_self, evt, 123)
+    assert fake_self._saved[0]["influence_tier"] is None
 
 
 def test_missing_faction_field_is_skipped():

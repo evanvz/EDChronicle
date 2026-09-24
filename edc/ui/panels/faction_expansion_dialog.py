@@ -331,6 +331,7 @@ class FactionExpansionDialog(QDialog):
         missions_hdr.setStyleSheet(_HDR_STYLE)
         missions_l.addWidget(missions_hdr)
         self._missions_label = QLabel("—")
+        self._missions_label.setWordWrap(True)
         self._missions_label.setStyleSheet("font-size:13px; background:transparent; border:none;")
         missions_l.addWidget(self._missions_label)
         bottom_row.addWidget(missions_card, 1)
@@ -529,7 +530,10 @@ class FactionExpansionDialog(QDialog):
         # Missions
         counts = self._panel._repo.get_faction_mission_completion_counts(self._system_address, faction_name)
         self._missions_label.setText(
-            f"Today: {counts['today']}   •   Last 7 days: {counts['last_7_days']}"
+            f"Today: {counts['today']} (weight {counts['weighted_today']})   •   "
+            f"Last 7 days: {counts['last_7_days']} (weight {counts['weighted_last_7_days']})\n"
+            "Weight sums Frontier's own \"+\" to \"+++++\" mission-impact rating -- a rough relative "
+            "signal, not a real point total (the game never exposes exact influence points)."
         )
 
         # Ticks

@@ -1182,13 +1182,18 @@ class MainWindow(QMainWindow):
             log.exception("Failed to save colonisation depot data")
         return True
 
-    def _record_faction_mission_completion(self, evt: dict) -> None:
+    def _record_faction_mission_completion(self, evt: dict, influence_tier: Optional[str] = None) -> None:
         """active_missions has already discarded this mission's record by
         the time we get here (event_engine.py's apply_mission_event pops
         it on MissionCompleted) -- the journal event itself carries the
         issuing Faction directly, same field MissionAccepted uses, so no
         need to read it back from state. Missions are turned in at the
-        destination, so the current system IS the completion system."""
+        destination, so the current system IS the completion system.
+
+        influence_tier is Frontier's own qualitative "+" to "+++++"
+        indicator (set at MissionAccepted, no exact point value ever
+        exposed by the game) -- must be captured by the caller BEFORE
+        engine.process() pops the active_missions record, see _on_event."""
         faction_name = evt.get("Faction")
         system_address = getattr(self.state, "system_address", None)
         if not (isinstance(faction_name, str) and faction_name and isinstance(system_address, int)):
@@ -1199,6 +1204,7 @@ class MainWindow(QMainWindow):
                 system_address=system_address,
                 faction_name=faction_name,
                 completed_at=evt.get("timestamp") or datetime.now(timezone.utc).isoformat(),
+                influence_tier=influence_tier if isinstance(influence_tier, str) else None,
             )
         except Exception:
             log.exception("Failed to record faction mission completion")
@@ -3194,6 +3200,18 @@ class MainWindow(QMainWindow):
         self._append(f"[EVENT] {name}")
 
         old_system_address = getattr(self.state, "system_address", None)
+        # Frontier's own qualitative influence tier ("+" to "+++++", set at
+        # MissionAccepted, no exact point value ever exposed) lives on the
+        # active_missions record -- engine.process() below pops that record
+        # the instant MissionCompleted is processed, so it must be read
+        # here, before that happens, or it's gone for good.
+        mission_influence_tier = None
+        if name == "MissionCompleted":
+            mission_id = evt.get("MissionID")
+            pre_rec = (getattr(self.state, "active_missions", None) or {}).get(mission_id)
+            if isinstance(pre_rec, dict):
+                mission_influence_tier = pre_rec.get("influence")
+
         self.eddn_publisher.observe(evt)
         state, msgs = self.engine.process(evt)
         self.state = state
@@ -3247,7 +3265,7 @@ class MainWindow(QMainWindow):
             self._refresh_player_faction()
 
         if name == "MissionCompleted":
-            self._record_faction_mission_completion(evt)
+            self._record_faction_mission_completion(evt, mission_influence_tier)
 
         if name == "Market":
             market_data = self._load_current_market()
