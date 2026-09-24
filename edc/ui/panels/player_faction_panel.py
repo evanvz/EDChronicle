@@ -1936,6 +1936,16 @@ class PlayerFactionPanel(QWidget):
         self._faction_expansion_dialog.raise_()
         self._faction_expansion_dialog.activateWindow()
 
+    def notify_faction_snapshot_saved(self, system_address: int) -> None:
+        """A live journal-sourced faction_snapshots write just landed for
+        system_address -- if the Faction Expansion tracker is open and
+        tracking this exact system, push it a zero-network-cost repaint
+        instead of leaving it to catch up on its own next refresh cycle.
+        No-op if the dialog was never opened this session."""
+        dlg = self._faction_expansion_dialog
+        if dlg is not None:
+            dlg.on_live_snapshot_saved(system_address)
+
     def _start_refresh_all(self, ignore_fresh_today: bool = False) -> bool:
         """Returns True iff a background refresh thread was actually
         started. ignore_fresh_today=True skips the "already refreshed

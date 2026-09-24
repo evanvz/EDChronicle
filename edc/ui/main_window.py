@@ -788,6 +788,17 @@ class MainWindow(QMainWindow):
                     )
         except Exception:
             log.exception("Failed to save faction snapshots")
+            return
+
+        # Zero-lag push to the Faction Expansion tracker, if it's open and
+        # tracking this exact system -- otherwise it wouldn't repaint this
+        # fresher-than-EDSM data until its own next refresh cycle (up to
+        # 2 minutes later on the auto-refresh timer). Cheap: just tells it
+        # to re-read what was already just written, no new network fetch.
+        try:
+            self.player_faction_panel.notify_faction_snapshot_saved(system_address)
+        except Exception:
+            log.exception("Failed to notify Faction Expansion tracker of a live snapshot")
 
     def _save_system_coords_from_state(self, system_name: str, timestamp: str) -> None:
         """system_coords is fed live only by the EDDN listener's

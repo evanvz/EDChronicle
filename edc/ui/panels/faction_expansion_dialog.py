@@ -476,6 +476,15 @@ class FactionExpansionDialog(QDialog):
         if self._tracked_system_name and not (self._thread and self._thread.isRunning()):
             self._start_lookup(self._tracked_system_name)
 
+    def on_live_snapshot_saved(self, system_address: int) -> None:
+        """Called by PlayerFactionPanel.notify_faction_snapshot_saved() the
+        moment a live journal-sourced snapshot lands for system_address --
+        a pure re-read of what's already in the DB (see _render's own
+        docstring for why that's already the freshest available value),
+        no network fetch, so this is safe to call even mid-lookup."""
+        if self._tracked_system_name and system_address == self._system_address:
+            self._render(self._tracked_system_name)
+
     # ── Render ───────────────────────────────────────────────────────────
 
     def _render(self, system_name: str) -> None:
