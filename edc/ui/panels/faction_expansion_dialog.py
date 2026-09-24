@@ -460,7 +460,7 @@ class FactionExpansionDialog(QDialog):
         self._tracked_system_name = result["system_name"]
         self._untrack_btn.setEnabled(True)
         self._status_label.setText("")
-        self._render(result["system_name"], match.get("Influence"))
+        self._render(result["system_name"])
         if not self._refresh_timer.isActive():
             self._refresh_timer.start()
 
@@ -478,12 +478,26 @@ class FactionExpansionDialog(QDialog):
 
     # ── Render ───────────────────────────────────────────────────────────
 
-    def _render(self, system_name: str, current_influence: Optional[float]) -> None:
+    def _render(self, system_name: str) -> None:
+        """Reads the influence % back from the DB's own latest snapshot
+        rather than trusting whatever the just-completed EDSM fetch
+        returned directly -- if the commander is physically present in
+        this system, the live journal path (_save_faction_snapshots, on
+        every Docked/FSDJump/Location) writes straight to the same
+        faction_snapshots row with zero network lag, and is MORE
+        authoritative than EDSM's community-uploaded data. Both paths
+        write through the same timestamp-guarded upsert
+        (save_faction_snapshot's own WHERE clause won't let a stale
+        write clobber a fresher one), so the latest row here already
+        reflects whichever source actually has the newest data --
+        this just has to read it back instead of assuming EDSM's own
+        response is automatically current."""
         faction_name = self._panel._faction_name
-        pct = (current_influence or 0.0) * 100.0
         self._header_label.setText(f"{faction_name} — {system_name}")
 
         history = self._panel._repo.get_faction_history(self._system_address, faction_name)
+        latest = history[0] if history else None
+        pct = ((latest or {}).get("influence") or 0.0) * 100.0
         history_asc = list(reversed(history))  # get_faction_history is DESC; chart wants oldest-first
         points = [(h["snapshot_date"], (h.get("influence") or 0.0) * 100.0) for h in history_asc]
         self._trend_widget.set_points(points)
@@ -500,7 +514,6 @@ class FactionExpansionDialog(QDialog):
             f"{pct:.1f}% influence{delta_txt}  —  ✅ at or above the {_EXPANSION_THRESHOLD:.0f}% expansion threshold"
         )
 
-        latest = history[0] if history else None
         if _is_expanding(latest):
             self._expansion_banner.setText(
                 "🚧 EXPANSION IN PROGRESS — Frontier's own BGS state for this faction here is "
