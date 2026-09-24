@@ -2565,6 +2565,38 @@ class Repository:
         rows = self.db.execute(query, params).fetchall()
         return [dict(r) for r in rows]
 
+    def record_faction_mission_completion(self, system_address: int, faction_name: str, completed_at: str) -> None:
+        """One row per MissionCompleted credited to faction_name in
+        system_address -- see mission_events.py's docstring for why this
+        can't be reconstructed from active_missions after the fact (the
+        completing mission's record is discarded the moment it completes)."""
+        self.db.execute(
+            "INSERT INTO faction_mission_completions (system_address, faction_name, completed_at) VALUES (?, ?, ?)",
+            (system_address, faction_name, completed_at),
+        )
+
+    def get_faction_mission_completion_counts(self, system_address: int, faction_name: str) -> dict:
+        """{"today": int, "last_7_days": int} -- completed_at is an ISO
+        UTC timestamp string, so a lexicographic >= comparison against
+        another ISO timestamp works directly, no date parsing needed."""
+        from datetime import datetime, timezone, timedelta
+
+        now = datetime.now(timezone.utc)
+        today_start = now.strftime("%Y-%m-%dT00:00:00")
+        week_start = (now - timedelta(days=7)).isoformat()
+
+        today = self.db.execute(
+            "SELECT COUNT(*) AS c FROM faction_mission_completions "
+            "WHERE system_address = ? AND faction_name = ? AND completed_at >= ?",
+            (system_address, faction_name, today_start),
+        ).fetchone()["c"]
+        last_7_days = self.db.execute(
+            "SELECT COUNT(*) AS c FROM faction_mission_completions "
+            "WHERE system_address = ? AND faction_name = ? AND completed_at >= ?",
+            (system_address, faction_name, week_start),
+        ).fetchone()["c"]
+        return {"today": today, "last_7_days": last_7_days}
+
     def get_odyssey_farming_candidates(self, limit: int = 20) -> list[dict]:
         """
         Odyssey on-foot farming candidates: systems whose most recent

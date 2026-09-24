@@ -35,6 +35,7 @@ from edc.core.edsm_faction_lookup import (
 from edc.core.inara_faction_csv import parse_inara_faction_csv
 from edc.ui import formatting as fmt
 from edc.ui.panels.combat_bgs_status_panel import _conflicts_text, _faction_states_text
+from edc.ui.panels.faction_expansion_dialog import FactionExpansionDialog
 from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, TABLE_STYLE as _TABLE_STYLE
 
 log = logging.getLogger(__name__)
@@ -648,10 +649,13 @@ class PlayerFactionPanel(QWidget):
 
     tick_refresh_started = pyqtSignal()
 
-    def __init__(self, repo, refresh_tracker=None, parent=None):
+    def __init__(self, repo, refresh_tracker=None, fdev_powerplay=None, faction_expansion_pin_store=None, parent=None):
         super().__init__(parent)
         self._repo = repo
         self._refresh_tracker = refresh_tracker
+        self._fdev_powerplay = fdev_powerplay
+        self._faction_expansion_pin_store = faction_expansion_pin_store
+        self._faction_expansion_dialog = None
         self._faction_name: Optional[str] = None
         self._last_state = None
         self._lookup_thread: Optional[QThread] = None
@@ -801,6 +805,18 @@ class PlayerFactionPanel(QWidget):
         self._cancel_refresh_btn.clicked.connect(self._on_cancel_refresh_clicked)
         self._cancel_refresh_btn.setVisible(False)
         refresh_row.addWidget(self._cancel_refresh_btn)
+        expansion_btn = QPushButton("Faction Expansion Tracker…")
+        expansion_btn.setStyleSheet(
+            "QPushButton { background:#0d2a1a; color:#7CFCA0; border:1px solid #2a5a3a;"
+            " border-radius:3px; padding:3px 12px; font-weight:bold; }"
+            "QPushButton:hover { background:#1a4a2a; }"
+        )
+        expansion_btn.setToolTip(
+            "Track one system's push toward the 75% BGS expansion threshold, alongside its "
+            "PowerPlay standing -- influence trend, mission completions, and tick countdowns."
+        )
+        expansion_btn.clicked.connect(self._open_faction_expansion_dialog)
+        refresh_row.addWidget(expansion_btn)
         root.addLayout(refresh_row)
 
         self._data_freshness_label = QLabel("")
@@ -1912,6 +1928,13 @@ class PlayerFactionPanel(QWidget):
             )
             return
         self._start_refresh_all()
+
+    def _open_faction_expansion_dialog(self) -> None:
+        if self._faction_expansion_dialog is None:
+            self._faction_expansion_dialog = FactionExpansionDialog(self)
+        self._faction_expansion_dialog.show()
+        self._faction_expansion_dialog.raise_()
+        self._faction_expansion_dialog.activateWindow()
 
     def _start_refresh_all(self, ignore_fresh_today: bool = False) -> bool:
         """Returns True iff a background refresh thread was actually

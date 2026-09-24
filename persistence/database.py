@@ -267,6 +267,20 @@ class Database:
             # Surface Mining (Update 4.4, 2026-09-02): $PlanetaryMiningLocation_Name;
             # signal count, tracked alongside bio/geo/human in body_signals.
             "ALTER TABLE body_signals ADD COLUMN surface_mining_signals INTEGER",
+            # One row per completed mission credited to a faction -- the
+            # live active_missions dict discards a mission's faction/system
+            # the moment it completes (see mission_events.py), so this is
+            # the only durable record of "how many missions did we turn in
+            # for faction X in system Y" the Faction Expansion tracker
+            # needs (today's count, trailing-7-day count).
+            """CREATE TABLE IF NOT EXISTS faction_mission_completions (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                system_address INTEGER NOT NULL,
+                faction_name   TEXT    NOT NULL,
+                completed_at   TEXT    NOT NULL
+            )""",
+            """CREATE INDEX IF NOT EXISTS idx_faction_mission_completions_lookup
+               ON faction_mission_completions (system_address, faction_name, completed_at)""",
         ]
         cache_migrations = [
             "ALTER TABLE net.spansh_bodies ADD COLUMN surface_gravity REAL",

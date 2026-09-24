@@ -73,6 +73,7 @@ from edc.core.odyssey_engineering import OdysseyEngineeringTable
 from edc.core.odyssey_wishlist import OdysseyWishlist
 from edc.core.market_destination import MarketDestinationStore
 from edc.core.raven_colonial_pin import RavenColonialPinStore
+from edc.core.faction_expansion_pin import FactionExpansionPinStore
 from edc.core.megaship_tracker import MegashipTracker
 from edc.core import service_health
 from edc.core.mission_events import MISSION_EVENT_NAMES
@@ -1181,6 +1182,27 @@ class MainWindow(QMainWindow):
             log.exception("Failed to save colonisation depot data")
         return True
 
+    def _record_faction_mission_completion(self, evt: dict) -> None:
+        """active_missions has already discarded this mission's record by
+        the time we get here (event_engine.py's apply_mission_event pops
+        it on MissionCompleted) -- the journal event itself carries the
+        issuing Faction directly, same field MissionAccepted uses, so no
+        need to read it back from state. Missions are turned in at the
+        destination, so the current system IS the completion system."""
+        faction_name = evt.get("Faction")
+        system_address = getattr(self.state, "system_address", None)
+        if not (isinstance(faction_name, str) and faction_name and isinstance(system_address, int)):
+            return
+        from datetime import datetime, timezone
+        try:
+            self.repo.record_faction_mission_completion(
+                system_address=system_address,
+                faction_name=faction_name,
+                completed_at=evt.get("timestamp") or datetime.now(timezone.utc).isoformat(),
+            )
+        except Exception:
+            log.exception("Failed to record faction mission completion")
+
     def _on_market_destination_selected(self, system_name: str, station_name: str, commodity: str, mode: str):
         """
         Market tab — clicking a Station/System cell in the results table
@@ -1713,6 +1735,7 @@ class MainWindow(QMainWindow):
         self.odyssey_wishlist_store = OdysseyWishlist(data_dir / "odyssey_engineering_wishlist.json")
         self.market_destination_store = MarketDestinationStore(data_dir / "market_destination.json")
         self.raven_colonial_pin_store = RavenColonialPinStore(data_dir / "raven_colonial_pin.json")
+        self.faction_expansion_pin_store = FactionExpansionPinStore(data_dir / "faction_expansion_pin.json")
         self.megaship_tracker = MegashipTracker(data_dir / "megaships_seen.json")
         # Visited megaships filled in by _StartupHistoryScanWorker (see its
         # kickoff below) -- confirmed live ~1.9s against a 899-file journal,
@@ -2074,7 +2097,10 @@ class MainWindow(QMainWindow):
         self.market_panel.destination_selected.connect(self._on_market_destination_selected)
 
         # Player Faction tab
-        self.player_faction_panel = PlayerFactionPanel(self.repo, self.faction_refresh_tracker)
+        self.player_faction_panel = PlayerFactionPanel(
+            self.repo, self.faction_refresh_tracker,
+            fdev_powerplay=self.fdev_powerplay, faction_expansion_pin_store=self.faction_expansion_pin_store,
+        )
         self.player_faction_panel.tick_refresh_started.connect(self.overview_panel.show_tick_flash)
 
         # Squadron tab
@@ -3219,6 +3245,9 @@ class MainWindow(QMainWindow):
             # completing 2 more missions after the first didn't update the
             # displayed count until the next tick.
             self._refresh_player_faction()
+
+        if name == "MissionCompleted":
+            self._record_faction_mission_completion(evt)
 
         if name == "Market":
             market_data = self._load_current_market()
