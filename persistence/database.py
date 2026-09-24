@@ -288,6 +288,13 @@ class Database:
             # ALTER since the table above may already exist without it on
             # an install that ran migrations once between the two commits.
             "ALTER TABLE faction_mission_completions ADD COLUMN influence_tier TEXT",
+            # Primary = the effect on the mission's own issuing faction
+            # (evt['Faction']); secondary = every other faction FactionEffects
+            # names (e.g. a destination/target faction, sometimes in a
+            # different system entirely). Defaults to 1 so every pre-existing
+            # row (all issuer-only, from before this column existed) stays
+            # correctly classified as primary.
+            "ALTER TABLE faction_mission_completions ADD COLUMN is_primary INTEGER NOT NULL DEFAULT 1",
         ]
         cache_migrations = [
             "ALTER TABLE net.spansh_bodies ADD COLUMN surface_gravity REAL",

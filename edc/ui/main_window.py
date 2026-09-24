@@ -1206,43 +1206,66 @@ class MainWindow(QMainWindow):
             log.exception("Failed to save colonisation depot data")
         return True
 
-    def _record_faction_mission_completion(self, evt: dict, influence_tier: Optional[str] = None) -> None:
-        """active_missions has already discarded this mission's record by
-        the time we get here (event_engine.py's apply_mission_event pops
-        it on MissionCompleted) -- the journal event itself carries the
-        issuing Faction directly, same field MissionAccepted uses, so no
-        need to read it back from state. Missions are turned in at the
-        destination, so the current system IS the completion system.
-
-        influence_tier is Frontier's own qualitative "+" to "+++++"
-        indicator (set at MissionAccepted, no exact point value ever
-        exposed by the game) -- must be captured by the caller BEFORE
-        engine.process() pops the active_missions record, see _on_event."""
-        faction_name = evt.get("Faction")
-        system_address = getattr(self.state, "system_address", None)
-        if not (isinstance(faction_name, str) and faction_name and isinstance(system_address, int)):
+    def _record_faction_mission_completion(self, evt: dict) -> None:
+        """FactionEffects carries every faction this mission actually moved,
+        each with its own SystemAddress (the issuing/primary faction's bump
+        usually lands in the current system, but a secondary/target
+        faction's bump can land in a different system entirely -- e.g. its
+        destination) and an Influence string whose length is Frontier's own
+        qualitative "+" to "+++++" tier (no exact point value is ever
+        exposed). Same split BGS-Tally uses: the effect whose Faction
+        matches the mission's own evt['Faction'] (the issuer) is primary,
+        everything else is secondary. Reading straight from this event
+        instead of pre-capturing from active_missions at MissionAccepted
+        removes the old pop-before-read race entirely."""
+        issuing_faction = evt.get("Faction")
+        effects = evt.get("FactionEffects")
+        if not isinstance(effects, list):
             return
         from datetime import datetime, timezone
-        try:
-            self.repo.record_faction_mission_completion(
-                system_address=system_address,
-                faction_name=faction_name,
-                completed_at=evt.get("timestamp") or datetime.now(timezone.utc).isoformat(),
-                influence_tier=influence_tier if isinstance(influence_tier, str) else None,
-            )
-        except Exception:
-            log.exception("Failed to record faction mission completion")
-            return
+        completed_at = evt.get("timestamp") or datetime.now(timezone.utc).isoformat()
+
+        notified_systems: set = set()
+        for effect in effects:
+            if not isinstance(effect, dict):
+                continue
+            faction_name = effect.get("Faction")
+            if not (isinstance(faction_name, str) and faction_name):
+                continue
+            influence = effect.get("Influence")
+            if not isinstance(influence, list):
+                continue
+            is_primary = faction_name == issuing_faction
+            for inf in influence:
+                if not isinstance(inf, dict):
+                    continue
+                system_address = inf.get("SystemAddress")
+                if not isinstance(system_address, int):
+                    continue
+                tier = inf.get("Influence")
+                try:
+                    self.repo.record_faction_mission_completion(
+                        system_address=system_address,
+                        faction_name=faction_name,
+                        completed_at=completed_at,
+                        influence_tier=tier if isinstance(tier, str) else None,
+                        is_primary=is_primary,
+                    )
+                except Exception:
+                    log.exception("Failed to record faction mission completion")
+                    continue
+                notified_systems.add(system_address)
 
         # Same zero-lag push as notify_faction_snapshot_saved -- without
         # this, the mission counter only repainted on the tracker's own
         # next refresh cycle (up to 2 minutes) even though the DB write
         # itself already happened instantly. Confirmed live 2026-09-24:
         # reported as "mission completion tracker doesn't update".
-        try:
-            self.player_faction_panel.notify_faction_mission_completed(system_address)
-        except Exception:
-            log.exception("Failed to notify Faction Expansion tracker of a mission completion")
+        for system_address in notified_systems:
+            try:
+                self.player_faction_panel.notify_faction_mission_completed(system_address)
+            except Exception:
+                log.exception("Failed to notify Faction Expansion tracker of a mission completion")
 
     def _on_market_destination_selected(self, system_name: str, station_name: str, commodity: str, mode: str):
         """
@@ -3261,17 +3284,6 @@ class MainWindow(QMainWindow):
         self._append(f"[EVENT] {name}")
 
         old_system_address = getattr(self.state, "system_address", None)
-        # Frontier's own qualitative influence tier ("+" to "+++++", set at
-        # MissionAccepted, no exact point value ever exposed) lives on the
-        # active_missions record -- engine.process() below pops that record
-        # the instant MissionCompleted is processed, so it must be read
-        # here, before that happens, or it's gone for good.
-        mission_influence_tier = None
-        if name == "MissionCompleted":
-            mission_id = evt.get("MissionID")
-            pre_rec = (getattr(self.state, "active_missions", None) or {}).get(mission_id)
-            if isinstance(pre_rec, dict):
-                mission_influence_tier = pre_rec.get("influence")
 
         self.eddn_publisher.observe(evt)
         state, msgs = self.engine.process(evt)
@@ -3326,7 +3338,7 @@ class MainWindow(QMainWindow):
             self._refresh_player_faction()
 
         if name == "MissionCompleted":
-            self._record_faction_mission_completion(evt, mission_influence_tier)
+            self._record_faction_mission_completion(evt)
 
         if name == "Market":
             market_data = self._load_current_market()

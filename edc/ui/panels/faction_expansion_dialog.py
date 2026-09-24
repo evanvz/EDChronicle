@@ -562,11 +562,17 @@ class FactionExpansionDialog(QDialog):
 
         # Missions
         counts = self._panel._repo.get_faction_mission_completion_counts(self._system_address, faction_name)
+        today, week = counts["today"], counts["last_7_days"]
         self._missions_label.setText(
-            f"Today: {counts['today']} (weight {counts['weighted_today']})   •   "
-            f"Last 7 days: {counts['last_7_days']} (weight {counts['weighted_last_7_days']})\n"
-            "Weight sums Frontier's own \"+\" to \"+++++\" mission-impact rating -- a rough relative "
-            "signal, not a real point total (the game never exposes exact influence points)."
+            f"Today: {today['count']} (weight {today['weighted']}) — "
+            f"{today['primary_count']} primary (wt {today['primary_weighted']}), "
+            f"{today['secondary_count']} secondary (wt {today['secondary_weighted']})   •   "
+            f"Last 7 days: {week['count']} (weight {week['weighted']}) — "
+            f"{week['primary_count']} primary (wt {week['primary_weighted']}), "
+            f"{week['secondary_count']} secondary (wt {week['secondary_weighted']})\n"
+            "Primary = missions issued by this faction; secondary = this faction was the mission's "
+            "target/destination instead. Weight sums Frontier's own \"+\" to \"+++++\" mission-impact "
+            "rating -- a rough relative signal, not a real point total."
         )
 
         # Ticks
