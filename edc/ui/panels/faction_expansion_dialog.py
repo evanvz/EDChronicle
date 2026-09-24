@@ -485,6 +485,17 @@ class FactionExpansionDialog(QDialog):
         if self._tracked_system_name and system_address == self._system_address:
             self._render(self._tracked_system_name)
 
+    def on_mission_completed(self, system_address: int) -> None:
+        """Called by PlayerFactionPanel.notify_faction_mission_completed() the
+        moment a MissionCompleted is recorded for system_address -- same
+        zero-lag re-render as on_live_snapshot_saved, for the mission-count
+        display specifically (it was being recorded instantly but the UI
+        only repainted on the tracker's own next refresh cycle -- confirmed
+        live 2026-09-24, reported as "mission completion tracker doesn't
+        update")."""
+        if self._tracked_system_name and system_address == self._system_address:
+            self._render(self._tracked_system_name)
+
     # ── Render ───────────────────────────────────────────────────────────
 
     def _render(self, system_name: str) -> None:

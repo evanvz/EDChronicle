@@ -56,3 +56,41 @@ def test_ignores_when_nothing_is_tracked_yet():
     fs, rendered = _fake_expansion_dialog(system_address=None, tracked_system_name=None)
     FactionExpansionDialog.on_live_snapshot_saved(fs, 12345)
     assert rendered == []
+
+
+# --- PlayerFactionPanel.notify_faction_mission_completed() / FactionExpansionDialog.on_mission_completed() ---
+
+
+def _fake_mission_dialog():
+    calls = []
+    return SimpleNamespace(on_mission_completed=lambda addr: calls.append(addr)), calls
+
+
+def test_notify_mission_completed_notifies_the_open_dialog():
+    dlg, calls = _fake_mission_dialog()
+    fake_self = SimpleNamespace(_faction_expansion_dialog=dlg)
+    PlayerFactionPanel.notify_faction_mission_completed(fake_self, 12345)
+    assert calls == [12345]
+
+
+def test_notify_mission_completed_noop_when_dialog_never_opened():
+    fake_self = SimpleNamespace(_faction_expansion_dialog=None)
+    PlayerFactionPanel.notify_faction_mission_completed(fake_self, 12345)  # must not raise
+
+
+def test_on_mission_completed_repaints_when_the_system_matches_the_tracked_one():
+    fs, rendered = _fake_expansion_dialog(system_address=12345, tracked_system_name="Ekono")
+    FactionExpansionDialog.on_mission_completed(fs, 12345)
+    assert rendered == ["Ekono"]
+
+
+def test_on_mission_completed_ignores_a_different_systems_completion():
+    fs, rendered = _fake_expansion_dialog(system_address=12345, tracked_system_name="Ekono")
+    FactionExpansionDialog.on_mission_completed(fs, 99999)
+    assert rendered == []
+
+
+def test_on_mission_completed_ignores_when_nothing_is_tracked_yet():
+    fs, rendered = _fake_expansion_dialog(system_address=None, tracked_system_name=None)
+    FactionExpansionDialog.on_mission_completed(fs, 12345)
+    assert rendered == []

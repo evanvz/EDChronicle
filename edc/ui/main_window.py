@@ -1232,6 +1232,17 @@ class MainWindow(QMainWindow):
             )
         except Exception:
             log.exception("Failed to record faction mission completion")
+            return
+
+        # Same zero-lag push as notify_faction_snapshot_saved -- without
+        # this, the mission counter only repainted on the tracker's own
+        # next refresh cycle (up to 2 minutes) even though the DB write
+        # itself already happened instantly. Confirmed live 2026-09-24:
+        # reported as "mission completion tracker doesn't update".
+        try:
+            self.player_faction_panel.notify_faction_mission_completed(system_address)
+        except Exception:
+            log.exception("Failed to notify Faction Expansion tracker of a mission completion")
 
     def _on_market_destination_selected(self, system_name: str, station_name: str, commodity: str, mode: str):
         """

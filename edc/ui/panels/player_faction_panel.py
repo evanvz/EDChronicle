@@ -1946,6 +1946,15 @@ class PlayerFactionPanel(QWidget):
         if dlg is not None:
             dlg.on_live_snapshot_saved(system_address)
 
+    def notify_faction_mission_completed(self, system_address: int) -> None:
+        """A MissionCompleted was just recorded for system_address -- same
+        zero-lag push as notify_faction_snapshot_saved, for the tracker's
+        mission-count display specifically. No-op if the dialog was never
+        opened this session."""
+        dlg = self._faction_expansion_dialog
+        if dlg is not None:
+            dlg.on_mission_completed(system_address)
+
     def _start_refresh_all(self, ignore_fresh_today: bool = False) -> bool:
         """Returns True iff a background refresh thread was actually
         started. ignore_fresh_today=True skips the "already refreshed
