@@ -62,6 +62,7 @@ from edc.core.spansh_client import SpanshClient as _SpanshClient
 from edc.core.edsm_powerplay import EdsmPowerPlayCache
 from edc.core.fdev_powerplay import FdevPowerPlayCache
 from edc.core.guardian_ruins import GuardianRuinsCache
+from edc.core.edastro_poi import EdAstroPoiCache
 from edc.core.server_status import fetch_server_status
 from edc.core.galnet_news import fetch_latest_headlines
 from edc.core.eddn_publisher import EddnPublisher, _commodity_symbol
@@ -184,6 +185,18 @@ class _GuardianRuinsRefreshWorker(QObject):
     finished = pyqtSignal(bool)
 
     def __init__(self, cache: GuardianRuinsCache):
+        super().__init__()
+        self._cache = cache
+
+    def run(self):
+        ok = self._cache.refresh()
+        self.finished.emit(ok)
+
+
+class _EdAstroPoiRefreshWorker(QObject):
+    finished = pyqtSignal(bool)
+
+    def __init__(self, cache: EdAstroPoiCache):
         super().__init__()
         self._cache = cache
 
@@ -1723,6 +1736,9 @@ class MainWindow(QMainWindow):
         self.guardian_ruins = GuardianRuinsCache(settings_base)
         self._guardian_ruins_thread: QThread | None = None
         self._guardian_ruins_worker: _GuardianRuinsRefreshWorker | None = None
+        self.edastro_poi = EdAstroPoiCache(settings_base)
+        self._edastro_poi_thread: QThread | None = None
+        self._edastro_poi_worker: _EdAstroPoiRefreshWorker | None = None
         self._market_prune_thread: QThread | None = None
         self._market_prune_worker: _MarketPruneWorker | None = None
         self._search_index_thread: QThread | None = None
@@ -2410,6 +2426,7 @@ class MainWindow(QMainWindow):
         self._maybe_start_edsm_powerplay_refresh()
         self._maybe_start_fdev_powerplay_refresh()
         self._maybe_start_guardian_ruins_refresh()
+        self._maybe_start_edastro_poi_refresh()
         self._maybe_start_market_prune()
         self._maybe_start_search_index_build()
         self._start_eddn_listener()
@@ -2699,6 +2716,28 @@ class MainWindow(QMainWindow):
             log.info("Guardian ruins cache refresh complete")
         else:
             log.warning("Guardian ruins cache refresh failed — will retry later")
+
+    def _maybe_start_edastro_poi_refresh(self):
+        if not self.edastro_poi.is_stale():
+            return
+        if self._edastro_poi_thread and self._edastro_poi_thread.isRunning():
+            return
+
+        log.info("EDAstro POI cache is stale — refreshing in background")
+        self._edastro_poi_worker = _EdAstroPoiRefreshWorker(self.edastro_poi)
+        self._edastro_poi_thread = QThread()
+        self._edastro_poi_worker.moveToThread(self._edastro_poi_thread)
+        self._edastro_poi_thread.started.connect(self._edastro_poi_worker.run)
+        self._edastro_poi_worker.finished.connect(self._on_edastro_poi_refreshed)
+        self._edastro_poi_worker.finished.connect(self._edastro_poi_thread.quit)
+        self._edastro_poi_thread.start()
+
+    def _on_edastro_poi_refreshed(self, ok: bool):
+        if ok:
+            log.info("EDAstro POI cache refresh complete")
+            self._refresh_exploration()
+        else:
+            log.warning("EDAstro POI cache refresh failed — will retry later")
 
     def _maybe_start_market_prune(self):
         """Once/day is plenty — the prune thresholds are 21 days for
@@ -5631,7 +5670,7 @@ class MainWindow(QMainWindow):
         # Temporary: remove once the freeze reported 2026-08-27 is diagnosed.
         _t0 = time.perf_counter()
         self.exploration_panel.refresh(
-            self.state, self.cfg, self.planet_values, spansh_rings=spansh_rings
+            self.state, self.cfg, self.planet_values, spansh_rings=spansh_rings, edastro_poi=self.edastro_poi
         )
         _elapsed_ms = (time.perf_counter() - _t0) * 1000
         if _elapsed_ms > 100:

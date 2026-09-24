@@ -3,6 +3,7 @@
 # See the LICENSE file in the project root for full terms.
 
 import logging
+from html import escape
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -117,6 +118,24 @@ class ExplorationPanel(QWidget):
         sig_l.addWidget(self.system_signals_box)
         self._content_layout.addWidget(sig_frame)
 
+        # ── Nearest notable POI (EDAstro's community-curated catalog) ──────
+        poi_frame = QFrame()
+        poi_frame.setStyleSheet(CARD_STYLE)
+        poi_l = QVBoxLayout(poi_frame)
+        poi_l.setContentsMargins(8, 6, 8, 6)
+        poi_l.setSpacing(2)
+        poi_hdr = QLabel("NEAREST NOTABLE POI (EDASTRO)")
+        poi_hdr.setStyleSheet(HDR_STYLE)
+        self.nearest_poi_box = QLabel("")
+        self.nearest_poi_box.setWordWrap(True)
+        self.nearest_poi_box.setTextFormat(Qt.TextFormat.RichText)
+        self.nearest_poi_box.setOpenExternalLinks(True)
+        self.nearest_poi_box.setStyleSheet("background: transparent; border: none;")
+        poi_l.addWidget(poi_hdr)
+        poi_l.addWidget(self.nearest_poi_box)
+        self._poi_frame = poi_frame
+        self._content_layout.addWidget(poi_frame)
+
         # ── Rings box (which bodies have rings, scan status, hotspots) ─────
         rings_frame = QFrame()
         rings_frame.setStyleSheet(
@@ -208,7 +227,7 @@ class ExplorationPanel(QWidget):
         )
 
     # ── Main refresh ──────────────────────────────────────────────────────────
-    def refresh(self, state, cfg, planet_values, spansh_rings=None):
+    def refresh(self, state, cfg, planet_values, spansh_rings=None, edastro_poi=None):
         try:
             min_100k = int(getattr(cfg, "min_planet_value_100k", 5) or 5)
         except Exception:
@@ -219,9 +238,42 @@ class ExplorationPanel(QWidget):
         self.min_value_changed.emit(f"{min_100k / 10:.1f}M")
 
         self._refresh_signals(state)
+        self._refresh_nearest_poi(state, edastro_poi)
         self._refresh_rings(state, spansh_rings)
         self._refresh_bodies(state, min_value, planet_values)
         self._refresh_materials(state)
+
+    # ── Nearest notable POI box ──────────────────────────────────────────────
+    def _refresh_nearest_poi(self, state, edastro_poi=None):
+        x = getattr(state, "system_x", None)
+        y = getattr(state, "system_y", None)
+        z = getattr(state, "system_z", None)
+        if edastro_poi is None or not edastro_poi.has_data() or not all(
+            isinstance(v, (int, float)) for v in (x, y, z)
+        ):
+            self._poi_frame.setVisible(False)
+            return
+
+        poi = edastro_poi.get_nearest(x, y, z)
+        if not poi:
+            self._poi_frame.setVisible(False)
+            return
+
+        self._poi_frame.setVisible(True)
+        name = escape(poi.get("name") or "Unknown")
+        poi_type = escape(poi.get("type") or "")
+        rating = poi.get("rating")
+        rating_txt = f", rating {rating:.1f}" if isinstance(rating, (int, float)) else ""
+        dist = poi.get("distance_ly")
+        dist_txt = f"{dist:.1f} ly" if isinstance(dist, (int, float)) else "?"
+        url = poi.get("galMapUrl") or poi.get("poiUrl") or ""
+        summary = escape(poi.get("summary") or "")
+
+        name_html = f'<a href="{escape(url)}" style="color:#FFB347;">{name}</a>' if url else name
+        html = f"{name_html} ({poi_type}{rating_txt}) — {dist_txt}"
+        if summary:
+            html += f"<br><span style='color:#9aa4b0;'>{summary}</span>"
+        self.nearest_poi_box.setText(html)
 
     # ── Rings box ─────────────────────────────────────────────────────────────
     def _refresh_rings(self, state, spansh_rings=None):
