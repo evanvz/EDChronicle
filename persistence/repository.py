@@ -483,7 +483,7 @@ class Repository:
                 recovering_states   = excluded.recovering_states,
                 is_controlling      = excluded.is_controlling,
                 my_reputation       = excluded.my_reputation,
-                is_squadron_faction = excluded.is_squadron_faction,
+                is_squadron_faction = MAX(faction_snapshots.is_squadron_faction, excluded.is_squadron_faction),
                 data_timestamp      = excluded.data_timestamp,
                 source              = excluded.source
             WHERE faction_snapshots.data_timestamp IS NULL

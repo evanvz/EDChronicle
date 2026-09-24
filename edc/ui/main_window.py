@@ -5450,6 +5450,27 @@ class MainWindow(QMainWindow):
         # trigger a refresh.
         self._codex_sightings_cache_system = None
 
+        # It may also have overwritten the current system's faction_snapshots
+        # row with a fresher (later data_timestamp) reading from another
+        # commander's journal -- save_faction_snapshot()'s own freshness
+        # guard already only accepts it if it's genuinely later in game
+        # time, so there's no separate staleness check needed here. Without
+        # this push it sat correct-but-unseen in the DB until the ~20-min
+        # timer, tab switch, or next arrival -- confirmed live 2026-09-24
+        # (Ekono: EDDN landed a fresher influence 24 minutes after arrival,
+        # card never repainted). Same zero-network-cost re-read as the
+        # journal-arrival path.
+        system_address = getattr(self.state, "system_address", None)
+        if isinstance(system_address, int):
+            try:
+                self.player_faction_panel.refresh_single_system(system_address)
+            except Exception:
+                log.exception("Failed to refresh current system after EDDN flush")
+            try:
+                self.player_faction_panel.notify_faction_snapshot_saved(system_address)
+            except Exception:
+                log.exception("Failed to notify Faction Expansion tracker after EDDN flush")
+
     def _on_wal_checkpoint_tick(self) -> None:
         """See _WalCheckpointWorker for why this is split off the 45s
         market-flush cadence onto its own, much longer timer.

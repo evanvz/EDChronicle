@@ -26,8 +26,11 @@ def repo(tmp_path):
     return Repository(db)
 
 
-def _faction(name="Test Faction", influence=0.5):
-    return {"Name": name, "Influence": influence, "Government": "Democracy", "Allegiance": "Federation"}
+def _faction(name="Test Faction", influence=0.5, squadron=False):
+    f = {"Name": name, "Influence": influence, "Government": "Democracy", "Allegiance": "Federation"}
+    if squadron:
+        f["SquadronFaction"] = True
+    return f
 
 
 def _read_row(repo, system_address, faction_name, snapshot_date):
@@ -118,6 +121,28 @@ def test_source_and_data_timestamp_are_stored_on_first_write(repo):
     assert row["source"] == "csv"
     assert row["data_timestamp"] == f"{_RECENT_DATE}T09:18:35Z"
     assert row["is_controlling"] == 1
+
+
+# --- is_squadron_faction never gets downgraded by a later write that just doesn't know about it ---
+
+def test_later_write_without_squadron_flag_does_not_clear_it(repo):
+    """Confirmed live 2026-09-24: an EDDN-sourced sighting of the player's
+    own squadron faction (another commander's journal, no SquadronFaction
+    key at all) landed later the same day than our own journal write and
+    silently reset is_squadron_faction to 0 -- next app start,
+    get_player_faction_overview()'s "most recent is_squadron_faction=1
+    row" lookup could lose track of the faction entirely."""
+    repo.save_faction_snapshot(1, _faction(influence=0.3, squadron=True), _RECENT_DATE, True, f"{_RECENT_DATE}T09:00:00Z", "journal")
+    repo.save_faction_snapshot(1, _faction(influence=0.7, squadron=False), _RECENT_DATE, True, f"{_RECENT_DATE}T12:00:00Z", "eddn")
+    row = _read_row(repo, 1, "Test Faction", _RECENT_DATE)
+    assert row["influence"] == 0.7  # fresher data still wins
+    assert row["is_squadron_faction"] == 1  # flag stays set
+
+
+def test_squadron_flag_still_gets_set_on_first_write(repo):
+    repo.save_faction_snapshot(1, _faction(squadron=True), _RECENT_DATE, True, f"{_RECENT_DATE}T09:00:00Z", "journal")
+    row = _read_row(repo, 1, "Test Faction", _RECENT_DATE)
+    assert row["is_squadron_faction"] == 1
 
 
 # --- get_player_faction_overview()'s same-day tiebreak ---
