@@ -33,12 +33,12 @@ def test_missions_are_grouped_by_system_and_faction(tmp_path):
     _seed_system(repo, 12345, "Ekono")
     repo.record_faction_mission_completion(
         12345, "Elite United Worlds", "2026-09-25T10:00:00Z",
-        influence_tier="++", is_primary=True, mission_type="Courier",
+        influence_tier="++", is_primary=True, mission_type="Courier", reward=48200,
     )
     report = repo.get_session_activity_report("2026-09-25T00:00:00Z")
     assert report["Ekono"]["Elite United Worlds"]["missions"] == {
         "count": 1, "weighted": 2, "primary_count": 1, "secondary_count": 0,
-        "by_type": {"Courier": 1},
+        "by_type": {"Courier": 1}, "reward_total": 48200, "reward_by_type": {"Courier": 48200},
     }
 
 
@@ -60,6 +60,41 @@ def test_missions_are_broken_down_by_type(tmp_path):
     report = repo.get_session_activity_report("2026-09-25T00:00:00Z")
     by_type = report["Ekono"]["Elite United Worlds"]["missions"]["by_type"]
     assert by_type == {"Courier": 2, "Massacre Conflict CivilWar": 1, "Unknown": 1}
+
+
+def test_reward_is_summed_by_type_from_primary_rows_only(tmp_path):
+    repo = _repo(tmp_path)
+    _seed_system(repo, 12345, "Ekono")
+    repo.record_faction_mission_completion(
+        12345, "Elite United Worlds", "2026-09-25T10:00:00Z",
+        mission_type="Courier", reward=10000, is_primary=True,
+    )
+    repo.record_faction_mission_completion(
+        12345, "Elite United Worlds", "2026-09-25T11:00:00Z",
+        mission_type="Courier", reward=20000, is_primary=True,
+    )
+    # A secondary-effect row for the same faction/system, with the same
+    # reward value as some primary mission elsewhere -- must NOT be summed.
+    repo.record_faction_mission_completion(
+        12345, "Elite United Worlds", "2026-09-25T12:00:00Z",
+        mission_type="Courier", reward=99999, is_primary=False,
+    )
+    report = repo.get_session_activity_report("2026-09-25T00:00:00Z")
+    m = report["Ekono"]["Elite United Worlds"]["missions"]
+    assert m["reward_total"] == 30000
+    assert m["reward_by_type"] == {"Courier": 30000}
+
+
+def test_missions_with_no_recorded_reward_contribute_zero(tmp_path):
+    repo = _repo(tmp_path)
+    _seed_system(repo, 12345, "Ekono")
+    repo.record_faction_mission_completion(
+        12345, "Elite United Worlds", "2026-09-25T10:00:00Z", mission_type="Courier",
+    )  # reward=None, older row shape or missing journal field
+    report = repo.get_session_activity_report("2026-09-25T00:00:00Z")
+    m = report["Ekono"]["Elite United Worlds"]["missions"]
+    assert m["reward_total"] == 0
+    assert m["reward_by_type"] == {"Courier": 0}
 
 
 def test_combat_bonds_are_summed_per_faction(tmp_path):

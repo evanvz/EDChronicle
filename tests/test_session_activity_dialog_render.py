@@ -89,6 +89,29 @@ def test_mission_type_breakdown_sorts_by_count_descending():
     assert text == "Courier x2, Massacre Conflict CivilWar x1"
 
 
+def test_mission_type_breakdown_includes_cr_reward_per_type():
+    entry = {
+        "missions": {
+            "count": 3, "weighted": 6, "primary_count": 3, "secondary_count": 0,
+            "by_type": {"Courier": 2, "Massacre Conflict CivilWar": 1},
+            "reward_by_type": {"Courier": 48200, "Massacre Conflict CivilWar": 312000},
+        },
+    }
+    text = SessionActivityDialog._format_mission_types(entry)
+    assert text == "Courier x2 (48,200 CR), Massacre Conflict CivilWar x1 (312,000 CR)"
+
+
+def test_mission_type_breakdown_omits_cr_when_reward_is_zero():
+    entry = {
+        "missions": {
+            "count": 1, "weighted": 0, "primary_count": 1, "secondary_count": 0,
+            "by_type": {"Courier": 1}, "reward_by_type": {"Courier": 0},
+        },
+    }
+    text = SessionActivityDialog._format_mission_types(entry)
+    assert text == "Courier x1"
+
+
 def test_mission_type_breakdown_empty_when_no_missions():
     entry = {"missions": {"count": 0, "weighted": 0, "primary_count": 0, "secondary_count": 0, "by_type": {}}}
     assert SessionActivityDialog._format_mission_types(entry) == ""

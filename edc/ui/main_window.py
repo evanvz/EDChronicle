@@ -1244,11 +1244,18 @@ class MainWindow(QMainWindow):
         matches the mission's own evt['Faction'] (the issuer) is primary,
         everything else is secondary. Reading straight from this event
         instead of pre-capturing from active_missions at MissionAccepted
-        removes the old pop-before-read race entirely."""
+        removes the old pop-before-read race entirely.
+
+        Not every mission moves a faction's influence at all -- a pure
+        cargo/passenger/data-hand-in mission can complete with FactionEffects
+        entirely empty (or present but with no Influence array), which
+        otherwise means it never gets recorded anywhere. Guaranteed here:
+        if no is_primary row got written from FactionEffects, one is still
+        written for the issuing faction at the player's current system,
+        with influence_tier=None -- "no BGS impact" is a fact worth keeping,
+        not the same as "never happened"."""
         issuing_faction = evt.get("Faction")
         effects = evt.get("FactionEffects")
-        if not isinstance(effects, list):
-            return
         from datetime import datetime, timezone
         completed_at = evt.get("timestamp") or datetime.now(timezone.utc).isoformat()
 
@@ -1266,37 +1273,62 @@ class MainWindow(QMainWindow):
             cleaned = cleaned.replace("_", " ").strip()
             mission_type = cleaned or None
 
+        reward = evt.get("Reward")
+        reward = reward if isinstance(reward, int) else None
+
         notified_systems: set = set()
-        for effect in effects:
-            if not isinstance(effect, dict):
-                continue
-            faction_name = effect.get("Faction")
-            if not (isinstance(faction_name, str) and faction_name):
-                continue
-            influence = effect.get("Influence")
-            if not isinstance(influence, list):
-                continue
-            is_primary = faction_name == issuing_faction
-            for inf in influence:
-                if not isinstance(inf, dict):
+        wrote_primary = False
+        if isinstance(effects, list):
+            for effect in effects:
+                if not isinstance(effect, dict):
                     continue
-                system_address = inf.get("SystemAddress")
-                if not isinstance(system_address, int):
+                faction_name = effect.get("Faction")
+                if not (isinstance(faction_name, str) and faction_name):
                     continue
-                tier = inf.get("Influence")
+                influence = effect.get("Influence")
+                if not isinstance(influence, list):
+                    continue
+                is_primary = faction_name == issuing_faction
+                for inf in influence:
+                    if not isinstance(inf, dict):
+                        continue
+                    system_address = inf.get("SystemAddress")
+                    if not isinstance(system_address, int):
+                        continue
+                    tier = inf.get("Influence")
+                    try:
+                        self.repo.record_faction_mission_completion(
+                            system_address=system_address,
+                            faction_name=faction_name,
+                            completed_at=completed_at,
+                            influence_tier=tier if isinstance(tier, str) else None,
+                            is_primary=is_primary,
+                            mission_type=mission_type,
+                            reward=reward,
+                        )
+                    except Exception:
+                        log.exception("Failed to record faction mission completion")
+                        continue
+                    notified_systems.add(system_address)
+                    if is_primary:
+                        wrote_primary = True
+
+        if not wrote_primary:
+            current_system_address = getattr(self.state, "system_address", None)
+            if isinstance(issuing_faction, str) and issuing_faction and isinstance(current_system_address, int):
                 try:
                     self.repo.record_faction_mission_completion(
-                        system_address=system_address,
-                        faction_name=faction_name,
+                        system_address=current_system_address,
+                        faction_name=issuing_faction,
                         completed_at=completed_at,
-                        influence_tier=tier if isinstance(tier, str) else None,
-                        is_primary=is_primary,
+                        influence_tier=None,
+                        is_primary=True,
                         mission_type=mission_type,
+                        reward=reward,
                     )
+                    notified_systems.add(current_system_address)
                 except Exception:
-                    log.exception("Failed to record faction mission completion")
-                    continue
-                notified_systems.add(system_address)
+                    log.exception("Failed to record faction mission completion (no-BGS-impact fallback)")
 
         # Same zero-lag push as notify_faction_snapshot_saved -- without
         # this, the mission counter only repainted on the tracker's own

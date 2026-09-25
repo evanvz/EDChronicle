@@ -300,6 +300,14 @@ class Database:
             # Activity Report's per-faction type breakdown. NULL for any
             # row recorded before this column existed.
             "ALTER TABLE faction_mission_completions ADD COLUMN mission_type TEXT",
+            # Credit reward -- not every mission is INF-driven (many are
+            # pure cargo/passenger payouts), so this is tracked alongside
+            # mission_type rather than assumed proportional to influence_tier.
+            # Stored on every row of a mission (mirrors mission_type) but
+            # only summed from the is_primary=1 row at report time, since
+            # the reward is paid once per mission, not once per faction it
+            # affected.
+            "ALTER TABLE faction_mission_completions ADD COLUMN reward INTEGER",
             # Live PowerPlay reading from the journal's own PowerplayState*
             # fields (Location/FSDJump only) -- previously only ever held in
             # memory, lost the moment the player left the system. Persisting

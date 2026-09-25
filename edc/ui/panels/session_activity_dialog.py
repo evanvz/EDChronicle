@@ -153,14 +153,25 @@ class SessionActivityDialog(QDialog):
 
     @staticmethod
     def _format_mission_types(entry: dict) -> str:
-        """Dim sub-line breaking mission count down by kind (e.g. "Courier
-        x2, Massacre Conflict CivilWar x1"), from the journal's own Name
-        field cleaned at write time -- see main_window.py's
-        _record_faction_mission_completion. Empty string when there are no
-        missions or none carry a recorded type (rows written before this
-        column existed)."""
-        by_type = entry["missions"].get("by_type") or {}
-        parts = [f"{t} x{c}" for t, c in sorted(by_type.items(), key=lambda kv: -kv[1])]
+        """Dim sub-line breaking mission count down by kind, with each
+        kind's total CR reward (e.g. "Courier x2 (48,200 CR), Massacre
+        Conflict CivilWar x1 (312,000 CR)") -- not every mission is
+        INF-driven, so the credit payout matters on its own, not just as a
+        proxy for influence_tier. Reward is only ever summed from a
+        mission's is_primary row (see get_session_activity_report), so a
+        secondary effect in another system doesn't double it. From the
+        journal's own Name field cleaned at write time -- see
+        main_window.py's _record_faction_mission_completion. Empty string
+        when there are no missions or none carry a recorded type (rows
+        written before this column existed)."""
+        m = entry["missions"]
+        by_type = m.get("by_type") or {}
+        reward_by_type = m.get("reward_by_type") or {}
+        parts = []
+        for t, c in sorted(by_type.items(), key=lambda kv: -kv[1]):
+            reward = reward_by_type.get(t, 0)
+            reward_txt = f" ({reward:,} CR)" if reward else ""
+            parts.append(f"{t} x{c}{reward_txt}")
         return ", ".join(parts)
 
     def _render_report(self, report: dict) -> None:

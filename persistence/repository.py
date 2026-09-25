@@ -2625,7 +2625,7 @@ class Repository:
     def record_faction_mission_completion(
         self, system_address: int, faction_name: str, completed_at: str,
         influence_tier: Optional[str] = None, is_primary: bool = True,
-        mission_type: Optional[str] = None,
+        mission_type: Optional[str] = None, reward: Optional[int] = None,
     ) -> None:
         """One row per faction a MissionCompleted's FactionEffects actually
         moved in system_address -- see main_window.py's
@@ -2646,12 +2646,17 @@ class Repository:
         mission_type is the cleaned journal Name (e.g. "Courier Boom" from
         "Mission_Courier_Boom_name") -- same for every row of one mission
         regardless of primary/secondary faction, since it describes the
-        mission itself, not which faction it affected."""
+        mission itself, not which faction it affected.
+
+        reward is the mission's CR payout (evt['Reward']) -- also the same
+        value on every row of one mission, but get_session_activity_report()
+        only sums it from the is_primary=1 row, so a multi-effect mission's
+        reward isn't double-counted."""
         self.db.execute(
             "INSERT INTO faction_mission_completions "
-            "(system_address, faction_name, completed_at, influence_tier, is_primary, mission_type) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (system_address, faction_name, completed_at, influence_tier, 1 if is_primary else 0, mission_type),
+            "(system_address, faction_name, completed_at, influence_tier, is_primary, mission_type, reward) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (system_address, faction_name, completed_at, influence_tier, 1 if is_primary else 0, mission_type, reward),
         )
 
     def get_faction_mission_completion_counts(self, system_address: int, faction_name: str) -> dict:
@@ -2778,7 +2783,10 @@ class Repository:
                 return None
             report.setdefault(system_name, {})
             return report[system_name].setdefault(faction_name, {
-                "missions": {"count": 0, "weighted": 0, "primary_count": 0, "secondary_count": 0, "by_type": {}},
+                "missions": {
+                    "count": 0, "weighted": 0, "primary_count": 0, "secondary_count": 0,
+                    "by_type": {}, "reward_total": 0, "reward_by_type": {},
+                },
                 "combat_bonds_total": 0,
                 "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 0},
                 "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 0},
@@ -2787,7 +2795,7 @@ class Repository:
         report: dict = {}
 
         mission_rows = self.db.execute(
-            "SELECT system_address, faction_name, influence_tier, is_primary, mission_type "
+            "SELECT system_address, faction_name, influence_tier, is_primary, mission_type, reward "
             "FROM faction_mission_completions WHERE completed_at >= ?",
             (since,),
         ).fetchall()
@@ -2799,12 +2807,19 @@ class Repository:
             m["count"] += 1
             if isinstance(r["influence_tier"], str):
                 m["weighted"] += len(r["influence_tier"])
-            if r["is_primary"]:
-                m["primary_count"] += 1
-            else:
-                m["secondary_count"] += 1
             mtype = r["mission_type"] if isinstance(r["mission_type"], str) and r["mission_type"] else "Unknown"
             m["by_type"][mtype] = m["by_type"].get(mtype, 0) + 1
+            if r["is_primary"]:
+                m["primary_count"] += 1
+                # Reward is paid once per mission, not once per faction it
+                # affected -- only the is_primary row counts it, so a
+                # mission with a secondary effect in another system isn't
+                # double-counted.
+                reward = r["reward"] if isinstance(r["reward"], int) else 0
+                m["reward_total"] += reward
+                m["reward_by_type"][mtype] = m["reward_by_type"].get(mtype, 0) + reward
+            else:
+                m["secondary_count"] += 1
 
         for r in self.get_faction_combat_bonds_since(since):
             entry = _bucket(r["system_address"], r["faction_name"])
