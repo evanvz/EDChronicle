@@ -619,10 +619,10 @@ class FactionExpansionDialog(QDialog):
         counts = self._panel._repo.get_faction_mission_completion_counts(self._system_address, faction_name)
         today, week = counts["today"], counts["last_7_days"]
         self._missions_label.setText(
-            f"Today: {today['count']} (wt {today['weighted']}) — "
-            f"{today['primary_count']} pri / {today['secondary_count']} sec   •   "
-            f"7 days: {week['count']} (wt {week['weighted']}) — "
-            f"{week['primary_count']} pri / {week['secondary_count']} sec"
+            f"Today: {today['count']} missions (impact {today['weighted']}) — "
+            f"{today['primary_count']} issued, {today['secondary_count']} secondary   •   "
+            f"Last 7 days: {week['count']} missions (impact {week['weighted']}) — "
+            f"{week['primary_count']} issued, {week['secondary_count']} secondary"
         )
 
         # Ticks

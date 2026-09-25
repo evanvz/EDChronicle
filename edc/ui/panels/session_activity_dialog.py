@@ -140,33 +140,37 @@ class SessionActivityDialog(QDialog):
 
     @staticmethod
     def _format_chips(entry: dict) -> str:
-        """One compact, color-coded rich-text line per faction -- BGS-Tally-
-        style stat chips (.INF/.CBs/.GroundCZs/.Sold) instead of a verbose
-        sentence. Only categories with actual activity are shown, same as
-        BGS-Tally's own report."""
+        """One compact, color-coded rich-text line per faction -- spelled-
+        out labels rather than BGS-Tally's own terse .INF/.CBs/.CZs
+        shorthand, since that reads as cryptic without already knowing its
+        convention (confirmed live 2026-09-25, same complaint applied here
+        that prompted spelling out the Faction Expansion tracker's own
+        mission line). Only categories with actual activity are shown."""
         chips = []
 
         m = entry["missions"]
         if m["count"]:
             chips.append(
-                f'<span style="color:{_CHIP_MISSIONS};">.INF</span> {m["weighted"]:+d} '
-                f'({m["count"]}m: {m["primary_count"]}p/{m["secondary_count"]}s)'
+                f'<span style="color:{_CHIP_MISSIONS};">INF</span> {m["weighted"]:+d} '
+                f'({m["count"]} missions: {m["primary_count"]} issued, {m["secondary_count"]} secondary)'
             )
 
         if entry["combat_bonds_total"]:
-            chips.append(f'<span style="color:{_CHIP_COMBAT};">.CBs</span> {entry["combat_bonds_total"]:,}')
+            chips.append(
+                f'<span style="color:{_CHIP_COMBAT};">Combat bonds</span> {entry["combat_bonds_total"]:,}'
+            )
 
         cz = entry["cz_kills"]
-        cz_parts = [f"{v}x{k.replace('_', '')}" for k, v in cz.items() if v]
+        cz_parts = [f"{v}x {k.replace('_', ' ')}" for k, v in cz.items() if v]
         if cz_parts:
-            chips.append(f'<span style="color:{_CHIP_COMBAT};">.CZs</span> {" ".join(cz_parts)}')
+            chips.append(f'<span style="color:{_CHIP_COMBAT};">CZ kills</span> {", ".join(cz_parts)}')
 
         trade = entry["trade_sold"]
         trade_parts = [f"{k}: {v:,}" for k, v in trade.items() if v]
         if trade_parts:
-            chips.append(f'<span style="color:{_CHIP_TRADE};">.Sold</span> {", ".join(trade_parts)}')
+            chips.append(f'<span style="color:{_CHIP_TRADE};">Sold</span> {", ".join(trade_parts)}')
 
-        return "  ".join(chips) if chips else '<span style="color:#555555;">no activity</span>'
+        return "  •  ".join(chips) if chips else '<span style="color:#555555;">no activity</span>'
 
     @staticmethod
     def _format_mission_types(entry: dict) -> str:
