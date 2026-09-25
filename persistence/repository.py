@@ -2706,6 +2706,27 @@ class Repository:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def record_faction_cz_kill(
+        self, system_address: int, faction_name: str, zone_type: str, size: str, earned_at: str,
+    ) -> None:
+        """One row per confirmed CZ kill credit -- see event_engine.py's
+        _credit_cz_kill for how ground/space and size are inferred, and
+        main_window.py's _record_faction_cz_kill for how it gets here."""
+        self.db.execute(
+            "INSERT INTO faction_cz_kills (system_address, faction_name, zone_type, size, earned_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (system_address, faction_name, zone_type, size, earned_at),
+        )
+
+    def get_faction_cz_kills_since(self, since: str) -> list[dict]:
+        """Every CZ kill earned_at >= since. Feeds get_session_activity_report()."""
+        rows = self.db.execute(
+            "SELECT system_address, faction_name, zone_type, size, earned_at "
+            "FROM faction_cz_kills WHERE earned_at >= ?",
+            (since,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def get_odyssey_farming_candidates(self, limit: int = 20) -> list[dict]:
         """
         Odyssey on-foot farming candidates: systems whose most recent

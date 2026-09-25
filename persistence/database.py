@@ -325,6 +325,16 @@ class Database:
             )""",
             """CREATE INDEX IF NOT EXISTS idx_faction_combat_bonds_lookup
                ON faction_combat_bonds (earned_at)""",
+            """CREATE TABLE IF NOT EXISTS faction_cz_kills (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                system_address INTEGER NOT NULL,
+                faction_name   TEXT    NOT NULL,
+                zone_type      TEXT    NOT NULL,
+                size           TEXT    NOT NULL,
+                earned_at      TEXT    NOT NULL
+            )""",
+            """CREATE INDEX IF NOT EXISTS idx_faction_cz_kills_lookup
+               ON faction_cz_kills (earned_at)""",
         ]
         cache_migrations = [
             "ALTER TABLE net.spansh_bodies ADD COLUMN surface_gravity REAL",
