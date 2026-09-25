@@ -295,6 +295,21 @@ class Database:
             # row (all issuer-only, from before this column existed) stays
             # correctly classified as primary.
             "ALTER TABLE faction_mission_completions ADD COLUMN is_primary INTEGER NOT NULL DEFAULT 1",
+            # Live PowerPlay reading from the journal's own PowerplayState*
+            # fields (Location/FSDJump only) -- previously only ever held in
+            # memory, lost the moment the player left the system. Persisting
+            # it lets the Faction Expansion tracker show a real last-known
+            # reading for any visited system, not just the current one, and
+            # keeps it clearly distinct from Frontier's separate downloadable
+            # control-vote CSV (fdev_powerplay.py), which measures a
+            # different weekly pool despite similar-sounding field names.
+            "ALTER TABLE systems ADD COLUMN pp_state TEXT",
+            "ALTER TABLE systems ADD COLUMN pp_control_progress REAL",
+            "ALTER TABLE systems ADD COLUMN pp_reinforcement INTEGER",
+            "ALTER TABLE systems ADD COLUMN pp_undermining INTEGER",
+            "ALTER TABLE systems ADD COLUMN pp_controlling_power TEXT",
+            "ALTER TABLE systems ADD COLUMN pp_powers TEXT",
+            "ALTER TABLE systems ADD COLUMN pp_data_timestamp TEXT",
         ]
         cache_migrations = [
             "ALTER TABLE net.spansh_bodies ADD COLUMN surface_gravity REAL",

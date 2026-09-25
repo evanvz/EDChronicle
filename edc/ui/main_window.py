@@ -813,6 +813,33 @@ class MainWindow(QMainWindow):
         except Exception:
             log.exception("Failed to notify Faction Expansion tracker of a live snapshot")
 
+    def _save_system_powerplay_snapshot(self) -> None:
+        """PowerplayState/PowerplayStateReinforcement/PowerplayStateUndermining/
+        PowerplayStateControlProgress only ever arrive on Location/FSDJump,
+        and previously only lived in self.state -- gone the instant the
+        player left the system. Persisting the last actual reading lets the
+        Faction Expansion tracker show real PowerPlay numbers for any
+        visited system, distinct from Frontier's separate CSV control-vote
+        feed (fdev_powerplay.py), which measures a different weekly pool."""
+        system_address = getattr(self.state, "system_address", None)
+        pp_state = getattr(self.state, "system_powerplay_state", None)
+        if not isinstance(system_address, int) or not pp_state:
+            return
+        try:
+            self.repo.save_system_powerplay_snapshot(
+                system_address=system_address,
+                system_name=getattr(self.state, "system", None) or "",
+                pp_state=pp_state,
+                control_progress=getattr(self.state, "system_powerplay_control_progress", None),
+                reinforcement=getattr(self.state, "system_powerplay_reinforcement", None),
+                undermining=getattr(self.state, "system_powerplay_undermining", None),
+                controlling_power=getattr(self.state, "system_controlling_power", None),
+                powers=getattr(self.state, "system_powers", None) or [],
+                data_timestamp=getattr(self.state, "factions_timestamp", "") or "",
+            )
+        except Exception:
+            log.exception("Failed to save PowerPlay snapshot")
+
     def _save_system_coords_from_state(self, system_name: str, timestamp: str) -> None:
         """system_coords is fed live only by the EDDN listener's
         on_coords_seen path -- own-journal BGS/RES saves need to write it
@@ -3314,6 +3341,13 @@ class MainWindow(QMainWindow):
         if name in ("Docked", "FSDJump", "Location"):
             self._save_faction_snapshots(self.state.factions_timestamp)
             self._save_system_bgs_status()
+
+        if name in ("FSDJump", "Location"):
+            # PowerplayState*/Powers fields are only ever present on these
+            # two events (never Docked), so saving here (not the block
+            # above) avoids re-writing the same in-memory reading with a
+            # timestamp that doesn't actually match a fresh observation.
+            self._save_system_powerplay_snapshot()
 
         if name == "FSSSignalDiscovered" and evt.get("SignalType") == "ResourceExtraction":
             self._save_system_res_tiers(evt.get("timestamp") or "")

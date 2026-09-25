@@ -420,6 +420,63 @@ class Repository:
             (system_address, system_name),
         )
 
+    def save_system_powerplay_snapshot(
+        self, system_address: int, system_name: str, pp_state: Optional[str],
+        control_progress: Optional[float], reinforcement: Optional[int], undermining: Optional[int],
+        controlling_power: Optional[str], powers: Optional[list], data_timestamp: str,
+    ) -> None:
+        """Persists the journal's own live PowerplayState* reading (only
+        ever present on Location/FSDJump) -- previously held only in
+        memory, so it vanished the instant the player left the system.
+        One row per system_address (same table save_system_name_if_missing
+        already ensures exists), always overwritten with the latest visit's
+        reading -- no history needed, the Faction Expansion tracker only
+        ever wants "what did I last actually see here".
+
+        Deliberately a separate concern from FdevPowerPlayCache's CSV feed
+        (fdev_powerplay.py) -- that one measures a different weekly
+        control-vote pool, not this system's running Reinforcement/
+        Undermining total, despite similarly-named fields."""
+        self.db.execute(
+            """
+            INSERT INTO systems (system_address, system_name, pp_state, pp_control_progress,
+                                  pp_reinforcement, pp_undermining, pp_controlling_power,
+                                  pp_powers, pp_data_timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(system_address) DO UPDATE SET
+                pp_state             = excluded.pp_state,
+                pp_control_progress  = excluded.pp_control_progress,
+                pp_reinforcement     = excluded.pp_reinforcement,
+                pp_undermining       = excluded.pp_undermining,
+                pp_controlling_power = excluded.pp_controlling_power,
+                pp_powers            = excluded.pp_powers,
+                pp_data_timestamp    = excluded.pp_data_timestamp
+            """,
+            (
+                system_address, system_name, pp_state, control_progress, reinforcement, undermining,
+                controlling_power, json.dumps(powers) if powers else None, data_timestamp,
+            ),
+        )
+
+    def get_system_powerplay_snapshot(self, system_address: int) -> Optional[dict]:
+        """{"pp_state", "pp_control_progress", "pp_reinforcement", "pp_undermining",
+        "pp_controlling_power", "pp_powers" (list), "pp_data_timestamp"} for the
+        player's last actual visit to system_address, or None if never
+        visited/no PowerPlay reading was ever recorded there."""
+        row = self.db.conn.execute(
+            "SELECT pp_state, pp_control_progress, pp_reinforcement, pp_undermining, "
+            "pp_controlling_power, pp_powers, pp_data_timestamp FROM systems WHERE system_address = ?",
+            (system_address,),
+        ).fetchone()
+        if row is None or row["pp_data_timestamp"] is None:
+            return None
+        result = dict(row)
+        try:
+            result["pp_powers"] = json.loads(result["pp_powers"]) if result["pp_powers"] else []
+        except (TypeError, ValueError):
+            result["pp_powers"] = []
+        return result
+
     def save_system_from_flight_log(
         self,
         system_address: int,

@@ -36,6 +36,7 @@ from PyQt6.QtWidgets import (
 from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, PRIMARY_BUTTON_STYLE as _BTN_STYLE
 from edc.ui import formatting as fmt
 from edc.core.edsm_faction_lookup import fetch_system_factions, ERROR_BLOCKED, ERROR_NOT_FOUND
+from edc.ui.panels.powerplay_system_status_panel import _is_decay_risk, _prediction_color
 
 log = logging.getLogger("edc.faction_expansion")
 
@@ -313,12 +314,21 @@ class FactionExpansionDialog(QDialog):
         pp_hdr = QLabel("POWERPLAY STANDING")
         pp_hdr.setStyleSheet(_HDR_STYLE)
         pp_l.addWidget(pp_hdr)
-        self._pp_label = QLabel("No PowerPlay data for this system.")
-        self._pp_label.setWordWrap(True)
-        self._pp_label.setStyleSheet("background:transparent; border:none;")
-        pp_l.addWidget(self._pp_label)
+        self._pp_live_label = QLabel("No live PowerPlay reading yet -- visit this system to capture one.")
+        self._pp_live_label.setWordWrap(True)
+        self._pp_live_label.setStyleSheet("background:transparent; border:none;")
+        pp_l.addWidget(self._pp_live_label)
         self._pp_bar = _PowerPlayBarWidget()
         pp_l.addWidget(self._pp_bar)
+        self._pp_decay_label = QLabel("")
+        self._pp_decay_label.setWordWrap(True)
+        self._pp_decay_label.setStyleSheet("background:transparent; border:none; color:#FF6B6B; font-weight:600;")
+        self._pp_decay_label.setVisible(False)
+        pp_l.addWidget(self._pp_decay_label)
+        self._pp_csv_label = QLabel("No PowerPlay data for this system.")
+        self._pp_csv_label.setWordWrap(True)
+        self._pp_csv_label.setStyleSheet("background:transparent; border:none; color:#888888; font-size:12px;")
+        pp_l.addWidget(self._pp_csv_label)
         layout.addWidget(pp_card)
 
         # ── Missions + ticks card ────────────────────────────────────────
@@ -397,7 +407,9 @@ class FactionExpansionDialog(QDialog):
         self._header_label.setText("")
         self._influence_label.setText("No data yet.")
         self._trend_widget.set_points([])
-        self._pp_label.setText("No PowerPlay data for this system.")
+        self._pp_live_label.setText("No live PowerPlay reading yet -- visit this system to capture one.")
+        self._pp_decay_label.setVisible(False)
+        self._pp_csv_label.setText("No PowerPlay data for this system.")
         self._pp_bar.set_values(0, 0)
         self._missions_label.setText("—")
         self._ticks_label.setText("—")
@@ -545,34 +557,72 @@ class FactionExpansionDialog(QDialog):
         else:
             self._expansion_banner.setVisible(False)
 
-        # PowerPlay
-        fdev = getattr(self._panel, "_fdev_powerplay", None)
-        pp = fdev.get_by_name(system_name) if fdev else None
-        if pp:
-            qty_for = pp.get("qty_for") or 0
-            qty_against = pp.get("qty_against") or 0
-            self._pp_bar.set_values(qty_against, qty_for)
-            self._pp_label.setText(
-                f"{pp.get('power') or 'Unknown power'} — {pp.get('state') or 'Unknown state'}"
-                f"  •  Predicted: {pp.get('prediction') or '—'}"
+        # PowerPlay -- live journal reading (ground truth, but only as
+        # fresh as the player's last actual visit) is the primary display;
+        # Frontier's downloadable CSV is a clearly separate supplementary
+        # line, since its qty_for/qty_against is a different weekly
+        # control-vote pool, not the same Reinforcement/Undermining total
+        # the live reading and the in-game HUD show (confirmed live
+        # 2026-09-25: Ekono's CSV read 6,715/0 while the actual in-game
+        # numbers were 908/4,666 -- similarly-named, not the same thing).
+        live = self._panel._repo.get_system_powerplay_snapshot(self._system_address)
+        if live:
+            age_txt, _ = fmt.relative_time(live["pp_data_timestamp"])
+            reinforcement = live.get("pp_reinforcement") or 0
+            undermining = live.get("pp_undermining") or 0
+            self._pp_bar.set_values(undermining, reinforcement)
+            control_progress = live.get("pp_control_progress")
+            ctrl_txt = f"{control_progress * 100:.1f}%" if isinstance(control_progress, (int, float)) else "—"
+            powers_txt = ", ".join(live.get("pp_powers") or []) or (live.get("pp_controlling_power") or "—")
+            self._pp_live_label.setText(
+                f"Live (as of your last visit, {age_txt}): {live.get('pp_controlling_power') or 'Unknown power'} — "
+                f"{live.get('pp_state') or 'Unknown state'}  •  Control: {ctrl_txt}\n"
+                f"Reinforcement: {reinforcement:,}   Undermining: {undermining:,}   •   Powers present: {powers_txt}"
+            )
+
+            # _is_decay_risk() checks state == "control" (Frontier's CSV
+            # vocabulary for "currently held") -- the journal uses a
+            # different vocabulary for the same concept (Exploited/
+            # Fortified/Stronghold), so translate rather than pass the
+            # journal string through directly.
+            held_tiers = {"exploited", "fortified", "stronghold"}
+            is_held = (live.get("pp_state") or "").strip().lower() in held_tiers
+            decay_risk = _is_decay_risk(
+                "control" if is_held else "", True,
+                control_progress if isinstance(control_progress, (int, float)) else None,
             )
         else:
             self._pp_bar.set_values(0, 0)
-            self._pp_label.setText("No PowerPlay data for this system.")
+            self._pp_live_label.setText("No live PowerPlay reading yet -- visit this system to capture one.")
+            decay_risk = False
+
+        self._pp_decay_label.setVisible(bool(decay_risk))
+        if decay_risk:
+            self._pp_decay_label.setText("⚠ Decay risk: >25% into next tier")
+
+        fdev = getattr(self._panel, "_fdev_powerplay", None)
+        pp = fdev.get_by_name(system_name) if fdev else None
+        if pp:
+            pred = pp.get("prediction") or "—"
+            self._pp_csv_label.setText(
+                f"Control vote (this cycle): {pp.get('qty_for') or 0:,} for / "
+                f"{pp.get('qty_against') or 0:,} against  •  Predicted: {pred}"
+            )
+            self._pp_csv_label.setStyleSheet(
+                f"background:transparent; border:none; color:{_prediction_color(pred)}; font-size:12px;"
+            )
+        else:
+            self._pp_csv_label.setText("No Frontier control-vote data for this system.")
+            self._pp_csv_label.setStyleSheet("background:transparent; border:none; color:#888888; font-size:12px;")
 
         # Missions
         counts = self._panel._repo.get_faction_mission_completion_counts(self._system_address, faction_name)
         today, week = counts["today"], counts["last_7_days"]
         self._missions_label.setText(
-            f"Today: {today['count']} (weight {today['weighted']}) — "
-            f"{today['primary_count']} primary (wt {today['primary_weighted']}), "
-            f"{today['secondary_count']} secondary (wt {today['secondary_weighted']})   •   "
-            f"Last 7 days: {week['count']} (weight {week['weighted']}) — "
-            f"{week['primary_count']} primary (wt {week['primary_weighted']}), "
-            f"{week['secondary_count']} secondary (wt {week['secondary_weighted']})\n"
-            "Primary = missions issued by this faction; secondary = this faction was the mission's "
-            "target/destination instead. Weight sums Frontier's own \"+\" to \"+++++\" mission-impact "
-            "rating -- a rough relative signal, not a real point total."
+            f"Today: {today['count']} (wt {today['weighted']}) — "
+            f"{today['primary_count']} pri / {today['secondary_count']} sec   •   "
+            f"7 days: {week['count']} (wt {week['weighted']}) — "
+            f"{week['primary_count']} pri / {week['secondary_count']} sec"
         )
 
         # Ticks
