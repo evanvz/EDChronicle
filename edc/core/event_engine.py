@@ -392,6 +392,7 @@ class EventEngine:
                     tally[key] = max(0, tally.get(key, 0) - 1)
                 tally[f"ground_{new_size}"] = tally.get(f"ground_{new_size}", 0) + 1
                 pending_settlement["size"] = new_size
+                self.state.last_cz_credit = {"faction_name": faction_name, "zone_type": "ground", "size": new_size}
             return
 
         if pending_space and _journal_age_seconds(pending_space.get("timestamp") or "", ts) <= _CZ_PENDING_TIMEOUT_S:
@@ -401,6 +402,7 @@ class EventEngine:
                 size = pending_space.get("type", "l")
                 tally = self.state.cz_kills.setdefault(faction_name, {})
                 tally[f"space_{size}"] = tally.get(f"space_{size}", 0) + 1
+                self.state.last_cz_credit = {"faction_name": faction_name, "zone_type": "space", "size": size}
 
     def _at_squadron_faction_station(self) -> bool:
         """True if the current system's controlling faction is the
@@ -998,6 +1000,7 @@ class EventEngine:
                 pass
 
         elif name == "FactionKillBond":
+            self.state.last_cz_credit = None
             credit_massacre_kill(self.state.active_missions, event.get("VictimFaction"), self.state.system)
 
             reward = event.get("Reward")

@@ -292,6 +292,7 @@ class GameState:
     cz_pending_settlement: Optional[Dict[str, Any]] = None
     cz_pending_space: Optional[Dict[str, Any]] = None
     cz_kills: Dict[str, Dict[str, int]] = field(default_factory=dict)
+    last_cz_credit: Optional[dict] = None  # one-shot signal for the current event -- see _credit_cz_kill
 
     # Mining (session-scoped; resets on app start, like the other session_collected fields)
     mining_refined_totals: Dict[str, int] = field(default_factory=dict)     # material(lower) -> units refined this session
