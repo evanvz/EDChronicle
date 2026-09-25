@@ -65,7 +65,7 @@ from edc.core.guardian_ruins import GuardianRuinsCache
 from edc.core.edastro_poi import EdAstroPoiCache
 from edc.core.server_status import fetch_server_status
 from edc.core.galnet_news import fetch_latest_headlines
-from edc.core.eddn_publisher import EddnPublisher, _commodity_symbol
+from edc.core.eddn_publisher import EddnPublisher, _commodity_symbol, build_commodity_message
 from edc.core.canonn_client import CanonnClient, SystemPoi
 from edc.core.engineering_blueprints import EngineeringBlueprintTable
 from edc.core.experimental_effects import ExperimentalEffectsTable
@@ -1566,6 +1566,38 @@ class MainWindow(QMainWindow):
             log.exception("Failed to save commodity display names")
 
         return data
+
+    def _save_own_market_snapshot(self, market_data: dict) -> None:
+        """Persists the player's own just-read Market.json straight into the
+        local market_prices search table -- previously this data was only
+        ever used to refresh the live UI and (if EDDN contribution happens
+        to be enabled) published outward; the local search index only ever
+        got filled by EDDN's crowd feed relaying data back, which meant a
+        commander's own dock-and-buy never showed up in their own market
+        search until some other commander (or EDDN round-tripping their own
+        publish) happened to report the same station. Confirmed live
+        2026-09-25: searched for a commodity, found none, flew to a station
+        that had it, bought some, searched again -- still nothing. Reuses
+        build_commodity_message()'s existing symbol normalization rather
+        than duplicating it; deliberately independent of
+        eddn_contribute_enabled, since this is local-only, no network
+        involved."""
+        msg = build_commodity_message(market_data)
+        if msg is None:
+            return
+        station_type = market_data.get("StationType") or ""
+        records = [
+            (
+                msg["marketId"], c["name"], msg["stationName"], station_type, msg["systemName"],
+                c["sellPrice"], c["buyPrice"], c["meanPrice"], c["demand"], c["demandBracket"],
+                c["stock"], c["stockBracket"], msg["timestamp"],
+            )
+            for c in msg["commodities"]
+        ]
+        try:
+            self.repo.save_market_snapshot_batch(records)
+        except Exception:
+            log.exception("Failed to save own market snapshot")
 
     def _load_current_fcmaterials(self):
         """
@@ -3529,6 +3561,8 @@ class MainWindow(QMainWindow):
             self.market_panel.refresh_trade_opportunities(self.state, radius)
             self.market_panel.refresh_commodity_names()
             self.mining_panel.refresh_commodity_names()
+            if market_data and not self._replaying:
+                self._save_own_market_snapshot(market_data)
             if market_data and getattr(self.cfg, "eddn_contribute_enabled", False) and not self._replaying:
                 docking_access = None
                 if market_data.get("MarketID") == getattr(self.state, "carrier_owned_market_id", None):
