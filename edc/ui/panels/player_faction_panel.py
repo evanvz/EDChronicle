@@ -819,7 +819,7 @@ class PlayerFactionPanel(QWidget):
         )
         expansion_btn.clicked.connect(self._open_faction_expansion_dialog)
         refresh_row.addWidget(expansion_btn)
-        session_activity_btn = QPushButton("Session Activity Report…")
+        session_activity_btn = QPushButton("Session BGS Activity…")
         session_activity_btn.setStyleSheet(
             "QPushButton { background:#1a1a3a; color:#B0A0FF; border:1px solid #3a3a6a;"
             " border-radius:3px; padding:3px 12px; font-weight:bold; }"
