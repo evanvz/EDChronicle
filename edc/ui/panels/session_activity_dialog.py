@@ -17,12 +17,31 @@ from __future__ import annotations
 
 import logging
 
-from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTextEdit
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea, QWidget, QFrame,
+)
 
-from edc.ui.style import HDR_STYLE as _HDR_STYLE
+from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE
 from edc.ui import formatting as fmt
 
 log = logging.getLogger("edc.session_activity")
+
+# Same palette player_faction_panel.py uses for faction identity coloring
+# (_FACTION_CHART_COLORS) -- duplicated as a short color list rather than
+# imported, since that module imports SessionActivityDialog from here and
+# importing back would be circular.
+_FACTION_COLORS = [
+    "#4D96FF", "#FFB347", "#6BCB77", "#FF6B6B",
+    "#B983FF", "#FFD93D", "#4DD8C8", "#FF8FB1",
+]
+
+# Stat-chip colors, matching this app's existing semantic conventions
+# elsewhere (green = mission/BGS INF progress, orange = credits/combat,
+# red = kills, teal = trade) rather than inventing a new palette.
+_CHIP_MISSIONS = "#6BCB77"
+_CHIP_COMBAT = "#FF6B6B"
+_CHIP_TRADE = "#4DD8C8"
 
 
 class SessionActivityDialog(QDialog):
@@ -50,13 +69,36 @@ class SessionActivityDialog(QDialog):
         self._tick_label.setStyleSheet("background:transparent; border:none; color:#888888; font-size:11px;")
         layout.addWidget(self._tick_label)
 
-        self._body = QTextEdit()
-        self._body.setReadOnly(True)
-        self._body.setStyleSheet("background:#0d1520; border:1px solid #223; color:#c8c8c8;")
-        layout.addWidget(self._body, 1)
+        # ── Scroll area of per-system cards -- same pattern combat_panel.py/
+        # exploration_panel.py/etc already use, rather than a single plain-
+        # text dump. ──────────────────────────────────────────────────────
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        layout.addWidget(scroll, 1)
 
-    def _set_body_text(self, text: str) -> None:
-        self._body.setPlainText(text)
+        content = QWidget()
+        content.setStyleSheet("background: transparent;")
+        self._content_layout = QVBoxLayout(content)
+        self._content_layout.setSpacing(8)
+        self._content_layout.setContentsMargins(4, 4, 4, 4)
+        self._content_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        scroll.setWidget(content)
+
+        self._empty_label = QLabel("No activity recorded yet this session.")
+        self._empty_label.setStyleSheet("background:transparent; border:none; color:#666666;")
+        self._empty_label.setVisible(False)
+        self._content_layout.addWidget(self._empty_label)
+        self._cards: list = []
+
+    def _clear_cards(self) -> None:
+        for card in self._cards:
+            self._content_layout.removeWidget(card)
+            card.deleteLater()
+        self._cards = []
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
@@ -79,36 +121,65 @@ class SessionActivityDialog(QDialog):
             report = {}
         self._render_report(report)
 
+    @staticmethod
+    def _format_chips(entry: dict) -> str:
+        """One compact, color-coded rich-text line per faction -- BGS-Tally-
+        style stat chips (.INF/.CBs/.GroundCZs/.Sold) instead of a verbose
+        sentence. Only categories with actual activity are shown, same as
+        BGS-Tally's own report."""
+        chips = []
+
+        m = entry["missions"]
+        if m["count"]:
+            chips.append(
+                f'<span style="color:{_CHIP_MISSIONS};">.INF</span> {m["weighted"]:+d} '
+                f'({m["count"]}m: {m["primary_count"]}p/{m["secondary_count"]}s)'
+            )
+
+        if entry["combat_bonds_total"]:
+            chips.append(f'<span style="color:{_CHIP_COMBAT};">.CBs</span> {entry["combat_bonds_total"]:,}')
+
+        cz = entry["cz_kills"]
+        cz_parts = [f"{v}x{k.replace('_', '')}" for k, v in cz.items() if v]
+        if cz_parts:
+            chips.append(f'<span style="color:{_CHIP_COMBAT};">.CZs</span> {" ".join(cz_parts)}')
+
+        trade = entry["trade_sold"]
+        trade_parts = [f"{k}: {v:,}" for k, v in trade.items() if v]
+        if trade_parts:
+            chips.append(f'<span style="color:{_CHIP_TRADE};">.Sold</span> {", ".join(trade_parts)}')
+
+        return "  ".join(chips) if chips else '<span style="color:#555555;">no activity</span>'
+
     def _render_report(self, report: dict) -> None:
+        self._clear_cards()
+        self._empty_label.setVisible(not report)
         if not report:
-            self._set_body_text("No activity recorded yet this session.")
             return
 
-        lines = []
         for system_name in sorted(report.keys()):
-            lines.append(f"=== {system_name} ===")
-            factions = report[system_name]
-            for faction_name in sorted(factions.keys()):
-                entry = factions[faction_name]
-                lines.append(f"  [{faction_name}]")
-                m = entry["missions"]
-                if m["count"]:
-                    lines.append(
-                        f"    Missions: {m['count']} (weight {m['weighted']}) — "
-                        f"{m['primary_count']} primary / {m['secondary_count']} secondary"
-                    )
-                if entry["combat_bonds_total"]:
-                    lines.append(f"    Combat bonds: {entry['combat_bonds_total']:,}")
-                cz = entry["cz_kills"]
-                cz_total = sum(cz.values())
-                if cz_total:
-                    parts = [f"{v}x {k}" for k, v in cz.items() if v]
-                    lines.append(f"    CZ kills: {', '.join(parts)}")
-                trade = entry["trade_sold"]
-                trade_total = sum(trade.values())
-                if trade_total:
-                    parts = [f"{k}: {v:,}" for k, v in trade.items() if v]
-                    lines.append(f"    Sold: {', '.join(parts)}")
-            lines.append("")
+            card = QFrame()
+            card.setStyleSheet(_CARD_STYLE)
+            card_l = QVBoxLayout(card)
+            card_l.setContentsMargins(8, 6, 8, 8)
+            card_l.setSpacing(4)
 
-        self._set_body_text("\n".join(lines))
+            hdr = QLabel(system_name)
+            hdr.setStyleSheet(_HDR_STYLE)
+            card_l.addWidget(hdr)
+
+            factions = report[system_name]
+            for i, faction_name in enumerate(sorted(factions.keys())):
+                entry = factions[faction_name]
+                color = _FACTION_COLORS[i % len(_FACTION_COLORS)]
+                row = QLabel(
+                    f'<span style="color:{color}; font-weight:700;">[{faction_name}]</span> '
+                    f'{self._format_chips(entry)}'
+                )
+                row.setTextFormat(Qt.TextFormat.RichText)
+                row.setWordWrap(True)
+                row.setStyleSheet("background:transparent; border:none;")
+                card_l.addWidget(row)
+
+            self._content_layout.addWidget(card)
+            self._cards.append(card)
