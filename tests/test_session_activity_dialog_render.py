@@ -18,6 +18,64 @@ def _dialog():
     return SessionActivityDialog(SimpleNamespace())
 
 
+def test_faction_color_is_stable_regardless_of_call_order():
+    a = SessionActivityDialog._faction_color("Elite United Worlds")
+    b = SessionActivityDialog._faction_color("Elite United Worlds")
+    assert a == b
+
+
+def test_different_factions_can_get_different_colors():
+    colors = {
+        SessionActivityDialog._faction_color(name)
+        for name in ["Elite United Worlds", "Hungarian Wolves", "Union Party of Wangai", "Aisling Duval"]
+    }
+    assert len(colors) > 1
+
+
+def test_same_faction_gets_the_same_color_across_different_systems():
+    report = {
+        "2026-09-25": {
+            "Ekono": {
+                "Elite United Worlds": {
+                    "missions": {"count": 1, "weighted": 2, "primary_count": 1, "secondary_count": 0,
+                                 "by_type": {"Courier": 1}},
+                    "combat_bonds_total": 0,
+                    "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 0},
+                    "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 0},
+                },
+            },
+            "Aiga": {
+                "Elite United Worlds": {
+                    "missions": {"count": 1, "weighted": 2, "primary_count": 1, "secondary_count": 0,
+                                 "by_type": {"Courier": 1}},
+                    "combat_bonds_total": 0,
+                    "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 0},
+                    "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 0},
+                },
+                "Hungarian Wolves": {
+                    "missions": {"count": 1, "weighted": 2, "primary_count": 1, "secondary_count": 0,
+                                 "by_type": {"Courier": 1}},
+                    "combat_bonds_total": 0,
+                    "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 0},
+                    "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 0},
+                },
+            },
+        },
+    }
+    dlg = _dialog()
+    dlg._render_report(report)
+    texts = []
+    for card in dlg._cards:
+        for i in range(card.layout().count()):
+            w = card.layout().itemAt(i).widget()
+            if w is not None and hasattr(w, "text") and "Elite United Worlds" in w.text():
+                texts.append(w.text())
+    assert len(texts) == 2
+    color_a = texts[0].split("color:")[1].split(";")[0]
+    color_b = texts[1].split("color:")[1].split(";")[0]
+    assert color_a == color_b
+
+
 def test_empty_report_shows_the_empty_label_and_no_cards():
     dlg = _dialog()
     dlg._render_report({})

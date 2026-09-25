@@ -16,6 +16,7 @@ fetching the tick itself -- no new network code needed.
 from __future__ import annotations
 
 import logging
+import zlib
 from datetime import datetime, timezone
 
 from PyQt6.QtCore import Qt
@@ -125,6 +126,19 @@ class SessionActivityDialog(QDialog):
         self._render_report(report)
 
     @staticmethod
+    def _faction_color(faction_name: str) -> str:
+        """Stable per-faction color, independent of how many other factions
+        share a card or in what order -- the same faction shows the same
+        color in every system/day section, rather than colors just cycling
+        by position within each card (which could assign a faction a
+        different color depending on which other factions happened to sort
+        before it in that particular card). zlib.crc32 (not the builtin
+        hash(), which is randomized per Python process for strings) so the
+        mapping is also stable across app restarts."""
+        idx = zlib.crc32(faction_name.encode("utf-8")) % len(_FACTION_COLORS)
+        return _FACTION_COLORS[idx]
+
+    @staticmethod
     def _format_chips(entry: dict) -> str:
         """One compact, color-coded rich-text line per faction -- BGS-Tally-
         style stat chips (.INF/.CBs/.GroundCZs/.Sold) instead of a verbose
@@ -219,9 +233,9 @@ class SessionActivityDialog(QDialog):
                 card_l.addWidget(hdr)
 
                 factions = systems[system_name]
-                for i, faction_name in enumerate(sorted(factions.keys())):
+                for faction_name in sorted(factions.keys()):
                     entry = factions[faction_name]
-                    color = _FACTION_COLORS[i % len(_FACTION_COLORS)]
+                    color = self._faction_color(faction_name)
                     row = QLabel(
                         f'<span style="color:{color}; font-weight:700;">[{faction_name}]</span> '
                         f'{self._format_chips(entry)}'
