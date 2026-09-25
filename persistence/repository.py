@@ -2684,6 +2684,28 @@ class Repository:
 
         return {"today": _query(today_start), "last_7_days": _query(week_start)}
 
+    def record_faction_combat_bond(
+        self, system_address: int, faction_name: str, reward: int, earned_at: str,
+    ) -> None:
+        """One row per FactionKillBond, for the session BGS activity
+        report -- see main_window.py's _record_faction_combat_bond."""
+        self.db.execute(
+            "INSERT INTO faction_combat_bonds (system_address, faction_name, reward, earned_at) "
+            "VALUES (?, ?, ?, ?)",
+            (system_address, faction_name, reward, earned_at),
+        )
+
+    def get_faction_combat_bonds_since(self, since: str) -> list[dict]:
+        """Every combat bond earned_at >= since (an ISO UTC timestamp --
+        lexicographic comparison works directly). Feeds
+        get_session_activity_report()."""
+        rows = self.db.execute(
+            "SELECT system_address, faction_name, reward, earned_at "
+            "FROM faction_combat_bonds WHERE earned_at >= ?",
+            (since,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def get_odyssey_farming_candidates(self, limit: int = 20) -> list[dict]:
         """
         Odyssey on-foot farming candidates: systems whose most recent

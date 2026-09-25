@@ -310,6 +310,21 @@ class Database:
             "ALTER TABLE systems ADD COLUMN pp_controlling_power TEXT",
             "ALTER TABLE systems ADD COLUMN pp_powers TEXT",
             "ALTER TABLE systems ADD COLUMN pp_data_timestamp TEXT",
+            # Session BGS activity report -- FactionKillBond rewards only
+            # (Bounty vouchers excluded: the journal's Bounty event carries
+            # VictimFaction, not which faction actually credits the
+            # voucher -- that's determined later, at redemption, not at
+            # kill time). One row per bond, queried with a >= timestamp
+            # filter at report time -- no session-reset logic needed here.
+            """CREATE TABLE IF NOT EXISTS faction_combat_bonds (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                system_address INTEGER NOT NULL,
+                faction_name   TEXT    NOT NULL,
+                reward         INTEGER NOT NULL,
+                earned_at      TEXT    NOT NULL
+            )""",
+            """CREATE INDEX IF NOT EXISTS idx_faction_combat_bonds_lookup
+               ON faction_combat_bonds (earned_at)""",
         ]
         cache_migrations = [
             "ALTER TABLE net.spansh_bodies ADD COLUMN surface_gravity REAL",
