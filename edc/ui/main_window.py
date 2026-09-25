@@ -541,6 +541,45 @@ class _SpanshSaveWorker(QObject):
         self.finished.emit(self._system_address)
 
 
+class _MarketSaveWorker(QObject):
+    """Persists the player's own just-read Market.json off the UI thread --
+    same class of freeze this project already hit and fixed for Spansh
+    body saves and the EDDN flush (see _SpanshSaveWorker): a synchronous
+    write to a shared, multi-million-row table (net.market_prices, same
+    table the EDDN flush writes to) can block the UI thread waiting on
+    whatever background writer currently holds the WAL lock. Confirmed
+    live 2026-09-25: a real freeze with no response while the market
+    window was open, right after this save was added to run inline in
+    _on_event. Opens its own connection per the project's cross-thread
+    SQLite rule."""
+    finished = pyqtSignal()
+
+    def __init__(self, db_path, records: list, name_pairs: list):
+        super().__init__()
+        self._db_path = db_path
+        self._records = records
+        self._name_pairs = name_pairs
+
+    def run(self):
+        from persistence.database import Database
+        from persistence.repository import Repository
+
+        db = Database(self._db_path)
+        try:
+            repo = Repository(db)
+            # Each of these already does its own single executemany +
+            # commit (not routed through Database.execute(), so
+            # deferred_commit() wouldn't reduce this to one commit anyway)
+            # -- two small commits here, off the UI thread, is fine.
+            repo.save_market_snapshot_batch(self._records)
+            repo.save_commodity_names_batch(self._name_pairs)
+        except Exception:
+            log.exception("Failed to save own market snapshot")
+        finally:
+            db.close()
+        self.finished.emit()
+
+
 class _WalCheckpointWorker(QObject):
     """
     PRAGMA wal_checkpoint(TRUNCATE) on its own connection and its own
@@ -1560,10 +1599,11 @@ class MainWindow(QMainWindow):
             })
             name_pairs.append((normalize_commodity_name(name), name))
         self.state.current_market_items = items
-        try:
-            self.repo.save_commodity_names_batch(name_pairs)
-        except Exception:
-            log.exception("Failed to save commodity display names")
+        # Saved off the UI thread by _save_own_market_snapshot's worker
+        # (see _MarketSaveWorker) rather than here -- this table is small,
+        # but it shares the same net.* database/WAL lock as market_prices,
+        # so writing it inline was still a freeze risk even on its own.
+        self.state.current_market_name_pairs = name_pairs
 
         return data
 
@@ -1581,7 +1621,16 @@ class MainWindow(QMainWindow):
         build_commodity_message()'s existing symbol normalization rather
         than duplicating it; deliberately independent of
         eddn_contribute_enabled, since this is local-only, no network
-        involved."""
+        involved.
+
+        Runs off the UI thread (_MarketSaveWorker) -- an earlier version of
+        this fix wrote directly here and caused a real freeze-with-no-
+        response while the market window was open, confirmed live
+        2026-09-25: net.market_prices is a multi-million-row table also
+        written by the EDDN flush worker, so a synchronous write here could
+        block on whatever background writer currently holds the WAL lock,
+        the same class of freeze already fixed for Spansh body saves (see
+        _SpanshSaveWorker)."""
         msg = build_commodity_message(market_data)
         if msg is None:
             return
@@ -1594,10 +1643,23 @@ class MainWindow(QMainWindow):
             )
             for c in msg["commodities"]
         ]
-        try:
-            self.repo.save_market_snapshot_batch(records)
-        except Exception:
-            log.exception("Failed to save own market snapshot")
+        name_pairs = getattr(self.state, "current_market_name_pairs", None) or []
+
+        if self._market_save_thread and self._market_save_thread.isRunning():
+            return  # previous save still running -- next Market event will catch up
+        # .wait() on the old thread before reassigning even after the
+        # isRunning() check above -- confirmed live crash race for the
+        # same pair of calls in _start_spansh_save (isRunning() going
+        # False only means quit() was processed, not that the old
+        # QThread's C++ teardown has actually settled yet).
+        if self._market_save_thread is not None:
+            self._market_save_thread.wait()
+        self._market_save_worker = _MarketSaveWorker(self.repo.db.db_path, records, name_pairs)
+        self._market_save_thread = QThread()
+        self._market_save_worker.moveToThread(self._market_save_thread)
+        self._market_save_thread.started.connect(self._market_save_worker.run)
+        self._market_save_worker.finished.connect(self._market_save_thread.quit)
+        self._market_save_thread.start()
 
     def _load_current_fcmaterials(self):
         """
@@ -2707,6 +2769,8 @@ class MainWindow(QMainWindow):
         self._spansh_enrich_pending: tuple[str, int] | None = None  # (system_name, system_address)
         self._spansh_save_thread: QThread | None = None
         self._spansh_save_worker: _SpanshSaveWorker | None = None
+        self._market_save_thread: QThread | None = None
+        self._market_save_worker: _MarketSaveWorker | None = None
         # One-slot last-wins queue: if enrichment finishes while a save is
         # still running, keep the newest (system_address, bodies) and start
         # it when the current save finishes -- do not drop the payload.
