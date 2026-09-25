@@ -16,6 +16,7 @@ fetching the tick itself -- no new network code needed.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
@@ -93,12 +94,14 @@ class SessionActivityDialog(QDialog):
         self._empty_label.setVisible(False)
         self._content_layout.addWidget(self._empty_label)
         self._cards: list = []
+        self._day_headers: list = []
 
     def _clear_cards(self) -> None:
-        for card in self._cards:
-            self._content_layout.removeWidget(card)
-            card.deleteLater()
+        for w in self._cards + self._day_headers:
+            self._content_layout.removeWidget(w)
+            w.deleteLater()
         self._cards = []
+        self._day_headers = []
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
@@ -174,42 +177,66 @@ class SessionActivityDialog(QDialog):
             parts.append(f"{t} x{c}{reward_txt}")
         return ", ".join(parts)
 
+    @staticmethod
+    def _format_day_header(date_str: str) -> str:
+        """"Today — 2026-09-25" / "Yesterday — 2026-09-24" / "Wednesday —
+        2026-09-23" -- a tick delayed past 24h can make one "since last
+        tick" window span more than one calendar day, so each day gets its
+        own labeled section rather than one flat total."""
+        try:
+            d = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            return date_str
+        delta = (datetime.now(timezone.utc).date() - d).days
+        if delta == 0:
+            return f"Today — {date_str}"
+        if delta == 1:
+            return f"Yesterday — {date_str}"
+        return f"{d.strftime('%A')} — {date_str}"
+
     def _render_report(self, report: dict) -> None:
         self._clear_cards()
         self._empty_label.setVisible(not report)
         if not report:
             return
 
-        for system_name in sorted(report.keys()):
-            card = QFrame()
-            card.setStyleSheet(_CARD_STYLE)
-            card_l = QVBoxLayout(card)
-            card_l.setContentsMargins(8, 6, 8, 8)
-            card_l.setSpacing(4)
+        for date_str in sorted(report.keys(), reverse=True):  # most recent day first
+            day_hdr = QLabel(self._format_day_header(date_str))
+            day_hdr.setStyleSheet(_HDR_STYLE + " font-size:15px;")
+            self._content_layout.addWidget(day_hdr)
+            self._day_headers.append(day_hdr)
 
-            hdr = QLabel(system_name)
-            hdr.setStyleSheet(_HDR_STYLE)
-            card_l.addWidget(hdr)
+            systems = report[date_str]
+            for system_name in sorted(systems.keys()):
+                card = QFrame()
+                card.setStyleSheet(_CARD_STYLE)
+                card_l = QVBoxLayout(card)
+                card_l.setContentsMargins(8, 6, 8, 8)
+                card_l.setSpacing(4)
 
-            factions = report[system_name]
-            for i, faction_name in enumerate(sorted(factions.keys())):
-                entry = factions[faction_name]
-                color = _FACTION_COLORS[i % len(_FACTION_COLORS)]
-                row = QLabel(
-                    f'<span style="color:{color}; font-weight:700;">[{faction_name}]</span> '
-                    f'{self._format_chips(entry)}'
-                )
-                row.setTextFormat(Qt.TextFormat.RichText)
-                row.setWordWrap(True)
-                row.setStyleSheet("background:transparent; border:none;")
-                card_l.addWidget(row)
+                hdr = QLabel(system_name)
+                hdr.setStyleSheet(_HDR_STYLE)
+                card_l.addWidget(hdr)
 
-                mission_types = self._format_mission_types(entry)
-                if mission_types:
-                    types_row = QLabel(f"    {mission_types}")
-                    types_row.setWordWrap(True)
-                    types_row.setStyleSheet("background:transparent; border:none; color:#666666; font-size:11px;")
-                    card_l.addWidget(types_row)
+                factions = systems[system_name]
+                for i, faction_name in enumerate(sorted(factions.keys())):
+                    entry = factions[faction_name]
+                    color = _FACTION_COLORS[i % len(_FACTION_COLORS)]
+                    row = QLabel(
+                        f'<span style="color:{color}; font-weight:700;">[{faction_name}]</span> '
+                        f'{self._format_chips(entry)}'
+                    )
+                    row.setTextFormat(Qt.TextFormat.RichText)
+                    row.setWordWrap(True)
+                    row.setStyleSheet("background:transparent; border:none;")
+                    card_l.addWidget(row)
 
-            self._content_layout.addWidget(card)
-            self._cards.append(card)
+                    mission_types = self._format_mission_types(entry)
+                    if mission_types:
+                        types_row = QLabel(f"    {mission_types}")
+                        types_row.setWordWrap(True)
+                        types_row.setStyleSheet("background:transparent; border:none; color:#666666; font-size:11px;")
+                        card_l.addWidget(types_row)
+
+                self._content_layout.addWidget(card)
+                self._cards.append(card)
