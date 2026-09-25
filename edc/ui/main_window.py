@@ -1294,6 +1294,98 @@ class MainWindow(QMainWindow):
             except Exception:
                 log.exception("Failed to notify Faction Expansion tracker of a mission completion")
 
+    def _record_faction_combat_bond(self, evt: dict) -> None:
+        """FactionKillBond carries AwardingFaction directly -- unlike
+        Bounty (which only carries VictimFaction, the faction actually
+        credited is determined later, at redemption, not at kill time),
+        so only FactionKillBond feeds the session activity report's
+        combat-bond total."""
+        faction_name = evt.get("AwardingFaction")
+        reward = evt.get("Reward")
+        system_address = getattr(self.state, "system_address", None)
+        if not (isinstance(faction_name, str) and faction_name and isinstance(reward, int)
+                and isinstance(system_address, int)):
+            return
+        from datetime import datetime, timezone
+        try:
+            self.repo.record_faction_combat_bond(
+                system_address=system_address, faction_name=faction_name, reward=reward,
+                earned_at=evt.get("timestamp") or datetime.now(timezone.utc).isoformat(),
+            )
+        except Exception:
+            log.exception("Failed to record faction combat bond")
+
+    def _record_faction_cz_kill(self, evt: dict) -> None:
+        """state.last_cz_credit is a one-shot signal set by
+        event_engine.py's _credit_cz_kill only when THIS FactionKillBond
+        just confirmed a new CZ kill (None otherwise -- e.g. a plain
+        combat bond outside any pending-CZ window)."""
+        credit = getattr(self.state, "last_cz_credit", None)
+        system_address = getattr(self.state, "system_address", None)
+        if not (isinstance(credit, dict) and isinstance(system_address, int)):
+            return
+        from datetime import datetime, timezone
+        try:
+            self.repo.record_faction_cz_kill(
+                system_address=system_address, faction_name=credit["faction_name"],
+                zone_type=credit["zone_type"], size=credit["size"],
+                earned_at=evt.get("timestamp") or datetime.now(timezone.utc).isoformat(),
+            )
+        except Exception:
+            log.exception("Failed to record faction CZ kill")
+
+    def _record_faction_trade_sold(self, evt: dict) -> None:
+        """Commodity (MarketSell), exploration data (SellExplorationData/
+        MultiSellExplorationData), and exobiology (SellOrganicData) sales
+        all happen while docked, so the current system's controlling
+        faction at sale time (state.controlling_faction) is who gets
+        credited -- same assumption _at_squadron_faction_station() already
+        makes for the existing squadron_bgs_trade_cr lump total."""
+        name = evt.get("event")
+        faction_name = getattr(self.state, "controlling_faction", None)
+        system_address = getattr(self.state, "system_address", None)
+        if not (isinstance(faction_name, str) and faction_name and isinstance(system_address, int)):
+            return
+
+        if name == "MarketSell":
+            value = evt.get("TotalSale")
+            kind = "commodity"
+        elif name == "MultiSellExplorationData":
+            value = evt.get("TotalEarnings")
+            if not isinstance(value, int):
+                base = evt.get("BaseValue") or 0
+                bonus = evt.get("Bonus") or 0
+                value = base + bonus if isinstance(base, int) and isinstance(bonus, int) else None
+            kind = "exploration"
+        elif name == "SellExplorationData":
+            base = evt.get("BaseValue")
+            bonus = evt.get("Bonus")
+            value = base + bonus if isinstance(base, int) and isinstance(bonus, int) else None
+            kind = "exploration"
+        elif name == "SellOrganicData":
+            bio_data = evt.get("BioData")
+            value = None
+            if isinstance(bio_data, list):
+                value = sum(
+                    (item.get("Value") or 0) + (item.get("Bonus") or 0)
+                    for item in bio_data if isinstance(item, dict)
+                )
+            kind = "exobiology"
+        else:
+            return
+
+        if not isinstance(value, int):
+            return
+
+        from datetime import datetime, timezone
+        try:
+            self.repo.record_faction_trade_sold(
+                system_address=system_address, faction_name=faction_name, kind=kind, value=value,
+                sold_at=evt.get("timestamp") or datetime.now(timezone.utc).isoformat(),
+            )
+        except Exception:
+            log.exception("Failed to record faction trade sold")
+
     def _on_market_destination_selected(self, system_name: str, station_name: str, commodity: str, mode: str):
         """
         Market tab — clicking a Station/System cell in the results table
@@ -3373,6 +3465,13 @@ class MainWindow(QMainWindow):
 
         if name == "MissionCompleted":
             self._record_faction_mission_completion(evt)
+
+        if name == "FactionKillBond":
+            self._record_faction_combat_bond(evt)
+            self._record_faction_cz_kill(evt)
+
+        if name in ("MarketSell", "MultiSellExplorationData", "SellExplorationData", "SellOrganicData"):
+            self._record_faction_trade_sold(evt)
 
         if name == "Market":
             market_data = self._load_current_market()
