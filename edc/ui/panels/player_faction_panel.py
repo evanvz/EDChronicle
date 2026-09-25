@@ -36,6 +36,7 @@ from edc.core.inara_faction_csv import parse_inara_faction_csv
 from edc.ui import formatting as fmt
 from edc.ui.panels.combat_bgs_status_panel import _conflicts_text, _faction_states_text
 from edc.ui.panels.faction_expansion_dialog import FactionExpansionDialog
+from edc.ui.panels.session_activity_dialog import SessionActivityDialog
 from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, TABLE_STYLE as _TABLE_STYLE
 
 log = logging.getLogger(__name__)
@@ -656,6 +657,7 @@ class PlayerFactionPanel(QWidget):
         self._fdev_powerplay = fdev_powerplay
         self._faction_expansion_pin_store = faction_expansion_pin_store
         self._faction_expansion_dialog = None
+        self._session_activity_dialog = None
         self._faction_name: Optional[str] = None
         self._last_state = None
         self._lookup_thread: Optional[QThread] = None
@@ -817,6 +819,18 @@ class PlayerFactionPanel(QWidget):
         )
         expansion_btn.clicked.connect(self._open_faction_expansion_dialog)
         refresh_row.addWidget(expansion_btn)
+        session_activity_btn = QPushButton("Session Activity Report…")
+        session_activity_btn.setStyleSheet(
+            "QPushButton { background:#1a1a3a; color:#B0A0FF; border:1px solid #3a3a6a;"
+            " border-radius:3px; padding:3px 12px; font-weight:bold; }"
+            "QPushButton:hover { background:#2a2a5a; }"
+        )
+        session_activity_btn.setToolTip(
+            "Every faction's mission/combat/CZ/trade activity, grouped by system, since the "
+            "last detected BGS tick -- across every system visited, not just one target."
+        )
+        session_activity_btn.clicked.connect(self._open_session_activity_dialog)
+        refresh_row.addWidget(session_activity_btn)
         root.addLayout(refresh_row)
 
         self._data_freshness_label = QLabel("")
@@ -1935,6 +1949,13 @@ class PlayerFactionPanel(QWidget):
         self._faction_expansion_dialog.show()
         self._faction_expansion_dialog.raise_()
         self._faction_expansion_dialog.activateWindow()
+
+    def _open_session_activity_dialog(self) -> None:
+        if self._session_activity_dialog is None:
+            self._session_activity_dialog = SessionActivityDialog(self)
+        self._session_activity_dialog.show()
+        self._session_activity_dialog.raise_()
+        self._session_activity_dialog.activateWindow()
 
     def notify_faction_snapshot_saved(self, system_address: int) -> None:
         """A live journal-sourced faction_snapshots write just landed for
