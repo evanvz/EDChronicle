@@ -1308,6 +1308,7 @@ class MainWindow(QMainWindow):
             return
         from datetime import datetime, timezone
         try:
+            self.repo.save_system_name_if_missing(system_address, getattr(self.state, "system", None) or "")
             self.repo.record_faction_combat_bond(
                 system_address=system_address, faction_name=faction_name, reward=reward,
                 earned_at=evt.get("timestamp") or datetime.now(timezone.utc).isoformat(),
@@ -1326,6 +1327,7 @@ class MainWindow(QMainWindow):
             return
         from datetime import datetime, timezone
         try:
+            self.repo.save_system_name_if_missing(system_address, getattr(self.state, "system", None) or "")
             self.repo.record_faction_cz_kill(
                 system_address=system_address, faction_name=credit["faction_name"],
                 zone_type=credit["zone_type"], size=credit["size"],
@@ -1379,6 +1381,7 @@ class MainWindow(QMainWindow):
 
         from datetime import datetime, timezone
         try:
+            self.repo.save_system_name_if_missing(system_address, getattr(self.state, "system", None) or "")
             self.repo.record_faction_trade_sold(
                 system_address=system_address, faction_name=faction_name, kind=kind, value=value,
                 sold_at=evt.get("timestamp") or datetime.now(timezone.utc).isoformat(),
@@ -3466,11 +3469,11 @@ class MainWindow(QMainWindow):
         if name == "MissionCompleted":
             self._record_faction_mission_completion(evt)
 
-        if name == "FactionKillBond":
+        if name == "FactionKillBond" and not self._replaying:
             self._record_faction_combat_bond(evt)
             self._record_faction_cz_kill(evt)
 
-        if name in ("MarketSell", "MultiSellExplorationData", "SellExplorationData", "SellOrganicData"):
+        if name in ("MarketSell", "MultiSellExplorationData", "SellExplorationData", "SellOrganicData") and not self._replaying:
             self._record_faction_trade_sold(evt)
 
         if name == "Market":

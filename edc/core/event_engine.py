@@ -392,7 +392,8 @@ class EventEngine:
                     tally[key] = max(0, tally.get(key, 0) - 1)
                 tally[f"ground_{new_size}"] = tally.get(f"ground_{new_size}", 0) + 1
                 pending_settlement["size"] = new_size
-                self.state.last_cz_credit = {"faction_name": faction_name, "zone_type": "ground", "size": new_size}
+                if previous_size is None:
+                    self.state.last_cz_credit = {"faction_name": faction_name, "zone_type": "ground", "size": new_size}
             return
 
         if pending_space and _journal_age_seconds(pending_space.get("timestamp") or "", ts) <= _CZ_PENDING_TIMEOUT_S:
