@@ -1298,9 +1298,15 @@ class MainWindow(QMainWindow):
         from datetime import datetime, timezone
         completed_at = evt.get("timestamp") or datetime.now(timezone.utc).isoformat()
 
-        # "Mission_Courier_Boom_name" -> "Courier Boom" -- same for every
-        # row of this mission regardless of which faction it affected, so
-        # computed once rather than per-effect.
+        # "Mission_Courier_Boom_name" -> "Courier Boom",
+        # "Mission_AltruismCredits_name" -> "Altruism Credits" -- same for
+        # every row of this mission regardless of which faction it
+        # affected, so computed once rather than per-effect. The camelCase
+        # split handles internal names with no underscore between words
+        # at all (confirmed live 2026-09-25: "AltruismCredits" rendered
+        # as one unbroken word without it).
+        import re
+
         raw_name = evt.get("Name")
         mission_type = None
         if isinstance(raw_name, str) and raw_name:
@@ -1309,7 +1315,9 @@ class MainWindow(QMainWindow):
                 cleaned = cleaned[len("Mission_"):]
             if cleaned.endswith("_name"):
                 cleaned = cleaned[:-len("_name")]
-            cleaned = cleaned.replace("_", " ").strip()
+            cleaned = cleaned.replace("_", " ")
+            cleaned = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", cleaned)
+            cleaned = cleaned.strip()
             mission_type = cleaned or None
 
         reward = evt.get("Reward")

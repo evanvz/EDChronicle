@@ -80,6 +80,31 @@ def test_missing_name_field_yields_no_mission_type():
     assert fake_self._saved[0]["mission_type"] is None
 
 
+def test_camelcase_internal_name_gets_word_boundaries_split():
+    """Confirmed live 2026-09-25: "Mission_AltruismCredits_name" has no
+    underscore between "Altruism" and "Credits" at all, so the plain
+    underscore-replace alone left it as one unbroken word in the report."""
+    fake_self = _fake_self()
+    evt = {
+        "event": "MissionCompleted", "Faction": "Elite United Worlds", "timestamp": "2026-09-24T10:00:00Z",
+        "Name": "Mission_AltruismCredits_name",
+        "FactionEffects": [_effect("Elite United Worlds", 12345, tier="++")],
+    }
+    MainWindow._record_faction_mission_completion(fake_self, evt)
+    assert fake_self._saved[0]["mission_type"] == "Altruism Credits"
+
+
+def test_plain_single_word_internal_name_is_unchanged():
+    fake_self = _fake_self()
+    evt = {
+        "event": "MissionCompleted", "Faction": "Elite United Worlds", "timestamp": "2026-09-24T10:00:00Z",
+        "Name": "Mission_Collect_name",
+        "FactionEffects": [_effect("Elite United Worlds", 12345, tier="++")],
+    }
+    MainWindow._record_faction_mission_completion(fake_self, evt)
+    assert fake_self._saved[0]["mission_type"] == "Collect"
+
+
 def test_missing_reward_field_yields_no_reward():
     fake_self = _fake_self()
     evt = {
