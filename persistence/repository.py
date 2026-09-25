@@ -2727,6 +2727,29 @@ class Repository:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def record_faction_trade_sold(
+        self, system_address: int, faction_name: str, kind: str, value: int, sold_at: str,
+    ) -> None:
+        """One row per commodity/exploration/exobiology sale, credited to
+        the selling station's controlling faction (selling only happens
+        while docked, so the current system's controlling faction at sale
+        time is correct) -- see main_window.py's
+        _record_faction_trade_sold."""
+        self.db.execute(
+            "INSERT INTO faction_trade_sold (system_address, faction_name, kind, value, sold_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (system_address, faction_name, kind, value, sold_at),
+        )
+
+    def get_faction_trade_sold_since(self, since: str) -> list[dict]:
+        """Every sale sold_at >= since. Feeds get_session_activity_report()."""
+        rows = self.db.execute(
+            "SELECT system_address, faction_name, kind, value, sold_at "
+            "FROM faction_trade_sold WHERE sold_at >= ?",
+            (since,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def get_odyssey_farming_candidates(self, limit: int = 20) -> list[dict]:
         """
         Odyssey on-foot farming candidates: systems whose most recent
