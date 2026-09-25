@@ -28,7 +28,8 @@ def test_report_builds_one_card_per_system():
     report = {
         "Ekono": {
             "Elite United Worlds": {
-                "missions": {"count": 3, "weighted": 6, "primary_count": 2, "secondary_count": 1},
+                "missions": {"count": 3, "weighted": 6, "primary_count": 2, "secondary_count": 1,
+                             "by_type": {"Courier": 2, "Massacre Conflict CivilWar": 1}},
                 "combat_bonds_total": 20000,
                 "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 2},
                 "trade_sold": {"commodity": 63085, "exploration": 0, "exobiology": 0},
@@ -36,7 +37,7 @@ def test_report_builds_one_card_per_system():
         },
         "Aiga": {
             "Hungarian Wolves": {
-                "missions": {"count": 0, "weighted": 0, "primary_count": 0, "secondary_count": 0},
+                "missions": {"count": 0, "weighted": 0, "primary_count": 0, "secondary_count": 0, "by_type": {}},
                 "combat_bonds_total": 0,
                 "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 0},
                 "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 0},
@@ -51,7 +52,7 @@ def test_report_builds_one_card_per_system():
 
 def test_faction_row_shows_color_coded_chips_only_for_actual_activity():
     entry = {
-        "missions": {"count": 3, "weighted": 6, "primary_count": 2, "secondary_count": 1},
+        "missions": {"count": 3, "weighted": 6, "primary_count": 2, "secondary_count": 1, "by_type": {"Courier": 3}},
         "combat_bonds_total": 20000,
         "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 2},
         "trade_sold": {"commodity": 63085, "exploration": 0, "exobiology": 0},
@@ -70,7 +71,7 @@ def test_faction_row_shows_color_coded_chips_only_for_actual_activity():
 
 def test_faction_row_with_no_activity_shows_placeholder():
     entry = {
-        "missions": {"count": 0, "weighted": 0, "primary_count": 0, "secondary_count": 0},
+        "missions": {"count": 0, "weighted": 0, "primary_count": 0, "secondary_count": 0, "by_type": {}},
         "combat_bonds_total": 0,
         "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 0},
         "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 0},
@@ -79,12 +80,27 @@ def test_faction_row_with_no_activity_shows_placeholder():
     assert "no activity" in html
 
 
+def test_mission_type_breakdown_sorts_by_count_descending():
+    entry = {
+        "missions": {"count": 3, "weighted": 6, "primary_count": 3, "secondary_count": 0,
+                     "by_type": {"Massacre Conflict CivilWar": 1, "Courier": 2}},
+    }
+    text = SessionActivityDialog._format_mission_types(entry)
+    assert text == "Courier x2, Massacre Conflict CivilWar x1"
+
+
+def test_mission_type_breakdown_empty_when_no_missions():
+    entry = {"missions": {"count": 0, "weighted": 0, "primary_count": 0, "secondary_count": 0, "by_type": {}}}
+    assert SessionActivityDialog._format_mission_types(entry) == ""
+
+
 def test_rerender_clears_previous_cards():
     dlg = _dialog()
     report_a = {
         "Ekono": {
             "Elite United Worlds": {
-                "missions": {"count": 1, "weighted": 2, "primary_count": 1, "secondary_count": 0},
+                "missions": {"count": 1, "weighted": 2, "primary_count": 1, "secondary_count": 0,
+                             "by_type": {"Courier": 1}},
                 "combat_bonds_total": 0,
                 "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 0},
                 "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 0},

@@ -31,11 +31,35 @@ def test_empty_report_with_no_activity(tmp_path):
 def test_missions_are_grouped_by_system_and_faction(tmp_path):
     repo = _repo(tmp_path)
     _seed_system(repo, 12345, "Ekono")
-    repo.record_faction_mission_completion(12345, "Elite United Worlds", "2026-09-25T10:00:00Z", influence_tier="++", is_primary=True)
+    repo.record_faction_mission_completion(
+        12345, "Elite United Worlds", "2026-09-25T10:00:00Z",
+        influence_tier="++", is_primary=True, mission_type="Courier",
+    )
     report = repo.get_session_activity_report("2026-09-25T00:00:00Z")
     assert report["Ekono"]["Elite United Worlds"]["missions"] == {
         "count": 1, "weighted": 2, "primary_count": 1, "secondary_count": 0,
+        "by_type": {"Courier": 1},
     }
+
+
+def test_missions_are_broken_down_by_type(tmp_path):
+    repo = _repo(tmp_path)
+    _seed_system(repo, 12345, "Ekono")
+    repo.record_faction_mission_completion(
+        12345, "Elite United Worlds", "2026-09-25T10:00:00Z", mission_type="Courier",
+    )
+    repo.record_faction_mission_completion(
+        12345, "Elite United Worlds", "2026-09-25T11:00:00Z", mission_type="Courier",
+    )
+    repo.record_faction_mission_completion(
+        12345, "Elite United Worlds", "2026-09-25T12:00:00Z", mission_type="Massacre Conflict CivilWar",
+    )
+    repo.record_faction_mission_completion(
+        12345, "Elite United Worlds", "2026-09-25T13:00:00Z",
+    )  # no mission_type -- older row shape
+    report = repo.get_session_activity_report("2026-09-25T00:00:00Z")
+    by_type = report["Ekono"]["Elite United Worlds"]["missions"]["by_type"]
+    assert by_type == {"Courier": 2, "Massacre Conflict CivilWar": 1, "Unknown": 1}
 
 
 def test_combat_bonds_are_summed_per_faction(tmp_path):

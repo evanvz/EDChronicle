@@ -151,6 +151,18 @@ class SessionActivityDialog(QDialog):
 
         return "  ".join(chips) if chips else '<span style="color:#555555;">no activity</span>'
 
+    @staticmethod
+    def _format_mission_types(entry: dict) -> str:
+        """Dim sub-line breaking mission count down by kind (e.g. "Courier
+        x2, Massacre Conflict CivilWar x1"), from the journal's own Name
+        field cleaned at write time -- see main_window.py's
+        _record_faction_mission_completion. Empty string when there are no
+        missions or none carry a recorded type (rows written before this
+        column existed)."""
+        by_type = entry["missions"].get("by_type") or {}
+        parts = [f"{t} x{c}" for t, c in sorted(by_type.items(), key=lambda kv: -kv[1])]
+        return ", ".join(parts)
+
     def _render_report(self, report: dict) -> None:
         self._clear_cards()
         self._empty_label.setVisible(not report)
@@ -180,6 +192,13 @@ class SessionActivityDialog(QDialog):
                 row.setWordWrap(True)
                 row.setStyleSheet("background:transparent; border:none;")
                 card_l.addWidget(row)
+
+                mission_types = self._format_mission_types(entry)
+                if mission_types:
+                    types_row = QLabel(f"    {mission_types}")
+                    types_row.setWordWrap(True)
+                    types_row.setStyleSheet("background:transparent; border:none; color:#666666; font-size:11px;")
+                    card_l.addWidget(types_row)
 
             self._content_layout.addWidget(card)
             self._cards.append(card)

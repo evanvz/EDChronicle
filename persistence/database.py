@@ -295,6 +295,11 @@ class Database:
             # row (all issuer-only, from before this column existed) stays
             # correctly classified as primary.
             "ALTER TABLE faction_mission_completions ADD COLUMN is_primary INTEGER NOT NULL DEFAULT 1",
+            # Cleaned mission kind (e.g. "Courier Boom" from the journal's
+            # own Name:"Mission_Courier_Boom_name") -- for the Session BGS
+            # Activity Report's per-faction type breakdown. NULL for any
+            # row recorded before this column existed.
+            "ALTER TABLE faction_mission_completions ADD COLUMN mission_type TEXT",
             # Live PowerPlay reading from the journal's own PowerplayState*
             # fields (Location/FSDJump only) -- previously only ever held in
             # memory, lost the moment the player left the system. Persisting

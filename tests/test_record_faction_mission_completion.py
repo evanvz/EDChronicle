@@ -32,12 +32,13 @@ def test_primary_effect_is_recorded():
     fake_self = _fake_self()
     evt = {
         "event": "MissionCompleted", "Faction": "Elite United Worlds", "timestamp": "2026-09-24T10:00:00Z",
+        "Name": "Mission_Courier_Boom_name",
         "FactionEffects": [_effect("Elite United Worlds", 12345, tier="++")],
     }
     MainWindow._record_faction_mission_completion(fake_self, evt)
     assert fake_self._saved == [{
         "system_address": 12345, "faction_name": "Elite United Worlds", "completed_at": "2026-09-24T10:00:00Z",
-        "influence_tier": "++", "is_primary": True,
+        "influence_tier": "++", "is_primary": True, "mission_type": "Courier Boom",
     }]
     assert fake_self._notified == [12345]
 
@@ -46,6 +47,7 @@ def test_secondary_effect_is_recorded_separately_even_in_a_different_system():
     fake_self = _fake_self()
     evt = {
         "event": "MissionCompleted", "Faction": "Elite United Worlds", "timestamp": "2026-09-24T10:00:00Z",
+        "Name": "Mission_Courier_name",
         "FactionEffects": [
             _effect("Hungarian Wolves", 999, tier="++"),  # target faction, destination system
             _effect("Elite United Worlds", 12345, tier="++"),  # issuer, current system
@@ -54,11 +56,21 @@ def test_secondary_effect_is_recorded_separately_even_in_a_different_system():
     MainWindow._record_faction_mission_completion(fake_self, evt)
     assert fake_self._saved == [
         {"system_address": 999, "faction_name": "Hungarian Wolves", "completed_at": "2026-09-24T10:00:00Z",
-         "influence_tier": "++", "is_primary": False},
+         "influence_tier": "++", "is_primary": False, "mission_type": "Courier"},
         {"system_address": 12345, "faction_name": "Elite United Worlds", "completed_at": "2026-09-24T10:00:00Z",
-         "influence_tier": "++", "is_primary": True},
+         "influence_tier": "++", "is_primary": True, "mission_type": "Courier"},
     ]
     assert set(fake_self._notified) == {999, 12345}
+
+
+def test_missing_name_field_yields_no_mission_type():
+    fake_self = _fake_self()
+    evt = {
+        "event": "MissionCompleted", "Faction": "Elite United Worlds", "timestamp": "2026-09-24T10:00:00Z",
+        "FactionEffects": [_effect("Elite United Worlds", 12345, tier="++")],
+    }
+    MainWindow._record_faction_mission_completion(fake_self, evt)
+    assert fake_self._saved[0]["mission_type"] is None
 
 
 def test_missing_faction_effects_is_skipped():

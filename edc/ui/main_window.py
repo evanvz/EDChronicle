@@ -1252,6 +1252,20 @@ class MainWindow(QMainWindow):
         from datetime import datetime, timezone
         completed_at = evt.get("timestamp") or datetime.now(timezone.utc).isoformat()
 
+        # "Mission_Courier_Boom_name" -> "Courier Boom" -- same for every
+        # row of this mission regardless of which faction it affected, so
+        # computed once rather than per-effect.
+        raw_name = evt.get("Name")
+        mission_type = None
+        if isinstance(raw_name, str) and raw_name:
+            cleaned = raw_name
+            if cleaned.startswith("Mission_"):
+                cleaned = cleaned[len("Mission_"):]
+            if cleaned.endswith("_name"):
+                cleaned = cleaned[:-len("_name")]
+            cleaned = cleaned.replace("_", " ").strip()
+            mission_type = cleaned or None
+
         notified_systems: set = set()
         for effect in effects:
             if not isinstance(effect, dict):
@@ -1277,6 +1291,7 @@ class MainWindow(QMainWindow):
                         completed_at=completed_at,
                         influence_tier=tier if isinstance(tier, str) else None,
                         is_primary=is_primary,
+                        mission_type=mission_type,
                     )
                 except Exception:
                     log.exception("Failed to record faction mission completion")
