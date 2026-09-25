@@ -2750,6 +2750,77 @@ class Repository:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def get_session_activity_report(self, since: str) -> dict:
+        """{system_name: {faction_name: {"missions": {...}, "combat_bonds_total": int,
+        "cz_kills": {...}, "trade_sold": {...}}}} -- everything since the last
+        detected BGS tick (see edc/core/bgs_tick.py), across every system,
+        not scoped to one faction (unlike the Faction Expansion tracker's
+        get_faction_mission_completion_counts). Four small queries
+        assembled in Python rather than one JOIN -- the four event types
+        don't share a natural join key beyond system+faction, and a JOIN
+        would multiply rows across tables instead of aggregating them.
+        A system_address with no systems row (can't be named) is skipped."""
+        names = {
+            r["system_address"]: r["system_name"]
+            for r in self.db.execute("SELECT system_address, system_name FROM systems").fetchall()
+            if r["system_name"]
+        }
+
+        def _bucket(system_address: int, faction_name: str) -> dict:
+            system_name = names.get(system_address)
+            if system_name is None:
+                return None
+            report.setdefault(system_name, {})
+            return report[system_name].setdefault(faction_name, {
+                "missions": {"count": 0, "weighted": 0, "primary_count": 0, "secondary_count": 0},
+                "combat_bonds_total": 0,
+                "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 0},
+                "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 0},
+            })
+
+        report: dict = {}
+
+        mission_rows = self.db.execute(
+            "SELECT system_address, faction_name, influence_tier, is_primary "
+            "FROM faction_mission_completions WHERE completed_at >= ?",
+            (since,),
+        ).fetchall()
+        for r in mission_rows:
+            entry = _bucket(r["system_address"], r["faction_name"])
+            if entry is None:
+                continue
+            m = entry["missions"]
+            m["count"] += 1
+            if isinstance(r["influence_tier"], str):
+                m["weighted"] += len(r["influence_tier"])
+            if r["is_primary"]:
+                m["primary_count"] += 1
+            else:
+                m["secondary_count"] += 1
+
+        for r in self.get_faction_combat_bonds_since(since):
+            entry = _bucket(r["system_address"], r["faction_name"])
+            if entry is None:
+                continue
+            entry["combat_bonds_total"] += r["reward"]
+
+        for r in self.get_faction_cz_kills_since(since):
+            entry = _bucket(r["system_address"], r["faction_name"])
+            if entry is None:
+                continue
+            key = f"{r['zone_type']}_{r['size']}"
+            if key in entry["cz_kills"]:
+                entry["cz_kills"][key] += 1
+
+        for r in self.get_faction_trade_sold_since(since):
+            entry = _bucket(r["system_address"], r["faction_name"])
+            if entry is None:
+                continue
+            if r["kind"] in entry["trade_sold"]:
+                entry["trade_sold"][r["kind"]] += r["value"]
+
+        return report
+
     def get_odyssey_farming_candidates(self, limit: int = 20) -> list[dict]:
         """
         Odyssey on-foot farming candidates: systems whose most recent
