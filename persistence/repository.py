@@ -654,7 +654,7 @@ class Repository:
             # all, so neither may clear. UPDATE only: never creates a row, and
             # rows holding only system-profile columns (conflicts NULL) are
             # left alone.
-            if source == "journal":
+            if source == "journal" and factions:
                 self.db.execute(
                     """
                     UPDATE net.system_bgs_status
@@ -678,8 +678,9 @@ class Repository:
                 faction_states = excluded.faction_states,
                 data_timestamp = excluded.data_timestamp,
                 source         = excluded.source
-            WHERE net.system_bgs_status.data_timestamp IS NULL
-               OR excluded.data_timestamp >= net.system_bgs_status.data_timestamp
+            WHERE (net.system_bgs_status.data_timestamp IS NULL
+               OR excluded.data_timestamp >= net.system_bgs_status.data_timestamp)
+              AND (excluded.source != 'edsm' OR net.system_bgs_status.conflicts IS NULL)
             """,
             (
                 system_address, system_name,
@@ -2957,23 +2958,27 @@ class Repository:
         return cur.lastrowid
 
     def list_bgs_tasks(self) -> list[dict]:
-        """All tasks in the user's priority order. A task whose system name
-        wasn't known when it was added is resolved here the first time that
-        system shows up (own visit or EDDN), and the resolution is saved."""
-        rows = [dict(r) for r in self.db.conn.execute(
+        """All tasks in the user's priority order, as stored. A task whose
+        system name wasn't known when it was added stays unresolved here --
+        resolving it via resolve_system would scan net.system_bgs_status
+        (742k rows, no usable index for COLLATE NOCASE) on every UI refresh.
+        See resolve_bgs_tasks_for_system for the actual resolution path."""
+        return [dict(r) for r in self.db.conn.execute(
             "SELECT id, system_address, system_name, task_type, faction_name, opponent_name, note, "
             "sort_order, created_at FROM bgs_tasks ORDER BY sort_order, id"
         ).fetchall()]
-        for r in rows:
-            if r["system_address"] is None and r["system_name"]:
-                resolved = self.resolve_system(r["system_name"])
-                if resolved:
-                    r["system_address"], r["system_name"] = resolved
-                    self.db.execute(
-                        "UPDATE bgs_tasks SET system_address = ?, system_name = ? WHERE id = ?",
-                        (resolved[0], resolved[1], r["id"]),
-                    )
-        return rows
+
+    def resolve_bgs_tasks_for_system(self, system_address: int, system_name: str) -> int:
+        """Resolves any task entered under this system's name before its
+        address was known, called only when the player is actually in that
+        system (one row lookup by name via the UI's current state), not
+        scanned across all unresolved tasks on every refresh."""
+        cur = self.db.execute(
+            "UPDATE bgs_tasks SET system_address = ?, system_name = ? "
+            "WHERE system_address IS NULL AND system_name = ? COLLATE NOCASE",
+            (system_address, system_name, system_name),
+        )
+        return cur.rowcount
 
     def delete_bgs_task(self, task_id: int) -> None:
         self.db.execute("DELETE FROM bgs_tasks WHERE id = ?", (task_id,))

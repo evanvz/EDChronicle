@@ -55,15 +55,28 @@ def test_add_and_list_tasks_in_entry_order(tmp_path):
     assert len(tasks[0]["created_at"]) == 20 and tasks[0]["created_at"].endswith("Z")
 
 
-def test_list_resolves_a_system_seen_after_the_task_was_added(tmp_path):
+def test_list_leaves_an_unknown_system_task_unresolved_even_after_it_becomes_known(tmp_path):
     repo = _repo(tmp_path)
     repo.add_bgs_task("kanuket", "vote", faction_name="A", opponent_name="B")
     _seed_system(repo, 777, "Kanuket")
     tasks = repo.list_bgs_tasks()
-    assert tasks[0]["system_address"] == 777
-    assert tasks[0]["system_name"] == "Kanuket"
+    assert tasks[0]["system_address"] is None
+    assert tasks[0]["system_name"] == "kanuket"
     row = repo.db.conn.execute("SELECT system_address FROM bgs_tasks").fetchone()
-    assert row["system_address"] == 777  # persisted, not just returned
+    assert row["system_address"] is None  # list_bgs_tasks no longer resolves/persists
+
+
+def test_resolve_bgs_tasks_for_system_resolves_matching_task_only(tmp_path):
+    repo = _repo(tmp_path)
+    kanuket_task = repo.add_bgs_task("kanuket", "vote", faction_name="A", opponent_name="B")
+    other_task = repo.add_bgs_task("Somewhere Else", "note", note="x")
+    resolved_count = repo.resolve_bgs_tasks_for_system(777, "Kanuket")
+    assert resolved_count == 1
+    tasks = {t["id"]: t for t in repo.list_bgs_tasks()}
+    assert tasks[kanuket_task]["system_address"] == 777
+    assert tasks[kanuket_task]["system_name"] == "Kanuket"
+    assert tasks[other_task]["system_address"] is None
+    assert tasks[other_task]["system_name"] == "Somewhere Else"
 
 
 def test_delete_task(tmp_path):

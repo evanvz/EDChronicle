@@ -260,7 +260,8 @@ def _stored_conflicts(repo):
 
 def test_newer_journal_reading_with_nothing_relevant_clears_ended_conflict(repo):
     repo.save_system_bgs_status(1, "Sol", _WAR, [], "2026-09-20T00:00:00Z", "journal")
-    repo.save_system_bgs_status(1, "Sol", [], [], "2026-09-21T00:00:00Z", "journal")
+    factions = [{"Name": "A", "ActiveStates": [], "PendingStates": [], "RecoveringStates": []}]
+    repo.save_system_bgs_status(1, "Sol", [], factions, "2026-09-21T00:00:00Z", "journal")
     assert _stored_conflicts(repo) == []
 
 
@@ -275,3 +276,26 @@ def test_eddn_and_edsm_readings_never_clear(repo):
     repo.save_system_bgs_status(1, "Sol", [], [], "2026-09-21T00:00:00Z", "eddn")
     repo.save_system_bgs_status(1, "Sol", [], [], "2026-09-22T00:00:00Z", "edsm")
     assert len(_stored_conflicts(repo)) == 1
+
+
+def test_newer_journal_reading_with_empty_factions_list_does_not_clear(repo):
+    repo.save_system_bgs_status(1, "Sol", _WAR, [], "2026-09-20T00:00:00Z", "journal")
+    repo.save_system_bgs_status(1, "Sol", [], [], "2026-09-21T00:00:00Z", "journal")
+    assert len(_stored_conflicts(repo)) == 1
+
+
+def test_edsm_reading_does_not_overwrite_existing_conflicts(repo):
+    election = [{"WarType": "election", "Status": "", "Faction1": {"Name": "A", "WonDays": 2}, "Faction2": {"Name": "B", "WonDays": 0}}]
+    repo.save_system_bgs_status(1, "Sol", election, [], "2026-09-20T00:00:00Z", "journal")
+    war = [{"WarType": "war", "Status": "active", "Faction1": {"Name": "C", "WonDays": 1}, "Faction2": {"Name": "D", "WonDays": 1}}]
+    repo.save_system_bgs_status(1, "Sol", war, [], "2026-09-25T00:00:00Z", "edsm")
+    stored = _stored_conflicts(repo)
+    assert stored[0]["war_type"] == "election"
+    assert stored[0]["won_days1"] == 2 and stored[0]["won_days2"] == 0
+
+
+def test_edsm_reading_still_inserts_when_no_existing_row(repo):
+    war = [{"WarType": "war", "Status": "active", "Faction1": {"Name": "C", "WonDays": 1}, "Faction2": {"Name": "D", "WonDays": 1}}]
+    repo.save_system_bgs_status(1, "Sol", war, [], "2026-09-25T00:00:00Z", "edsm")
+    stored = _stored_conflicts(repo)
+    assert stored[0]["war_type"] == "war"
