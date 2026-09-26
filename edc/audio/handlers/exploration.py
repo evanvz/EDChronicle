@@ -172,6 +172,12 @@ class ExplorationPhrases:
         "Megaship nearby. Don't let those merits go to waste, Commander.",
     ]
 
+    MEGASHIP_CONFLICT = [
+        "Caution — there's a {war} in this system. Expect hostiles at the megaship.",
+        "Heads up, Commander — {war} in this system. The megaship may be under attack, expect hostiles.",
+        "{war} under way here. Expect hostiles around the megaship.",
+    ]
+
     NHSS_DETECTED = [
         "Non-human signal source detected. Threat level {threat}.",
         "Non-human signal source on sensors. Threat level {threat}.",
@@ -335,6 +341,11 @@ class ExplorationPhrases:
         if activity == "acquisition":
             return pick(ExplorationPhrases.MEGASHIP_PP_ACQUISITION)
         return pick(ExplorationPhrases.MEGASHIP_PP_MERITS)
+
+    @staticmethod
+    def megaship_conflict_warning(war_label: str) -> str:
+        phrase = pick(ExplorationPhrases.MEGASHIP_CONFLICT, war=war_label.lower())
+        return phrase[0].upper() + phrase[1:]
 
     @staticmethod
     def compromised_nav_beacon_pp_merits(activity: str) -> str:

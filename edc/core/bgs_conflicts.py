@@ -83,6 +83,26 @@ def find_squadron_war_enemy(factions: List[dict], system_conflicts: List[dict]) 
     return None
 
 
+def active_system_war(system_conflicts: List[dict]) -> Optional[tuple]:
+    """("War" | "Civil war", faction1, faction2) for the first War/CivilWar
+    in the current system's Conflicts that isn't merely pending, else None.
+    Journal-verified megaship-attack signal: hostiles at a megaship came from
+    one combatant of such a war (HIP 19591, HIP 108729). Status can be ""
+    rather than "active" in a live war, so only "pending" is excluded."""
+    for c in (system_conflicts or []):
+        if not isinstance(c, dict):
+            continue
+        war_type = str(c.get("WarType", "")).lower()
+        if war_type not in ("war", "civilwar"):
+            continue
+        if str(c.get("Status", "")).lower() == "pending":
+            continue
+        f1 = (c.get("Faction1") or {}).get("Name") or "?"
+        f2 = (c.get("Faction2") or {}).get("Name") or "?"
+        return ("Civil war" if war_type == "civilwar" else "War", f1, f2)
+    return None
+
+
 def parse_powerplay_conflict_progress(event: Dict[str, Any]) -> Dict[str, float]:
     """
     Journal emits PowerplayConflictProgress as a list of

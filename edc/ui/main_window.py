@@ -2,6 +2,7 @@
 # Licensed under the PolyForm Noncommercial License 1.0.0.
 # See the LICENSE file in the project root for full terms.
 
+import html
 import json
 import logging
 import sqlite3
@@ -98,7 +99,7 @@ from edc.core.commodity_categories import CommodityCategoryTable
 from edc.core.fdevids_names import ShipNameTable
 from edc.core.bounty_scanner import scan_active_bounties_with_dates
 from edc.core.fine_scanner import scan_active_fines
-from edc.core.bgs_conflicts import squadron_faction_name
+from edc.core.bgs_conflicts import active_system_war, squadron_faction_name
 from edc.core.combat_bond_scanner import scan_unredeemed_combat_total
 from edc.core.materials_scanner import scan_latest_materials
 from edc.core.notoriety_scanner import scan_latest_notoriety
@@ -4153,18 +4154,22 @@ class MainWindow(QMainWindow):
                         pledged = (getattr(state, "pp_power", None) or "").strip()
                         ctrl = (getattr(state, "system_controlling_power", None) or "").strip()
                         pp_state_val = (getattr(state, "system_powerplay_state", None) or "").strip()
+                        merit = ""
                         if pledged:
                             # Marking "done" happens on confirmed drop-in
                             # (SupercruiseDestinationDrop), not here — this
                             # only decides whether it's worth alerting about.
                             # Reinforcement: our own power controls this system
                             if ctrl and ctrl.lower() == pledged.lower():
-                                self._tts_megaship_announced.add(mega_key)
-                                return ExplorationPhrases.megaship_pp_merits("reinforcement")
+                                merit = ExplorationPhrases.megaship_pp_merits("reinforcement")
                             # Acquisition: no controlling power, but PP-active
-                            if not ctrl and pp_state_val:
-                                self._tts_megaship_announced.add(mega_key)
-                                return ExplorationPhrases.megaship_pp_merits("acquisition")
+                            elif not ctrl and pp_state_val:
+                                merit = ExplorationPhrases.megaship_pp_merits("acquisition")
+                        war = active_system_war(getattr(state, "system_conflicts", None))
+                        warning = ExplorationPhrases.megaship_conflict_warning(war[0]) if war else ""
+                        if merit or warning:
+                            self._tts_megaship_announced.add(mega_key)
+                            return f"{merit} {warning}".strip()
                     return ""
 
                 if sig_type == "navbeacon":
@@ -5139,6 +5144,13 @@ class MainWindow(QMainWindow):
         except Exception:
             log.exception("Failed to add system intel hints")
 
+    @staticmethod
+    def _megaship_conflict_hud_suffix(system_conflicts) -> str:
+        war = active_system_war(system_conflicts)
+        if not war:
+            return ""
+        return f" — ⚠ {war[0]}: {html.escape(war[1])} vs {html.escape(war[2])}, expect hostiles"
+
     def _refresh_hud(self):
         parts = []
         lines = []
@@ -5498,7 +5510,8 @@ class MainWindow(QMainWindow):
                 # count; this is presence-only ("detected"), not a tally.
                 lines.append("✨ Action: Stellar phenomena detected")
             if mega:
-                lines.append(f"🚢 Action: Megaship signals discovered ({mega})")
+                suffix = self._megaship_conflict_hud_suffix(getattr(self.state, "system_conflicts", None))
+                lines.append(f"🚢 Action: Megaship signals discovered ({mega}){suffix}")
             if gen_ships:
                 lines.append(f"🚀 Action: Generation Ship discovered: {', '.join(gen_ships)}")
             if tour:
