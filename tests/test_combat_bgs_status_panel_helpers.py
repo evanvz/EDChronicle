@@ -8,10 +8,10 @@ from edc.ui.panels.combat_bgs_status_panel import (
 # --- _merge_results ---
 
 def test_merge_results_combines_bgs_only_system():
-    bgs = [{"system_name": "Sol", "distance_ly": 5.0, "conflicts": [], "faction_states": [], "data_timestamp": "2026-08-23T00:00:00Z"}]
+    bgs = [{"system_name": "Sol", "distance_ly": 5.0, "conflicts": [{"war_type": "war"}], "faction_states": [], "data_timestamp": "2026-08-23T00:00:00Z"}]
     rows = _merge_results(bgs, [])
     assert rows == [{
-        "system_name": "Sol", "distance_ly": 5.0, "conflicts": [], "faction_states": [],
+        "system_name": "Sol", "distance_ly": 5.0, "conflicts": [{"war_type": "war"}], "faction_states": [],
         "tiers": [], "data_timestamp": "2026-08-23T00:00:00Z",
     }]
 
@@ -39,7 +39,7 @@ def test_merge_results_merges_same_system_from_both_lists():
 
 
 def test_merge_results_keeps_bgs_timestamp_when_it_is_newer():
-    bgs = [{"system_name": "Sol", "distance_ly": 5.0, "conflicts": [], "faction_states": [],
+    bgs = [{"system_name": "Sol", "distance_ly": 5.0, "conflicts": [{"war_type": "war"}], "faction_states": [],
             "data_timestamp": "2026-08-23T05:00:00Z"}]
     res = [{"system_name": "Sol", "distance_ly": 5.0, "tiers": ["Low"], "data_timestamp": "2026-08-23T01:00:00Z"}]
     rows = _merge_results(bgs, res)
@@ -48,8 +48,8 @@ def test_merge_results_keeps_bgs_timestamp_when_it_is_newer():
 
 def test_merge_results_sorted_by_distance():
     bgs = [
-        {"system_name": "Far", "distance_ly": 50.0, "conflicts": [], "faction_states": [], "data_timestamp": "2026-08-23T00:00:00Z"},
-        {"system_name": "Near", "distance_ly": 5.0, "conflicts": [], "faction_states": [], "data_timestamp": "2026-08-23T00:00:00Z"},
+        {"system_name": "Far", "distance_ly": 50.0, "conflicts": [{"war_type": "war"}], "faction_states": [], "data_timestamp": "2026-08-23T00:00:00Z"},
+        {"system_name": "Near", "distance_ly": 5.0, "conflicts": [{"war_type": "war"}], "faction_states": [], "data_timestamp": "2026-08-23T00:00:00Z"},
     ]
     rows = _merge_results(bgs, [])
     assert [r["system_name"] for r in rows] == ["Near", "Far"]
@@ -156,3 +156,21 @@ def test_merge_results_drops_election_only_rows_and_strips_elections():
     merged = _merge_results(bgs, [])
     assert [r["system_name"] for r in merged] == ["Both"]
     assert merged[0]["conflicts"] == [war]
+
+
+def test_merge_results_drops_empty_bgs_rows_but_keeps_with_res_data():
+    # A cleared BGS row (conflicts=[], faction_states=[]) is dropped from
+    # the BGS loop, but search_bgs_status_near returns such rows, and
+    # RES-only display should still work via res_results setdefault.
+    bgs = [
+        {"system_name": "OnlyCleared", "distance_ly": 1.0, "conflicts": [],
+         "faction_states": [], "data_timestamp": "2026-09-26T00:00:00Z"},
+    ]
+    res = [
+        {"system_name": "OnlyCleared", "distance_ly": 1.0, "tiers": ["High"],
+         "data_timestamp": "2026-09-26T01:00:00Z"},
+    ]
+    merged = _merge_results(bgs, res)
+    assert [r["system_name"] for r in merged] == ["OnlyCleared"]
+    assert merged[0]["conflicts"] == []
+    assert merged[0]["tiers"] == ["High"]

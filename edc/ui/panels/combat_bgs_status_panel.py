@@ -85,9 +85,7 @@ def _merge_results(bgs_results: List[dict], res_results: List[dict]) -> List[Dic
     merged: Dict[str, Dict[str, Any]] = {}
     for r in bgs_results:
         conflicts = _combat_conflicts(r["conflicts"])
-        # Drop rows with only elections (no combat conflicts and no factions),
-        # but keep rows with no data at all (might have RES data).
-        if not conflicts and not r["faction_states"] and r["conflicts"]:
+        if not conflicts and not r["faction_states"]:
             continue
         merged[r["system_name"]] = {
             "system_name": r["system_name"], "distance_ly": r["distance_ly"],
