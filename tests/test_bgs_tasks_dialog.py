@@ -51,7 +51,27 @@ def test_card_shows_what_to_do_line(tmp_path):
     dlg, repo, _ = _dialog(tmp_path)
     repo.add_bgs_task("Ekono", "vote", faction_name="A", opponent_name="B")
     dlg.refresh()
-    assert "What to do: Missions, trade and exploration data for A." in _card_texts(dlg)[0]
+    text = _card_texts(dlg)[0]
+    assert "What to do:" in text
+    assert "Missions, trade and exploration data for A." in text
+
+
+def test_cards_use_one_accent_colour_per_task_type(tmp_path):
+    from edc.core.bgs_tasks import TYPE_COLORS
+
+    dlg, repo, _ = _dialog(tmp_path)
+    repo.add_bgs_task("Ekono", "vote", faction_name="A<b>", opponent_name="B")
+    repo.add_bgs_task("Ekono", "fight", faction_name="C", opponent_name="D")
+    dlg.refresh()
+    for card, task_type in zip(dlg._cards, ("vote", "fight")):
+        colour = TYPE_COLORS[task_type]
+        assert colour in card.styleSheet()  # left border
+        labels = card.findChildren(QLabel)
+        assert colour in labels[0].styleSheet()  # title
+        guide = [l for l in labels if "What to do" in l.text()][0]
+        assert colour in guide.text()
+    vote_guide = [l for l in dlg._cards[0].findChildren(QLabel) if "What to do" in l.text()][0]
+    assert "A&lt;b&gt;" in vote_guide.text()  # faction names escaped in rich text
 
 
 def test_invalid_input_shows_error_and_adds_nothing(tmp_path):

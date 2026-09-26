@@ -7,6 +7,7 @@ each with live progress from data the app already records. See
 docs/superpowers/specs/2026-09-26-bgs-tasks-tracker-design.md."""
 from __future__ import annotations
 
+import html
 import logging
 
 from PyQt6.QtCore import Qt
@@ -16,7 +17,7 @@ from PyQt6.QtWidgets import (
 )
 
 from edc.core.bgs_tasks import (
-    DEFAULT_LIMITS, STATUS_COLORS, TASK_LABELS, TASK_TYPES, build_task_views, task_title, validate_task_input,
+    DEFAULT_LIMITS, STATUS_COLORS, TASK_LABELS, TASK_TYPES, TYPE_COLORS, build_task_views, task_title, validate_task_input,
 )
 from edc.ui import formatting as fmt
 from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE
@@ -25,7 +26,7 @@ log = logging.getLogger("edc.bgs_tasks")
 
 _LINE_STYLE = "background:transparent; border:none; color:#c8c8c8;"
 _DIM_STYLE = "background:transparent; border:none; color:#888888; font-size:11px;"
-_GUIDE_STYLE = "background:transparent; border:none; color:#7fb2e6; font-style:italic;"
+_GUIDE_STYLE = "background:transparent; border:none; color:#a8a8a8;"
 _WARN_STYLE ="background:transparent; border:none; color:#FFB347;"
 _SMALL_BTN = (
     "QPushButton { background:#101c2a; color:#c8c8c8; border:1px solid #2a3a4a;"
@@ -231,14 +232,15 @@ class BgsTasksDialog(QDialog):
     def _make_card(self, view: dict) -> QFrame:
         task = view["task"]
         card = QFrame()
-        card.setStyleSheet(_CARD_STYLE)
+        accent = TYPE_COLORS.get(task["task_type"], "#c8c8c8")
+        card.setStyleSheet(_CARD_STYLE + f" QFrame {{ border-left:4px solid {accent}; }}")
         card_l = QVBoxLayout(card)
         card_l.setContentsMargins(8, 6, 8, 8)
         card_l.setSpacing(3)
 
         top = QHBoxLayout()
         title = QLabel(task_title(task))
-        title.setStyleSheet(_HDR_STYLE)
+        title.setStyleSheet(_HDR_STYLE + f" color:{accent};")
         title.setWordWrap(True)
         top.addWidget(title, 1)
         if view["status"]:
@@ -259,7 +261,10 @@ class BgsTasksDialog(QDialog):
         card_l.addLayout(top)
 
         if view.get("guide"):
-            lbl = QLabel(f"What to do: {view['guide']}")
+            lbl = QLabel(
+                f'<span style="color:{accent}; font-weight:700;">What to do:</span> {html.escape(view["guide"])}'
+            )
+            lbl.setTextFormat(Qt.TextFormat.RichText)
             lbl.setWordWrap(True)
             lbl.setStyleSheet(_GUIDE_STYLE)
             card_l.addWidget(lbl)

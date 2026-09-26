@@ -5907,11 +5907,13 @@ class MainWindow(QMainWindow):
         self._notify_bgs_activity()
 
     def _notify_bgs_activity(self) -> None:
+        # Hint first: it links tasks to the system just arrived in, so the
+        # BGS Tasks window's refresh below already sees the link.
+        self._refresh_bgs_task_hint()
         try:
             self.player_faction_panel.notify_bgs_activity()
         except Exception:
             log.exception("Failed to refresh BGS Tasks window")
-        self._refresh_bgs_task_hint()
 
     def _refresh_bgs_task_hint(self) -> None:
         """Overview HUD line for the squadron BGS task(s) in the current

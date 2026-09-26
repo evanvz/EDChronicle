@@ -30,6 +30,16 @@ STATUS_COLORS = {
     STATUS_TRACKING: "#4DD8C8",
 }
 
+# One accent per task type, matching colours already used elsewhere
+# (missions green, Overview election yellow / war red).
+TYPE_COLORS = {
+    "boost": "#6BCB77",
+    "vote": "#FFD93D",
+    "fight": "#FF6B6B",
+    "powerplay": "#B983FF",
+    "note": "#888888",
+}
+
 # Squadron guidance defaults (Frontier publishes no per-stream limits).
 DEFAULT_LIMITS = {"tier_score": 25, "bounties": 20_000_000, "exploration": 20_000_000}
 

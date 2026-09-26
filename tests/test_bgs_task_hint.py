@@ -82,7 +82,9 @@ def test_notify_pushes_panel_and_hint():
         _refresh_bgs_task_hint=lambda: calls.append("hint"),
     )
     MainWindow._notify_bgs_activity(fake_self)
-    assert calls == ["panel", "hint"]
+    # Hint first: it links tasks to the system just arrived in, so the
+    # window's refresh right after already sees the link.
+    assert calls == ["hint", "panel"]
 
 
 def _dispatch_fake_self(replaying):
