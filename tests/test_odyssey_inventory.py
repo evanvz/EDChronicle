@@ -166,6 +166,7 @@ def test_bootstrap_replay_does_not_double_apply_backpackchange_over_disk_snapsho
         _append=lambda text: None,
         _refresh_engineering=lambda: None,
         _schedule_hud_refresh=lambda: None,
+        _refresh_bgs_task_hint=lambda: None,
     )
     fake_self._load_backpack_inventory = lambda: MainWindow._load_backpack_inventory(fake_self)
     fake_self._load_shiplocker_inventory = lambda: MainWindow._load_shiplocker_inventory(fake_self)

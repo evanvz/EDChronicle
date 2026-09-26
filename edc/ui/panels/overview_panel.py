@@ -374,6 +374,17 @@ class OverviewPanel(QWidget):
         self.pinned_destination_badge.linkActivated.connect(lambda _href: self.destination_dismissed.emit())
         layout.addWidget(self.pinned_destination_badge)
 
+        # ── Squadron BGS task hint (current system has a BGS task) ─────────
+        self.bgs_task_badge = QLabel("")
+        self.bgs_task_badge.setTextFormat(Qt.TextFormat.PlainText)
+        self.bgs_task_badge.setWordWrap(True)
+        self.bgs_task_badge.setVisible(False)
+        self.bgs_task_badge.setStyleSheet(
+            "QLabel { background: #2a1a0d; border: 1px solid #5a3a1a;"
+            "border-radius: 6px; padding: 6px 10px; color: #FFB347; }"
+        )
+        layout.addWidget(self.bgs_task_badge)
+
         # ── Squadron faction badge ──────────────────────────────────────────
         self.squadron_faction_badge = QLabel("")
         self.squadron_faction_badge.setTextFormat(Qt.TextFormat.RichText)
@@ -503,6 +514,12 @@ class OverviewPanel(QWidget):
             f'&nbsp;&nbsp;<a href="dismiss" style="color:#E6E6E6;">[✓ Mark Reached]</a>'
         )
         self.pinned_destination_badge.setVisible(True)
+
+    def set_bgs_task_hint(self, text: str) -> None:
+        """One line naming the squadron BGS task(s) for the current system,
+        or "" to hide. Plain text -- faction names are never parsed as HTML."""
+        self.bgs_task_badge.setText(text)
+        self.bgs_task_badge.setVisible(bool(text))
 
     # ── Engineering wishlist alert ─────────────────────────────────────────────
     def set_engineering_alert(self, materials: list) -> None:

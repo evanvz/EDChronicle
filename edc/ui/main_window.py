@@ -81,6 +81,7 @@ from edc.core import service_health
 from edc.core.mission_events import MISSION_EVENT_NAMES
 from edc.core.megaship_scanner import scan_visited_megaships
 from edc.core.faction_refresh_tracker import FactionRefreshTracker
+from edc.core.bgs_tasks import bgs_limits, build_task_views, hud_line
 from edc.core.bgs_tick import fetch_latest_tick
 from edc.ui.panels.engineering_panel import EngineeringPanel
 from edc.audio.handlers.engineering import EngineeringPhrases
@@ -480,6 +481,13 @@ class _EddnFlushWorker(QObject):
         finally:
             db.close()
         self.finished.emit()
+
+
+# Journal events after which BGS task progress may have changed.
+_BGS_ACTIVITY_EVENTS = frozenset({
+    "FSDJump", "Location", "CarrierJump", "Docked", "MissionCompleted", "RedeemVoucher",
+    "FactionKillBond", "MarketSell", "MultiSellExplorationData", "SellExplorationData", "SellOrganicData",
+})
 
 
 def _retry_once_if_locked(db, work, what: str) -> None:
@@ -2483,6 +2491,8 @@ class MainWindow(QMainWindow):
             self.repo, self.faction_refresh_tracker,
             fdev_powerplay=self.fdev_powerplay, faction_expansion_pin_store=self.faction_expansion_pin_store,
         )
+        self.player_faction_panel.bgs_limits_getter = lambda: bgs_limits(self.cfg)
+        self.player_faction_panel.bgs_tasks_changed.connect(self._refresh_bgs_task_hint)
         self.player_faction_panel.tick_refresh_started.connect(self.overview_panel.show_tick_flash)
 
         # Squadron tab
@@ -3624,6 +3634,7 @@ class MainWindow(QMainWindow):
             self._load_shiplocker_inventory()
             self._load_backpack_inventory()
             self._refresh_engineering()
+            self._refresh_bgs_task_hint()
             return
 
         self._append(f"[EVENT] {name}")
@@ -3700,6 +3711,9 @@ class MainWindow(QMainWindow):
 
         if name in ("MarketSell", "MultiSellExplorationData", "SellExplorationData", "SellOrganicData") and not self._replaying:
             self._record_faction_trade_sold(evt)
+
+        if name in _BGS_ACTIVITY_EVENTS and not self._replaying:
+            self._notify_bgs_activity()
 
         if name == "Market":
             market_data = self._load_current_market()
@@ -5857,6 +5871,28 @@ class MainWindow(QMainWindow):
                 self.player_faction_panel.notify_faction_snapshot_saved(system_address)
             except Exception:
                 log.exception("Failed to notify Faction Expansion tracker after EDDN flush")
+        self._notify_bgs_activity()
+
+    def _notify_bgs_activity(self) -> None:
+        try:
+            self.player_faction_panel.notify_bgs_activity()
+        except Exception:
+            log.exception("Failed to refresh BGS Tasks window")
+        self._refresh_bgs_task_hint()
+
+    def _refresh_bgs_task_hint(self) -> None:
+        """Overview HUD line for the squadron BGS task(s) in the current
+        system -- see docs/superpowers/specs/2026-09-26-bgs-tasks-tracker-design.md."""
+        system_address = getattr(self.state, "system_address", None)
+        text = ""
+        if isinstance(system_address, int):
+            try:
+                since = getattr(self.player_faction_panel, "_latest_known_tick", None) or "1970-01-01T00:00:00Z"
+                views = build_task_views(self.repo, since, bgs_limits(self.cfg), system_address=system_address)
+                text = hud_line(views)
+            except Exception:
+                log.exception("Failed to build BGS task hint")
+        self.overview_panel.set_bgs_task_hint(text)
 
     def _on_wal_checkpoint_tick(self) -> None:
         """See _WalCheckpointWorker for why this is split off the 45s

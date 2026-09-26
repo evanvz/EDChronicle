@@ -34,6 +34,7 @@ def _fake_self(system_address=123):
         ),
         _refresh_calls=refresh_calls,
         _notify_calls=notify_calls,
+        _notify_bgs_activity=lambda: None,
     )
 
 

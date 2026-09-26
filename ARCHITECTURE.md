@@ -109,6 +109,7 @@ Notable files:
 - `fdev_powerplay.py` — Frontier's own official PowerPlay control-vote CSV feed (a daily-cached download, distinct from the live per-visit journal PowerplayState fields), used to cross-check the PowerPlay Target Finder and shown as a supplementary "control vote" line on the Faction Expansion Tracker
 - `inara_faction_csv.py` — parses Inara's faction-presence CSV export format
 - `bgs_conflicts.py` — squadron-aligned faction lookup, finds who it's at active war with in the current system, and backs BGS activity attribution (bounty/trade crediting)
+- `bgs_tasks.py` — Pure logic for the BGS Tasks tracker — per-task progress/status from the session activity tables, `net.system_bgs_status` (now including elections), `faction_snapshots` and `systems.pp_*`; Boost limits are squadron guidance from Settings
 - `ship_loadout.py` — classifies current ship hardpoints as armed/unarmed from `Loadout` events
 - `faction_refresh_tracker.py` — persists the last full-EDSM-refresh timestamp for the Player Faction tab's 24h auto-refresh gate
 - `rank_names.py` — Rank/Progress category index → real rank name tables (Elite I-V aware), verified against the community Journal Manual
@@ -190,6 +191,7 @@ Notable files:
 - `player_faction_panel.py`
 - `faction_expansion_dialog.py` — Faction Expansion Tracker: one target system's push toward the 75% BGS expansion threshold (influence trend, live PowerPlay standing, mission tally)
 - `session_activity_dialog.py` — Session BGS Activity Report: whole-session, all-faction mission/combat/CZ/trade activity grouped by day, since the last detected BGS tick
+- `bgs_tasks_dialog.py` — BGS Tasks window (from the Player Faction panel) — add/remove/reorder tasks, live progress cards; the current system's task(s) also show as a line on the Overview HUD
 - `squadron_panel.py`
 - `intel_panel.py`
 - `inventory_panel.py` — `ShiplockerPanel` (Odyssey) and `MaterialsPanel`
@@ -222,6 +224,7 @@ Notable files:
 | `faction_mission_completions` | One row per faction a `MissionCompleted`'s `FactionEffects` actually moved — system, faction, timestamp, influence tier, primary/secondary, Trend-signed weight, cleaned mission type, and CR reward. Backs both the Faction Expansion Tracker's mission tally and the Session BGS Activity Report |
 | `faction_combat_bonds` | One row per combat bond cash-in (`RedeemVoucher`), for the Session BGS Activity Report — only for a faction present in the system where it's cashed in |
 | `faction_bounties` | One row per faction credited by a bounty voucher cash-in (`RedeemVoucher` `Factions` list), same present-in-system rule |
+| `bgs_tasks` | Squadron BGS objectives entered by hand for the BGS Tasks tracker (system, type, faction, opponent, note, priority order); system name resolved to `system_address` when first seen |
 | `faction_cz_kills` | One row per confirmed conflict-zone kill (ground/space, size), for the Session BGS Activity Report |
 | `faction_trade_sold` | One row per commodity/exploration/exobiology sale, credited to the docked station's owning faction (fleet carriers skipped); commodity value is profit, for the Session BGS Activity Report |
 | `station_info` | Landing pad counts, station services, and (for Fleet Carriers) self-reported docking access — from `Docked` events, yours and every commander's via EDDN |
