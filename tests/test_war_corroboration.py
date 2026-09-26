@@ -98,8 +98,8 @@ def test_bgs_action_core_quantifies_staleness_from_data_timestamp():
     # cross-check EDSM/Inara to judge how stale an uncorroborated War
     # claim is -- _data_age_days() (keyed off data_timestamp) already
     # has the answer.
-    from datetime import date, timedelta
-    stale_date = (date.today() - timedelta(days=18)).isoformat() + "T00:00:00Z"
+    from datetime import datetime, timedelta, timezone
+    stale_date = (datetime.now(timezone.utc).date() - timedelta(days=18)).isoformat() + "T00:00:00Z"
     sys_rec = {
         "faction_state": "War", "war_corroborated": False, "is_controlling": True,
         "data_timestamp": stale_date,

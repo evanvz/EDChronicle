@@ -4174,6 +4174,15 @@ class MainWindow(QMainWindow):
                         return ExplorationPhrases.nhss_detected(threat)
 
                 sig_type = (evt.get("SignalType") or "").strip().lower()
+                # The game writes a new system's signal list BEFORE its
+                # FSDJump, so state (PowerPlay, conflicts) is still the
+                # previous system's -- confirmed live 2026-09-26: a
+                # non-PowerPlay system's megaship got an "acquisition merits"
+                # callout. Skip until state matches; the FSS honk re-fires
+                # the signals after the jump.
+                if (sig_type in ("megaship", "navbeacon")
+                        and evt.get("SystemAddress") != getattr(state, "system_address", None)):
+                    return ""
                 if sig_type == "megaship":
                     signal_name = evt.get("SignalName") or ""
                     mega_key = MegashipTracker.key(evt.get("SystemAddress"), signal_name)

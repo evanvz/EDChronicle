@@ -39,7 +39,7 @@ def _fake_self(conflicts, pp_power="", ctrl="", pp_state=""):
         _tts_megaship_announced=set(),
         megaship_tracker=SimpleNamespace(has_seen=lambda key: False),
     ), SimpleNamespace(
-        system_conflicts=conflicts, pp_power=pp_power,
+        system_address=560249932147, system_conflicts=conflicts, pp_power=pp_power,
         system_controlling_power=ctrl, system_powerplay_state=pp_state,
     )
 
@@ -83,3 +83,30 @@ def test_hud_suffix_names_both_sides_escaped():
     )
     assert suffix == " — ⚠ War: A&amp;B vs &lt;C&gt;, expect hostiles"
     assert MainWindow._megaship_conflict_hud_suffix([]) == ""
+
+
+# --- signals written before the FSDJump belong to the NEXT system ---
+# Confirmed live 2026-09-26: Baudurotri's megaship signal arrived before its
+# FSDJump, so the callout used the previous system's (Tucanae, Unoccupied)
+# PowerPlay state and wrongly said "Scan for acquisition merits".
+
+def test_signal_for_a_system_we_are_not_in_yet_is_not_announced():
+    fake_self, state = _fake_self([_CIVIL_WAR], pp_power="Aisling Duval", ctrl="", pp_state="Unoccupied")
+    evt = dict(_MEGASHIP_EVT, SystemAddress=4207155221234)
+    assert MainWindow._tts_router(fake_self, "FSSSignalDiscovered", evt, state) == ""
+    # not marked as announced -- the post-jump re-fire must still be able to announce it
+    state.system_address = 4207155221234
+    assert MainWindow._tts_router(fake_self, "FSSSignalDiscovered", evt, state) != ""
+
+
+def test_compromised_nav_beacon_for_another_system_is_not_announced():
+    fake_self, state = _fake_self([], pp_power="Aisling Duval", ctrl="Aisling Duval", pp_state="Fortified")
+    fake_self._tts_cnb_announced = set()
+    same_system = {"event": "FSSSignalDiscovered", "SystemAddress": 560249932147, "SignalType": "NavBeacon",
+                   "SignalName": "$MULTIPLAYER_SCENARIO80_TITLE;", "SignalName_Localised": "Compromised Nav Beacon"}
+    assert MainWindow._tts_router(fake_self, "FSSSignalDiscovered", same_system, state) != ""  # control case
+    fake_self._tts_cnb_announced = set()
+    evt = {"event": "FSSSignalDiscovered", "SystemAddress": 4207155221234, "SignalType": "NavBeacon",
+           "SignalName": "$MULTIPLAYER_SCENARIO80_TITLE;", "SignalName_Localised": "Compromised Nav Beacon"}
+    assert MainWindow._tts_router(fake_self, "FSSSignalDiscovered", evt, state) == ""
+    assert fake_self._tts_cnb_announced == set()
