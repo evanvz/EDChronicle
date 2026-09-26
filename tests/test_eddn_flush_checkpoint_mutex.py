@@ -55,3 +55,26 @@ def test_wal_checkpoint_tick_skips_while_previous_checkpoint_running():
         _flush_thread=None,
     )
     MainWindow._on_wal_checkpoint_tick(fake_self)
+
+
+# Confirmed live 2026-09-25: _MarketSaveWorker threw "database is locked"
+# while a 30s net.wal_checkpoint(TRUNCATE) was running.
+
+def test_wal_checkpoint_tick_skips_while_market_save_running():
+    fake_self = SimpleNamespace(
+        _wal_checkpoint_thread=None,
+        _flush_thread=None,
+        _market_save_thread=_running_thread(),
+        _spansh_save_thread=None,
+    )
+    MainWindow._on_wal_checkpoint_tick(fake_self)  # no self.repo -- would raise if it went on
+
+
+def test_wal_checkpoint_tick_skips_while_spansh_save_running():
+    fake_self = SimpleNamespace(
+        _wal_checkpoint_thread=None,
+        _flush_thread=None,
+        _market_save_thread=None,
+        _spansh_save_thread=_running_thread(),
+    )
+    MainWindow._on_wal_checkpoint_tick(fake_self)

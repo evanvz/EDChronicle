@@ -4,6 +4,7 @@
 
 import json
 import logging
+import sqlite3
 import time
 from datetime import date
 from PyQt6.QtWidgets import (
@@ -481,6 +482,20 @@ class _EddnFlushWorker(QObject):
         self.finished.emit()
 
 
+def _retry_once_if_locked(db, work, what: str) -> None:
+    """A WAL checkpoint can hold the lock longer than busy_timeout (seen
+    live: 30.2s, 2026-09-25), so a background writer retries once rather
+    than dropping the write. Only for idempotent upsert work."""
+    try:
+        work()
+    except sqlite3.OperationalError as e:
+        if "locked" not in str(e):
+            raise
+        log.warning("%s hit 'database is locked' -- retrying once", what)
+        db.conn.rollback()
+        work()
+
+
 class _SpanshSaveWorker(QObject):
     """
     Persists Spansh-enriched body data off the UI thread -- same
@@ -514,26 +529,30 @@ class _SpanshSaveWorker(QObject):
         db = Database(self._db_path)
         try:
             repo = Repository(db)
-            with db.deferred_commit():
-                for b in self._bodies:
-                    repo.save_spansh_body(
-                        system_address=self._system_address,
-                        body_name=b["name"],
-                        planet_class=b.get("planet_class"),
-                        distance_ls=b.get("distance_ls"),
-                        estimated_value=b.get("estimated_value"),
-                        landable=b.get("landable"),
-                        surface_gravity=b.get("surface_gravity"),
-                        radius=b.get("radius"),
-                        mass_em=b.get("mass_em"),
-                        surface_temperature=b.get("surface_temperature"),
-                        surface_pressure=b.get("surface_pressure"),
-                        atmosphere_type=b.get("atmosphere_type"),
-                        volcanism=b.get("volcanism"),
-                        tidal_lock=b.get("tidal_lock"),
-                        was_mapped=b.get("was_mapped"),
-                        updated_at=b.get("updated_at"),
-                    )
+
+            def save():
+                with db.deferred_commit():
+                    for b in self._bodies:
+                        repo.save_spansh_body(
+                            system_address=self._system_address,
+                            body_name=b["name"],
+                            planet_class=b.get("planet_class"),
+                            distance_ls=b.get("distance_ls"),
+                            estimated_value=b.get("estimated_value"),
+                            landable=b.get("landable"),
+                            surface_gravity=b.get("surface_gravity"),
+                            radius=b.get("radius"),
+                            mass_em=b.get("mass_em"),
+                            surface_temperature=b.get("surface_temperature"),
+                            surface_pressure=b.get("surface_pressure"),
+                            atmosphere_type=b.get("atmosphere_type"),
+                            volcanism=b.get("volcanism"),
+                            tidal_lock=b.get("tidal_lock"),
+                            was_mapped=b.get("was_mapped"),
+                            updated_at=b.get("updated_at"),
+                        )
+
+            _retry_once_if_locked(db, save, "Spansh body save")
         except Exception:
             log.exception("Failed to save Spansh-enriched bodies for address %s", self._system_address)
         finally:
@@ -571,8 +590,11 @@ class _MarketSaveWorker(QObject):
             # commit (not routed through Database.execute(), so
             # deferred_commit() wouldn't reduce this to one commit anyway)
             # -- two small commits here, off the UI thread, is fine.
-            repo.save_market_snapshot_batch(self._records)
-            repo.save_commodity_names_batch(self._name_pairs)
+            def save():
+                repo.save_market_snapshot_batch(self._records)
+                repo.save_commodity_names_batch(self._name_pairs)
+
+            _retry_once_if_locked(db, save, "Own market save")
         except Exception:
             log.exception("Failed to save own market snapshot")
         finally:
@@ -5785,6 +5807,10 @@ class MainWindow(QMainWindow):
             return  # previous checkpoint still running — next tick will catch up
         if self._flush_thread and self._flush_thread.isRunning():
             return  # EDDN flush in progress — avoid colliding on the same file
+        if self._market_save_thread and self._market_save_thread.isRunning():
+            return
+        if self._spansh_save_thread and self._spansh_save_thread.isRunning():
+            return
         self._wal_checkpoint_worker = _WalCheckpointWorker(self.repo.db.db_path)
         if self._wal_checkpoint_thread is not None:
             self._wal_checkpoint_thread.wait()  # old-thread teardown race -- see _start_spansh_enrich's docstring
