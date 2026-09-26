@@ -225,6 +225,7 @@ Notable files:
 | `faction_combat_bonds` | One row per combat bond cash-in (`RedeemVoucher`), for the Session BGS Activity Report — only for a faction present in the system where it's cashed in |
 | `faction_bounties` | One row per faction credited by a bounty voucher cash-in (`RedeemVoucher` `Factions` list), same present-in-system rule |
 | `bgs_tasks` | Squadron BGS objectives entered by hand for the BGS Tasks tracker (system, type, faction, opponent, note, priority order); system name resolved to `system_address` when first seen |
+| `powerplay_merits` | One row per `PowerplayMerits` journal event, credited to the system the player was in — the BGS Tasks tracker's "merits here this PowerPlay week" (week starts Thursday ~07:00 UTC) |
 | `faction_cz_kills` | One row per confirmed conflict-zone kill (ground/space, size), for the Session BGS Activity Report |
 | `faction_trade_sold` | One row per commodity/exploration/exobiology sale, credited to the docked station's owning faction (fleet carriers skipped); commodity value is profit, for the Session BGS Activity Report |
 | `station_info` | Landing pad counts, station services, and (for Fleet Carriers) self-reported docking access — from `Docked` events, yours and every commander's via EDDN |

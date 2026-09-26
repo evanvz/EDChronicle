@@ -47,6 +47,13 @@ def test_add_boost_task_renders_a_card(tmp_path):
     assert changed == [1]
 
 
+def test_card_shows_what_to_do_line(tmp_path):
+    dlg, repo, _ = _dialog(tmp_path)
+    repo.add_bgs_task("Ekono", "vote", faction_name="A", opponent_name="B")
+    dlg.refresh()
+    assert "What to do: Missions, trade and exploration data for A." in _card_texts(dlg)[0]
+
+
 def test_invalid_input_shows_error_and_adds_nothing(tmp_path):
     dlg, repo, _ = _dialog(tmp_path)
     dlg._system_edit.setText("Kanuket")

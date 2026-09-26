@@ -488,6 +488,7 @@ class _EddnFlushWorker(QObject):
 _BGS_ACTIVITY_EVENTS = frozenset({
     "FSDJump", "Location", "CarrierJump", "Docked", "MissionCompleted", "RedeemVoucher",
     "FactionKillBond", "MarketSell", "MultiSellExplorationData", "SellExplorationData", "SellOrganicData",
+    "PowerplayMerits",
 })
 
 
@@ -1455,6 +1456,20 @@ class MainWindow(QMainWindow):
                     )
         except Exception:
             log.exception("Failed to record redeemed voucher")
+
+    def _record_powerplay_merits(self, evt: dict) -> None:
+        system_address = getattr(self.state, "system_address", None)
+        merits = evt.get("MeritsGained")
+        if not (isinstance(system_address, int) and isinstance(merits, int) and merits > 0):
+            return
+        from datetime import datetime, timezone
+        try:
+            self.repo.record_powerplay_merits(
+                system_address, evt.get("Power"), merits,
+                evt.get("timestamp") or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            )
+        except Exception:
+            log.exception("Failed to record PowerPlay merits")
 
     def _record_faction_cz_kill(self, evt: dict) -> None:
         """state.last_cz_credit is a one-shot signal set by
@@ -2493,6 +2508,8 @@ class MainWindow(QMainWindow):
             fdev_powerplay=self.fdev_powerplay, faction_expansion_pin_store=self.faction_expansion_pin_store,
         )
         self.player_faction_panel.bgs_limits_getter = lambda: bgs_limits(self.cfg)
+        self.player_faction_panel.pledged_power_getter = lambda: (getattr(self.state, "pp_power", None) or "").strip()
+        self.player_faction_panel.pp_activities = self.pp_activities
         self.player_faction_panel.bgs_tasks_changed.connect(self._refresh_bgs_task_hint)
         self.player_faction_panel.tick_refresh_started.connect(self.overview_panel.show_tick_flash)
 
@@ -3709,6 +3726,9 @@ class MainWindow(QMainWindow):
 
         if name == "RedeemVoucher" and not self._replaying:
             self._record_faction_redeem_voucher(evt)
+
+        if name == "PowerplayMerits" and not self._replaying:
+            self._record_powerplay_merits(evt)
 
         if name in ("MarketSell", "MultiSellExplorationData", "SellExplorationData", "SellOrganicData") and not self._replaying:
             self._record_faction_trade_sold(evt)
@@ -5904,7 +5924,11 @@ class MainWindow(QMainWindow):
                 if isinstance(system_name, str) and system_name:
                     self.repo.resolve_bgs_tasks_for_system(system_address, system_name)
                 since = getattr(self.player_faction_panel, "_latest_known_tick", None) or "1970-01-01T00:00:00Z"
-                views = build_task_views(self.repo, since, bgs_limits(self.cfg), system_address=system_address)
+                views = build_task_views(
+                    self.repo, since, bgs_limits(self.cfg), system_address=system_address,
+                    pledged=(getattr(self.state, "pp_power", None) or "").strip(),
+                    pp_activities=getattr(self, "pp_activities", None),
+                )
                 text = hud_line(views)
             except Exception:
                 log.exception("Failed to build BGS task hint")

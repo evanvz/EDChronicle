@@ -670,6 +670,10 @@ class PlayerFactionPanel(QWidget):
         # Set by MainWindow: callable returning the Boost limits dict
         # (edc.core.bgs_tasks.bgs_limits(cfg)); None falls back to defaults.
         self.bgs_limits_getter = None
+        # Set by MainWindow: pledged power name getter and the PowerPlay
+        # activity table, for the BGS Tasks window's PowerPlay cards.
+        self.pledged_power_getter = None
+        self.pp_activities = None
         self._faction_name: Optional[str] = None
         self._last_state = None
         self._lookup_thread: Optional[QThread] = None

@@ -25,7 +25,8 @@ log = logging.getLogger("edc.bgs_tasks")
 
 _LINE_STYLE = "background:transparent; border:none; color:#c8c8c8;"
 _DIM_STYLE = "background:transparent; border:none; color:#888888; font-size:11px;"
-_WARN_STYLE = "background:transparent; border:none; color:#FFB347;"
+_GUIDE_STYLE = "background:transparent; border:none; color:#7fb2e6; font-style:italic;"
+_WARN_STYLE ="background:transparent; border:none; color:#FFB347;"
 _SMALL_BTN = (
     "QPushButton { background:#101c2a; color:#c8c8c8; border:1px solid #2a3a4a;"
     " border-radius:3px; padding:1px 8px; }"
@@ -204,8 +205,13 @@ class BgsTasksDialog(QDialog):
             since = "1970-01-01T00:00:00Z"
         getter = getattr(self._panel, "bgs_limits_getter", None)
         limits = getter() if getter else dict(DEFAULT_LIMITS)
+        pledged_getter = getattr(self._panel, "pledged_power_getter", None)
         try:
-            views = build_task_views(self._panel._repo, since, limits)
+            views = build_task_views(
+                self._panel._repo, since, limits,
+                pledged=pledged_getter() if pledged_getter else "",
+                pp_activities=getattr(self._panel, "pp_activities", None),
+            )
         except Exception:
             log.exception("Failed to build BGS task views")
             views = []
@@ -252,6 +258,11 @@ class BgsTasksDialog(QDialog):
             top.addWidget(btn)
         card_l.addLayout(top)
 
+        if view.get("guide"):
+            lbl = QLabel(f"What to do: {view['guide']}")
+            lbl.setWordWrap(True)
+            lbl.setStyleSheet(_GUIDE_STYLE)
+            card_l.addWidget(lbl)
         for line in view["lines"]:
             lbl = QLabel(line)
             lbl.setWordWrap(True)

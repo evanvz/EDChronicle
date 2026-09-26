@@ -8,6 +8,7 @@ faction_snapshots, systems.pp_*). No task data ever leaves the app. See
 docs/superpowers/specs/2026-09-26-bgs-tasks-tracker-design.md."""
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 TASK_TYPES = ("boost", "vote", "fight", "powerplay", "note")
@@ -124,7 +125,7 @@ def _boost_view(task: dict, report: dict, history: list, limits: dict) -> dict:
     faction = task.get("faction_name") or ""
     act = faction_activity(report, task["system_name"], faction)
     lines = [
-        f"Tier score {act['tier_score']} / {limits['tier_score']}",
+        f"Tier score {act['tier_score']} / {limits['tier_score']} ({act['missions']} missions)",
         f"Bounties {_cr(act['bounties'])} / {_cr(limits['bounties'])}",
         f"Exploration {_cr(act['exploration'])} / {_cr(limits['exploration'])}",
     ]
@@ -211,41 +212,100 @@ def _conflict_view(task: dict, report: dict, bgs_status: Optional[dict], kind: s
             "hud": f"{verb} {who} — {score}", "updated_at": updated_at}
 
 
-def _powerplay_view(pp: Optional[dict]) -> dict:
+def powerplay_week_start(now: Optional[datetime] = None) -> str:
+    """Most recent PowerPlay weekly tick: Thursday ~07:00 UTC (community
+    estimate, same as the Faction Expansion Tracker's countdown)."""
+    now = now or datetime.now(timezone.utc)
+    start = (now - timedelta(days=(now.weekday() - 3) % 7)).replace(hour=7, minute=0, second=0, microsecond=0)
+    if start > now:
+        start -= timedelta(days=7)
+    return start.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def powerplay_mode(pledged: str, controlling_power: str, pp_state: str) -> str:
+    """Same rule as the megaship merit callout: our power controls it ->
+    Reinforcement; another power controls it -> Undermining; nobody controls
+    it but it's PowerPlay-active -> Acquisition."""
+    if not pledged:
+        return ""
+    if controlling_power:
+        return "Reinforcement" if _same(controlling_power, pledged) else "Undermining"
+    return "Acquisition" if pp_state else ""
+
+
+def _powerplay_guide(mode: str, pp_state: str, pledged: str, pp_activities) -> str:
+    if not pledged:
+        return "Pledge to a power to see PowerPlay actions for this system"
+    if not mode:
+        return "Not a PowerPlay target for your power right now"
+    if pp_activities is None:
+        return mode
+    acts = [a for a in pp_activities.get_actions(mode.lower(), pp_state) if a.merits == "yes"]
+    acts.sort(key=lambda a: not any(_same(p, pledged) for p in a.bonus_powers))
+    names = list(dict.fromkeys(a.action for a in acts))[:4]
+    return f"{mode}: {', '.join(names)}" if names else mode
+
+
+def _powerplay_view(pp: Optional[dict], pledged: str, merits: int, pp_activities) -> dict:
+    merits_line = [f"Your merits here this PowerPlay week: {merits:,}"] if pledged else []
+    merits_hud = f" · {merits:,} merits this week" if pledged else ""
     if not pp:
-        return {"status": STATUS_NO_DATA, "lines": ["No PowerPlay reading yet"], "warnings": [],
-                "hud": "PowerPlay — no data yet", "updated_at": None}
-    reading = pp.get("pp_state") or "Unknown"
+        return {"status": STATUS_NO_DATA, "lines": ["No PowerPlay reading yet"] + merits_line, "warnings": [],
+                "hud": "PowerPlay — no data yet" + merits_hud, "updated_at": None,
+                "guide": "" if pledged else _powerplay_guide("", "", "", None)}
+    pp_state = pp.get("pp_state") or ""
+    reading = pp_state or "Unknown"
     progress = pp.get("pp_control_progress")
     if isinstance(progress, (int, float)):
         reading += f" — {progress * 100:.1f}%"
-    lines = [reading]
+    mode = powerplay_mode(pledged, pp.get("pp_controlling_power") or "", pp_state)
+    head = f"{mode}: {reading}" if mode else reading
+    lines = [head]
     if pp.get("pp_controlling_power"):
         lines.append(f"Controlled by {pp['pp_controlling_power']}")
+    lines += merits_line
     return {"status": STATUS_TRACKING, "lines": lines, "warnings": [],
-            "hud": f"PowerPlay — {reading}", "updated_at": pp.get("pp_data_timestamp")}
+            "hud": f"PowerPlay — {head}{merits_hud}", "updated_at": pp.get("pp_data_timestamp"),
+            "guide": _powerplay_guide(mode, pp_state, pledged, pp_activities)}
+
+
+def _bgs_guide(task: dict, limits: dict) -> str:
+    faction = task.get("faction_name") or "the faction"
+    opponent = task.get("opponent_name") or "the other side"
+    task_type = task["task_type"]
+    if task_type == "boost":
+        return (f"Missions for {faction} (about {limits['tier_score']} INF+ per tick), bounties and "
+                f"exploration data at {faction}-controlled stations, profitable trade at its stations.")
+    if task_type == "vote":
+        return f"Missions, trade and exploration data for {faction}. Combat doesn't count in elections."
+    return (f"Win conflict zones for {faction}, cash combat bonds for it in this system, massacre missions. "
+            f"Don't cash bonds for {opponent}.")
 
 
 def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], history: list,
-                    pp: Optional[dict], limits: dict) -> dict:
+                    pp: Optional[dict], limits: dict, pledged: str = "", merits: int = 0,
+                    pp_activities=None) -> dict:
     task_type = task["task_type"]
     if task_type == "boost":
         view = _boost_view(task, report, history, limits)
     elif task_type in ("vote", "fight"):
         view = _conflict_view(task, report, bgs_status, task_type)
     elif task_type == "powerplay":
-        view = _powerplay_view(pp)
+        view = _powerplay_view(pp, pledged, merits, pp_activities)
     else:
         note = task.get("note") or ""
         return {"task": task, "status": "", "lines": [note] if note else [], "warnings": [],
-                "hud": f"Note: {note}" if note else "", "updated_at": None}
+                "hud": f"Note: {note}" if note else "", "updated_at": None, "guide": ""}
+    if task_type != "powerplay":
+        view["guide"] = _bgs_guide(task, limits)
     if task.get("note"):
         view["lines"].append(task["note"])
     view["task"] = task
     return view
 
 
-def build_task_views(repo, since: str, limits: dict, system_address: Optional[int] = None) -> list[dict]:
+def build_task_views(repo, since: str, limits: dict, system_address: Optional[int] = None,
+                     pledged: str = "", pp_activities=None, now: Optional[datetime] = None) -> list[dict]:
     """Views for every task (or only those in system_address), in the
     user's priority order."""
     tasks = repo.list_bgs_tasks()
@@ -254,13 +314,17 @@ def build_task_views(repo, since: str, limits: dict, system_address: Optional[in
     if not tasks:
         return []
     report = repo.get_session_activity_report(since)
+    week_start = powerplay_week_start(now)
     views = []
     for t in tasks:
         addr = t["system_address"]
         bgs_status = repo.get_bgs_status_for_system(addr) if addr is not None else None
         history = repo.get_faction_history(addr) if addr is not None else []
         pp = repo.get_system_powerplay_snapshot(addr) if addr is not None else None
-        views.append(build_task_view(t, report, bgs_status, history, pp, limits))
+        merits = (repo.get_powerplay_merits_since(addr, week_start)
+                  if t["task_type"] == "powerplay" and pledged and addr is not None else 0)
+        views.append(build_task_view(t, report, bgs_status, history, pp, limits,
+                                     pledged=pledged, merits=merits, pp_activities=pp_activities))
     return views
 
 

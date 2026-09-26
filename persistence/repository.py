@@ -2780,6 +2780,21 @@ class Repository:
             (system_address, faction_name, amount, redeemed_at),
         )
 
+    def record_powerplay_merits(self, system_address: int, power: str, merits: int, earned_at: str) -> None:
+        """One row per PowerplayMerits journal event, credited to the system
+        the player was in -- for the BGS Tasks tracker's merits-per-system."""
+        self.db.execute(
+            "INSERT INTO powerplay_merits (system_address, power, merits, earned_at) VALUES (?, ?, ?, ?)",
+            (system_address, power, merits, earned_at),
+        )
+
+    def get_powerplay_merits_since(self, system_address: int, since: str) -> int:
+        row = self.db.conn.execute(
+            "SELECT COALESCE(SUM(merits), 0) FROM powerplay_merits WHERE system_address = ? AND earned_at >= ?",
+            (system_address, since),
+        ).fetchone()
+        return row[0]
+
     def record_faction_cz_kill(
         self, system_address: int, faction_name: str, zone_type: str, size: str, earned_at: str,
     ) -> None:

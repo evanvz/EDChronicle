@@ -87,7 +87,7 @@ def test_boost_todo_with_progress_lines():
     view = build_task_view(_task("boost", "EUW"), report, None, history, None, LIMITS)
     assert view["status"] == STATUS_TODO
     assert view["lines"] == [
-        "Tier score 12 / 25",
+        "Tier score 12 / 25 (3 missions)",
         "Bounties 5.0M / 20.0M",
         "Exploration 0 / 20.0M",
         "Trade profit 3.4M",

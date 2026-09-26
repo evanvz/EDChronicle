@@ -391,6 +391,15 @@ class Database:
                 sort_order     INTEGER NOT NULL DEFAULT 0,
                 created_at     TEXT    NOT NULL
             )""",
+            """CREATE TABLE IF NOT EXISTS powerplay_merits (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                system_address INTEGER NOT NULL,
+                power          TEXT,
+                merits         INTEGER NOT NULL,
+                earned_at      TEXT    NOT NULL
+            )""",
+            """CREATE INDEX IF NOT EXISTS idx_powerplay_merits_lookup
+               ON powerplay_merits (system_address, earned_at)""",
         ]
         cache_migrations = [
             "ALTER TABLE net.spansh_bodies ADD COLUMN surface_gravity REAL",
