@@ -380,6 +380,17 @@ class Database:
             )""",
             """CREATE INDEX IF NOT EXISTS idx_faction_bounties_lookup
                ON faction_bounties (redeemed_at)""",
+            """CREATE TABLE IF NOT EXISTS bgs_tasks (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                system_address INTEGER,
+                system_name    TEXT    NOT NULL,
+                task_type      TEXT    NOT NULL,
+                faction_name   TEXT,
+                opponent_name  TEXT,
+                note           TEXT,
+                sort_order     INTEGER NOT NULL DEFAULT 0,
+                created_at     TEXT    NOT NULL
+            )""",
         ]
         cache_migrations = [
             "ALTER TABLE net.spansh_bodies ADD COLUMN surface_gravity REAL",

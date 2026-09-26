@@ -2921,6 +2921,92 @@ class Repository:
 
         return report
 
+    # --- BGS Tasks tracker (docs/superpowers/specs/2026-09-26-bgs-tasks-tracker-design.md) ---
+
+    def resolve_system(self, name: str) -> Optional[tuple]:
+        """(system_address, canonical_name) for a system name typed by the
+        user, case-insensitive -- the personal systems table first, then
+        EDDN's net.system_bgs_status. None if the name was never seen."""
+        name = (name or "").strip()
+        if not name:
+            return None
+        for sql in (
+            "SELECT system_address, system_name FROM systems WHERE system_name = ? COLLATE NOCASE LIMIT 1",
+            "SELECT system_address, system_name FROM net.system_bgs_status WHERE system_name = ? COLLATE NOCASE LIMIT 1",
+        ):
+            row = self.db.conn.execute(sql, (name,)).fetchone()
+            if row and row["system_address"] is not None:
+                return row["system_address"], row["system_name"] or name
+        return None
+
+    def add_bgs_task(
+        self, system_name: str, task_type: str, faction_name: Optional[str] = None,
+        opponent_name: Optional[str] = None, note: Optional[str] = None,
+    ) -> int:
+        from datetime import datetime, timezone
+
+        resolved = self.resolve_system(system_name)
+        address, name = resolved if resolved else (None, (system_name or "").strip())
+        next_order = self.db.conn.execute("SELECT COALESCE(MAX(sort_order), -1) + 1 FROM bgs_tasks").fetchone()[0]
+        cur = self.db.execute(
+            "INSERT INTO bgs_tasks (system_address, system_name, task_type, faction_name, opponent_name, "
+            "note, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                address, name, task_type, faction_name or None, opponent_name or None, note or None,
+                next_order, datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            ),
+        )
+        return cur.lastrowid
+
+    def list_bgs_tasks(self) -> list[dict]:
+        """All tasks in the user's priority order. A task whose system name
+        wasn't known when it was added is resolved here the first time that
+        system shows up (own visit or EDDN), and the resolution is saved."""
+        rows = [dict(r) for r in self.db.conn.execute(
+            "SELECT id, system_address, system_name, task_type, faction_name, opponent_name, note, "
+            "sort_order, created_at FROM bgs_tasks ORDER BY sort_order, id"
+        ).fetchall()]
+        for r in rows:
+            if r["system_address"] is None and r["system_name"]:
+                resolved = self.resolve_system(r["system_name"])
+                if resolved:
+                    r["system_address"], r["system_name"] = resolved
+                    self.db.execute(
+                        "UPDATE bgs_tasks SET system_address = ?, system_name = ? WHERE id = ?",
+                        (resolved[0], resolved[1], r["id"]),
+                    )
+        return rows
+
+    def delete_bgs_task(self, task_id: int) -> None:
+        self.db.execute("DELETE FROM bgs_tasks WHERE id = ?", (task_id,))
+
+    def move_bgs_task(self, task_id: int, direction: int) -> None:
+        """direction -1 moves the task up one place, +1 down one place."""
+        ids = [r["id"] for r in self.db.conn.execute("SELECT id FROM bgs_tasks ORDER BY sort_order, id").fetchall()]
+        if task_id not in ids:
+            return
+        i = ids.index(task_id)
+        j = i + direction
+        if not 0 <= j < len(ids):
+            return
+        ids[i], ids[j] = ids[j], ids[i]
+        with self.db.deferred_commit():
+            for order, tid in enumerate(ids):
+                self.db.execute("UPDATE bgs_tasks SET sort_order = ? WHERE id = ?", (order, tid))
+
+    def get_known_system_names(self) -> list[str]:
+        rows = self.db.conn.execute(
+            "SELECT system_name FROM systems WHERE system_name IS NOT NULL AND system_name != '' ORDER BY system_name"
+        ).fetchall()
+        return [r["system_name"] for r in rows]
+
+    def get_known_faction_names(self, system_address: int) -> list[str]:
+        rows = self.db.conn.execute(
+            "SELECT DISTINCT faction_name FROM faction_snapshots WHERE system_address = ? ORDER BY faction_name",
+            (system_address,),
+        ).fetchall()
+        return [r["faction_name"] for r in rows]
+
     def get_odyssey_farming_candidates(self, limit: int = 20) -> list[dict]:
         """
         Odyssey on-foot farming candidates: systems whose most recent
