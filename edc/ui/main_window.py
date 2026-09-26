@@ -612,6 +612,9 @@ class _MarketSaveWorker(QObject):
         self.finished.emit()
 
 
+_CHECKPOINT_BUSY_TIMEOUT_MS = 2000
+
+
 class _WalCheckpointWorker(QObject):
     """
     PRAGMA wal_checkpoint(TRUNCATE) on its own connection and its own
@@ -653,11 +656,20 @@ class _WalCheckpointWorker(QObject):
 
         db = Database(self._db_path)
         try:
+            # While TRUNCATE waits for an active reader (a Market/Trade Route
+            # search), every writer to that database is blocked too -- with
+            # the default 30s busy_timeout that froze journal saves for ~32s
+            # (2026-09-26 17:04). Give up fast; the next 5-minute tick retries.
+            db.conn.execute(f"PRAGMA busy_timeout={_CHECKPOINT_BUSY_TIMEOUT_MS}")
             for schema in ("main", "net"):
                 _t0 = time.perf_counter()
-                db.conn.execute(f"PRAGMA {schema}.wal_checkpoint(TRUNCATE)")
+                busy, _, _ = db.conn.execute(f"PRAGMA {schema}.wal_checkpoint(TRUNCATE)").fetchone()
                 _elapsed_ms = (time.perf_counter() - _t0) * 1000
-                log.info("%s.wal_checkpoint(TRUNCATE) took %.0fms", schema, _elapsed_ms)
+                if busy:
+                    log.info("%s.wal_checkpoint(TRUNCATE) skipped after %.0fms: readers still active, "
+                             "retrying next tick", schema, _elapsed_ms)
+                else:
+                    log.info("%s.wal_checkpoint(TRUNCATE) took %.0fms", schema, _elapsed_ms)
         except Exception:
             log.exception("Background WAL checkpoint failed")
         finally:
@@ -3653,6 +3665,9 @@ class MainWindow(QMainWindow):
             self._load_backpack_inventory()
             self._refresh_engineering()
             self._refresh_bgs_task_hint()
+            # The startup Canonn fetch ran before the replay set the
+            # commander name (nearest-challenge needs it) -- fetch again now.
+            self._maybe_start_canonn_refresh()
             return
 
         self._append(f"[EVENT] {name}")
