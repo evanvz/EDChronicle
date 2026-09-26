@@ -39,7 +39,7 @@ def test_same_faction_gets_the_same_color_across_different_systems():
                 "Elite United Worlds": {
                     "missions": {"count": 1, "weighted": 2, "primary_count": 1, "secondary_count": 0,
                                  "by_type": {"Courier": 1}},
-                    "combat_bonds_total": 0,
+                    "combat_bonds_total": 0, "bounties_total": 0,
                     "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 0},
                     "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 0},
                 },
@@ -48,14 +48,14 @@ def test_same_faction_gets_the_same_color_across_different_systems():
                 "Elite United Worlds": {
                     "missions": {"count": 1, "weighted": 2, "primary_count": 1, "secondary_count": 0,
                                  "by_type": {"Courier": 1}},
-                    "combat_bonds_total": 0,
+                    "combat_bonds_total": 0, "bounties_total": 0,
                     "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 0},
                     "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 0},
                 },
                 "Hungarian Wolves": {
                     "missions": {"count": 1, "weighted": 2, "primary_count": 1, "secondary_count": 0,
                                  "by_type": {"Courier": 1}},
-                    "combat_bonds_total": 0,
+                    "combat_bonds_total": 0, "bounties_total": 0,
                     "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 0},
                     "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 0},
                 },
@@ -90,7 +90,7 @@ def test_report_builds_one_card_per_system():
                 "Elite United Worlds": {
                     "missions": {"count": 3, "weighted": 6, "primary_count": 2, "secondary_count": 1,
                                  "by_type": {"Courier": 2, "Massacre Conflict CivilWar": 1}},
-                    "combat_bonds_total": 20000,
+                    "combat_bonds_total": 20000, "bounties_total": 0,
                     "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 2},
                     "trade_sold": {"commodity": 63085, "exploration": 0, "exobiology": 0},
                 },
@@ -98,7 +98,7 @@ def test_report_builds_one_card_per_system():
             "Aiga": {
                 "Hungarian Wolves": {
                     "missions": {"count": 0, "weighted": 0, "primary_count": 0, "secondary_count": 0, "by_type": {}},
-                    "combat_bonds_total": 0,
+                    "combat_bonds_total": 0, "bounties_total": 0,
                     "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 0},
                     "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 0},
                 },
@@ -118,7 +118,7 @@ def test_report_with_activity_on_two_days_builds_two_day_headers():
             "Elite United Worlds": {
                 "missions": {"count": 1, "weighted": 2, "primary_count": 1, "secondary_count": 0,
                              "by_type": {"Courier": 1}},
-                "combat_bonds_total": 0,
+                "combat_bonds_total": 0, "bounties_total": 0,
                 "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 0},
                 "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 0},
             },
@@ -134,7 +134,7 @@ def test_report_with_activity_on_two_days_builds_two_day_headers():
 def test_faction_row_shows_color_coded_chips_only_for_actual_activity():
     entry = {
         "missions": {"count": 3, "weighted": 6, "primary_count": 2, "secondary_count": 1, "by_type": {"Courier": 3}},
-        "combat_bonds_total": 20000,
+        "combat_bonds_total": 20000, "bounties_total": 0,
         "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 2},
         "trade_sold": {"commodity": 63085, "exploration": 0, "exobiology": 0},
     }
@@ -146,15 +146,28 @@ def test_faction_row_shows_color_coded_chips_only_for_actual_activity():
     assert "CZ kills" in html
     assert "2x space h" in html
     assert "Sold" in html
-    assert "63,085" in html
+    assert "trade profit: 63,085" in html
     assert "exploration" not in html  # zero value, not shown
     assert "exobiology" not in html
+    assert "Bounties" not in html
+
+
+def test_faction_row_shows_bounties_chip():
+    entry = {
+        "missions": {"count": 0, "weighted": 0, "primary_count": 0, "secondary_count": 0, "by_type": {}},
+        "combat_bonds_total": 0, "bounties_total": 12500000,
+        "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 0},
+        "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 0},
+    }
+    html = SessionActivityDialog._format_chips(entry)
+    assert "Bounties" in html
+    assert "12,500,000" in html
 
 
 def test_faction_row_with_no_activity_shows_placeholder():
     entry = {
         "missions": {"count": 0, "weighted": 0, "primary_count": 0, "secondary_count": 0, "by_type": {}},
-        "combat_bonds_total": 0,
+        "combat_bonds_total": 0, "bounties_total": 0,
         "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 0},
         "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 0},
     }
@@ -207,7 +220,7 @@ def test_rerender_clears_previous_cards_and_day_headers():
                 "Elite United Worlds": {
                     "missions": {"count": 1, "weighted": 2, "primary_count": 1, "secondary_count": 0,
                                  "by_type": {"Courier": 1}},
-                    "combat_bonds_total": 0,
+                    "combat_bonds_total": 0, "bounties_total": 0,
                     "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 0},
                     "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 0},
                 },
@@ -240,7 +253,7 @@ def test_day_sections_render_most_recent_day_first():
             "Elite United Worlds": {
                 "missions": {"count": 1, "weighted": 2, "primary_count": 1, "secondary_count": 0,
                              "by_type": {"Courier": 1}},
-                "combat_bonds_total": 0,
+                "combat_bonds_total": 0, "bounties_total": 0,
                 "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 0},
                 "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 0},
             },

@@ -173,6 +173,11 @@ class GameState:
     # Cargo snapshot (safe defaults)
     cargo_inventory: List[Dict[str, Any]] = field(default_factory=list)
 
+    # Docked station (None when not docked) -- BGS credit for trade/data
+    # sales goes to the station's owner, and a FleetCarrier carries none.
+    station_faction: Optional[str] = None
+    station_type: Optional[str] = None
+
     # Current station's commodity market (Market.json, read on the "Market" event)
     current_market_id: Optional[int] = None
     current_market_station: Optional[str] = None

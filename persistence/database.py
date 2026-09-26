@@ -371,6 +371,15 @@ class Database:
             )""",
             """CREATE INDEX IF NOT EXISTS idx_faction_trade_sold_lookup
                ON faction_trade_sold (sold_at)""",
+            """CREATE TABLE IF NOT EXISTS faction_bounties (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                system_address INTEGER NOT NULL,
+                faction_name   TEXT    NOT NULL,
+                amount         INTEGER NOT NULL,
+                redeemed_at    TEXT    NOT NULL
+            )""",
+            """CREATE INDEX IF NOT EXISTS idx_faction_bounties_lookup
+               ON faction_bounties (redeemed_at)""",
         ]
         cache_migrations = [
             "ALTER TABLE net.spansh_bodies ADD COLUMN surface_gravity REAL",

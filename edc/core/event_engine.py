@@ -438,6 +438,14 @@ class EventEngine:
         if isinstance(credits_now, int):
             self.state.credits = credits_now
 
+        if name == "Docked" or (name in ("Location", "CarrierJump") and event.get("Docked")):
+            station_faction = event.get("StationFaction")
+            self.state.station_faction = station_faction.get("Name") if isinstance(station_faction, dict) else None
+            self.state.station_type = event.get("StationType")
+        elif name in ("Undocked", "Location", "FSDJump", "CarrierJump"):
+            self.state.station_faction = None
+            self.state.station_type = None
+
         if name == "Location":
             # Happens on login; great for HUD
             new_sys = event.get("StarSystem", self.state.system)

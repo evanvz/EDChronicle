@@ -108,6 +108,24 @@ def test_combat_bonds_are_summed_per_faction(tmp_path):
     assert report["2026-09-25"]["Ekono"]["Elite United Worlds"]["combat_bonds_total"] == 20000
 
 
+def test_bounties_are_summed_per_faction(tmp_path):
+    repo = _repo(tmp_path)
+    _seed_system(repo, 12345, "Ekono")
+    repo.record_faction_bounty(12345, "Hungarian Wolves", 10000000, "2026-09-25T10:00:00Z")
+    repo.record_faction_bounty(12345, "Hungarian Wolves", 2500000, "2026-09-25T11:00:00Z")
+    report = repo.get_session_activity_report("2026-09-25T00:00:00Z")
+    entry = report["2026-09-25"]["Ekono"]["Hungarian Wolves"]
+    assert entry["bounties_total"] == 12500000
+    assert entry["combat_bonds_total"] == 0
+
+
+def test_bounties_before_since_are_excluded(tmp_path):
+    repo = _repo(tmp_path)
+    _seed_system(repo, 12345, "Ekono")
+    repo.record_faction_bounty(12345, "Hungarian Wolves", 1000, "2026-09-24T10:00:00Z")
+    assert repo.get_session_activity_report("2026-09-25T00:00:00Z") == {}
+
+
 def test_cz_kills_are_bucketed_by_zone_and_size(tmp_path):
     repo = _repo(tmp_path)
     _seed_system(repo, 12345, "Ekono")

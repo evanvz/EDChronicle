@@ -1412,27 +1412,40 @@ class MainWindow(QMainWindow):
             except Exception:
                 log.exception("Failed to notify Faction Expansion tracker of a mission completion")
 
-    def _record_faction_combat_bond(self, evt: dict) -> None:
-        """FactionKillBond carries AwardingFaction directly -- unlike
-        Bounty (which only carries VictimFaction, the faction actually
-        credited is determined later, at redemption, not at kill time),
-        so only FactionKillBond feeds the session activity report's
-        combat-bond total."""
-        faction_name = evt.get("AwardingFaction")
-        reward = evt.get("Reward")
+    def _record_faction_redeem_voucher(self, evt: dict) -> None:
+        """BGS credit for combat bonds and bounties lands at cash-in, not at
+        kill time, and only for a faction present in the system where
+        they're cashed in -- which also drops the non-minor-faction names
+        real journals carry here (a power name, "PilotsFederation", blank
+        at an Interstellar Factors broker). Bounty vouchers can credit
+        several factions in one transaction (Factions list)."""
+        vtype = evt.get("Type")
+        if vtype == "CombatBond":
+            credits = [(evt.get("Faction"), evt.get("Amount"))]
+        elif vtype == "bounty":
+            credits = [(f.get("Faction"), f.get("Amount")) for f in (evt.get("Factions") or []) if isinstance(f, dict)]
+        else:
+            return
         system_address = getattr(self.state, "system_address", None)
-        if not (isinstance(faction_name, str) and faction_name and isinstance(reward, int)
-                and isinstance(system_address, int)):
+        present = {f.get("Name") for f in (getattr(self.state, "factions", None) or []) if isinstance(f, dict)}
+        credits = [(n, a) for n, a in credits if n and n in present and isinstance(a, int)]
+        if not credits or not isinstance(system_address, int):
             return
         from datetime import datetime, timezone
+        at = evt.get("timestamp") or datetime.now(timezone.utc).isoformat()
         try:
             self.repo.save_system_name_if_missing(system_address, getattr(self.state, "system", None) or "")
-            self.repo.record_faction_combat_bond(
-                system_address=system_address, faction_name=faction_name, reward=reward,
-                earned_at=evt.get("timestamp") or datetime.now(timezone.utc).isoformat(),
-            )
+            for faction_name, amount in credits:
+                if vtype == "CombatBond":
+                    self.repo.record_faction_combat_bond(
+                        system_address=system_address, faction_name=faction_name, reward=amount, earned_at=at,
+                    )
+                else:
+                    self.repo.record_faction_bounty(
+                        system_address=system_address, faction_name=faction_name, amount=amount, redeemed_at=at,
+                    )
         except Exception:
-            log.exception("Failed to record faction combat bond")
+            log.exception("Failed to record redeemed voucher")
 
     def _record_faction_cz_kill(self, evt: dict) -> None:
         """state.last_cz_credit is a one-shot signal set by
@@ -1457,18 +1470,25 @@ class MainWindow(QMainWindow):
     def _record_faction_trade_sold(self, evt: dict) -> None:
         """Commodity (MarketSell), exploration data (SellExplorationData/
         MultiSellExplorationData), and exobiology (SellOrganicData) sales
-        all happen while docked, so the current system's controlling
-        faction at sale time (state.controlling_faction) is who gets
-        credited -- same assumption _at_squadron_faction_station() already
-        makes for the existing squadron_bgs_trade_cr lump total."""
+        credit the docked station's owning faction -- which can differ from
+        the system's controlling faction. Fleet carriers carry no BGS
+        weight, so sales there are skipped. Commodity value is profit
+        (sale minus the game's own AvgPricePaid cost basis), the figure
+        BGS trade influence is based on."""
         name = evt.get("event")
-        faction_name = getattr(self.state, "controlling_faction", None)
+        faction_name = getattr(self.state, "station_faction", None)
         system_address = getattr(self.state, "system_address", None)
+        if getattr(self.state, "station_type", None) == "FleetCarrier":
+            return
         if not (isinstance(faction_name, str) and faction_name and isinstance(system_address, int)):
             return
 
         if name == "MarketSell":
             value = evt.get("TotalSale")
+            avg_paid = evt.get("AvgPricePaid")
+            count = evt.get("Count")
+            if isinstance(value, int) and isinstance(avg_paid, (int, float)) and isinstance(count, int):
+                value = int(value - avg_paid * count)
             kind = "commodity"
         elif name == "MultiSellExplorationData":
             value = evt.get("TotalEarnings")
@@ -3645,8 +3665,10 @@ class MainWindow(QMainWindow):
             self._record_faction_mission_completion(evt)
 
         if name == "FactionKillBond" and not self._replaying:
-            self._record_faction_combat_bond(evt)
             self._record_faction_cz_kill(evt)
+
+        if name == "RedeemVoucher" and not self._replaying:
+            self._record_faction_redeem_voucher(evt)
 
         if name in ("MarketSell", "MultiSellExplorationData", "SellExplorationData", "SellOrganicData") and not self._replaying:
             self._record_faction_trade_sold(evt)

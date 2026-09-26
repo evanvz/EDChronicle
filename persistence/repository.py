@@ -2730,8 +2730,10 @@ class Repository:
     def record_faction_combat_bond(
         self, system_address: int, faction_name: str, reward: int, earned_at: str,
     ) -> None:
-        """One row per FactionKillBond, for the session BGS activity
-        report -- see main_window.py's _record_faction_combat_bond."""
+        """One row per combat bond cash-in (RedeemVoucher), for the session
+        BGS activity report -- see main_window.py's
+        _record_faction_redeem_voucher. Rows recorded before 2026-09-26
+        were logged at kill time (FactionKillBond) instead."""
         self.db.execute(
             "INSERT INTO faction_combat_bonds (system_address, faction_name, reward, earned_at) "
             "VALUES (?, ?, ?, ?)",
@@ -2748,6 +2750,16 @@ class Repository:
             (since,),
         ).fetchall()
         return [dict(r) for r in rows]
+
+    def record_faction_bounty(
+        self, system_address: int, faction_name: str, amount: int, redeemed_at: str,
+    ) -> None:
+        """One row per faction credited by a bounty voucher cash-in."""
+        self.db.execute(
+            "INSERT INTO faction_bounties (system_address, faction_name, amount, redeemed_at) "
+            "VALUES (?, ?, ?, ?)",
+            (system_address, faction_name, amount, redeemed_at),
+        )
 
     def record_faction_cz_kill(
         self, system_address: int, faction_name: str, zone_type: str, size: str, earned_at: str,
@@ -2825,6 +2837,7 @@ class Repository:
                     "by_type": {}, "reward_total": 0, "reward_by_type": {},
                 },
                 "combat_bonds_total": 0,
+                "bounties_total": 0,
                 "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 0},
                 "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 0},
             })
@@ -2862,6 +2875,16 @@ class Repository:
             if entry is None:
                 continue
             entry["combat_bonds_total"] += r["reward"]
+
+        bounty_rows = self.db.execute(
+            "SELECT system_address, faction_name, amount, redeemed_at FROM faction_bounties WHERE redeemed_at >= ?",
+            (since,),
+        ).fetchall()
+        for r in bounty_rows:
+            entry = _bucket(r["redeemed_at"][:10], r["system_address"], r["faction_name"])
+            if entry is None:
+                continue
+            entry["bounties_total"] += r["amount"]
 
         for r in self.get_faction_cz_kills_since(since):
             entry = _bucket(r["earned_at"][:10], r["system_address"], r["faction_name"])

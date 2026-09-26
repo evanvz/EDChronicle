@@ -160,13 +160,18 @@ class SessionActivityDialog(QDialog):
                 f'<span style="color:{_CHIP_COMBAT};">Combat bonds</span> {entry["combat_bonds_total"]:,}'
             )
 
+        if entry["bounties_total"]:
+            chips.append(
+                f'<span style="color:{_CHIP_COMBAT};">Bounties</span> {entry["bounties_total"]:,}'
+            )
+
         cz = entry["cz_kills"]
         cz_parts = [f"{v}x {k.replace('_', ' ')}" for k, v in cz.items() if v]
         if cz_parts:
             chips.append(f'<span style="color:{_CHIP_COMBAT};">CZ kills</span> {", ".join(cz_parts)}')
 
         trade = entry["trade_sold"]
-        trade_parts = [f"{k}: {v:,}" for k, v in trade.items() if v]
+        trade_parts = [f"{'trade profit' if k == 'commodity' else k}: {v:,}" for k, v in trade.items() if v]
         if trade_parts:
             chips.append(f'<span style="color:{_CHIP_TRADE};">Sold</span> {", ".join(trade_parts)}')
 
