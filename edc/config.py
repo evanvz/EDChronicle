@@ -52,6 +52,11 @@ class AppConfig:
     market_search_radius_ly: int = 100
     last_market_prune_date: Optional[str] = None
     search_indexes_ensured: bool = False
+    # BGS Tasks tracker Boost limits per tick -- squadron guidance, not
+    # Frontier numbers (Frontier publishes none).
+    bgs_limit_tier_score: int = 25
+    bgs_limit_bounties_cr: int = 20_000_000
+    bgs_limit_exploration_cr: int = 20_000_000
 
     def __post_init__(self):
         if self.tts_events is None:
@@ -193,6 +198,9 @@ class ConfigStore:
                 market_search_radius_ly=int(data.get("market_search_radius_ly", 100) or 100),
                 last_market_prune_date=data.get("last_market_prune_date"),
                 search_indexes_ensured=bool(data.get("search_indexes_ensured", False)),
+                bgs_limit_tier_score=int(data.get("bgs_limit_tier_score", 25) or 25),
+                bgs_limit_bounties_cr=int(data.get("bgs_limit_bounties_cr", 20_000_000) or 20_000_000),
+                bgs_limit_exploration_cr=int(data.get("bgs_limit_exploration_cr", 20_000_000) or 20_000_000),
             )
             if isinstance(data.get("tts_events"), dict):
                 cfg.tts_events.update(data["tts_events"])
@@ -229,6 +237,9 @@ class ConfigStore:
                         "market_search_radius_ly": int(getattr(cfg, "market_search_radius_ly", 100) or 100),
                         "last_market_prune_date": getattr(cfg, "last_market_prune_date", None),
                         "search_indexes_ensured": bool(getattr(cfg, "search_indexes_ensured", False)),
+                        "bgs_limit_tier_score": int(getattr(cfg, "bgs_limit_tier_score", 25) or 25),
+                        "bgs_limit_bounties_cr": int(getattr(cfg, "bgs_limit_bounties_cr", 20_000_000) or 20_000_000),
+                        "bgs_limit_exploration_cr": int(getattr(cfg, "bgs_limit_exploration_cr", 20_000_000) or 20_000_000),
                     },
                     indent=2,
                 ),

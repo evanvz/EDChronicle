@@ -2636,6 +2636,34 @@ class MainWindow(QMainWindow):
         market_row.addStretch(1)
         st.addLayout(market_row)
 
+        # --- Squadron BGS limits (BGS Tasks tracker) ---
+        bgs_row = QHBoxLayout()
+        bgs_row.addWidget(QLabel("Squadron BGS limits per tick — missions tier score:"))
+        self.bgs_limit_tier_spin = QSpinBox()
+        self.bgs_limit_tier_spin.setRange(1, 500)
+        self.bgs_limit_tier_spin.setValue(int(getattr(self.cfg, "bgs_limit_tier_score", 25) or 25))
+        self.bgs_limit_tier_spin.valueChanged.connect(self._on_bgs_limit_tier_changed)
+        bgs_row.addWidget(self.bgs_limit_tier_spin)
+        bgs_row.addWidget(QLabel("bounties:"))
+        self.bgs_limit_bounties_spin = QSpinBox()
+        self.bgs_limit_bounties_spin.setRange(1, 2000)
+        self.bgs_limit_bounties_spin.setSuffix(" M CR")
+        self.bgs_limit_bounties_spin.setValue(int(getattr(self.cfg, "bgs_limit_bounties_cr", 20_000_000) or 20_000_000) // 1_000_000)
+        self.bgs_limit_bounties_spin.valueChanged.connect(self._on_bgs_limit_bounties_changed)
+        bgs_row.addWidget(self.bgs_limit_bounties_spin)
+        bgs_row.addWidget(QLabel("exploration:"))
+        self.bgs_limit_exploration_spin = QSpinBox()
+        self.bgs_limit_exploration_spin.setRange(1, 2000)
+        self.bgs_limit_exploration_spin.setSuffix(" M CR")
+        self.bgs_limit_exploration_spin.setValue(int(getattr(self.cfg, "bgs_limit_exploration_cr", 20_000_000) or 20_000_000) // 1_000_000)
+        self.bgs_limit_exploration_spin.valueChanged.connect(self._on_bgs_limit_exploration_changed)
+        bgs_row.addWidget(self.bgs_limit_exploration_spin)
+        bgs_row.addStretch(1)
+        bgs_row_widget_note = QLabel("Squadron guidance, not Frontier numbers — used by the BGS Tasks tracker.")
+        bgs_row_widget_note.setStyleSheet("color:#888888; font-size:11px;")
+        st.addLayout(bgs_row)
+        st.addWidget(bgs_row_widget_note)
+
         # --- Database compaction (manual — see _on_compact_db_clicked) ---
         st.addWidget(QLabel("Database maintenance"))
         self.compact_db_status_label = QLabel(
@@ -4418,6 +4446,18 @@ class MainWindow(QMainWindow):
 
     def _on_market_radius_changed(self, value: int):
         self.cfg.market_search_radius_ly = int(value)
+        self.cfg_store.save(self.cfg)
+
+    def _on_bgs_limit_tier_changed(self, value: int):
+        self.cfg.bgs_limit_tier_score = int(value)
+        self.cfg_store.save(self.cfg)
+
+    def _on_bgs_limit_bounties_changed(self, value_millions: int):
+        self.cfg.bgs_limit_bounties_cr = int(value_millions) * 1_000_000
+        self.cfg_store.save(self.cfg)
+
+    def _on_bgs_limit_exploration_changed(self, value_millions: int):
+        self.cfg.bgs_limit_exploration_cr = int(value_millions) * 1_000_000
         self.cfg_store.save(self.cfg)
 
     def _on_always_on_top_changed(self, checked: bool):
