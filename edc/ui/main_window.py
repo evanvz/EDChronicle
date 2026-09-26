@@ -5884,9 +5884,12 @@ class MainWindow(QMainWindow):
         """Overview HUD line for the squadron BGS task(s) in the current
         system -- see docs/superpowers/specs/2026-09-26-bgs-tasks-tracker-design.md."""
         system_address = getattr(self.state, "system_address", None)
+        system_name = getattr(self.state, "system", None)
         text = ""
         if isinstance(system_address, int):
             try:
+                if isinstance(system_name, str) and system_name:
+                    self.repo.resolve_bgs_tasks_for_system(system_address, system_name)
                 since = getattr(self.player_faction_panel, "_latest_known_tick", None) or "1970-01-01T00:00:00Z"
                 views = build_task_views(self.repo, since, bgs_limits(self.cfg), system_address=system_address)
                 text = hud_line(views)

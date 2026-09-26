@@ -25,10 +25,10 @@ def _repo(tmp_path):
     return repo
 
 
-def _fake_self(repo, system_address=12345):
+def _fake_self(repo, system_address=12345, system="Ekono"):
     hints = []
     return SimpleNamespace(
-        state=SimpleNamespace(system_address=system_address),
+        state=SimpleNamespace(system_address=system_address, system=system),
         repo=repo, cfg=AppConfig(),
         player_faction_panel=SimpleNamespace(_latest_known_tick=None),
         overview_panel=SimpleNamespace(set_bgs_task_hint=hints.append),
@@ -56,6 +56,14 @@ def test_hint_empty_without_a_current_system(tmp_path):
     fake_self = _fake_self(_repo(tmp_path), system_address=None)
     MainWindow._refresh_bgs_task_hint(fake_self)
     assert fake_self._hints == [""]
+
+
+def test_hint_resolves_a_task_added_before_the_system_was_known(tmp_path):
+    repo = _repo(tmp_path)
+    repo.add_bgs_task("Kanuket", "note", note="watch faction")
+    fake_self = _fake_self(repo, system_address=777, system="Kanuket")
+    MainWindow._refresh_bgs_task_hint(fake_self)
+    assert fake_self._hints == ["Squadron task: Note: watch faction"]
 
 
 def test_overview_hint_label_visibility():
