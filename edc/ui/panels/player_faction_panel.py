@@ -37,6 +37,7 @@ from edc.ui import formatting as fmt
 from edc.ui.panels.combat_bgs_status_panel import _conflicts_text, _faction_states_text
 from edc.ui.panels.faction_expansion_dialog import FactionExpansionDialog
 from edc.ui.panels.session_activity_dialog import SessionActivityDialog
+from edc.ui.panels.bgs_tasks_dialog import BgsTasksDialog
 from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, TABLE_STYLE as _TABLE_STYLE
 
 log = logging.getLogger(__name__)
@@ -649,6 +650,7 @@ class PlayerFactionPanel(QWidget):
     """
 
     tick_refresh_started = pyqtSignal()
+    bgs_tasks_changed = pyqtSignal()
 
     def __init__(self, repo, refresh_tracker=None, fdev_powerplay=None, faction_expansion_pin_store=None, parent=None):
         super().__init__(parent)
@@ -658,6 +660,10 @@ class PlayerFactionPanel(QWidget):
         self._faction_expansion_pin_store = faction_expansion_pin_store
         self._faction_expansion_dialog = None
         self._session_activity_dialog = None
+        self._bgs_tasks_dialog = None
+        # Set by MainWindow: callable returning the Boost limits dict
+        # (edc.core.bgs_tasks.bgs_limits(cfg)); None falls back to defaults.
+        self.bgs_limits_getter = None
         self._faction_name: Optional[str] = None
         self._last_state = None
         self._lookup_thread: Optional[QThread] = None
@@ -831,6 +837,18 @@ class PlayerFactionPanel(QWidget):
         )
         session_activity_btn.clicked.connect(self._open_session_activity_dialog)
         refresh_row.addWidget(session_activity_btn)
+        bgs_tasks_btn = QPushButton("BGS Tasks…")
+        bgs_tasks_btn.setStyleSheet(
+            "QPushButton { background:#2a1a0d; color:#FFB347; border:1px solid #5a3a1a;"
+            " border-radius:3px; padding:3px 12px; font-weight:bold; }"
+            "QPushButton:hover { background:#4a2a1a; }"
+        )
+        bgs_tasks_btn.setToolTip(
+            "Your squadron's BGS objectives, entered by hand, with live progress for each "
+            "(influence, conflict score, your actions this tick)."
+        )
+        bgs_tasks_btn.clicked.connect(self._open_bgs_tasks_dialog)
+        refresh_row.addWidget(bgs_tasks_btn)
         root.addLayout(refresh_row)
 
         self._data_freshness_label = QLabel("")
@@ -1956,6 +1974,20 @@ class PlayerFactionPanel(QWidget):
         self._session_activity_dialog.show()
         self._session_activity_dialog.raise_()
         self._session_activity_dialog.activateWindow()
+
+    def _open_bgs_tasks_dialog(self) -> None:
+        if self._bgs_tasks_dialog is None:
+            self._bgs_tasks_dialog = BgsTasksDialog(self)
+        self._bgs_tasks_dialog.show()
+        self._bgs_tasks_dialog.raise_()
+        self._bgs_tasks_dialog.activateWindow()
+
+    def notify_bgs_activity(self) -> None:
+        """New BGS-relevant data landed (own action, jump, EDDN flush) --
+        repaint the BGS Tasks window if it's open. No-op otherwise."""
+        dlg = self._bgs_tasks_dialog
+        if dlg is not None and dlg.isVisible():
+            dlg.refresh()
 
     def notify_faction_snapshot_saved(self, system_address: int) -> None:
         """A live journal-sourced faction_snapshots write just landed for
