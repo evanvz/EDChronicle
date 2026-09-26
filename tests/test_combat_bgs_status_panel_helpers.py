@@ -79,6 +79,12 @@ def test_conflicts_text_guards_missing_won_days():
     assert _conflicts_text(conflicts) == "War: A (?) vs B (?)"
 
 
+def test_conflicts_text_shows_stakes_when_present():
+    conflicts = [{"war_type": "war", "faction1": "A", "won_days1": 2, "faction2": "B", "won_days2": 1,
+                  "stake1": "Hahn Hub", "stake2": ""}]
+    assert _conflicts_text(conflicts) == "War: A (2) vs B (1), stakes: Hahn Hub vs none"
+
+
 # --- _faction_states_text ---
 
 def test_faction_states_text_empty():

@@ -46,7 +46,20 @@ def test_save_stores_war_conflict_and_ignores_non_war_conflicts(repo):
     assert row is not None
     stored = json.loads(row["conflicts"])
     assert len(stored) == 1
-    assert stored[0] == {"faction1": "C", "faction2": "D", "war_type": "war", "status": "active", "won_days1": 2, "won_days2": 1}
+    assert stored[0] == {"faction1": "C", "faction2": "D", "war_type": "war", "status": "active",
+                         "won_days1": 2, "won_days2": 1, "stake1": None, "stake2": None}
+
+
+def test_save_stores_conflict_stakes(repo):
+    conflicts = [{"WarType": "civilwar", "Status": "active",
+                  "Faction1": {"Name": "A", "Stake": "Hahn Hub", "WonDays": 1},
+                  "Faction2": {"Name": "B", "Stake": "", "WonDays": 0}}]
+    repo.save_system_bgs_status(1, "Sol", conflicts=conflicts, factions=[],
+                                 data_timestamp="2026-08-23T00:00:00Z", source="journal")
+    row = repo.db.conn.execute("SELECT * FROM system_bgs_status WHERE system_address = 1").fetchone()
+    stored = json.loads(row["conflicts"])[0]
+    assert stored["stake1"] == "Hahn Hub"
+    assert stored["stake2"] == ""
 
 
 def test_save_stores_multistate_factions_only(repo):

@@ -104,10 +104,14 @@ def _conflicts_text(conflicts: List[dict]) -> str:
     parts = []
     for c in conflicts:
         label = "War" if c.get("war_type") == "war" else "Civil War"
-        parts.append(
+        text = (
             f"{label}: {c.get('faction1')} ({_won_days_text(c.get('won_days1'))}) "
             f"vs {c.get('faction2')} ({_won_days_text(c.get('won_days2'))})"
         )
+        stake1, stake2 = c.get("stake1"), c.get("stake2")
+        if stake1 or stake2:
+            text += f", stakes: {stake1 or 'none'} vs {stake2 or 'none'}"
+        parts.append(text)
     return " | ".join(parts)
 
 

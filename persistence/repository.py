@@ -630,6 +630,7 @@ class Repository:
                 "faction1": f1.get("Name"), "faction2": f2.get("Name"),
                 "war_type": war_type, "status": c.get("Status"),
                 "won_days1": f1.get("WonDays"), "won_days2": f2.get("WonDays"),
+                "stake1": f1.get("Stake"), "stake2": f2.get("Stake"),
             })
 
         multistate_factions = []
