@@ -8,11 +8,11 @@ Inspired by [EDCoPilot](https://www.razzafrag.com/) by CMDR RazzaFrag.
 
 ## Features
 
-- **Exploration** — live body/signal tracking, first-discovery/mapping/footfall status, ring hotspot tracking, Spansh backfill for missing physical stats, Canonn Codex intel
+- **Exploration** — live body/signal tracking, first-discovery/mapping/footfall status, ring hotspot tracking, Spansh backfill for missing physical stats, Canonn Codex intel, nearest notable Point of Interest (EDAstro)
 - **Exobiology** — genus/species/sample tracking, estimated credit values, Codex logging
 - **Combat** — combat contacts table with real Crime & Punishment engage-risk detection, gated voice callouts (never your own faction/power), notoriety and bounty tracking, massacre-mission stacking, System Status (wars, RES sites) for nearby systems
 - **PowerPlay** — live system-type detection, PowerPlay Target Finder cross-checked against two independent data sources, megaship alerts
-- **Player Faction (BGS)** — tracks your squadron-aligned faction galaxy-wide (not just where you've been), risk-bucket dashboard (War/Expansion/Retreat/Conflict), Inara CSV import, per-system BGS history and forecasting
+- **Player Faction (BGS)** — tracks your squadron-aligned faction galaxy-wide (not just where you've been), risk-bucket dashboard (War/Expansion/Retreat/Conflict), Inara CSV import, per-system BGS history and forecasting, a Faction Expansion Tracker for pushing one target system toward the 75% expansion threshold (influence trend, live PowerPlay standing, mission tally), and a Session BGS Activity Report covering every faction's mission/combat/CZ/trade activity for the whole session, grouped by day
 - **Market & Trading** — galaxy-wide best price search, Trade Opportunities, Trade Route Loop Planner, rare goods finder, broker/service finder (Black Market, Interstellar Factors, Material Trader, etc.)
 - **Mining** — session stats, ring/hotspot finder, sell-price lookup for refined cargo
 - **Engineering** — live material inventory, blueprint wishlist with real per-grade roll costs, Material Trader advisor, engineer distance/rank lookup
@@ -66,7 +66,7 @@ Full feature list, architecture, and database schema: see [ARCHITECTURE.md](ARCH
 
 ## How it works
 
-EDChronicle reads your Elite Dangerous journal files live while you play, and imports your full journal history into a local SQLite database on first launch. For data your own journals can't provide — galaxy-wide market prices, station info, PowerPlay control, squadron faction presence elsewhere in the galaxy — it draws on the same shared community network the rest of the Elite Dangerous tooling ecosystem uses: [Spansh](https://spansh.co.uk), [EDSM](https://www.edsm.net), [Canonn](https://canonn.tech), and a live [EDDN](https://github.com/EDCD/EDDN) feed. It can optionally contribute your own journal/market data back to EDDN too (on by default, matching EDMarketConnector's own default).
+EDChronicle reads your Elite Dangerous journal files live while you play, and imports your full journal history into a local SQLite database on first launch. For data your own journals can't provide — galaxy-wide market prices, station info, PowerPlay control, squadron faction presence elsewhere in the galaxy — it draws on the same shared community network the rest of the Elite Dangerous tooling ecosystem uses: [Spansh](https://spansh.co.uk), [EDSM](https://www.edsm.net), [Canonn](https://canonn.tech), [EDAstro](https://edastro.com), and a live [EDDN](https://github.com/EDCD/EDDN) feed. It can optionally contribute your own journal/market data back to EDDN too (on by default, matching EDMarketConnector's own default) — and your own market visits are always saved to your local search database regardless of that setting, so your own dock-and-buy always shows up in your own Market search.
 
 > **The longer EDChronicle stays open, the better it gets.** Galaxy-wide data (market prices, station services, squadron faction presence elsewhere) only accumulates while the app is running and connected to EDDN — a fresh install starts with none of it. Leave the app open while you play (not just while actively looking at it) to let it build up over time, the same way every EDDN-based tool works.
 

@@ -10,6 +10,7 @@ EDChronicle draws on the same community data network the rest of the Elite Dange
 - **[EDSM](https://www.edsm.net)** — daily PowerPlay dump (independent cross-check against Spansh), and per-system faction lookups for Player Faction CSV import
 - **[EDDN](https://github.com/EDCD/EDDN)** — live subscription for real-time PowerPlay cross-checking, network-wide squadron faction presence tracking, the galaxy-wide commodity price feed behind the Market tab, and station services/pad sizes crowdsourced from every commander's dockings (the same model Inara/EDSM use) — the same feed Spansh and EDSM themselves are built from
 - **[Canonn](https://canonn.tech)** — community-sourced Codex/POI intel for the current system and nearest unclaimed Codex challenge
+- **[EDAstro](https://edastro.com)** — Galactic Exploration Catalog + Galactic Mapping Project POI data (notable stellar phenomena, historical sites), for the Exploration tab's nearest-POI card. The catalog's own bundled coordinates are used with a locally-computed nearest search rather than EDAstro's live "nearest POI" API endpoint, which was confirmed not to work as documented
 - **[Inara](https://inara.cz)** — optional bulk CSV export of a minor faction's full system presence list, for the Player Faction tab's bulk import
 
 EDChronicle can also contribute back: "Contribute data to EDDN" in Settings (on by default, matching EDMarketConnector's own default — turn it off if you'd rather not) publishes a subset of your journal events (jumps, docking, scans, surface signal scans, carrier jumps, codex entries) to EDDN's `journal/1` schema, your own market visits (commodity buy/sell prices, stock, demand — including your own Fleet Carrier's docking access, when applicable) to EDDN's `commodity/3` schema whenever you open a station's Commodities screen, and your own Fleet Carrier's material listings to EDDN's `fcmaterials_journal/1` schema whenever you open its bartender screen — the same feeds the Market tab's search and the Engineering tab's "Sold by Carriers" search draw from. All of this benefits every tool that consumes EDDN, not just EDChronicle. No personal data beyond your commander name is included, and EDDN obfuscates that before distributing it further.
@@ -69,7 +70,7 @@ Flow:
 3. `edc/ui/panels/powerplay_finder_panel.py` cross-checks each Spansh search result's controlling power against both sources and flags disagreement
 4. `eddn_market.py` buffers commodity prices, station sightings, Fleet Carrier material listings, carrier docking access, and squadron-faction sightings in memory and flushes to SQLite periodically in one batched transaction (`Database.deferred_commit()`), rather than committing per message
 5. On every raw journal event, `MainWindow` calls `edc/core/eddn_publisher.py::observe()` to track session header fields (commander, game version, Horizons/Odyssey flags); if "Contribute data to EDDN" is enabled in Settings, `maybe_publish()` builds a schema-compliant `journal/1` message and queues it for background delivery to the EDDN gateway
-6. On the `Market` event, `_load_current_market()`'s already-parsed `Market.json` dict is also handed to `maybe_publish_commodity()`, which builds a `commodity/3` message (applying EDDN's required elisions/renames, plus your own carrier's docking access when the market is confirmed your own) and queues it on the same gateway worker — same opt-in setting, no separate toggle
+6. On the `Market` event, `_load_current_market()`'s already-parsed `Market.json` dict is also handed to `maybe_publish_commodity()`, which builds a `commodity/3` message (applying EDDN's required elisions/renames, plus your own carrier's docking access when the market is confirmed your own) and queues it on the same gateway worker — same opt-in setting, no separate toggle. Independent of that opt-in setting, `MainWindow._save_own_market_snapshot()` also writes your own visit straight into the local `market_prices` search table (reusing `build_commodity_message()`'s own symbol normalization) — previously the local Market search only ever reflected EDDN's crowd feed relaying data back (either another commander's visit, or your own publish round-tripping through the network), so a commander's own dock-and-buy never showed up in their own search at all if EDDN contribution happened to be off. Dispatched via a `_MarketSaveWorker` off the UI thread (mirroring `_SpanshSaveWorker`'s own shape below) rather than written inline, after an early version of the fix caused a real freeze while `net.market_prices` (a multi-million-row table also written by the EDDN flush worker) was locked by a background write.
 7. On the `FCMaterials` event, `_load_current_fcmaterials()` reads `FCMaterials.json` and hands it to `maybe_publish_fcmaterials()`, which builds an `fcmaterials_journal/1` message and queues it the same way
 
 ### 5. Player Faction (BGS) tracking path
@@ -83,6 +84,8 @@ Flow:
 3. The EDDN network-wide listener (path 4) supplies presence data for systems never personally visited
 4. `edc/core/edsm_faction_lookup.py` + `edc/core/inara_faction_csv.py` support manual add and bulk CSV import, resolving each system live against EDSM with retry-on-block; a `_FactionRefreshWorker` re-queries every tracked system once per local calendar day (so a fresh day's first session always gets one, matching the BGS's own daily tick — not a rolling 24h window) and backfills `system_coords` via `fetch_system_coords()`
 5. `edc/ui/panels/player_faction_panel.py` classifies every system into 0+ status buckets (`_compute_buckets()`, pure in-memory, no extra queries) and renders them as tiles; clicking one opens a `_FactionBucketDialog` (non-modal `QDialog`, kept alive in a dict so it survives tab switches) which re-renders live as buckets are recomputed on arrival or after a manual recheck
+6. **Faction Expansion Tracker** (`edc/ui/panels/faction_expansion_dialog.py`, launched from a button on the Player Faction tab): tracks one target system's push toward the 75% BGS expansion threshold for the squadron faction — an influence trend chart, a live PowerPlay standing card (see below), and a mission-completion tally, independent of the galaxy-wide bucket dashboard above. `MainWindow._save_system_powerplay_snapshot()` persists the journal's own live `PowerplayState`/`PowerplayStateReinforcement`/`PowerplayStateUndermining`/`PowerplayStateControlProgress` fields (only present on `Location`/`FSDJump`) into new columns on the `systems` table, since that data previously only lived in memory and vanished the moment the player left the system — shown as the tracker's primary PowerPlay reading, clearly separate from Frontier's own downloadable control-vote CSV feed (`edc/core/fdev_powerplay.py`), which measures a different weekly pool despite similarly-named fields. `MainWindow._record_faction_mission_completion()` reads `MissionCompleted`'s own `FactionEffects` array directly (primary = the mission's issuing faction, secondary = every other faction it named, e.g. a destination faction in a different system entirely) into `faction_mission_completions`, signed by Frontier's own `Trend` field (`UpGood`/`DownGood` add to the tally, `UpBad`/`DownBad` subtract) rather than treated as a flat positive regardless of direction; a mission with no BGS effect at all (pure cargo/passenger payouts) still gets one fallback row recorded for the issuing faction, so it isn't invisible to the report.
+7. **Session BGS Activity Report** (`edc/ui/panels/session_activity_dialog.py`, launched from the same Player Faction tab): a separate, whole-session, all-faction view — "what did I do this session" rather than the tracker's "is my one targeted push working." `Repository.get_session_activity_report()` aggregates `faction_mission_completions` plus three new tables (`faction_combat_bonds`, `faction_cz_kills`, `faction_trade_sold`, fed by new `MainWindow` hooks on `FactionKillBond`, the existing CZ-kill-credit signal, and `MarketSell`/`MultiSellExplorationData`/`SellExplorationData`/`SellOrganicData`) into `{date: {system_name: {faction_name: {...}}}}`, grouped by day since the session reuses `PlayerFactionPanel._latest_known_tick` as its boundary (a delayed tick can span more than one calendar day). All three new hooks are guarded by `self._replaying`, matching the same bootstrap-replay-duplication fix already applied elsewhere, and are dispatched off the UI thread the same way market snapshots are (see path 4) to avoid contending with the EDDN flush worker's own writes to the same tables.
 
 ## Current top-level module ownership
 
@@ -102,6 +105,8 @@ Notable files:
 - `eddn_market.py` — buffered EDDN commodity price, station, Fleet Carrier material listing, carrier docking access, and squadron faction sighting ingestion
 - `eddn_publisher.py` — opt-in `journal/1` (jumps, docking, scans...), `commodity/3` (market visits, including your own carrier's docking access), and `fcmaterials_journal/1` (your own carrier's material listings) publishing back to EDDN
 - `canonn_client.py` — Canonn Codex/POI community intel
+- `edastro_poi.py` — EDAstro's Galactic Exploration Catalog/Galactic Mapping Project POI list, cached and searched locally for the Exploration tab's nearest-notable-POI card
+- `fdev_powerplay.py` — Frontier's own official PowerPlay control-vote CSV feed (a daily-cached download, distinct from the live per-visit journal PowerplayState fields), used to cross-check the PowerPlay Target Finder and shown as a supplementary "control vote" line on the Faction Expansion Tracker
 - `inara_faction_csv.py` — parses Inara's faction-presence CSV export format
 - `bgs_conflicts.py` — squadron-aligned faction lookup, finds who it's at active war with in the current system, and backs BGS activity attribution (bounty/trade crediting)
 - `ship_loadout.py` — classifies current ship hardpoints as armed/unarmed from `Loadout` events
@@ -183,6 +188,8 @@ Notable files:
 - `engineering_panel.py`
 - `fleet_carrier_panel.py`
 - `player_faction_panel.py`
+- `faction_expansion_dialog.py` — Faction Expansion Tracker: one target system's push toward the 75% BGS expansion threshold (influence trend, live PowerPlay standing, mission tally)
+- `session_activity_dialog.py` — Session BGS Activity Report: whole-session, all-faction mission/combat/CZ/trade activity grouped by day, since the last detected BGS tick
 - `squadron_panel.py`
 - `intel_panel.py`
 - `inventory_panel.py` — `ShiplockerPanel` (Odyssey) and `MaterialsPanel`
@@ -202,7 +209,7 @@ Notable files:
 
 | Table | Contents |
 |-------|----------|
-| `systems` | Visited systems: name, body count, FSS complete, first/last visit, visit count |
+| `systems` | Visited systems: name, body count, FSS complete, first/last visit, visit count, plus the last live PowerPlay reading seen there (`pp_state`, `pp_control_progress`, `pp_reinforcement`, `pp_undermining`, `pp_controlling_power`, `pp_powers`, `pp_data_timestamp`) |
 | `bodies` | Scanned planets: class, distance, value, signals, physical stats (gravity, radius, temp, pressure, atmosphere, composition, tidal lock, first discovered/mapped) |
 | `body_signals` | Bio, geo, and human signal counts per body |
 | `spansh_bodies` | Spansh-sourced body data used when journal data is missing |
@@ -212,6 +219,10 @@ Notable files:
 | `dss_genus_discovery` | Genus discoveries recorded via DSS scan |
 | `faction_snapshots` | Per-system, per-day BGS snapshot (influence, states, controlling status) for the squadron-aligned faction, from journal visits and EDDN |
 | `dismissed_faction_systems` | Systems manually hidden from the Player Faction tab |
+| `faction_mission_completions` | One row per faction a `MissionCompleted`'s `FactionEffects` actually moved — system, faction, timestamp, influence tier, primary/secondary, Trend-signed weight, cleaned mission type, and CR reward. Backs both the Faction Expansion Tracker's mission tally and the Session BGS Activity Report |
+| `faction_combat_bonds` | One row per `FactionKillBond`, for the Session BGS Activity Report (Bounty vouchers deliberately excluded — the journal event carries who was killed, not which faction actually gets credited at redemption) |
+| `faction_cz_kills` | One row per confirmed conflict-zone kill (ground/space, size), for the Session BGS Activity Report |
+| `faction_trade_sold` | One row per commodity/exploration/exobiology sale, credited to the selling station's controlling faction, for the Session BGS Activity Report |
 | `station_info` | Landing pad counts, station services, and (for Fleet Carriers) self-reported docking access — from `Docked` events, yours and every commander's via EDDN |
 | `market_prices` | Galaxy-wide commodity prices from the EDDN commodity feed, keyed by market + commodity |
 | `system_bgs_status` | Latest known War/CivilWar conflicts and multi-state factions per system, from journal visits and EDDN — one row per system, not daily history |
@@ -242,6 +253,8 @@ Some newer features persist to plain JSON under `settings/` or `data/` rather th
 | `data/market_destination.json` | The currently pinned Market-tab destination, if any — created on pin, deleted on arrival or manual dismiss |
 | `settings/edsm_powerplay_cache.json` | Daily-refreshed EDSM PowerPlay dump cross-check cache |
 | `settings/eddn_powerplay_cache.json` | Live EDDN PowerPlay sightings collected this session |
+| `settings/fdev_powerplay_cache.json` | Daily-refreshed Frontier official PowerPlay control-vote CSV feed |
+| `settings/edastro_poi_cache.json` | EDAstro's bulk POI catalog, refreshed periodically and searched locally for nearest-POI |
 
 ## Development tooling
 
