@@ -2943,8 +2943,6 @@ class Repository:
         self, system_name: str, task_type: str, faction_name: Optional[str] = None,
         opponent_name: Optional[str] = None, note: Optional[str] = None,
     ) -> int:
-        from datetime import datetime, timezone
-
         resolved = self.resolve_system(system_name)
         address, name = resolved if resolved else (None, (system_name or "").strip())
         next_order = self.db.conn.execute("SELECT COALESCE(MAX(sort_order), -1) + 1 FROM bgs_tasks").fetchone()[0]
