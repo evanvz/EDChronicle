@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
 )
 
 from edc.core.bgs_tasks import (
-    DEFAULT_LIMITS, STATUS_COLORS, TASK_LABELS, TASK_TYPES, TYPE_COLORS, build_task_views, task_title, validate_task_input,
+    DEFAULT_LIMITS, STATUS_COLORS, STATUS_DONE, TASK_LABELS, TASK_TYPES, TYPE_COLORS, build_task_views, task_title, validate_task_input,
 )
 from edc.ui import formatting as fmt
 from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE
@@ -25,7 +25,11 @@ from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE
 log = logging.getLogger("edc.bgs_tasks")
 
 _LINE_STYLE = "background:transparent; border:none; color:#c8c8c8;"
-_DIM_STYLE = "background:transparent; border:none; color:#888888; font-size:11px;"
+_LINE_STATE_STYLES = {
+    "met": "background:transparent; border:none; color:#6BCB77;",
+    "over": "background:transparent; border:none; color:#FFB347;",
+}
+_DIM_STYLE ="background:transparent; border:none; color:#888888; font-size:11px;"
 _GUIDE_STYLE = "background:transparent; border:none; color:#a8a8a8;"
 _WARN_STYLE ="background:transparent; border:none; color:#FFB347;"
 _SMALL_BTN = (
@@ -233,7 +237,8 @@ class BgsTasksDialog(QDialog):
         task = view["task"]
         card = QFrame()
         accent = TYPE_COLORS.get(task["task_type"], "#c8c8c8")
-        card.setStyleSheet(_CARD_STYLE + f" QFrame {{ border-left:4px solid {accent}; }}")
+        done_tint = " QFrame { background:#0f2418; }" if view["status"] == STATUS_DONE else ""
+        card.setStyleSheet(_CARD_STYLE + f" QFrame {{ border-left:4px solid {accent}; }}" + done_tint)
         card_l = QVBoxLayout(card)
         card_l.setContentsMargins(8, 6, 8, 8)
         card_l.setSpacing(3)
@@ -268,10 +273,10 @@ class BgsTasksDialog(QDialog):
             lbl.setWordWrap(True)
             lbl.setStyleSheet(_GUIDE_STYLE)
             card_l.addWidget(lbl)
-        for line in view["lines"]:
+        for line, state in zip(view["lines"], view.get("line_states") or [""] * len(view["lines"])):
             lbl = QLabel(line)
             lbl.setWordWrap(True)
-            lbl.setStyleSheet(_LINE_STYLE)
+            lbl.setStyleSheet(_LINE_STATE_STYLES.get(state, _LINE_STYLE))
             card_l.addWidget(lbl)
         for warning in view["warnings"]:
             lbl = QLabel(f"⚠ {warning}")

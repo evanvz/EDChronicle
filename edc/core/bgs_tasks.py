@@ -83,6 +83,10 @@ def _same(a, b) -> bool:
     return isinstance(a, str) and isinstance(b, str) and a.strip().lower() == b.strip().lower()
 
 
+def _missions(n: int) -> str:
+    return f"{n} mission" if n == 1 else f"{n} missions"
+
+
 def _cr(value: int) -> str:
     return f"{value / 1_000_000:.1f}M" if abs(value) >= 1_000_000 else f"{value:,}"
 
@@ -135,10 +139,17 @@ def _boost_view(task: dict, report: dict, history: list, limits: dict) -> dict:
     faction = task.get("faction_name") or ""
     act = faction_activity(report, task["system_name"], faction)
     lines = [
-        f"Tier score {act['tier_score']} / {limits['tier_score']} ({act['missions']} missions)",
+        f"Tier score {act['tier_score']} / {limits['tier_score']} ({_missions(act['missions'])})",
         f"Bounties {_cr(act['bounties'])} / {_cr(limits['bounties'])}",
         f"Exploration {_cr(act['exploration'])} / {_cr(limits['exploration'])}",
     ]
+    line_states = []
+    for i, (key, _) in enumerate(_LIMITED_STREAMS):
+        state = ""
+        if limits[key] > 0 and act[key] >= limits[key]:
+            state = "over" if act[key] > limits[key] else "met"
+            lines[i] += " ✓"
+        line_states.append(state)
     if act["trade_profit"]:
         lines.append(f"Trade profit {_cr(act['trade_profit'])}")
     if act["combat_bonds"]:
@@ -165,7 +176,7 @@ def _boost_view(task: dict, report: dict, history: list, limits: dict) -> dict:
         status = STATUS_LOSING
     else:
         status = STATUS_TODO
-    return {"status": status, "lines": lines, "warnings": warnings,
+    return {"status": status, "lines": lines, "warnings": warnings, "line_states": line_states,
             "hud": f"Boost {faction} — tier score {act['tier_score']}/{limits['tier_score']}",
             "updated_at": None}
 
@@ -190,7 +201,7 @@ def _conflict_view(task: dict, report: dict, bgs_status: Optional[dict], kind: s
 
     if kind == "vote":
         lines.append(
-            f"Your actions: {act['missions']} missions (tier score {act['tier_score']}), "
+            f"Your actions: {_missions(act['missions'])} (tier score {act['tier_score']}), "
             f"trade profit {_cr(act['trade_profit'])}, exploration {_cr(act['exploration'])}"
         )
         acted = bool(act["missions"] or act["trade_profit"] > 0 or act["exploration"] or act["exobiology"])
@@ -199,7 +210,7 @@ def _conflict_view(task: dict, report: dict, bgs_status: Optional[dict], kind: s
     else:
         lines.append(
             f"Your actions: {act['cz_kills']} CZ kills, combat bonds {_cr(act['combat_bonds'])}, "
-            f"{act['missions']} missions"
+            f"{_missions(act['missions'])}"
         )
         acted = bool(act["cz_kills"] or act["combat_bonds"] or act["missions"])
         if opponent and faction_activity(report, task["system_name"], opponent)["combat_bonds"]:
@@ -304,12 +315,16 @@ def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], histor
         view = _powerplay_view(pp, pledged, merits, pp_activities)
     else:
         note = task.get("note") or ""
-        return {"task": task, "status": "", "lines": [note] if note else [], "warnings": [],
+        lines = [note] if note else []
+        return {"task": task, "status": "", "lines": lines, "line_states": [""] * len(lines), "warnings": [],
                 "hud": f"Note: {note}" if note else "", "updated_at": None, "guide": ""}
     if task_type != "powerplay":
         view["guide"] = _bgs_guide(task, limits)
     if task.get("note"):
         view["lines"].append(task["note"])
+    # "met" / "over" per line where the line has a target (Boost streams), else "".
+    states = view.get("line_states", [])
+    view["line_states"] = states + [""] * (len(view["lines"]) - len(states))
     view["task"] = task
     return view
 

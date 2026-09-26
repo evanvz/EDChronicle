@@ -120,3 +120,23 @@ def test_opponent_field_only_enabled_for_vote_and_fight(tmp_path):
     assert dlg._opponent_edit.isEnabled()
     dlg._type_combo.setCurrentIndex(dlg._type_combo.findData("note"))
     assert not dlg._faction_edit.isEnabled()
+
+
+def test_done_card_gets_green_tint_and_met_line_is_green(tmp_path):
+    from edc.core.bgs_tasks import DEFAULT_LIMITS
+
+    dlg, repo, _ = _dialog(tmp_path)
+    repo.add_bgs_task("Ekono", "boost", faction_name="Elite United Worlds")
+    repo.record_faction_bounty(12345, "Elite United Worlds", DEFAULT_LIMITS["bounties"], "2026-09-26T10:00:00Z")
+    dlg.refresh()
+    card = dlg._cards[0]
+    assert "#0f2418" in card.styleSheet()
+    bounty_line = [l for l in card.findChildren(QLabel) if l.text().startswith("Bounties")][0]
+    assert "#6BCB77" in bounty_line.styleSheet()
+
+
+def test_unfinished_card_has_no_tint(tmp_path):
+    dlg, repo, _ = _dialog(tmp_path)
+    repo.add_bgs_task("Ekono", "boost", faction_name="Elite United Worlds")
+    dlg.refresh()
+    assert "#0f2418" not in dlg._cards[0].styleSheet()

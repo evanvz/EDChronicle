@@ -118,3 +118,36 @@ def test_build_task_views_queries_merits_since_week_start():
     views = build_task_views(repo, "t", LIMITS, pledged="Aisling Duval", now=now)
     assert calls == [(12345, "2026-09-24T07:00:00Z")]
     assert "Your merits here this PowerPlay week: 55" in views[0]["lines"]
+
+
+# --- per-line target state on Boost cards ---
+
+def _entry(count=0, weighted=0, bounties=0, exploration=0):
+    return {
+        "missions": {"count": count, "weighted": weighted, "primary_count": count, "secondary_count": 0,
+                     "by_type": {}, "reward_total": 0, "reward_by_type": {}},
+        "combat_bonds_total": 0, "bounties_total": bounties,
+        "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 0},
+        "trade_sold": {"commodity": 0, "exploration": exploration, "exobiology": 0},
+    }
+
+
+def test_boost_line_states_under_met_and_over():
+    report = {"2026-09-26": {"Tucanae": {"EUW": _entry(count=5, weighted=25, bounties=21_000_000, exploration=1)}}}
+    view = build_task_view(_task("boost", "EUW"), report, None, [], None, LIMITS)
+    assert view["line_states"][:3] == ["met", "over", ""]
+    assert view["lines"][0] == "Tier score 25 / 25 (5 missions) ✓"
+    assert view["lines"][1] == "Bounties 21.0M / 20.0M ✓"
+    assert view["lines"][2] == "Exploration 1 / 20.0M"
+    assert len(view["line_states"]) == len(view["lines"])
+
+
+def test_non_boost_line_states_are_blank_and_aligned():
+    view = build_task_view(_task("vote", "A", "B", note="x"), {}, None, [], None, LIMITS)
+    assert view["line_states"] == [""] * len(view["lines"])
+
+
+def test_single_mission_is_singular():
+    report = {"2026-09-26": {"Tucanae": {"EUW": _entry(count=1, weighted=3)}}}
+    view = build_task_view(_task("boost", "EUW"), report, None, [], None, LIMITS)
+    assert view["lines"][0] == "Tier score 3 / 25 (1 mission)"
