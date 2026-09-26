@@ -38,7 +38,7 @@ third-party data push).
 | Boost | system, faction | Your signed tier score, bounties, combat bonds, trade profit, exploration and exobiology for that faction in that system since the last tick; the faction's influence in the latest snapshot vs the previous day's | `get_session_activity_report(since_tick)` filtered to system+faction; `faction_snapshots` |
 | Vote (election) | system, faction, opponent | Days won (e.g. 2 - 0) and status; your missions, trade profit and exploration for the faction; a warning if you log combat bonds/CZ kills there | `net.system_bgs_status` conflicts (after the election change below); session report |
 | Fight (war/civil war) | system, faction, opponent | Days won and status; your CZ kills, combat bonds cashed and missions for the faction; a warning if you cash bonds for the opponent | `net.system_bgs_status`; session report |
-| PowerPlay | system, note | Latest PowerPlay state/progress for the system | `systems.pp_*` via `get_system_powerplay_snapshot()`; FDev CSV cache as fallback |
+| PowerPlay | system, note | Latest PowerPlay state/progress for the system | `systems.pp_*` via `get_system_powerplay_snapshot()` (your own last visit; no CSV fallback in v1) |
 | Note | system (optional), free text | Text only | — |
 
 Freshness: every conflict/influence/PowerPlay value shows its age
@@ -68,8 +68,11 @@ Each task card shows one status line:
 - **To do** — nothing logged this tick.
 - **Losing ground** — Vote/Fight: opponent has more days won than the
   faction. Boost: influence dropped since the previous snapshot.
-- **Conflict ended** — Vote/Fight: the conflict is no longer reported for
-  the system. The task stays until removed.
+- **Conflict ended** — Vote/Fight: the system has been read since the task
+  was created and the conflict is no longer in it. Ended conflicts are
+  cleared by the player's own journal visit (EDDN/EDSM readings never
+  clear, since they don't reliably carry the full picture). The task stays
+  until removed.
 
 Tasks persist until the user removes them (no auto-delete). Order is the
 user's priority order (drag or up/down), matching the squadron post.

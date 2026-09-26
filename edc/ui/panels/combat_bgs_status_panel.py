@@ -73,14 +73,25 @@ class _SearchWorker(QObject):
         self.finished.emit(bgs_results, res_results)
 
 
+def _combat_conflicts(conflicts: List[dict]) -> List[dict]:
+    """Elections are stored alongside wars (for the BGS Tasks tracker) but
+    are not combat -- this panel only ever shows War/Civil War."""
+    return [c for c in (conflicts or []) if c.get("war_type") != "election"]
+
+
 def _merge_results(bgs_results: List[dict], res_results: List[dict]) -> List[Dict[str, Any]]:
     """One row per system_name, combining conflict/faction-state data with
     RES tier data -- most systems will only have one of the two."""
     merged: Dict[str, Dict[str, Any]] = {}
     for r in bgs_results:
+        conflicts = _combat_conflicts(r["conflicts"])
+        # Drop rows with only elections (no combat conflicts and no factions),
+        # but keep rows with no data at all (might have RES data).
+        if not conflicts and not r["faction_states"] and r["conflicts"]:
+            continue
         merged[r["system_name"]] = {
             "system_name": r["system_name"], "distance_ly": r["distance_ly"],
-            "conflicts": r["conflicts"], "faction_states": r["faction_states"],
+            "conflicts": conflicts, "faction_states": r["faction_states"],
             "tiers": [], "data_timestamp": r["data_timestamp"],
         }
     for r in res_results:
@@ -99,6 +110,7 @@ def _won_days_text(won_days) -> str:
 
 
 def _conflicts_text(conflicts: List[dict]) -> str:
+    conflicts = _combat_conflicts(conflicts)
     if not conflicts:
         return ""
     parts = []

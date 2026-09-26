@@ -35,18 +35,19 @@ def test_save_skips_when_nothing_relevant(repo):
     assert row is None
 
 
-def test_save_stores_war_conflict_and_ignores_non_war_conflicts(repo):
+def test_save_stores_war_and_election_conflicts_and_ignores_others(repo):
     conflicts = [
         {"WarType": "election", "Status": "", "Faction1": {"Name": "A", "WonDays": 1}, "Faction2": {"Name": "B", "WonDays": 0}},
         {"WarType": "war", "Status": "active", "Faction1": {"Name": "C", "WonDays": 2}, "Faction2": {"Name": "D", "WonDays": 1}},
+        {"WarType": "", "Status": "", "Faction1": {"Name": "E"}, "Faction2": {"Name": "F"}},
     ]
     repo.save_system_bgs_status(1, "Sol", conflicts=conflicts, factions=[],
                                  data_timestamp="2026-08-23T00:00:00Z", source="journal")
     row = repo.db.conn.execute("SELECT * FROM system_bgs_status WHERE system_address = 1").fetchone()
     assert row is not None
     stored = json.loads(row["conflicts"])
-    assert len(stored) == 1
-    assert stored[0] == {"faction1": "C", "faction2": "D", "war_type": "war", "status": "active",
+    assert [c["war_type"] for c in stored] == ["election", "war"]
+    assert stored[1] == {"faction1": "C", "faction2": "D", "war_type": "war", "status": "active",
                          "won_days1": 2, "won_days2": 1, "stake1": None, "stake2": None}
 
 
@@ -245,3 +246,32 @@ def test_get_bgs_status_for_system_returns_saved_data_regardless_of_age(repo):
     assert result is not None
     assert result["conflicts"][0]["faction1"] == "A"
     assert result["data_timestamp"] == ts
+
+
+# --- ended conflicts are cleared by a newer own-journal reading ---
+
+_WAR = [{"WarType": "war", "Status": "active", "Faction1": {"Name": "A", "WonDays": 1}, "Faction2": {"Name": "B", "WonDays": 0}}]
+
+
+def _stored_conflicts(repo):
+    row = repo.db.conn.execute("SELECT conflicts FROM system_bgs_status WHERE system_address = 1").fetchone()
+    return json.loads(row["conflicts"])
+
+
+def test_newer_journal_reading_with_nothing_relevant_clears_ended_conflict(repo):
+    repo.save_system_bgs_status(1, "Sol", _WAR, [], "2026-09-20T00:00:00Z", "journal")
+    repo.save_system_bgs_status(1, "Sol", [], [], "2026-09-21T00:00:00Z", "journal")
+    assert _stored_conflicts(repo) == []
+
+
+def test_older_journal_reading_does_not_clear_newer_conflict(repo):
+    repo.save_system_bgs_status(1, "Sol", _WAR, [], "2026-09-21T00:00:00Z", "journal")
+    repo.save_system_bgs_status(1, "Sol", [], [], "2026-09-20T00:00:00Z", "journal")
+    assert len(_stored_conflicts(repo)) == 1
+
+
+def test_eddn_and_edsm_readings_never_clear(repo):
+    repo.save_system_bgs_status(1, "Sol", _WAR, [], "2026-09-20T00:00:00Z", "journal")
+    repo.save_system_bgs_status(1, "Sol", [], [], "2026-09-21T00:00:00Z", "eddn")
+    repo.save_system_bgs_status(1, "Sol", [], [], "2026-09-22T00:00:00Z", "edsm")
+    assert len(_stored_conflicts(repo)) == 1

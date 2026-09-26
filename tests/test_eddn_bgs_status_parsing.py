@@ -17,7 +17,7 @@ def test_extract_bgs_status_returns_war_conflicts_and_multistate_factions():
         ],
     }
     conflicts, factions = _extract_bgs_status(msg)
-    assert len(conflicts) == 1 and conflicts[0]["WarType"] == "war"
+    assert [c["WarType"] for c in conflicts] == ["war", "election"]
     assert len(factions) == 1 and factions[0]["Name"] == "A"
 
 

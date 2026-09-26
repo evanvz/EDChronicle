@@ -127,3 +127,32 @@ def test_faction_states_text_mixes_active_pending_and_recovering():
         "recovering_states": [{"State": "Outbreak"}],
     }]
     assert _faction_states_text(factions) == "A: War, Election (pending), Outbreak (recovering)"
+
+
+# --- elections are stored for the BGS Tasks tracker but never shown here ---
+
+def test_conflicts_text_skips_elections():
+    conflicts = [
+        {"war_type": "election", "faction1": "A", "won_days1": 1, "faction2": "B", "won_days2": 0},
+        {"war_type": "war", "faction1": "C", "won_days1": 2, "faction2": "D", "won_days2": 1},
+    ]
+    assert _conflicts_text(conflicts) == "War: C (2) vs D (1)"
+
+
+def test_conflicts_text_election_only_is_empty():
+    conflicts = [{"war_type": "election", "faction1": "A", "won_days1": 1, "faction2": "B", "won_days2": 0}]
+    assert _conflicts_text(conflicts) == ""
+
+
+def test_merge_results_drops_election_only_rows_and_strips_elections():
+    election = {"war_type": "election", "faction1": "A", "won_days1": 1, "faction2": "B", "won_days2": 0}
+    war = {"war_type": "war", "faction1": "C", "won_days1": 2, "faction2": "D", "won_days2": 1}
+    bgs = [
+        {"system_name": "OnlyElection", "distance_ly": 1.0, "conflicts": [election],
+         "faction_states": [], "data_timestamp": "2026-09-26T00:00:00Z"},
+        {"system_name": "Both", "distance_ly": 2.0, "conflicts": [election, war],
+         "faction_states": [], "data_timestamp": "2026-09-26T00:00:00Z"},
+    ]
+    merged = _merge_results(bgs, [])
+    assert [r["system_name"] for r in merged] == ["Both"]
+    assert merged[0]["conflicts"] == [war]

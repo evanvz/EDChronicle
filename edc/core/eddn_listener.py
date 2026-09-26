@@ -54,14 +54,14 @@ _FSSBODYSIGNALS_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/fssbodysignals/"
 
 
 def _extract_bgs_status(msg: dict) -> tuple[list, list]:
-    """War/CivilWar conflicts and multi-state factions from a journal
+    """War/CivilWar/Election conflicts and multi-state factions from a journal
     message's Conflicts/Factions arrays -- unconditional (any system, not
     just a squadron-watched faction), unlike _maybe_emit_faction_seen."""
     from edc.core.bgs_conflicts import is_multistate_faction
 
     conflicts = [
         c for c in (msg.get("Conflicts") or [])
-        if isinstance(c, dict) and str(c.get("WarType", "")).lower() in ("war", "civilwar")
+        if isinstance(c, dict) and str(c.get("WarType", "")).lower() in ("war", "civilwar", "election")
     ]
     factions = [
         f for f in (msg.get("Factions") or [])

@@ -608,7 +608,7 @@ class Repository:
         data_timestamp: str, source: str,
     ) -> None:
         """
-        Upserts current War/CivilWar conflicts and multi-state factions for
+        Upserts current War/CivilWar/Election conflicts and multi-state factions for
         a system, plus any faction in Civil Unrest or Infrastructure
         Failure even alone (not multi-state) -- both indicate reduced/no
         settlement security, the signal behind finding an abandoned
@@ -622,7 +622,7 @@ class Repository:
             if not isinstance(c, dict):
                 continue
             war_type = str(c.get("WarType", "")).lower()
-            if war_type not in ("war", "civilwar"):
+            if war_type not in ("war", "civilwar", "election"):
                 continue
             f1 = c.get("Faction1") or {}
             f2 = c.get("Faction2") or {}
@@ -644,10 +644,28 @@ class Repository:
                     "recovering_states": f.get("RecoveringStates"),
                 })
 
+        normalized_timestamp = _normalize_data_timestamp(data_timestamp)
         if not war_conflicts and not multistate_factions:
+            # The player's own journal always carries the full Conflicts/
+            # Factions picture, so a newer own reading with nothing relevant
+            # means a stored war/election has ended -- clear it rather than
+            # leave it looking current. EDDN listener messages with nothing
+            # relevant are never emitted, and EDSM has no Conflicts data at
+            # all, so neither may clear. UPDATE only: never creates a row, and
+            # rows holding only system-profile columns (conflicts NULL) are
+            # left alone.
+            if source == "journal":
+                self.db.execute(
+                    """
+                    UPDATE net.system_bgs_status
+                    SET conflicts = '[]', faction_states = '[]', data_timestamp = ?, source = ?
+                    WHERE system_address = ? AND conflicts IS NOT NULL
+                      AND (data_timestamp IS NULL OR ? >= data_timestamp)
+                    """,
+                    (normalized_timestamp, source, system_address, normalized_timestamp),
+                )
             return
 
-        normalized_timestamp = _normalize_data_timestamp(data_timestamp)
         self.db.execute(
             """
             INSERT INTO net.system_bgs_status (
