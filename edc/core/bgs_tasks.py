@@ -170,9 +170,10 @@ def _conflict_view(task: dict, report: dict, bgs_status: Optional[dict], kind: s
 
     days_for = days_against = 0
     if c:
-        days_for = c["days_for"] if isinstance(c["days_for"], int) else 0
-        days_against = c["days_against"] if isinstance(c["days_against"], int) else 0
-        lines.append(f"Days won {days_for} - {days_against} ({c['status'] or 'pending'})")
+        days_for = c["days_for"] if isinstance(c["days_for"], int) else None
+        days_against = c["days_against"] if isinstance(c["days_against"], int) else None
+        lines.append(f"Days won {days_for if days_for is not None else '?'} - "
+                     f"{days_against if days_against is not None else '?'} ({c['status'] or 'pending'})")
         if c["stake_for"] or c["stake_against"]:
             lines.append(f"Stakes: {c['stake_for'] or 'none'} vs {c['stake_against'] or 'none'}")
 
@@ -198,14 +199,14 @@ def _conflict_view(task: dict, report: dict, bgs_status: Optional[dict], kind: s
         status = STATUS_ENDED if read_since_created else STATUS_NO_DATA
     elif acted:
         status = STATUS_DONE
-    elif days_against > days_for:
+    elif days_for is not None and days_against is not None and days_against > days_for:
         status = STATUS_LOSING
     else:
         status = STATUS_TODO
 
     verb = TASK_LABELS[kind]
     who = f"{faction} vs {opponent}" if opponent else faction
-    score = f"{days_for}-{days_against}" if c else "no score yet"
+    score = f"{days_for if days_for is not None else '?'}-{days_against if days_against is not None else '?'}" if c else "no score yet"
     return {"status": status, "lines": lines, "warnings": warnings,
             "hud": f"{verb} {who} — {score}", "updated_at": updated_at}
 

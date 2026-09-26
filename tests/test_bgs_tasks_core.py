@@ -159,6 +159,32 @@ def test_vote_ended_when_read_since_task_created_and_gone():
 
 # --- Fight ---
 
+def test_fight_unknown_won_days_show_as_question_marks_and_are_never_losing():
+    view = build_task_view(_task("fight", "UID", "Damona", system="ICZ"), {},
+                           _status(_conflict("civilwar", "Damona", None, "UID", None)), [], None, LIMITS)
+    assert view["lines"][0] == "Days won ? - ? (active)"
+    assert view["hud"].endswith("— ?-?")
+    assert view["status"] == STATUS_TODO
+
+
+def test_fight_losing_ground_when_opponent_has_more_won_days_and_no_actions():
+    view = build_task_view(_task("fight", "UID", "Damona", system="ICZ"), {},
+                           _status(_conflict("civilwar", "UID", 0, "Damona", 3)), [], None, LIMITS)
+    assert view["status"] == STATUS_LOSING
+
+
+def test_fight_ended_when_status_read_after_task_created_and_conflict_gone():
+    view = build_task_view(_task("fight", "UID", "Damona", system="ICZ", created_at="2026-09-26T11:00:00Z"), {},
+                           _status(ts="2026-09-26T12:00:00Z"), [], None, LIMITS)
+    assert view["status"] == STATUS_ENDED
+
+
+def test_fight_todo_when_zero_zero_and_no_actions():
+    view = build_task_view(_task("fight", "UID", "Damona", system="ICZ"), {},
+                           _status(_conflict("civilwar", "UID", 0, "Damona", 0)), [], None, LIMITS)
+    assert view["status"] == STATUS_TODO
+
+
 def test_fight_counts_combat_actions_and_warns_about_bonds_for_opponent():
     report = {"2026-09-26": {"ICZ": {
         "UID": _entry(cz_space_h=1),
