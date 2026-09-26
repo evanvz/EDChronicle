@@ -111,6 +111,25 @@ def _row_is_at_war(faction_state, active_states) -> bool:
     return _row_has_state(faction_state, active_states, {"war", "civilwar"})
 
 
+def _signed_tier_value(influence_tier, trend) -> int:
+    """Frontier's own "+" to "+++++" tier length, signed by its Trend
+    ("UpGood"/"DownGood"/"UpBad"/"DownBad") -- "Good" means this specific
+    FactionEffects entry should ADD to the faction's score, "Bad" means it
+    should SUBTRACT (confirmed live 2026-09-26: a combat-mission secondary
+    effect on a rival faction carried Trend:"DownBad" -- their influence
+    actually went down, but was being counted as a flat positive). trend
+    is None for any row recorded before that column existed, or where
+    Frontier's own data didn't carry one -- always treated as positive,
+    the only behavior that ever existed before this fix, since there's no
+    way to recover the real sign for those rows after the fact."""
+    if not isinstance(influence_tier, str):
+        return 0
+    magnitude = len(influence_tier)
+    if isinstance(trend, str) and trend.endswith("Bad"):
+        return -magnitude
+    return magnitude
+
+
 class Repository:
     def __init__(self, db: Database):
         self.db = db
@@ -2626,6 +2645,7 @@ class Repository:
         self, system_address: int, faction_name: str, completed_at: str,
         influence_tier: Optional[str] = None, is_primary: bool = True,
         mission_type: Optional[str] = None, reward: Optional[int] = None,
+        trend: Optional[str] = None,
     ) -> None:
         """One row per faction a MissionCompleted's FactionEffects actually
         moved in system_address -- see main_window.py's
@@ -2651,12 +2671,23 @@ class Repository:
         reward is the mission's CR payout (evt['Reward']) -- also the same
         value on every row of one mission, but get_session_activity_report()
         only sums it from the is_primary=1 row, so a multi-effect mission's
-        reward isn't double-counted."""
+        reward isn't double-counted.
+
+        trend is Frontier's own "UpGood"/"DownGood"/"UpBad"/"DownBad" on
+        this specific Influence entry -- "Good" means the tier count should
+        add to the faction's score, "Bad" means it should subtract (see
+        get_faction_mission_completion_counts/get_session_activity_report
+        for where the sign is actually applied). None defaults to positive
+        at read time, matching the only behavior that ever existed before
+        this column."""
         self.db.execute(
             "INSERT INTO faction_mission_completions "
-            "(system_address, faction_name, completed_at, influence_tier, is_primary, mission_type, reward) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (system_address, faction_name, completed_at, influence_tier, 1 if is_primary else 0, mission_type, reward),
+            "(system_address, faction_name, completed_at, influence_tier, is_primary, mission_type, reward, trend) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                system_address, faction_name, completed_at, influence_tier, 1 if is_primary else 0,
+                mission_type, reward, trend,
+            ),
         )
 
     def get_faction_mission_completion_counts(self, system_address: int, faction_name: str) -> dict:
@@ -2677,7 +2708,7 @@ class Repository:
 
         def _query(since: str) -> dict:
             rows = self.db.execute(
-                "SELECT influence_tier, is_primary FROM faction_mission_completions "
+                "SELECT influence_tier, is_primary, trend FROM faction_mission_completions "
                 "WHERE system_address = ? AND faction_name = ? AND completed_at >= ?",
                 (system_address, faction_name, since),
             ).fetchall()
@@ -2685,7 +2716,7 @@ class Repository:
             secondary = [r for r in rows if not r["is_primary"]]
 
             def _weighted(rs) -> int:
-                return sum(len(r["influence_tier"]) for r in rs if isinstance(r["influence_tier"], str))
+                return sum(_signed_tier_value(r["influence_tier"], r["trend"]) for r in rs)
 
             return {
                 "count": len(rows), "weighted": _weighted(rows),
@@ -2800,7 +2831,7 @@ class Repository:
         report: dict = {}
 
         mission_rows = self.db.execute(
-            "SELECT system_address, faction_name, influence_tier, is_primary, mission_type, reward, completed_at "
+            "SELECT system_address, faction_name, influence_tier, is_primary, mission_type, reward, trend, completed_at "
             "FROM faction_mission_completions WHERE completed_at >= ?",
             (since,),
         ).fetchall()
@@ -2810,8 +2841,7 @@ class Repository:
                 continue
             m = entry["missions"]
             m["count"] += 1
-            if isinstance(r["influence_tier"], str):
-                m["weighted"] += len(r["influence_tier"])
+            m["weighted"] += _signed_tier_value(r["influence_tier"], r["trend"])
             mtype = r["mission_type"] if isinstance(r["mission_type"], str) and r["mission_type"] else "Unknown"
             m["by_type"][mtype] = m["by_type"].get(mtype, 0) + 1
             if r["is_primary"]:

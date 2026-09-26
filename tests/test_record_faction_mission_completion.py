@@ -46,6 +46,7 @@ def test_primary_effect_is_recorded():
     assert fake_self._saved == [{
         "system_address": 12345, "faction_name": "Elite United Worlds", "completed_at": "2026-09-24T10:00:00Z",
         "influence_tier": "++", "is_primary": True, "mission_type": "Courier Boom", "reward": 48200,
+        "trend": "UpGood",
     }]
     assert fake_self._notified == [12345]
 
@@ -63,11 +64,32 @@ def test_secondary_effect_is_recorded_separately_even_in_a_different_system():
     MainWindow._record_faction_mission_completion(fake_self, evt)
     assert fake_self._saved == [
         {"system_address": 999, "faction_name": "Hungarian Wolves", "completed_at": "2026-09-24T10:00:00Z",
-         "influence_tier": "++", "is_primary": False, "mission_type": "Courier", "reward": 15000},
+         "influence_tier": "++", "is_primary": False, "mission_type": "Courier", "reward": 15000, "trend": "UpGood"},
         {"system_address": 12345, "faction_name": "Elite United Worlds", "completed_at": "2026-09-24T10:00:00Z",
-         "influence_tier": "++", "is_primary": True, "mission_type": "Courier", "reward": 15000},
+         "influence_tier": "++", "is_primary": True, "mission_type": "Courier", "reward": 15000, "trend": "UpGood"},
     ]
     assert set(fake_self._notified) == {999, 12345}
+
+
+def test_downbad_trend_on_a_secondary_effect_is_recorded_verbatim():
+    """Confirmed live 2026-09-26 (a real Black Box Salvage Contract for
+    Refinery): a rival faction's secondary effect carried Trend:"DownBad"
+    -- their influence actually went down. main_window.py must pass this
+    through untouched; the sign is only ever applied at read time
+    (Repository._signed_tier_value), not here."""
+    fake_self = _fake_self()
+    evt = {
+        "event": "MissionCompleted", "Faction": "Elite United Worlds", "timestamp": "2026-09-24T10:00:00Z",
+        "Name": "MISSION_Salvage_Refinery_name", "Reward": 46065,
+        "FactionEffects": [
+            _effect("Cameron's Combat Services", 11666607056345, tier="+", trend="DownBad"),
+            _effect("Elite United Worlds", 83919508202, tier="+++++", trend="UpGood"),
+        ],
+    }
+    MainWindow._record_faction_mission_completion(fake_self, evt)
+    assert fake_self._saved[0]["trend"] == "DownBad"
+    assert fake_self._saved[0]["faction_name"] == "Cameron's Combat Services"
+    assert fake_self._saved[1]["trend"] == "UpGood"
 
 
 def test_missing_name_field_yields_no_mission_type():

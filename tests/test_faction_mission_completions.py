@@ -136,3 +136,37 @@ def test_defaults_to_primary_when_not_specified(tmp_path):
     counts = repo.get_faction_mission_completion_counts(123, "Test Faction")
     b = _bucket(count=1, primary_count=1)
     assert counts == _counts(today=b, last_7_days=b)
+
+
+# --- trend sign (2026-09-26: "DownBad" secondary effects were being
+# counted as a flat positive with no sign) ---
+
+def test_downbad_trend_subtracts_from_weighted(tmp_path):
+    repo = _repo(tmp_path)
+    repo.record_faction_mission_completion(
+        123, "Test Faction", _iso(0), influence_tier="+", is_primary=False, trend="DownBad",
+    )
+    counts = repo.get_faction_mission_completion_counts(123, "Test Faction")
+    b = _bucket(count=1, weighted=-1, secondary_count=1, secondary_weighted=-1)
+    assert counts == _counts(today=b, last_7_days=b)
+
+
+def test_downgood_trend_still_adds_to_weighted(tmp_path):
+    repo = _repo(tmp_path)
+    repo.record_faction_mission_completion(
+        123, "Test Faction", _iso(0), influence_tier="++", is_primary=True, trend="DownGood",
+    )
+    counts = repo.get_faction_mission_completion_counts(123, "Test Faction")
+    b = _bucket(count=1, weighted=2, primary_count=1, primary_weighted=2)
+    assert counts == _counts(today=b, last_7_days=b)
+
+
+def test_missing_trend_still_defaults_to_positive(tmp_path):
+    """No way to recover the real sign for rows recorded before this
+    column existed -- always treated as positive, matching the only
+    behavior that ever existed before this fix."""
+    repo = _repo(tmp_path)
+    repo.record_faction_mission_completion(123, "Test Faction", _iso(0), influence_tier="+++", is_primary=True)
+    counts = repo.get_faction_mission_completion_counts(123, "Test Faction")
+    b = _bucket(count=1, weighted=3, primary_count=1, primary_weighted=3)
+    assert counts == _counts(today=b, last_7_days=b)

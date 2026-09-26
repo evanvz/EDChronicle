@@ -180,3 +180,35 @@ def test_same_system_and_faction_on_the_same_day_still_accumulates(tmp_path):
     repo.record_faction_combat_bond(12345, "Elite United Worlds", 2000, "2026-09-25T15:00:00Z")
     report = repo.get_session_activity_report("2026-09-25T00:00:00Z")
     assert report["2026-09-25"]["Ekono"]["Elite United Worlds"]["combat_bonds_total"] == 3000
+
+
+# --- trend sign (2026-09-26: "DownBad" secondary effects were being
+# counted as a flat positive with no sign) ---
+
+def test_downbad_trend_subtracts_from_weighted(tmp_path):
+    repo = _repo(tmp_path)
+    _seed_system(repo, 12345, "Ekono")
+    repo.record_faction_mission_completion(
+        12345, "Cameron's Combat Services", "2026-09-25T10:00:00Z",
+        influence_tier="+", is_primary=False, mission_type="Salvage Refinery", trend="DownBad",
+    )
+    report = repo.get_session_activity_report("2026-09-25T00:00:00Z")
+    m = report["2026-09-25"]["Ekono"]["Cameron's Combat Services"]["missions"]
+    assert m["weighted"] == -1
+    assert m["count"] == 1  # count itself is unaffected by sign
+
+
+def test_mixed_signed_and_unsigned_rows_sum_correctly(tmp_path):
+    repo = _repo(tmp_path)
+    _seed_system(repo, 12345, "Ekono")
+    repo.record_faction_mission_completion(
+        12345, "Elite United Worlds", "2026-09-25T10:00:00Z",
+        influence_tier="+++++", is_primary=True, mission_type="Salvage Refinery", trend="UpGood",
+    )
+    repo.record_faction_mission_completion(
+        12345, "Elite United Worlds", "2026-09-25T11:00:00Z",
+        influence_tier="++", is_primary=True, mission_type="Courier",
+    )  # no trend recorded -- defaults to positive
+    report = repo.get_session_activity_report("2026-09-25T00:00:00Z")
+    m = report["2026-09-25"]["Ekono"]["Elite United Worlds"]["missions"]
+    assert m["weighted"] == 7  # 5 + 2, both positive

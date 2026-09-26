@@ -1343,6 +1343,7 @@ class MainWindow(QMainWindow):
                     if not isinstance(system_address, int):
                         continue
                     tier = inf.get("Influence")
+                    trend = inf.get("Trend")
                     try:
                         self.repo.record_faction_mission_completion(
                             system_address=system_address,
@@ -1352,6 +1353,7 @@ class MainWindow(QMainWindow):
                             is_primary=is_primary,
                             mission_type=mission_type,
                             reward=reward,
+                            trend=trend if isinstance(trend, str) else None,
                         )
                     except Exception:
                         log.exception("Failed to record faction mission completion")

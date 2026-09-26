@@ -308,6 +308,19 @@ class Database:
             # the reward is paid once per mission, not once per faction it
             # affected.
             "ALTER TABLE faction_mission_completions ADD COLUMN reward INTEGER",
+            # Frontier's own Trend field ("UpGood"/"DownGood"/"UpBad"/
+            # "DownBad") on the mission's FactionEffects Influence entry --
+            # "Good" means the tier count should ADD to that faction's
+            # score, "Bad" means it should SUBTRACT (confirmed live
+            # 2026-09-26: a combat-mission secondary effect on a rival
+            # faction came through as Trend:"DownBad" -- their influence
+            # actually went down, but was being counted as a flat positive
+            # tier score with no sign at all). NULL for any row recorded
+            # before this column existed, or where Frontier's own data
+            # didn't carry a Trend -- always treated as positive (the
+            # previous, only-ever-seen behavior), since there's no way to
+            # recover the real sign for those rows after the fact.
+            "ALTER TABLE faction_mission_completions ADD COLUMN trend TEXT",
             # Live PowerPlay reading from the journal's own PowerplayState*
             # fields (Location/FSDJump only) -- previously only ever held in
             # memory, lost the moment the player left the system. Persisting
