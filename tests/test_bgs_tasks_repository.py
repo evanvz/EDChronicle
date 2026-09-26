@@ -99,5 +99,22 @@ def test_known_names(tmp_path):
     repo.db.execute(
         "INSERT INTO faction_snapshots (system_address, faction_name, snapshot_date) VALUES (1, 'Elite United Worlds', '2026-09-26')"
     )
-    assert repo.get_known_system_names() == ["Ekono", "Kanuket"]
+    assert repo.get_all_system_names() == ["Ekono", "Kanuket"]
     assert repo.get_known_faction_names(1) == ["Elite United Worlds", "Hungarian Wolves"]
+
+
+def test_get_known_system_names_faction_scoped_is_intact(tmp_path):
+    """Regression test: the original faction-scoped get_known_system_names(faction_name)
+    method is not shadowed by get_all_system_names()."""
+    repo = _repo(tmp_path)
+    _seed_system(repo, 1, "Ekono")
+    _seed_system(repo, 2, "Kanuket")
+    # Insert faction_snapshots for only one faction in one system
+    repo.db.execute(
+        "INSERT INTO faction_snapshots (system_address, faction_name, snapshot_date) VALUES (1, 'Elite United Worlds', '2026-09-26')"
+    )
+    # The faction-scoped method should return only systems where this faction has snapshots
+    known = repo.get_known_system_names("Elite United Worlds")
+    assert isinstance(known, set)
+    assert "ekono" in known  # method returns lowercased names
+    assert "kanuket" not in known

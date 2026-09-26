@@ -124,7 +124,7 @@ class BgsTasksDialog(QDialog):
 
     def _load_system_completer(self) -> None:
         try:
-            names = self._panel._repo.get_known_system_names()
+            names = self._panel._repo.get_all_system_names()
         except Exception:
             log.exception("Failed to load system names for BGS task entry")
             return

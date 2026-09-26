@@ -2992,7 +2992,7 @@ class Repository:
             for order, tid in enumerate(ids):
                 self.db.execute("UPDATE bgs_tasks SET sort_order = ? WHERE id = ?", (order, tid))
 
-    def get_known_system_names(self) -> list[str]:
+    def get_all_system_names(self) -> list[str]:
         rows = self.db.conn.execute(
             "SELECT system_name FROM systems WHERE system_name IS NOT NULL AND system_name != '' ORDER BY system_name"
         ).fetchall()
