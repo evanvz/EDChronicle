@@ -151,7 +151,7 @@ class SessionActivityDialog(QDialog):
         m = entry["missions"]
         if m["count"]:
             chips.append(
-                f'<span style="color:{_CHIP_MISSIONS};">INF</span> {m["weighted"]:+d} '
+                f'<span style="color:{_CHIP_MISSIONS};">Tier score</span> {m["weighted"]:+d} '
                 f'({m["count"]} missions: {m["primary_count"]} issued, {m["secondary_count"]} secondary)'
             )
 

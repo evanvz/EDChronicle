@@ -139,7 +139,7 @@ def test_faction_row_shows_color_coded_chips_only_for_actual_activity():
         "trade_sold": {"commodity": 63085, "exploration": 0, "exobiology": 0},
     }
     html = SessionActivityDialog._format_chips(entry)
-    assert "INF" in html
+    assert "Tier score" in html
     assert "3 missions: 2 issued, 1 secondary" in html
     assert "Combat bonds" in html
     assert "20,000" in html
