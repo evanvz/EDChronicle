@@ -123,6 +123,12 @@ def _parse_states(raw) -> List[str]:
     ]
 
 
+def _utc_today() -> date:
+    """Snapshot dates and data timestamps are UTC (journal/EDDN event time);
+    the local date runs a day ahead for UTC+ players near local midnight."""
+    return datetime.now(timezone.utc).date()
+
+
 def _data_age_days(sys_rec: Dict[str, Any], today: Optional[date] = None) -> Optional[int]:
     """Days since this row's real underlying data last changed, from
     data_timestamp -- NOT snapshot_date, which is just the date WE last
@@ -134,7 +140,7 @@ def _data_age_days(sys_rec: Dict[str, Any], today: Optional[date] = None) -> Opt
     only when data_timestamp is absent (e.g. a caller/test that never set
     it), so older code paths don't silently break.
     """
-    today = today or date.today()
+    today = today or _utc_today()
     raw = sys_rec.get("data_timestamp") or sys_rec.get("snapshot_date")
     if not isinstance(raw, str) or not raw:
         return None
@@ -467,7 +473,7 @@ class _CsvImportWorker(QObject):
                         data_timestamp = match.pop("LastUpdate", None)
                         source = "edsm"
                         faction_rec = match
-                        snapshot_date = date.today().isoformat()
+                        snapshot_date = _utc_today().isoformat()
                         imported += 1
                     else:
                         # EDSM found the system but doesn't list our faction
@@ -481,7 +487,7 @@ class _CsvImportWorker(QObject):
                             "Allegiance": row.get("allegiance"),
                         }
                         is_controlling = False
-                        snapshot_date = row.get("updated_date") or date.today().isoformat()
+                        snapshot_date = row.get("updated_date") or _utc_today().isoformat()
                         data_timestamp = row.get("updated_date") or "1970-01-01T00:00:00Z"
                         source = "csv"
                         fallback_used += 1
@@ -578,7 +584,7 @@ class _FactionRefreshWorker(QObject):
                         time.sleep(0.3)
                         continue
 
-                    snapshot_date = date.today().isoformat()
+                    snapshot_date = _utc_today().isoformat()
                     present_names = set()
                     # One commit for this system's whole faction list instead
                     # of one per faction (save_faction_snapshot auto-commits
@@ -1187,7 +1193,7 @@ class PlayerFactionPanel(QWidget):
         system that matched none of the "needs attention" buckets; "Stale
         Data" is checked independently of that, on its own axis."""
         buckets: Dict[str, List[dict]] = {key: [] for key, _, _ in _BUCKET_DEFS}
-        today = date.today()
+        today = _utc_today()
 
         for s in systems:
             active_names = [s.get("faction_state")] if s.get("faction_state") and s.get("faction_state") != "None" else []
@@ -1666,7 +1672,7 @@ class PlayerFactionPanel(QWidget):
             is_controlling = bool(match.pop("is_controlling", False))
             data_timestamp = match.pop("LastUpdate", None)
             self._repo.save_faction_snapshot(
-                result["system_address"], match, date.today().isoformat(), is_controlling,
+                result["system_address"], match, _utc_today().isoformat(), is_controlling,
                 data_timestamp, "edsm",
             )
             # A deliberate manual add should override an earlier "Remove" —
@@ -1933,7 +1939,7 @@ class PlayerFactionPanel(QWidget):
         if not systems:
             self._data_freshness_label.setText("")
             return
-        today = date.today()
+        today = _utc_today()
         today_count = 0
         recent_count = 0  # 1-6 days
         stale_count = 0   # 7+ days (matches the Stale Data bucket threshold)
@@ -2034,7 +2040,7 @@ class PlayerFactionPanel(QWidget):
             # "not already refreshed today" — skips systems a live arrival (or
             # an earlier refresh today) already updated, cutting EDSM request
             # volume instead of re-querying every tracked system every time.
-            today = date.today().isoformat()
+            today = _utc_today().isoformat()
             fresh_today = {
                 s.get("system_name")
                 for s in (self._last_overview.get("systems") if self._last_overview else None) or []

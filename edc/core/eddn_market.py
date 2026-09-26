@@ -20,7 +20,7 @@ per-message synchronous writes would be a real bottleneck.
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from typing import Any, Dict, Tuple
 
 from edc.core.eddn_publisher import _commodity_symbol
@@ -350,7 +350,7 @@ def _write_buffers_inner(repo, coords, market, factions, stations, codex, fcmate
         for system_address, (system_name, faction, is_controlling, timestamp) in factions:
             try:
                 repo.save_system_name_if_missing(system_address, system_name)
-                snapshot_date = (timestamp or "")[:10] or date.today().isoformat()
+                snapshot_date = (timestamp or "")[:10] or datetime.now(timezone.utc).date().isoformat()
                 repo.save_faction_snapshot(
                     system_address, faction, snapshot_date, is_controlling, timestamp or "", "eddn",
                 )
