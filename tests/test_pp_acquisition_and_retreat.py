@@ -73,7 +73,7 @@ def test_active_retreat_counts_down_and_warns_below_threshold():
         _row("2026-09-20", 0.024, pending=["Retreat"]),
     ]
     view = build_task_view(_task("boost", "EUW"), {}, None, history, None, LIMITS, today=date(2026, 9, 22))
-    assert ("Retreat active (day 2): Important Day ~2026-09-25 (active day 5), "
+    assert ("Retreat active (day 2): Important Day ~2026-09-25 (active day 5, ±1 day), "
             "must be above 2.5% on ~2026-09-26") in view["lines"]
     assert "Influence 2.0% is below 2.5% — the faction retreats unless it's raised" in view["warnings"]
 
@@ -81,7 +81,7 @@ def test_active_retreat_counts_down_and_warns_below_threshold():
 def test_pending_retreat_projects_from_the_next_day():
     history = [_row("2026-09-24", 0.03, pending=["Retreat"])]
     view = build_task_view(_task("boost", "EUW"), {}, None, history, None, LIMITS, today=date(2026, 9, 24))
-    assert ("Retreat pending: Important Day ~2026-09-29 (active day 5), "
+    assert ("Retreat pending: Important Day ~2026-09-29 (active day 5, ±1 day), "
             "must be above 2.5% on ~2026-09-30") in view["lines"]
 
 
@@ -95,3 +95,32 @@ def test_no_retreat_no_countdown():
     history = [_row("2026-09-24", 0.4, active=["Boom"])]
     view = build_task_view(_task("boost", "EUW"), {}, None, history, None, LIMITS, today=date(2026, 9, 24))
     assert not any(line.startswith("Retreat") for line in view["lines"])
+
+
+# --- plain-English state labels (Frontier's PP 2.0 states) ---
+
+def _pp(state, powers=("Aisling Duval",), progress=None, controller=None):
+    return {"pp_state": state, "pp_control_progress": None, "pp_controlling_power": controller,
+            "pp_powers": list(powers), "pp_conflict_progress": progress or {},
+            "pp_data_timestamp": "2026-09-27T10:00:00Z"}
+
+
+def test_expansion_and_contested_get_plain_meanings():
+    view = build_task_view(_task("powerplay"), {}, None, [], _pp("Expansion"), LIMITS, pledged="Aisling Duval")
+    assert view["lines"][0].startswith("Acquisition: Expansion (a power is trying to take it)")
+    view = build_task_view(_task("powerplay"), {}, None, [], _pp("Contested"), LIMITS, pledged="Aisling Duval")
+    assert view["lines"][0].startswith("Acquisition: Contested (powers will fight for it next week)")
+
+
+# --- acquisition only where your power is actually present / in range ---
+
+def test_unoccupied_system_without_your_power_is_not_acquisition():
+    view = build_task_view(_task("powerplay"), {}, None, [], _pp("Unoccupied", powers=("Zachary Hudson",)),
+                           LIMITS, pledged="Aisling Duval")
+    assert not view["lines"][0].startswith("Acquisition")
+    assert view["guide"] == "Not a PowerPlay target for your power right now"
+
+
+def test_unoccupied_system_with_your_power_is_acquisition():
+    view = build_task_view(_task("powerplay"), {}, None, [], _pp("Unoccupied"), LIMITS, pledged="Aisling Duval")
+    assert view["lines"][0].startswith("Acquisition: Unoccupied (no power yet)")

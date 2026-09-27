@@ -110,3 +110,17 @@ def test_compromised_nav_beacon_for_another_system_is_not_announced():
            "SignalName": "$MULTIPLAYER_SCENARIO80_TITLE;", "SignalName_Localised": "Compromised Nav Beacon"}
     assert MainWindow._tts_router(fake_self, "FSSSignalDiscovered", evt, state) == ""
     assert fake_self._tts_cnb_announced == set()
+
+
+# --- acquisition only where your power is present (in range) ---
+
+def test_no_acquisition_callout_when_your_power_is_not_in_range():
+    fake_self, state = _fake_self([], pp_power="Aisling Duval", ctrl="", pp_state="Unoccupied")
+    state.system_powers = ["Zachary Hudson"]
+    assert MainWindow._tts_router(fake_self, "FSSSignalDiscovered", _MEGASHIP_EVT, state) == ""
+
+
+def test_acquisition_callout_when_your_power_is_in_range():
+    fake_self, state = _fake_self([], pp_power="Aisling Duval", ctrl="", pp_state="Unoccupied")
+    state.system_powers = ["Aisling Duval"]
+    assert "acquisition" in MainWindow._tts_router(fake_self, "FSSSignalDiscovered", _MEGASHIP_EVT, state).lower()

@@ -196,7 +196,7 @@ def _retreat_countdown(rows: list, today: date) -> tuple:
     important = active_start + timedelta(days=4)
     judged = active_start + timedelta(days=5)
     phase = f"active (day {(today - active_start).days + 1})" if active_days else "pending"
-    line = (f"Retreat {phase}: Important Day ~{important.isoformat()} (active day 5), "
+    line = (f"Retreat {phase}: Important Day ~{important.isoformat()} (active day 5, ±1 day), "
             f"must be above 2.5% on ~{judged.isoformat()}")
     warnings = []
     if today == important:
@@ -323,15 +323,30 @@ def powerplay_week_start(now: Optional[datetime] = None) -> str:
     return start.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def powerplay_mode(pledged: str, controlling_power: str, pp_state: str) -> str:
-    """Same rule as the megaship merit callout: our power controls it ->
-    Reinforcement; another power controls it -> Undermining; nobody controls
-    it but it's PowerPlay-active -> Acquisition."""
+# Plain meanings for PowerPlay 2.0 states that are easy to misread
+# ("Unoccupied" is not about population).
+_PP_STATE_MEANINGS = {
+    "Unoccupied": "no power yet",
+    "Expansion": "a power is trying to take it",
+    "Contested": "powers will fight for it next week",
+}
+
+
+def powerplay_mode(pledged: str, controlling_power: str, pp_state: str, powers_present=None) -> str:
+    """Our power controls it -> Reinforcement; another power controls it ->
+    Undermining; nobody controls it -> Acquisition, but only if our power is
+    in range (Frontier: within 20 ly of its Fortified / 30 ly of its
+    Stronghold systems) -- the journal shows that as our power appearing in
+    the system's Powers list. When that list isn't known, stay permissive."""
     if not pledged:
         return ""
     if controlling_power:
         return "Reinforcement" if _same(controlling_power, pledged) else "Undermining"
-    return "Acquisition" if pp_state else ""
+    if not pp_state:
+        return ""
+    if powers_present and not any(_same(p, pledged) for p in powers_present):
+        return ""
+    return "Acquisition"
 
 
 def _powerplay_guide(mode: str, pp_state: str, pledged: str, pp_activities) -> str:
@@ -356,7 +371,8 @@ def _powerplay_view(pp: Optional[dict], pledged: str, merits: int, pp_activities
                 "guide": "" if pledged else _powerplay_guide("", "", "", None)}
     pp_state = pp.get("pp_state") or ""
     # "Unoccupied" is a PowerPlay state (no controlling power), not population.
-    reading = "Unoccupied (no power yet)" if pp_state == "Unoccupied" else (pp_state or "Unknown")
+    reading = f"{pp_state} ({_PP_STATE_MEANINGS[pp_state]})" if pp_state in _PP_STATE_MEANINGS \
+        else (pp_state or "Unknown")
     progress = pp.get("pp_control_progress")
     acquisition = pp.get("pp_conflict_progress") or {}
     if isinstance(progress, (int, float)):
@@ -366,7 +382,8 @@ def _powerplay_view(pp: Optional[dict], pledged: str, merits: int, pp_activities
         power = next((p for p in acquisition if _same(p, pledged)), None) \
             or max(acquisition, key=acquisition.get)
         reading += f" — {power} {acquisition[power] * 100:.1f}%"
-    mode = powerplay_mode(pledged, pp.get("pp_controlling_power") or "", pp_state)
+    powers_present = list(pp.get("pp_powers") or []) + list((pp.get("pp_conflict_progress") or {}).keys())
+    mode = powerplay_mode(pledged, pp.get("pp_controlling_power") or "", pp_state, powers_present)
     head = f"{mode}: {reading}" if mode else reading
     lines = [head]
     if pp.get("pp_controlling_power"):

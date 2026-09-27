@@ -82,7 +82,7 @@ from edc.core import service_health
 from edc.core.mission_events import MISSION_EVENT_NAMES
 from edc.core.megaship_scanner import scan_visited_megaships
 from edc.core.faction_refresh_tracker import FactionRefreshTracker
-from edc.core.bgs_tasks import bgs_limits, build_task_views, hud_line
+from edc.core.bgs_tasks import bgs_limits, build_task_views, hud_line, powerplay_mode
 from edc.core.bgs_tick import fetch_latest_tick
 from edc.ui.panels.engineering_panel import EngineeringPanel
 from edc.audio.handlers.engineering import EngineeringPhrases
@@ -4262,8 +4262,10 @@ class MainWindow(QMainWindow):
                             # Reinforcement: our own power controls this system
                             if ctrl and ctrl.lower() == pledged.lower():
                                 merit = ExplorationPhrases.megaship_pp_merits("reinforcement")
-                            # Acquisition: no controlling power, but PP-active
-                            elif not ctrl and pp_state_val:
+                            # Acquisition: no controlling power, PP-active, and our
+                            # power in range (listed in the system's Powers).
+                            elif powerplay_mode(pledged, "", pp_state_val,
+                                                getattr(state, "system_powers", None)) == "Acquisition":
                                 merit = ExplorationPhrases.megaship_pp_merits("acquisition")
                         war = active_system_war(getattr(state, "system_conflicts", None))
                         warning = ExplorationPhrases.megaship_conflict_warning(war[0]) if war else ""
