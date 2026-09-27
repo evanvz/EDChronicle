@@ -126,3 +126,16 @@ def test_guidance_names_the_deciding_lever():
     assert "Combat doesn't count" in vote
     boost = build_task_view(_task("boost", "A"), {}, None, [], None, LIMITS)["guide"]
     assert "exobiology and mined goods don't count" in boost
+
+
+def test_trade_purchases_show_on_boost_and_count_for_votes():
+    entry = _entry()
+    entry["trade_sold"]["purchase"] = 2_500_000
+    report = {"d": {"Tucanae": {"A": entry}}}
+    boost = build_task_view(_task("boost", "A"), report, None, [], None, LIMITS)
+    assert "Trade buys 2.5M" in boost["lines"]
+    status = {"conflicts": [{"faction1": "A", "faction2": "B", "war_type": "election", "status": "active",
+                             "won_days1": 0, "won_days2": 0, "stake1": None, "stake2": None}],
+              "faction_states": [], "data_timestamp": "2026-09-26T12:00:00Z"}
+    vote = build_task_view(_task("vote", "A", "B"), report, status, [], None, LIMITS)
+    assert vote["status"] == "Done this tick"

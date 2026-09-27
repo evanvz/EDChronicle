@@ -487,7 +487,7 @@ class _EddnFlushWorker(QObject):
 # Journal events after which BGS task progress may have changed.
 _BGS_ACTIVITY_EVENTS = frozenset({
     "FSDJump", "Location", "CarrierJump", "Docked", "MissionCompleted", "RedeemVoucher",
-    "FactionKillBond", "MarketSell", "MultiSellExplorationData", "SellExplorationData", "SellOrganicData",
+    "FactionKillBond", "MarketBuy", "MarketSell", "MultiSellExplorationData", "SellExplorationData", "SellOrganicData",
     "PowerplayMerits",
 })
 
@@ -1402,7 +1402,13 @@ class MainWindow(QMainWindow):
                     continue
                 faction_name = effect.get("Faction")
                 if not (isinstance(faction_name, str) and faction_name):
-                    continue
+                    # Game bug: some effects carry a blank faction name (15
+                    # real cases, mostly DownBad on salvage missions). Same
+                    # fallback as BGS-Tally: the TargetFaction from when the
+                    # mission was accepted -- only sometimes recorded.
+                    faction_name = getattr(self, "_completing_mission_target", None)
+                    if not (isinstance(faction_name, str) and faction_name):
+                        continue
                 influence = effect.get("Influence")
                 if not isinstance(influence, list):
                     continue
@@ -1546,7 +1552,12 @@ class MainWindow(QMainWindow):
         if not (isinstance(faction_name, str) and faction_name and isinstance(system_address, int)):
             return
 
-        if name == "MarketSell":
+        if name == "MarketBuy":
+            # Buying counts too: high-supply purchases help the station owner
+            # (SINC Complete BGS Guide 2024 p33; BGS-Tally tracks buys as well).
+            value = evt.get("TotalCost")
+            kind = "purchase"
+        elif name == "MarketSell":
             value = evt.get("TotalSale")
             avg_paid = evt.get("AvgPricePaid")
             count = evt.get("Count")
@@ -3715,6 +3726,11 @@ class MainWindow(QMainWindow):
         old_system_address = getattr(self.state, "system_address", None)
 
         self.eddn_publisher.observe(evt)
+        if name == "MissionCompleted":
+            # The engine drops the mission from active_missions below; keep its
+            # TargetFaction for FactionEffects entries with a blank faction name.
+            accepted = (getattr(self.state, "active_missions", None) or {}).get(evt.get("MissionID")) or {}
+            self._completing_mission_target = accepted.get("target_faction")
         state, msgs = self.engine.process(evt)
         self.state = state
 
@@ -3785,7 +3801,7 @@ class MainWindow(QMainWindow):
         if name == "PowerplayMerits" and not self._replaying:
             self._record_powerplay_merits(evt)
 
-        if name in ("MarketSell", "MultiSellExplorationData", "SellExplorationData", "SellOrganicData") and not self._replaying:
+        if name in ("MarketBuy", "MarketSell", "MultiSellExplorationData", "SellExplorationData", "SellOrganicData") and not self._replaying:
             self._record_faction_trade_sold(evt)
 
         if name in _BGS_ACTIVITY_EVENTS and not self._replaying:

@@ -2886,7 +2886,7 @@ class Repository:
                 "combat_bonds_total": 0,
                 "bounties_total": 0,
                 "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 0},
-                "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 0},
+                "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 0, "purchase": 0},
             })
 
         report: dict = {}

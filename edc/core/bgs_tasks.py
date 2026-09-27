@@ -126,7 +126,7 @@ def faction_activity(report: dict, system_name: str, faction_name: str) -> dict:
     """This tick's activity for one faction in one system, summed across
     every day in the session report. Names match case-insensitively."""
     total = {k: 0 for k in ("missions", "tier_score", "bounties", "combat_bonds", "cz_kills", "cz_value",
-                            "trade_profit", "exploration", "exobiology")}
+                            "trade_profit", "trade_bought", "exploration", "exobiology")}
     for systems in report.values():
         for sys_name, factions in systems.items():
             if not _same(sys_name, system_name):
@@ -141,6 +141,7 @@ def faction_activity(report: dict, system_name: str, faction_name: str) -> dict:
                 total["cz_kills"] += sum(e["cz_kills"].values())
                 total["cz_value"] += sum(n * _CZ_WEIGHTS.get(k, 0) for k, n in e["cz_kills"].items())
                 total["trade_profit"] += e["trade_sold"]["commodity"]
+                total["trade_bought"] += e["trade_sold"].get("purchase", 0)
                 total["exploration"] += e["trade_sold"]["exploration"]
                 total["exobiology"] += e["trade_sold"]["exobiology"]
     return total
@@ -226,6 +227,8 @@ def _boost_view(task: dict, report: dict, history: list, limits: dict, today: Op
             text += " ✓"
         lines.append(text)
         line_states.append(state)
+    if act["trade_bought"]:
+        lines.append(f"Trade buys {_cr(act['trade_bought'])}")
     if act["combat_bonds"]:
         lines.append(f"Combat bonds {_cr(act['combat_bonds'])}")
 
@@ -280,7 +283,7 @@ def _conflict_view(task: dict, report: dict, bgs_status: Optional[dict], kind: s
             f"Your actions: {_missions(act['missions'])} (tier score {act['tier_score']}), "
             f"trade profit {_cr(act['trade_profit'])}, exploration {_cr(act['exploration'])}"
         )
-        acted = bool(act["missions"] or act["trade_profit"] > 0 or act["exploration"])
+        acted = bool(act["missions"] or act["trade_profit"] > 0 or act["trade_bought"] or act["exploration"])
         if act["combat_bonds"] or act["cz_kills"]:
             warnings.append("Combat doesn't count in elections")
     else:

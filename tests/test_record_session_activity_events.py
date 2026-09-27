@@ -256,3 +256,30 @@ def test_market_sell_dispatch_fires_when_not_replaying():
     evt = {"event": "MarketSell", "TotalSale": 63085, "timestamp": "2026-09-25T10:00:00Z"}
     MainWindow._on_event(fake_self, evt)
     fake_self._record_faction_trade_sold.assert_called_once_with(evt)
+
+
+# --- trade purchases (SINC BGS Guide 2024 p33: trade counts both ways) ---
+
+def test_market_buy_is_recorded_for_the_station_owner():
+    fake_self = _fake_self(station_faction="Hungarian Wolves")
+    evt = {"event": "MarketBuy", "Type": "gold", "Count": 100, "BuyPrice": 9000, "TotalCost": 900000,
+           "timestamp": "2026-09-27T10:00:00Z"}
+    MainWindow._record_faction_trade_sold(fake_self, evt)
+    assert fake_self._saved[-1] == ("trade", {
+        "system_address": 12345, "faction_name": "Hungarian Wolves",
+        "kind": "purchase", "value": 900000, "sold_at": "2026-09-27T10:00:00Z",
+    })
+
+
+def test_market_buy_at_a_fleet_carrier_is_skipped():
+    fake_self = _fake_self(station_faction="FleetCarrier", station_type="FleetCarrier")
+    evt = {"event": "MarketBuy", "Count": 100, "TotalCost": 900000, "timestamp": "2026-09-27T10:00:00Z"}
+    MainWindow._record_faction_trade_sold(fake_self, evt)
+    assert fake_self._saved == []
+
+
+def test_market_buy_dispatch_fires_when_live():
+    fake_self = _dispatch_fake_self(replaying=False)
+    evt = {"event": "MarketBuy", "Count": 1, "TotalCost": 10, "timestamp": "2026-09-27T10:00:00Z"}
+    MainWindow._on_event(fake_self, evt)
+    fake_self._record_faction_trade_sold.assert_called_once_with(evt)

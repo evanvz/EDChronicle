@@ -222,3 +222,48 @@ def test_missing_timestamp_falls_back_to_now():
     MainWindow._record_faction_mission_completion(fake_self, evt)
     assert len(fake_self._saved) == 1
     assert fake_self._saved[0]["completed_at"]  # non-empty ISO string
+
+
+# --- blank faction name in FactionEffects (known game bug) ---
+# 15 real missions in the journal (e.g. Black Box Salvage, 2026-09-25) carry
+# {"Faction": "", "Influence": [{... "Trend": "DownBad"}]}. Like BGS-Tally,
+# fall back to the TargetFaction recorded when the mission was accepted
+# (captured before the event engine drops the mission).
+
+def test_blank_faction_uses_target_faction_from_acceptance():
+    fake_self = _fake_self()
+    fake_self._completing_mission_target = "Cameron's Combat Services"
+    evt = {
+        "event": "MissionCompleted", "Faction": "Elite United Worlds", "timestamp": "2026-09-25T20:00:51Z",
+        "FactionEffects": [_effect("", 3652626385267, tier="+", trend="DownBad"),
+                           _effect("Elite United Worlds", 12345)],
+    }
+    MainWindow._record_faction_mission_completion(fake_self, evt)
+    blank = [r for r in fake_self._saved if r["system_address"] == 3652626385267]
+    assert blank and blank[0]["faction_name"] == "Cameron's Combat Services"
+    assert blank[0]["is_primary"] is False
+    assert blank[0]["trend"] == "DownBad"
+
+
+def test_blank_faction_without_target_is_still_skipped():
+    fake_self = _fake_self()
+    evt = {
+        "event": "MissionCompleted", "Faction": "Elite United Worlds", "timestamp": "2026-09-25T20:00:51Z",
+        "FactionEffects": [_effect("", 3652626385267, tier="+", trend="DownBad"),
+                           _effect("Elite United Worlds", 12345)],
+    }
+    MainWindow._record_faction_mission_completion(fake_self, evt)
+    assert not any(r["system_address"] == 3652626385267 for r in fake_self._saved)
+
+
+def test_target_faction_is_captured_before_the_engine_drops_the_mission():
+    from unittest.mock import MagicMock
+
+    fake_self = MagicMock()
+    fake_self._replaying = False
+    fake_self.cfg.eddn_contribute_enabled = False
+    fake_self.state.active_missions = {1066923630: {"target_faction": "Cameron's Combat Services"}}
+    fake_self.engine.process.return_value = (MagicMock(), [])
+    MainWindow._on_event(fake_self, {"event": "MissionCompleted", "MissionID": 1066923630,
+                                     "timestamp": "2026-09-25T20:00:51Z"})
+    assert fake_self._completing_mission_target == "Cameron's Combat Services"
