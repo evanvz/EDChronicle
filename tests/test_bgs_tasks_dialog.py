@@ -53,7 +53,7 @@ def test_card_shows_what_to_do_line(tmp_path):
     dlg.refresh()
     text = _card_texts(dlg)[0]
     assert "What to do:" in text
-    assert "Missions, trade and exploration data for A." in text
+    assert "Complete election missions for A" in text
 
 
 def test_cards_use_one_accent_colour_per_task_type(tmp_path):

@@ -57,6 +57,9 @@ class AppConfig:
     bgs_limit_tier_score: int = 25
     bgs_limit_bounties_cr: int = 20_000_000
     bgs_limit_exploration_cr: int = 20_000_000
+    # Boost targets from SINC's per-population table when the system's
+    # population is known; the three limits above are the fallback.
+    bgs_population_targets: bool = True
 
     def __post_init__(self):
         if self.tts_events is None:
@@ -201,6 +204,7 @@ class ConfigStore:
                 bgs_limit_tier_score=int(data.get("bgs_limit_tier_score", 25) or 25),
                 bgs_limit_bounties_cr=int(data.get("bgs_limit_bounties_cr", 20_000_000) or 20_000_000),
                 bgs_limit_exploration_cr=int(data.get("bgs_limit_exploration_cr", 20_000_000) or 20_000_000),
+                bgs_population_targets=bool(data.get("bgs_population_targets", True)),
             )
             if isinstance(data.get("tts_events"), dict):
                 cfg.tts_events.update(data["tts_events"])
@@ -240,6 +244,7 @@ class ConfigStore:
                         "bgs_limit_tier_score": int(getattr(cfg, "bgs_limit_tier_score", 25) or 25),
                         "bgs_limit_bounties_cr": int(getattr(cfg, "bgs_limit_bounties_cr", 20_000_000) or 20_000_000),
                         "bgs_limit_exploration_cr": int(getattr(cfg, "bgs_limit_exploration_cr", 20_000_000) or 20_000_000),
+                        "bgs_population_targets": bool(getattr(cfg, "bgs_population_targets", True)),
                     },
                     indent=2,
                 ),

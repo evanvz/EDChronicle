@@ -171,7 +171,10 @@ class SessionActivityDialog(QDialog):
             chips.append(f'<span style="color:{_CHIP_COMBAT};">CZ kills</span> {", ".join(cz_parts)}')
 
         trade = entry["trade_sold"]
-        trade_parts = [f"{'trade profit' if k == 'commodity' else k}: {v:,}" for k, v in trade.items() if v]
+        # Exobiology has no BGS effect (SINC Complete BGS Guide 2024, p32) --
+        # still listed, since it's recorded, but labelled so it isn't mistaken for influence.
+        labels = {"commodity": "trade profit", "exobiology": "exobiology (no BGS effect)"}
+        trade_parts = [f"{labels.get(k, k)}: {v:,}" for k, v in trade.items() if v]
         if trade_parts:
             chips.append(f'<span style="color:{_CHIP_TRADE};">Sold</span> {", ".join(trade_parts)}')
 

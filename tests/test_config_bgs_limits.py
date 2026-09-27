@@ -50,3 +50,19 @@ def test_settings_handlers_store_values_and_save():
     assert fake_self.cfg.bgs_limit_bounties_cr == 12_000_000
     assert fake_self.cfg.bgs_limit_exploration_cr == 30_000_000
     assert len(fake_self._saved) == 3
+
+
+def test_population_targets_setting_defaults_on_and_round_trips(tmp_path):
+    assert AppConfig().bgs_population_targets is True
+    store = ConfigStore(tmp_path)
+    cfg = AppConfig()
+    cfg.bgs_population_targets = False
+    store.save(cfg)
+    assert store.load().bgs_population_targets is False
+
+
+def test_population_targets_handler_saves():
+    fake_self = _fake_self()
+    MainWindow._on_bgs_population_targets_toggled(fake_self, False)
+    assert fake_self.cfg.bgs_population_targets is False
+    assert len(fake_self._saved) == 1

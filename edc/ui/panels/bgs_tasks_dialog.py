@@ -105,7 +105,11 @@ class BgsTasksDialog(QDialog):
         self._empty_label.setStyleSheet("background:transparent; border:none; color:#666666;")
         self._content_layout.addWidget(self._empty_label)
 
-        footer = QLabel("Boost limits are squadron guidance (editable in Settings), not Frontier numbers.")
+        footer = QLabel(
+            "Boost targets are community guidance (SINC BGS Guide 2024, sized by system population; "
+            "Settings values when population is unknown), not Frontier numbers."
+        )
+        footer.setWordWrap(True)
         footer.setStyleSheet(_DIM_STYLE)
         layout.addWidget(footer)
 

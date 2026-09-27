@@ -1549,7 +1549,11 @@ class MainWindow(QMainWindow):
             value = evt.get("TotalSale")
             avg_paid = evt.get("AvgPricePaid")
             count = evt.get("Count")
-            if isinstance(value, int) and isinstance(avg_paid, (int, float)) and isinstance(count, int):
+            # Cargo never bought (mined, mission reward) has AvgPricePaid 0 and
+            # doesn't count as BGS trade (SINC Complete BGS Guide 2024, p37).
+            if not (isinstance(avg_paid, (int, float)) and avg_paid > 0):
+                return
+            if isinstance(value, int) and isinstance(count, int):
                 value = int(value - avg_paid * count)
             kind = "commodity"
         elif name == "MultiSellExplorationData":
@@ -2725,9 +2729,19 @@ class MainWindow(QMainWindow):
         self.bgs_limit_exploration_spin.valueChanged.connect(self._on_bgs_limit_exploration_changed)
         bgs_row.addWidget(self.bgs_limit_exploration_spin)
         bgs_row.addStretch(1)
-        bgs_row_widget_note = QLabel("Squadron guidance, not Frontier numbers — used by the BGS Tasks tracker.")
+        bgs_row_widget_note = QLabel(
+            "Community guidance, not Frontier numbers — used by the BGS Tasks tracker when the "
+            "system's population is unknown (or when population-based targets are off)."
+        )
+        bgs_row_widget_note.setWordWrap(True)
         bgs_row_widget_note.setStyleSheet("color:#888888; font-size:11px;")
         st.addLayout(bgs_row)
+        self.bgs_population_targets_check = QCheckBox(
+            "Size Boost targets by system population (SINC BGS Guide: small < 1m, medium 1–25m, large > 25m)"
+        )
+        self.bgs_population_targets_check.setChecked(bool(getattr(self.cfg, "bgs_population_targets", True)))
+        self.bgs_population_targets_check.toggled.connect(self._on_bgs_population_targets_toggled)
+        st.addWidget(self.bgs_population_targets_check)
         st.addWidget(bgs_row_widget_note)
 
         # --- Database compaction (manual — see _on_compact_db_clicked) ---
@@ -4546,6 +4560,10 @@ class MainWindow(QMainWindow):
 
     def _on_bgs_limit_exploration_changed(self, value_millions: int):
         self.cfg.bgs_limit_exploration_cr = int(value_millions) * 1_000_000
+        self.cfg_store.save(self.cfg)
+
+    def _on_bgs_population_targets_toggled(self, checked: bool):
+        self.cfg.bgs_population_targets = bool(checked)
         self.cfg_store.save(self.cfg)
 
     def _on_always_on_top_changed(self, checked: bool):

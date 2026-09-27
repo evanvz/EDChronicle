@@ -264,3 +264,14 @@ def test_day_sections_render_most_recent_day_first():
     dlg._render_report(report)
     dates_in_headers = [h.text().split(" — ")[-1] for h in dlg._day_headers]
     assert dates_in_headers == ["2026-09-25", "2026-09-24", "2026-09-23"]
+
+
+def test_exobiology_is_labelled_as_no_bgs_effect():
+    entry = {
+        "missions": {"count": 0, "weighted": 0, "primary_count": 0, "secondary_count": 0, "by_type": {}},
+        "combat_bonds_total": 0, "bounties_total": 0,
+        "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 0},
+        "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 5_000_000},
+    }
+    html = SessionActivityDialog._format_chips(entry)
+    assert "exobiology (no BGS effect): 5,000,000" in html

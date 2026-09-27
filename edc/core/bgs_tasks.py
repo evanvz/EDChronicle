@@ -43,7 +43,30 @@ TYPE_COLORS = {
 # Squadron guidance defaults (Frontier publishes no per-stream limits).
 DEFAULT_LIMITS = {"tier_score": 25, "bounties": 20_000_000, "exploration": 20_000_000}
 
-_LIMITED_STREAMS = (("tier_score", "Tier score"), ("bounties", "Bounties"), ("exploration", "Exploration"))
+_LIMITED_STREAMS = (("tier_score", "Tier score"), ("bounties", "Bounties"), ("exploration", "Exploration"),
+                    ("trade_profit", "Trade profit"))
+
+# SINC's recommended effort per player per day per system, by population
+# (Complete BGS Guide 2024, p69). Community guidance, not Frontier numbers.
+_POPULATION_TARGETS = (
+    (1_000_000, "small", {"tier_score": 15, "bounties": 10_000_000, "exploration": 5_000_000,
+                          "trade_profit": 10_000_000}),
+    (25_000_000, "medium", {"tier_score": 25, "bounties": 20_000_000, "exploration": 10_000_000,
+                            "trade_profit": 20_000_000}),
+    (None, "large", {"tier_score": 50, "bounties": 30_000_000, "exploration": 15_000_000,
+                     "trade_profit": 30_000_000}),
+)
+
+
+def population_targets(population) -> Optional[dict]:
+    """SINC daily targets for a system of this population, or None if the
+    population isn't known. Small < 1m, medium 1m-25m, large > 25m."""
+    if not isinstance(population, int) or population <= 0:
+        return None
+    for ceiling, size, targets in _POPULATION_TARGETS:
+        if ceiling is None or (population < ceiling if size == "small" else population <= ceiling):
+            return dict(targets, size=size)
+    return None
 
 
 def bgs_limits(cfg) -> dict:
@@ -51,6 +74,7 @@ def bgs_limits(cfg) -> dict:
         "tier_score": int(getattr(cfg, "bgs_limit_tier_score", DEFAULT_LIMITS["tier_score"])),
         "bounties": int(getattr(cfg, "bgs_limit_bounties_cr", DEFAULT_LIMITS["bounties"])),
         "exploration": int(getattr(cfg, "bgs_limit_exploration_cr", DEFAULT_LIMITS["exploration"])),
+        "by_population": bool(getattr(cfg, "bgs_population_targets", True)),
     }
 
 
@@ -91,10 +115,16 @@ def _cr(value: int) -> str:
     return f"{value / 1_000_000:.1f}M" if abs(value) >= 1_000_000 else f"{value:,}"
 
 
+# Relative worth of a CZ towards winning a war day, in low-space-CZ units
+# (Complete BGS Guide 2024, p46 -- community-measured).
+_CZ_WEIGHTS = {"space_l": 1.0, "space_m": 1.3, "space_h": 1.6,
+               "ground_l": 0.25, "ground_m": 0.325, "ground_h": 0.4}
+
+
 def faction_activity(report: dict, system_name: str, faction_name: str) -> dict:
     """This tick's activity for one faction in one system, summed across
     every day in the session report. Names match case-insensitively."""
-    total = {k: 0 for k in ("missions", "tier_score", "bounties", "combat_bonds", "cz_kills",
+    total = {k: 0 for k in ("missions", "tier_score", "bounties", "combat_bonds", "cz_kills", "cz_value",
                             "trade_profit", "exploration", "exobiology")}
     for systems in report.values():
         for sys_name, factions in systems.items():
@@ -108,6 +138,7 @@ def faction_activity(report: dict, system_name: str, faction_name: str) -> dict:
                 total["bounties"] += e.get("bounties_total", 0)
                 total["combat_bonds"] += e["combat_bonds_total"]
                 total["cz_kills"] += sum(e["cz_kills"].values())
+                total["cz_value"] += sum(n * _CZ_WEIGHTS.get(k, 0) for k, n in e["cz_kills"].items())
                 total["trade_profit"] += e["trade_sold"]["commodity"]
                 total["exploration"] += e["trade_sold"]["exploration"]
                 total["exobiology"] += e["trade_sold"]["exobiology"]
@@ -138,24 +169,25 @@ def find_conflict(bgs_status: Optional[dict], faction_name: str, opponent_name: 
 def _boost_view(task: dict, report: dict, history: list, limits: dict) -> dict:
     faction = task.get("faction_name") or ""
     act = faction_activity(report, task["system_name"], faction)
-    lines = [
-        f"Tier score {act['tier_score']} / {limits['tier_score']} ({_missions(act['missions'])})",
-        f"Bounties {_cr(act['bounties'])} / {_cr(limits['bounties'])}",
-        f"Exploration {_cr(act['exploration'])} / {_cr(limits['exploration'])}",
-    ]
-    line_states = []
-    for i, (key, _) in enumerate(_LIMITED_STREAMS):
+    lines, line_states = [], []
+    for key, label in _LIMITED_STREAMS:
+        limit = limits.get(key, 0)
+        if key == "tier_score":
+            text = f"Tier score {act[key]} / {limit} ({_missions(act['missions'])})"
+        elif limit > 0:
+            text = f"{label} {_cr(act[key])} / {_cr(limit)}"
+        elif act[key]:
+            text = f"{label} {_cr(act[key])}"  # no target set for this stream
+        else:
+            continue
         state = ""
-        if limits[key] > 0 and act[key] >= limits[key]:
-            state = "over" if act[key] > limits[key] else "met"
-            lines[i] += " ✓"
+        if limit > 0 and act[key] >= limit:
+            state = "over" if act[key] > limit else "met"
+            text += " ✓"
+        lines.append(text)
         line_states.append(state)
-    if act["trade_profit"]:
-        lines.append(f"Trade profit {_cr(act['trade_profit'])}")
     if act["combat_bonds"]:
         lines.append(f"Combat bonds {_cr(act['combat_bonds'])}")
-    if act["exobiology"]:
-        lines.append(f"Exobiology {_cr(act['exobiology'])}")
 
     rows = [h for h in history if _same(h.get("faction_name"), faction) and isinstance(h.get("influence"), (int, float))]
     latest = rows[0]["influence"] if rows else None
@@ -167,10 +199,10 @@ def _boost_view(task: dict, report: dict, history: list, limits: dict) -> dict:
         lines.append(f"Influence {latest * 100:.1f}%{as_of}")
 
     warnings = [
-        f"{label} past squadron limit — diminishing returns"
-        for key, label in _LIMITED_STREAMS if limits[key] > 0 and act[key] > limits[key]
+        f"{label} past the daily target — diminishing returns"
+        for key, label in _LIMITED_STREAMS if limits.get(key, 0) > 0 and act[key] > limits[key]
     ]
-    if any(limits[key] > 0 and act[key] >= limits[key] for key, _ in _LIMITED_STREAMS):
+    if any(limits.get(key, 0) > 0 and act[key] >= limits[key] for key, _ in _LIMITED_STREAMS):
         status = STATUS_DONE
     elif latest is not None and previous is not None and latest < previous:
         status = STATUS_LOSING
@@ -204,13 +236,14 @@ def _conflict_view(task: dict, report: dict, bgs_status: Optional[dict], kind: s
             f"Your actions: {_missions(act['missions'])} (tier score {act['tier_score']}), "
             f"trade profit {_cr(act['trade_profit'])}, exploration {_cr(act['exploration'])}"
         )
-        acted = bool(act["missions"] or act["trade_profit"] > 0 or act["exploration"] or act["exobiology"])
+        acted = bool(act["missions"] or act["trade_profit"] > 0 or act["exploration"])
         if act["combat_bonds"] or act["cz_kills"]:
             warnings.append("Combat doesn't count in elections")
     else:
+        cz_count = f"{act['cz_kills']} CZ fought" if act["cz_kills"] == 1 else f"{act['cz_kills']} CZs fought"
         lines.append(
-            f"Your actions: {act['cz_kills']} CZ kills, combat bonds {_cr(act['combat_bonds'])}, "
-            f"{_missions(act['missions'])}"
+            f"Your actions: {cz_count} (worth {act['cz_value']:.1f} low space CZs), "
+            f"combat bonds {_cr(act['combat_bonds'])}, {_missions(act['missions'])}"
         )
         acted = bool(act["cz_kills"] or act["combat_bonds"] or act["missions"])
         if opponent and faction_activity(report, task["system_name"], opponent)["combat_bonds"]:
@@ -290,24 +323,39 @@ def _powerplay_view(pp: Optional[dict], pledged: str, merits: int, pp_activities
             "guide": _powerplay_guide(mode, pp_state, pledged, pp_activities)}
 
 
-def _bgs_guide(task: dict, limits: dict) -> str:
+def _bgs_guide(task: dict, limits: dict, population_basis: str = "") -> str:
+    # Wording follows what decides each day per the SINC Complete BGS Guide 2024.
     faction = task.get("faction_name") or "the faction"
     opponent = task.get("opponent_name") or "the other side"
     task_type = task["task_type"]
     if task_type == "boost":
-        return (f"Missions for {faction} (about {limits['tier_score']} INF+ per tick), bounties and "
-                f"exploration data at {faction}-controlled stations, profitable trade at its stations.")
+        return (f"A bit of each: missions for {faction} (about {limits['tier_score']} INF+ per tick), bounties, "
+                f"exploration data and high-demand profitable trade at {faction}-controlled stations "
+                f"(exobiology and mined goods don't count). {population_basis}").strip()
     if task_type == "vote":
-        return f"Missions, trade and exploration data for {faction}. Combat doesn't count in elections."
-    return (f"Win conflict zones for {faction}, cash combat bonds for it in this system, massacre missions. "
-            f"Don't cash bonds for {opponent}.")
+        return (f"Complete election missions for {faction} — they decide each day. Trade, exploration data "
+                f"and economic missions only break ties. Combat doesn't count in elections.")
+    return (f"Win the most conflict zones for {faction} each day — low space CZs are the most efficient. "
+            f"Combat bonds, bounties and combat missions only break ties. Don't cash bonds for {opponent}.")
+
+
+def _population_basis(targets: Optional[dict], population) -> str:
+    if targets:
+        return (f"Targets for a {targets['size']} system ({population / 1_000_000:.1f} million), "
+                f"SINC guidance.")
+    return "Targets from Settings (population unknown)."
 
 
 def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], history: list,
                     pp: Optional[dict], limits: dict, pledged: str = "", merits: int = 0,
-                    pp_activities=None) -> dict:
+                    pp_activities=None, population: Optional[int] = None) -> dict:
     task_type = task["task_type"]
+    population_basis = ""
     if task_type == "boost":
+        targets = population_targets(population) if limits.get("by_population", True) else None
+        if targets:
+            limits = dict(limits, **{k: v for k, v in targets.items() if k != "size"})
+        population_basis = _population_basis(targets, population)
         view = _boost_view(task, report, history, limits)
     elif task_type in ("vote", "fight"):
         view = _conflict_view(task, report, bgs_status, task_type)
@@ -319,7 +367,7 @@ def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], histor
         return {"task": task, "status": "", "lines": lines, "line_states": [""] * len(lines), "warnings": [],
                 "hud": f"Note: {note}" if note else "", "updated_at": None, "guide": ""}
     if task_type != "powerplay":
-        view["guide"] = _bgs_guide(task, limits)
+        view["guide"] = _bgs_guide(task, limits, population_basis)
     if task.get("note"):
         view["lines"].append(task["note"])
     # "met" / "over" per line where the line has a target (Boost streams), else "".
@@ -348,8 +396,11 @@ def build_task_views(repo, since: str, limits: dict, system_address: Optional[in
         pp = repo.get_system_powerplay_snapshot(addr) if addr is not None else None
         merits = (repo.get_powerplay_merits_since(addr, week_start)
                   if t["task_type"] == "powerplay" and pledged and addr is not None else 0)
+        population = (repo.get_system_population(addr)
+                      if t["task_type"] == "boost" and addr is not None else None)
         views.append(build_task_view(t, report, bgs_status, history, pp, limits,
-                                     pledged=pledged, merits=merits, pp_activities=pp_activities))
+                                     pledged=pledged, merits=merits, pp_activities=pp_activities,
+                                     population=population))
     return views
 
 

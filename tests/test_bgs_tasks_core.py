@@ -38,7 +38,8 @@ def _conflict(war_type, f1, d1, f2, d2, status="active"):
 
 def test_bgs_limits_reads_cfg():
     cfg = SimpleNamespace(bgs_limit_tier_score=30, bgs_limit_bounties_cr=10_000_000, bgs_limit_exploration_cr=5_000_000)
-    assert bgs_limits(cfg) == {"tier_score": 30, "bounties": 10_000_000, "exploration": 5_000_000}
+    assert bgs_limits(cfg) == {"tier_score": 30, "bounties": 10_000_000, "exploration": 5_000_000,
+                               "by_population": True}
 
 
 def test_validate_task_input():
@@ -64,7 +65,7 @@ def test_faction_activity_sums_across_days_case_insensitively():
         "2026-09-26": {"EKONO": {"elite united worlds": _entry(count=1, weighted=-1, cz_space_h=2, profit=600_000)}},
     }
     act = faction_activity(report, "ekono", "Elite United Worlds")
-    assert act == {"missions": 3, "tier_score": 4, "bounties": 1_000, "combat_bonds": 0, "cz_kills": 2,
+    assert act == {"missions": 3, "tier_score": 4, "bounties": 1_000, "combat_bonds": 0, "cz_kills": 2, "cz_value": 3.2,
                    "trade_profit": 600_000, "exploration": 0, "exobiology": 0}
 
 
@@ -101,7 +102,7 @@ def test_boost_done_when_a_stream_reaches_its_limit_and_warns_past_it():
     report = {"2026-09-26": {"Ekono": {"EUW": _entry(count=6, weighted=27)}}}
     view = build_task_view(_task("boost", "EUW"), report, None, [], None, LIMITS)
     assert view["status"] == STATUS_DONE
-    assert view["warnings"] == ["Tier score past squadron limit — diminishing returns"]
+    assert view["warnings"] == ["Tier score past the daily target — diminishing returns"]
 
 
 def test_boost_losing_ground_when_influence_dropped():
@@ -194,7 +195,7 @@ def test_fight_counts_combat_actions_and_warns_about_bonds_for_opponent():
                            _status(_conflict("civilwar", "Damona", 0, "UID", 0)), [], None, LIMITS)
     assert view["status"] == STATUS_DONE
     assert view["lines"][0] == "Days won 0 - 0 (active)"
-    assert view["lines"][1] == "Your actions: 1 CZ kills, combat bonds 0, 0 missions"
+    assert view["lines"][1] == "Your actions: 1 CZ fought (worth 1.6 low space CZs), combat bonds 0, 0 missions"
     assert view["warnings"] == ["You cashed combat bonds for Damona"]
 
 
@@ -240,6 +241,7 @@ def test_build_task_views_filters_by_system_and_uses_repo():
         get_bgs_status_for_system=lambda addr: None,
         get_faction_history=lambda addr: [],
         get_system_powerplay_snapshot=lambda addr: None,
+        get_system_population=lambda addr: None,
     )
     views = build_task_views(repo, "2026-09-26T00:00:00Z", LIMITS, system_address=12345)
     assert [v["task"]["id"] for v in views] == [1]

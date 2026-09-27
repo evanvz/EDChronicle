@@ -2780,6 +2780,14 @@ class Repository:
             (system_address, faction_name, amount, redeemed_at),
         )
 
+    def get_system_population(self, system_address: int) -> Optional[int]:
+        """Population from EDDN system profiles (net.system_bgs_status), or
+        None if never reported."""
+        row = self.db.conn.execute(
+            "SELECT population FROM net.system_bgs_status WHERE system_address = ?", (system_address,)
+        ).fetchone()
+        return row["population"] if row and isinstance(row["population"], int) else None
+
     def record_powerplay_merits(self, system_address: int, power: str, merits: int, earned_at: str) -> None:
         """One row per PowerplayMerits journal event, credited to the system
         the player was in -- for the BGS Tasks tracker's merits-per-system."""

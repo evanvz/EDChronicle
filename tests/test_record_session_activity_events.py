@@ -135,11 +135,16 @@ def test_market_sell_is_recorded_as_commodity_profit_for_station_faction():
     ]
 
 
-def test_market_sell_without_avg_price_paid_counts_full_sale():
-    fake_self = _fake_self()
-    evt = {"event": "MarketSell", "Count": 10, "TotalSale": 63085, "timestamp": "2026-09-25T10:00:00Z"}
-    MainWindow._record_faction_trade_sold(fake_self, evt)
-    assert fake_self._saved[-1][1]["value"] == 63085
+def test_cargo_not_bought_is_not_trade():
+    # Mined goods and mission-reward cargo have AvgPricePaid 0 -- sales of
+    # mined commodities don't affect trade influence (SINC BGS Guide 2024 p37).
+    for evt in (
+        {"event": "MarketSell", "Count": 10, "TotalSale": 63085, "AvgPricePaid": 0, "timestamp": "2026-09-25T10:00:00Z"},
+        {"event": "MarketSell", "Count": 10, "TotalSale": 63085, "timestamp": "2026-09-25T10:00:00Z"},
+    ):
+        fake_self = _fake_self()
+        MainWindow._record_faction_trade_sold(fake_self, evt)
+        assert fake_self._saved == []
 
 
 def test_multi_sell_exploration_data_is_recorded_as_exploration():
