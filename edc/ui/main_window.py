@@ -614,6 +614,32 @@ class _MarketSaveWorker(QObject):
 
 _CHECKPOINT_BUSY_TIMEOUT_MS = 2000
 
+# Longest single network request a worker can be inside when the app closes
+# (EDSM's 20s timeout) plus a margin -- a cancelled loop exits after it.
+_CLOSE_WAIT_SECONDS = 25
+
+
+def _collect_background_work(obj, depth: int, seen: set, threads: list, workers: list) -> None:
+    """Every QThread and every QObject worker with a cancel() method
+    reachable from obj (attributes, dict values, nested QWidget panels)."""
+    if id(obj) in seen or depth < 0 or not hasattr(obj, "__dict__"):
+        return
+    seen.add(id(obj))
+    for attr_name in list(vars(obj)):
+        try:
+            val = getattr(obj, attr_name, None)
+        except Exception:
+            continue
+        if isinstance(val, QThread):
+            threads.append(val)
+        elif isinstance(val, QObject) and callable(getattr(val, "cancel", None)):
+            workers.append(val)
+        if isinstance(val, dict):
+            for v in list(val.values()):
+                _collect_background_work(v, depth - 1, seen, threads, workers)
+        elif isinstance(val, QWidget) and depth > 0:
+            _collect_background_work(val, depth - 1, seen, threads, workers)
+
 
 class _WalCheckpointWorker(QObject):
     """
@@ -3576,25 +3602,24 @@ class MainWindow(QMainWindow):
         workers spread across main_window.py and several panels and new
         ones keep getting added — a fixed list would silently rot.
         """
-        if seen is None:
-            seen = set()
-        if id(obj) in seen or depth < 0 or not hasattr(obj, "__dict__"):
-            return
-        seen.add(id(obj))
-        for attr_name in list(vars(obj)):
+        threads: list = []
+        workers: list = []
+        _collect_background_work(obj, depth, seen if seen is not None else set(), threads, workers)
+        # quit() alone doesn't stop a worker mid-loop (e.g. the Player
+        # Faction full EDSM refresh) -- cancel every cancellable worker
+        # first, then wait for the threads on one shared deadline. Confirmed
+        # crash 2026-09-27: a 3s-per-thread wait expired mid-refresh and the
+        # worker was deleted while its thread still ran.
+        for w in workers:
             try:
-                val = getattr(obj, attr_name, None)
-            except Exception:
-                continue
-            if isinstance(val, QThread):
-                if val.isRunning():
-                    val.quit()
-                    val.wait(3000)
-            elif isinstance(val, dict):
-                for v in list(val.values()):
-                    self._stop_background_threads(v, depth - 1, seen)
-            elif isinstance(val, QWidget) and depth > 0:
-                self._stop_background_threads(val, depth - 1, seen)
+                w.cancel()
+            except RuntimeError:
+                pass  # C++ object already gone
+        deadline = time.monotonic() + _CLOSE_WAIT_SECONDS
+        for t in threads:
+            if t.isRunning():
+                t.quit()
+                t.wait(max(0, int((deadline - time.monotonic()) * 1000)))
 
     def closeEvent(self, event):
         import traceback
