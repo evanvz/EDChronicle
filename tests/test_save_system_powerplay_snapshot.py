@@ -30,7 +30,7 @@ def test_saves_a_live_reading():
         "system_address": 12345, "system_name": "Ekono", "pp_state": "Stronghold",
         "control_progress": 0.268642, "reinforcement": 908, "undermining": 4666,
         "controlling_power": "Aisling Duval", "powers": ["Aisling Duval"],
-        "data_timestamp": "2026-09-24T21:34:20Z",
+        "data_timestamp": "2026-09-24T21:34:20Z", "conflict_progress": {},
     }]
 
 

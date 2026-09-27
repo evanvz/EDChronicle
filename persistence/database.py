@@ -400,6 +400,9 @@ class Database:
             )""",
             """CREATE INDEX IF NOT EXISTS idx_powerplay_merits_lookup
                ON powerplay_merits (system_address, earned_at)""",
+            # {power: 0-1 progress} from the journal's PowerplayConflictProgress
+            # -- acquisition progress in Unoccupied systems.
+            "ALTER TABLE systems ADD COLUMN pp_conflict_progress TEXT",
         ]
         cache_migrations = [
             "ALTER TABLE net.spansh_bodies ADD COLUMN surface_gravity REAL",

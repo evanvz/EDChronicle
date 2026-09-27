@@ -68,9 +68,9 @@ def test_pledged_card_shows_mode_merits_and_top_activities_bonus_first():
     ])
     view = build_task_view(_task("powerplay"), {}, None, [], _PP, LIMITS,
                            pledged="Aisling Duval", merits=340, pp_activities=table)
-    assert view["lines"][0] == "Acquisition: Unoccupied — 78.9%"
+    assert view["lines"][0] == "Acquisition: Unoccupied (no power yet) — 78.9%"
     assert "Your merits here this PowerPlay week: 340" in view["lines"]
-    assert view["hud"] == "PowerPlay — Acquisition: Unoccupied — 78.9% · 340 merits this week"
+    assert view["hud"] == "PowerPlay — Acquisition: Unoccupied (no power yet) — 78.9% · 340 merits this week"
     assert view["guide"] == ("Acquisition: Transport Powerplay Commodities, Bounty Hunting, "
                              "Power Kills, Holoscreen Hacking")
     assert table.calls == [("acquisition", "Unoccupied")]

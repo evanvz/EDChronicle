@@ -206,8 +206,8 @@ def test_powerplay_view():
           "pp_data_timestamp": "2026-09-26T10:00:00Z"}
     view = build_task_view(_task("powerplay", note="acquisition"), {}, None, [], pp, LIMITS)
     assert view["status"] == STATUS_TRACKING
-    assert view["lines"] == ["Unoccupied — 78.9%", "acquisition"]
-    assert view["hud"] == "PowerPlay — Unoccupied — 78.9%"
+    assert view["lines"] == ["Unoccupied (no power yet) — 78.9%", "acquisition"]
+    assert view["hud"] == "PowerPlay — Unoccupied (no power yet) — 78.9%"
     assert view["updated_at"] == "2026-09-26T10:00:00Z"
 
 

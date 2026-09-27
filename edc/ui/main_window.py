@@ -945,6 +945,7 @@ class MainWindow(QMainWindow):
                 controlling_power=getattr(self.state, "system_controlling_power", None),
                 powers=getattr(self.state, "system_powers", None) or [],
                 data_timestamp=getattr(self.state, "factions_timestamp", "") or "",
+                conflict_progress=getattr(self.state, "system_powerplay_conflict_progress", None) or {},
             )
         except Exception:
             log.exception("Failed to save PowerPlay snapshot")

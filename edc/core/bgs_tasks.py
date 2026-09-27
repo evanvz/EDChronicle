@@ -8,7 +8,8 @@ faction_snapshots, systems.pp_*). No task data ever leaves the app. See
 docs/superpowers/specs/2026-09-26-bgs-tasks-tracker-design.md."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+import json
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 TASK_TYPES = ("boost", "vote", "fight", "powerplay", "note")
@@ -166,7 +167,46 @@ def find_conflict(bgs_status: Optional[dict], faction_name: str, opponent_name: 
     return None
 
 
-def _boost_view(task: dict, report: dict, history: list, limits: dict) -> dict:
+def _state_names(raw) -> set:
+    try:
+        data = json.loads(raw) if isinstance(raw, str) else raw
+    except (TypeError, ValueError):
+        return set()
+    return {str(s.get("State")).lower() for s in (data or []) if isinstance(s, dict) and s.get("State")}
+
+
+def _retreat_countdown(rows: list, today: date) -> tuple:
+    """(line, warnings) for a faction in Retreat, from its daily snapshots
+    (newest first). SINC Complete BGS Guide 2024 p56: pending, then active
+    days 1-7; do the work on active day 5 (the Important Day), the 2.5%
+    check is active day 6. Dates are UTC days and the tick isn't at
+    midnight, hence "~"."""
+    run = []
+    for r in rows:  # contiguous newest-first run of snapshots that show Retreat
+        pending = "retreat" in _state_names(r.get("pending_states"))
+        active = "retreat" in _state_names(r.get("active_states"))
+        if not (pending or active):
+            break
+        run.append((date.fromisoformat(r["snapshot_date"][:10]), active))
+    if not run:
+        return None, []
+    active_days = [d for d, active in run if active]
+    active_start = min(active_days) if active_days else min(d for d, _ in run) + timedelta(days=1)
+    important = active_start + timedelta(days=4)
+    judged = active_start + timedelta(days=5)
+    phase = f"active (day {(today - active_start).days + 1})" if active_days else "pending"
+    line = (f"Retreat {phase}: Important Day ~{important.isoformat()} (active day 5), "
+            f"must be above 2.5% on ~{judged.isoformat()}")
+    warnings = []
+    if today == important:
+        warnings.append("Retreat Important Day is today — hand everything in")
+    influence = rows[0].get("influence")
+    if isinstance(influence, (int, float)) and influence < 0.025:
+        warnings.append(f"Influence {influence * 100:.1f}% is below 2.5% — the faction retreats unless it's raised")
+    return line, warnings
+
+
+def _boost_view(task: dict, report: dict, history: list, limits: dict, today: Optional[date] = None) -> dict:
     faction = task.get("faction_name") or ""
     act = faction_activity(report, task["system_name"], faction)
     lines, line_states = [], []
@@ -202,6 +242,10 @@ def _boost_view(task: dict, report: dict, history: list, limits: dict) -> dict:
         f"{label} past the daily target — diminishing returns"
         for key, label in _LIMITED_STREAMS if limits.get(key, 0) > 0 and act[key] > limits[key]
     ]
+    retreat_line, retreat_warnings = _retreat_countdown(rows, today or datetime.now(timezone.utc).date())
+    if retreat_line:
+        lines.append(retreat_line)
+        warnings += retreat_warnings
     if any(limits.get(key, 0) > 0 and act[key] >= limits[key] for key, _ in _LIMITED_STREAMS):
         status = STATUS_DONE
     elif latest is not None and previous is not None and latest < previous:
@@ -308,10 +352,17 @@ def _powerplay_view(pp: Optional[dict], pledged: str, merits: int, pp_activities
                 "hud": "PowerPlay — no data yet" + merits_hud, "updated_at": None,
                 "guide": "" if pledged else _powerplay_guide("", "", "", None)}
     pp_state = pp.get("pp_state") or ""
-    reading = pp_state or "Unknown"
+    # "Unoccupied" is a PowerPlay state (no controlling power), not population.
+    reading = "Unoccupied (no power yet)" if pp_state == "Unoccupied" else (pp_state or "Unknown")
     progress = pp.get("pp_control_progress")
+    acquisition = pp.get("pp_conflict_progress") or {}
     if isinstance(progress, (int, float)):
         reading += f" — {progress * 100:.1f}%"
+    elif acquisition:
+        # Acquisition progress per power; show ours if we're in it, else the leader.
+        power = next((p for p in acquisition if _same(p, pledged)), None) \
+            or max(acquisition, key=acquisition.get)
+        reading += f" — {power} {acquisition[power] * 100:.1f}%"
     mode = powerplay_mode(pledged, pp.get("pp_controlling_power") or "", pp_state)
     head = f"{mode}: {reading}" if mode else reading
     lines = [head]
@@ -348,7 +399,8 @@ def _population_basis(targets: Optional[dict], population) -> str:
 
 def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], history: list,
                     pp: Optional[dict], limits: dict, pledged: str = "", merits: int = 0,
-                    pp_activities=None, population: Optional[int] = None) -> dict:
+                    pp_activities=None, population: Optional[int] = None,
+                    today: Optional[date] = None) -> dict:
     task_type = task["task_type"]
     population_basis = ""
     if task_type == "boost":
@@ -356,7 +408,7 @@ def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], histor
         if targets:
             limits = dict(limits, **{k: v for k, v in targets.items() if k != "size"})
         population_basis = _population_basis(targets, population)
-        view = _boost_view(task, report, history, limits)
+        view = _boost_view(task, report, history, limits, today)
     elif task_type in ("vote", "fight"):
         view = _conflict_view(task, report, bgs_status, task_type)
     elif task_type == "powerplay":

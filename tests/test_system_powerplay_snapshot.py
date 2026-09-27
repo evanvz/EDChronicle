@@ -35,7 +35,7 @@ def test_saves_and_reads_back_a_snapshot(tmp_path):
         "pp_state": "Stronghold", "pp_control_progress": 0.268642,
         "pp_reinforcement": 908, "pp_undermining": 4666,
         "pp_controlling_power": "Aisling Duval", "pp_powers": ["Aisling Duval"],
-        "pp_data_timestamp": "2026-09-24T21:34:20Z",
+        "pp_data_timestamp": "2026-09-24T21:34:20Z", "pp_conflict_progress": {},
     }
 
 
