@@ -2499,6 +2499,53 @@ class Repository:
 
         return stations
 
+    def get_faction_station_destinations(self, faction_name: str) -> list[dict]:
+        """
+        Every non-carrier station with current market data whose
+        controlling faction is faction_name (case-insensitive), for the
+        BGS supply-run
+        destination picker. Each dict: market_id, station_name,
+        system_name, pad_size, x/y/z (None if the system has no known
+        coordinates), and journal_pp -- our own last PowerPlay reading
+        for the system in get_system_powerplay_snapshot's shape, or None.
+
+        The PowerPlay readings are fetched in one pass rather than joined:
+        systems has no system_name index, and a per-station join would
+        rescan it for every row.
+        """
+        rows = self.db.conn.execute(
+            """
+            SELECT si.market_id, si.station_name, si.system_name, si.station_type,
+                   si.pads_small, si.pads_medium, si.pads_large, sc.x, sc.y, sc.z
+            FROM net.station_info si
+            LEFT JOIN system_coords sc ON sc.system_name = si.system_name
+            WHERE LOWER(si.station_faction) = LOWER(?)
+              AND (si.station_type IS NULL OR si.station_type != 'FleetCarrier')
+              AND EXISTS (SELECT 1 FROM net.market_prices m
+                          WHERE m.market_id = si.market_id AND m.last_updated >= ?)
+            ORDER BY si.system_name, si.station_name
+            """,
+            (faction_name, _market_data_cutoff()),
+        ).fetchall()
+        journal_pp = {
+            r["system_name"].lower(): dict(r)
+            for r in self.db.conn.execute(
+                "SELECT system_name, pp_state, pp_controlling_power, pp_data_timestamp "
+                "FROM systems WHERE pp_data_timestamp IS NOT NULL AND system_name IS NOT NULL"
+            )
+        }
+        return [
+            {
+                "market_id": r["market_id"],
+                "station_name": r["station_name"],
+                "system_name": r["system_name"],
+                "pad_size": effective_pad_size(r["station_type"], r["pads_small"], r["pads_medium"], r["pads_large"]),
+                "x": r["x"], "y": r["y"], "z": r["z"],
+                "journal_pp": journal_pp.get((r["system_name"] or "").lower()),
+            }
+            for r in rows
+        ]
+
     def resolve_system_name_case_insensitive(self, name: str) -> Optional[str]:
         """Resolves a user-typed system name to its exact stored casing,
         via the much smaller system_coords table rather than a

@@ -266,3 +266,112 @@ def _best_leg(buy_station: dict, sell_station: dict, cargo_capacity: int) -> Opt
                 "data_age_hours": data_age_hours,
             }
     return best
+
+
+# "Sell for large profit" only earns PowerPlay merits at 40%+ margin
+# (Pilot's Handbook, via the Elite Dangerous wiki).
+PP_LARGE_PROFIT_MARGIN = 0.40
+
+
+def destination_pp_status(
+    my_power: Optional[str], journal: Optional[dict], edsm: Optional[dict],
+) -> tuple:
+    """("ok" | "unverified" | "no", label) for whether a BGS supply-run
+    destination system is controlled by the player's pledged power.
+    Our own journal reading (repo.get_system_powerplay_snapshot shape) is
+    trusted first as the freshest; EDSM's daily dump row
+    (EdsmPowerPlayCache.get_controller_by_name shape) is the fallback."""
+    if not my_power:
+        return "unverified", "not pledged"
+    if journal and journal.get("pp_data_timestamp"):
+        power = journal.get("pp_controlling_power") or ""
+        state = journal.get("pp_state") or ""
+    elif edsm:
+        state = edsm.get("power_state") or ""
+        # An Unoccupied EDSM row is a foothold, not control.
+        power = "" if state == "Unoccupied" else (edsm.get("power") or "")
+    else:
+        return "unverified", "PP unverified"
+    if power.lower() == my_power.lower():
+        return "ok", state
+    return "no", f"controlled by {power}" if power else "not controlled by any power"
+
+
+def find_supply_for_destination(
+    dest_station: dict,
+    dest_xyz: tuple,
+    supply_stations: Dict[int, dict],
+    cargo_capacity: int,
+    dest_market_id: Optional[int] = None,
+    max_results: int = 25,
+) -> List[Dict[str, Any]]:
+    """
+    Destination-first BGS supply run: for every commodity `dest_station`
+    buys (its "sells" dict, station's point of view), finds the supply
+    station with the best total profit, ties going to the one nearer the
+    destination. Quantity is capped by cargo, the supply stock and the
+    destination's demand -- selling past demand hurts the owner's
+    influence, so a zero-demand commodity is skipped outright.
+
+    dest_station / supply_stations use get_market_snapshot_* shapes;
+    supply stations need x/y/z (get_market_snapshot_in_radius).
+    """
+    dx, dy, dz = dest_xyz
+    results: List[Dict[str, Any]] = []
+
+    for commodity, (sell_price, demand, sell_updated) in dest_station["sells"].items():
+        if isinstance(demand, int) and demand <= 0:
+            continue
+        best: Optional[Dict[str, Any]] = None
+        for market_id, s in supply_stations.items():
+            if market_id == dest_market_id:
+                continue
+            buy_info = s["buys"].get(commodity)
+            if buy_info is None:
+                continue
+            buy_price, stock, buy_updated = buy_info
+            profit_per_unit = sell_price - buy_price
+            if profit_per_unit <= 0:
+                continue
+            qty = cargo_capacity
+            if isinstance(stock, int) and stock > 0:
+                qty = min(qty, stock)
+            if isinstance(demand, int):
+                qty = min(qty, demand)
+            if qty <= 0:
+                continue
+
+            total = profit_per_unit * qty
+            dist = ((s["x"] - dx) ** 2 + (s["y"] - dy) ** 2 + (s["z"] - dz) ** 2) ** 0.5
+            if best is not None and (total, -dist) <= (best["total_profit"], -best["dist_to_dest"]):
+                continue
+            ages = [dt for dt in (_parse_ts(buy_updated), _parse_ts(sell_updated)) if dt is not None]
+            best = {
+                "commodity": commodity,
+                "buy_station_name": s["station_name"],
+                "buy_system_name": s["system_name"],
+                "pad_size": s.get("pad_size"),
+                "dist_to_dest": dist,
+                "buy_price": buy_price,
+                "sell_price": sell_price,
+                "profit_per_unit": profit_per_unit,
+                "demand": demand,
+                "quantity": qty,
+                "total_profit": total,
+                "pp_large_profit": profit_per_unit >= buy_price * PP_LARGE_PROFIT_MARGIN,
+                "data_age_hours": (
+                    (datetime.now(timezone.utc) - min(ages)).total_seconds() / 3600.0
+                    if ages else None
+                ),
+            }
+        if best is not None:
+            results.append(best)
+
+    results.sort(
+        key=lambda r: (
+            r["data_age_hours"] is None or r["data_age_hours"] < STALE_THRESHOLD_HOURS,
+            r["total_profit"],
+        ),
+        reverse=True,
+    )
+    return results[:max_results]

@@ -18,7 +18,9 @@ from PyQt6.QtWidgets import (
     QSpinBox, QComboBox, QCheckBox, QTableWidget, QTableWidgetItem, QHeaderView, QFrame,
 )
 
-from edc.core.trade_routes import find_trade_loops, find_point_to_point_trades
+from edc.core.trade_routes import (
+    destination_pp_status, find_point_to_point_trades, find_supply_for_destination, find_trade_loops,
+)
 from edc.ui.busy_spinner import BusySpinner
 from edc.ui.panels.market_panel import _NumericTableWidgetItem
 from edc.ui.style import CARD_STYLE as _CARD_STYLE, LABEL_STYLE as _LABEL_STYLE
@@ -26,6 +28,8 @@ from edc.ui.style import CARD_STYLE as _CARD_STYLE, LABEL_STYLE as _LABEL_STYLE
 log = logging.getLogger(__name__)
 
 _PAD_RANK = {"S": 1, "M": 2, "L": 3}
+# EDDN demandBracket; BGS trade wants High (SINC Complete BGS Guide 2024).
+_DEMAND_LEVELS = {1: "Low", 2: "Med", 3: "High"}
 
 
 class _TradeRouteWorker(QObject):
@@ -63,11 +67,8 @@ class _TradeRouteWorker(QObject):
             repo = Repository(db)
             stations = repo.get_market_snapshot_in_radius(self._x, self._y, self._z, self._radius_ly)
 
-            if self._exclude_enemy_pp and self._my_power and self._edsm_powerplay:
-                stations = {
-                    mid: s for mid, s in stations.items()
-                    if not self._is_enemy_pp(s["system_name"])
-                }
+            if self._exclude_enemy_pp:
+                stations = _drop_enemy_pp(stations, self._my_power, self._edsm_powerplay)
 
             if self._faction_only and self._squadron_faction_name:
                 stations = {
@@ -76,14 +77,7 @@ class _TradeRouteWorker(QObject):
                     == self._squadron_faction_name.strip().lower()
                 }
 
-            if self._required_pad in _PAD_RANK:
-                # Only drop a station whose pad is CONFIRMED too small —
-                # "?" (unknown) stays in rather than being wrongly excluded.
-                min_rank = _PAD_RANK[self._required_pad]
-                stations = {
-                    mid: s for mid, s in stations.items()
-                    if s["pad_size"] not in _PAD_RANK or _PAD_RANK[s["pad_size"]] >= min_rank
-                }
+            stations = _filter_pad(stations, self._required_pad)
 
             loops = find_trade_loops(stations, self._cargo_capacity)
 
@@ -99,10 +93,133 @@ class _TradeRouteWorker(QObject):
             db.close()
         self.finished.emit(loops, "")
 
-    def _is_enemy_pp(self, system_name: str) -> bool:
-        controller = self._edsm_powerplay.get_controller_by_name(system_name)
-        controlling_power = (controller or {}).get("power") or ""
-        return bool(controlling_power) and controlling_power != self._my_power
+
+def _filter_pad(stations: dict, required_pad) -> dict:
+    """Only drops a station whose pad is CONFIRMED too small — "?"
+    (unknown) stays in rather than being wrongly excluded."""
+    if required_pad not in _PAD_RANK:
+        return stations
+    min_rank = _PAD_RANK[required_pad]
+    return {
+        mid: s for mid, s in stations.items()
+        if s["pad_size"] not in _PAD_RANK or _PAD_RANK[s["pad_size"]] >= min_rank
+    }
+
+
+def _drop_enemy_pp(stations: dict, my_power, edsm_powerplay) -> dict:
+    """Drops stations in systems EDSM says another power controls."""
+    if not my_power or not edsm_powerplay:
+        return stations
+
+    def is_enemy(system_name):
+        controller = edsm_powerplay.get_controller_by_name(system_name)
+        power = (controller or {}).get("power") or ""
+        return bool(power) and power != my_power
+
+    return {mid: s for mid, s in stations.items() if not is_enemy(s["system_name"])}
+
+
+class _BgsSupplyWorker(QObject):
+    """Destination-first supply search for a BGS trade run -- own SQLite
+    connection per the project's cross-thread rule."""
+    finished = pyqtSignal(list, str, str)  # (results, error, note)
+
+    def __init__(self, db_path, dest, center_xyz, radius_ly, cargo_capacity,
+                 required_pad, exclude_enemy_pp, my_power, edsm_powerplay):
+        super().__init__()
+        self._db_path = db_path
+        self._dest = dest
+        self._center = center_xyz
+        self._radius_ly = radius_ly
+        self._cargo_capacity = cargo_capacity
+        self._required_pad = required_pad
+        self._exclude_enemy_pp = exclude_enemy_pp
+        self._my_power = my_power
+        self._edsm_powerplay = edsm_powerplay
+
+    def run(self):
+        from persistence.database import Database
+        from persistence.repository import Repository
+
+        dest = self._dest
+        note = ""
+        if dest.get("pp_status") == "unverified" and self._my_power:
+            # Neither our journal nor EDSM's dump knows this system -- ask
+            # Spansh live. None means no power or a failed lookup, which
+            # can't be told apart, so that stays "unverified".
+            from edc.core.spansh_client import fetch_controlling_power
+            power = fetch_controlling_power(dest["system_name"])
+            if power and power.lower() != self._my_power.lower():
+                self.finished.emit([], f"{dest['system_name']} is controlled by {power}, not your power.", "")
+                return
+            if not power:
+                note = f" PowerPlay control of {dest['system_name']} is unverified."
+
+        db = Database(self._db_path)
+        try:
+            repo = Repository(db)
+            dest_station = repo.get_market_snapshot_for_systems([dest["system_name"]]).get(dest["market_id"])
+            if not dest_station or not dest_station["sells"]:
+                self.finished.emit([], f"No market data for {dest['station_name']} yet.", "")
+                return
+            supply = repo.get_market_snapshot_in_radius(*self._center, self._radius_ly)
+            supply = _filter_pad(supply, self._required_pad)
+            if self._exclude_enemy_pp:
+                supply = _drop_enemy_pp(supply, self._my_power, self._edsm_powerplay)
+            results = find_supply_for_destination(
+                dest_station, (dest["x"], dest["y"], dest["z"]), supply,
+                self._cargo_capacity, dest_market_id=dest["market_id"],
+            )
+            display_names = repo.get_commodity_display_name_map()
+            brackets = dict(db.conn.execute(
+                "SELECT commodity_name, demand_bracket FROM net.market_prices WHERE market_id = ?",
+                (dest["market_id"],),
+            ).fetchall())
+            for r in results:
+                r["commodity_display"] = display_names.get(r["commodity"], r["commodity"].title())
+                r["demand_level"] = _DEMAND_LEVELS.get(brackets.get(r["commodity"]), "")
+        except Exception as exc:
+            log.exception("BGS supply search failed")
+            self.finished.emit([], str(exc), "")
+            return
+        finally:
+            db.close()
+        self.finished.emit(results, "", note)
+
+
+class _BgsDestinationsWorker(QObject):
+    """Loads the squadron faction's stations and their PowerPlay status
+    off the UI thread -- a cold first read of the market cache took over
+    a second on the live DB."""
+    finished = pyqtSignal(str, list)  # (faction_name or "", destinations)
+
+    def __init__(self, db_path, my_power, edsm_powerplay):
+        super().__init__()
+        self._db_path = db_path
+        self._my_power = my_power
+        self._edsm_powerplay = edsm_powerplay
+
+    def run(self):
+        from persistence.database import Database
+        from persistence.repository import Repository
+
+        faction, destinations = "", []
+        db = Database(self._db_path)
+        try:
+            repo = Repository(db)
+            overview = repo.get_player_faction_overview()
+            faction = (overview or {}).get("faction_name") or ""
+            destinations = repo.get_faction_station_destinations(faction) if faction else []
+            for d in destinations:
+                edsm = self._edsm_powerplay.get_controller_by_name(d["system_name"]) if self._edsm_powerplay else None
+                d["pp_status"], d["pp_label"] = destination_pp_status(self._my_power, d["journal_pp"], edsm)
+            # Confirmed ones first, then unverified; alphabetical within each.
+            destinations.sort(key=lambda d: (d["pp_status"] != "ok", d["system_name"], d["station_name"]))
+        except Exception:
+            log.exception("Failed to load BGS supply-run destinations")
+        finally:
+            db.close()
+        self.finished.emit(faction, destinations)
 
 
 class _PointToPointWorker(QObject):
@@ -164,6 +281,13 @@ class TradeRoutePanel(QWidget):
         self._dest_user_edited: bool = False
         self._p2p_thread: Optional[QThread] = None
         self._p2p_worker: Optional[_PointToPointWorker] = None
+        self._bgs_thread: Optional[QThread] = None
+        self._bgs_worker: Optional[_BgsSupplyWorker] = None
+        self._bgs_load_thread: Optional[QThread] = None
+        self._bgs_load_worker: Optional[_BgsDestinationsWorker] = None
+        self._bgs_destinations: list = []  # every squadron-faction station, eligible or not
+        self._bgs_loaded_for_power: Optional[str] = None
+        self._bgs_user_picked: bool = False
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 8)
@@ -371,6 +495,7 @@ class TradeRoutePanel(QWidget):
         self._p2p_loading_spinner = BusySpinner(self)
 
         root.addWidget(p2p_frame, 1)
+        root.addWidget(self._build_bgs_card(), 1)
 
     def refresh(self, state) -> None:
         """Cheap, safe to call on every general refresh — just updates the
@@ -408,6 +533,15 @@ class TradeRoutePanel(QWidget):
             bool(self._origin_items) and bool(self._dest_edit.text().strip())
             and isinstance(self._cargo_capacity, int) and self._cargo_capacity > 0
         )
+
+        # Reload when the pledge first becomes known (or changes) -- the
+        # PowerPlay eligibility of every destination depends on it.
+        if self._bgs_loaded_for_power != (self._my_power or ""):
+            self._load_bgs_destinations()
+        if route_target and not self._bgs_user_picked:
+            idx = self._bgs_dest_combo.findText(f"{route_target} — ", Qt.MatchFlag.MatchStartsWith)
+            if idx >= 0:
+                self._bgs_dest_combo.setCurrentIndex(idx)
 
     def _start_search(self) -> None:
         if not self._system:
@@ -611,5 +745,273 @@ class TradeRoutePanel(QWidget):
         if column not in (1, 2):
             return
         item = self._p2p_table.item(row, column)
+        if item and item.text():
+            QApplication.clipboard().setText(item.text())
+
+    # --- BGS supply run: pick a squadron-faction station first, then find
+    # what it buys and the best place nearby to buy that ---
+
+    def _build_bgs_card(self) -> QFrame:
+        frame = QFrame()
+        frame.setStyleSheet(_CARD_STYLE)
+        lay = QVBoxLayout(frame)
+        lay.setContentsMargins(8, 6, 8, 8)
+        lay.setSpacing(6)
+
+        hdr = QLabel("BGS SUPPLY RUN")
+        hdr.setStyleSheet("color:#4da3ff; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;")
+        lay.addWidget(hdr)
+
+        note = QLabel(
+            "Pick a station your squadron faction controls, in a system your power controls. "
+            "Finds what it buys at a profit and the best nearby station to buy it from. "
+            "Selling there raises the faction's influence; 40%+ margins also earn PowerPlay merits."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
+        lay.addWidget(note)
+
+        field_style = "background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;"
+        btn_style = (
+            "QPushButton { background:#1a3a5a; color:#FFB347; border:1px solid #2a5a8a;"
+            " border-radius:3px; padding:3px 12px; font-weight:bold; }"
+            "QPushButton:hover { background:#2a5a8a; }"
+            "QPushButton:disabled { background:#111; color:#555; border-color:#333; }"
+        )
+
+        dest_row = QHBoxLayout()
+        dest_row.setSpacing(8)
+        dest_label = QLabel("Sell at:")
+        dest_label.setStyleSheet(_LABEL_STYLE)
+        self._bgs_dest_combo = QComboBox()
+        self._bgs_dest_combo.setEditable(True)
+        self._bgs_dest_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self._bgs_dest_combo.lineEdit().setPlaceholderText("Pick a station, or type a system name")
+        self._bgs_dest_combo.setStyleSheet(field_style)
+        self._bgs_dest_combo.activated.connect(lambda _i: setattr(self, "_bgs_user_picked", True))
+        self._bgs_dest_combo.lineEdit().textEdited.connect(lambda _t: setattr(self, "_bgs_user_picked", True))
+        reload_btn = QPushButton("Reload")
+        reload_btn.setStyleSheet(btn_style)
+        reload_btn.setToolTip("Re-read your squadron faction's stations and their PowerPlay control.")
+        reload_btn.clicked.connect(self._load_bgs_destinations)
+        dest_row.addWidget(dest_label)
+        dest_row.addWidget(self._bgs_dest_combo, 1)
+        dest_row.addWidget(reload_btn)
+        lay.addLayout(dest_row)
+
+        opt_row = QHBoxLayout()
+        opt_row.setSpacing(8)
+        near_label = QLabel("Buy near:")
+        near_label.setStyleSheet(_LABEL_STYLE)
+        self._bgs_near_combo = QComboBox()
+        self._bgs_near_combo.addItem("Destination", "dest")
+        self._bgs_near_combo.addItem("Me", "me")
+        self._bgs_near_combo.setStyleSheet(field_style)
+        self._bgs_range_spin = QSpinBox()
+        self._bgs_range_spin.setRange(5, 200)
+        self._bgs_range_spin.setSingleStep(5)
+        self._bgs_range_spin.setValue(20)
+        self._bgs_range_spin.setSuffix(" ly")
+        self._bgs_range_spin.setStyleSheet(field_style)
+        pad_label = QLabel("Min pad:")
+        pad_label.setStyleSheet(_LABEL_STYLE)
+        self._bgs_pad_combo = QComboBox()
+        self._bgs_pad_combo.addItem("Any", None)
+        self._bgs_pad_combo.addItem("Medium+", "M")
+        self._bgs_pad_combo.addItem("Large only", "L")
+        self._bgs_pad_combo.setStyleSheet(field_style)
+        self._bgs_enemy_pp_check = QCheckBox("Exclude enemy PowerPlay systems")
+        self._bgs_enemy_pp_check.setStyleSheet(_LABEL_STYLE)
+        self._bgs_enemy_pp_check.setChecked(True)
+        self._bgs_search_btn = QPushButton("Search")
+        self._bgs_search_btn.setStyleSheet(btn_style)
+        self._bgs_search_btn.clicked.connect(self._start_bgs_search)
+        for w in (near_label, self._bgs_near_combo, self._bgs_range_spin, pad_label,
+                  self._bgs_pad_combo, self._bgs_enemy_pp_check, self._bgs_search_btn):
+            opt_row.addWidget(w)
+        opt_row.addStretch(1)
+        lay.addLayout(opt_row)
+
+        self._bgs_status_label = QLabel("Pick a destination station and press Search.")
+        self._bgs_status_label.setWordWrap(True)
+        self._bgs_status_label.setStyleSheet("color:#888888; font-size:12px; background:transparent;")
+        lay.addWidget(self._bgs_status_label)
+
+        self._bgs_table = QTableWidget()
+        self._bgs_table.setColumnCount(12)
+        self._bgs_table.setHorizontalHeaderLabels(
+            ["Commodity", "Buy Station", "Buy System", "Dist to Dest (ly)", "Buy", "Sell",
+             "Profit/u", "Demand", "Qty", "Total Profit", "PP Merits", "Data Age"]
+        )
+        self._bgs_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._bgs_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._bgs_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self._bgs_table.verticalHeader().setVisible(False)
+        self._bgs_table.setAlternatingRowColors(True)
+        self._bgs_table.setStyleSheet(self._p2p_table.styleSheet())
+        h = self._bgs_table.horizontalHeader()
+        for c in (0, 1, 2):
+            h.setSectionResizeMode(c, QHeaderView.ResizeMode.Stretch)
+        for c in range(3, 12):
+            h.setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
+        self._bgs_table.setToolTip(
+            "Click a Buy Station or Buy System cell to copy its name. Qty is capped by your cargo, "
+            "the stock and the destination's demand — selling past demand hurts the faction. "
+            "PP Merits ✓ means a 40%+ margin, which also earns merits in your power's system."
+        )
+        self._bgs_table.cellClicked.connect(self._on_bgs_cell_clicked)
+        lay.addWidget(self._bgs_table, 1)
+
+        self._bgs_loading_spinner = BusySpinner(self)
+        return frame
+
+    def _load_bgs_destinations(self) -> None:
+        self._bgs_loaded_for_power = self._my_power or ""
+        if self._bgs_load_thread and self._bgs_load_thread.isRunning():
+            return
+        self._bgs_status_label.setText("Loading your squadron faction's stations…")
+        self._bgs_load_worker = _BgsDestinationsWorker(self._repo.db.db_path, self._my_power, self._edsm_powerplay)
+        if self._bgs_load_thread is not None:
+            self._bgs_load_thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
+        self._bgs_load_thread = QThread()
+        self._bgs_load_worker.moveToThread(self._bgs_load_thread)
+        self._bgs_load_thread.started.connect(self._bgs_load_worker.run)
+        self._bgs_load_worker.finished.connect(self._on_bgs_destinations)
+        self._bgs_load_worker.finished.connect(self._bgs_load_thread.quit)
+        self._bgs_load_thread.start()
+
+    def _on_bgs_destinations(self, faction: str, destinations: list) -> None:
+        self._bgs_destinations = destinations
+        current = self._bgs_dest_combo.currentText()
+        self._bgs_dest_combo.clear()
+        eligible = [d for d in destinations if d["pp_status"] != "no"]
+        for d in eligible:
+            self._bgs_dest_combo.addItem(
+                f"{d['system_name']} — {d['station_name']} ({d['pp_label']}, pad {d['pad_size']})", d,
+            )
+        self._bgs_dest_combo.setCurrentIndex(self._bgs_dest_combo.findText(current))  # -1 = blank
+        if not self._bgs_user_picked and self._route_target_system:
+            idx = self._bgs_dest_combo.findText(f"{self._route_target_system} — ", Qt.MatchFlag.MatchStartsWith)
+            if idx >= 0:
+                self._bgs_dest_combo.setCurrentIndex(idx)
+        if not faction:
+            self._bgs_status_label.setText("No squadron-aligned faction known yet — dock in one of its systems first.")
+        else:
+            self._bgs_status_label.setText(
+                f"{len(eligible)} {faction} station{'s' if len(eligible) != 1 else ''} with market data in "
+                f"{'your power' if self._my_power else 'any power'}'s systems. Pick one and press Search."
+            )
+
+    def _resolve_bgs_destination(self):
+        """(destination dict, None) for the picked station, or (None,
+        reason) -- a typed system name gets checked against both rules."""
+        text = self._bgs_dest_combo.currentText().strip()
+        if not text:
+            return None, "Pick a destination station first."
+        idx = self._bgs_dest_combo.findText(text)
+        if idx >= 0:
+            return self._bgs_dest_combo.itemData(idx), None
+        stations = [d for d in self._bgs_destinations if (d["system_name"] or "").lower() == text.lower()]
+        if not stations:
+            return None, f"{text}: no station controlled by your squadron faction is known there."
+        ok = [d for d in stations if d["pp_status"] != "no"]
+        if not ok:
+            return None, f"{text} is {stations[0]['pp_label']}, not your power."
+        return ok[0], None
+
+    def _start_bgs_search(self) -> None:
+        dest, reason = self._resolve_bgs_destination()
+        if dest is None:
+            self._bgs_status_label.setText(reason)
+            return
+        if not isinstance(self._cargo_capacity, int) or self._cargo_capacity <= 0:
+            self._bgs_status_label.setText("Cargo capacity unknown yet — undock or check the outfitting screen once.")
+            return
+        if dest["x"] is None:
+            self._bgs_status_label.setText(f"No coordinates known for {dest['system_name']} yet.")
+            return
+        near_me = self._bgs_near_combo.currentData() == "me"
+        if near_me and not self._system:
+            self._bgs_status_label.setText("No system location data yet — jump to a system first.")
+            return
+        if self._bgs_thread and self._bgs_thread.isRunning():
+            return
+
+        center = (self._ref_x, self._ref_y, self._ref_z) if near_me else (dest["x"], dest["y"], dest["z"])
+        radius = self._bgs_range_spin.value()
+        self._bgs_search_btn.setEnabled(False)
+        self._bgs_status_label.setText(
+            f"Searching supply for {dest['station_name']} within {radius} ly of "
+            f"{'you' if near_me else dest['system_name']}…"
+        )
+        self._bgs_table.setRowCount(0)
+        self._bgs_loading_spinner.start_over(self)
+
+        self._bgs_worker = _BgsSupplyWorker(
+            self._repo.db.db_path, dest, center, radius, self._cargo_capacity,
+            self._bgs_pad_combo.currentData(), self._bgs_enemy_pp_check.isChecked(),
+            self._my_power, self._edsm_powerplay,
+        )
+        if self._bgs_thread is not None:
+            self._bgs_thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
+        self._bgs_thread = QThread()
+        self._bgs_worker.moveToThread(self._bgs_thread)
+        self._bgs_thread.started.connect(self._bgs_worker.run)
+        self._bgs_worker.finished.connect(self._on_bgs_results)
+        self._bgs_worker.finished.connect(self._bgs_thread.quit)
+        self._bgs_thread.start()
+
+    def _on_bgs_results(self, results: list, error: str, note: str = "") -> None:
+        self._bgs_search_btn.setEnabled(True)
+        self._bgs_loading_spinner.stop()
+        if error:
+            self._bgs_status_label.setText(error)
+            return
+        if not results:
+            self._bgs_status_label.setText(
+                'No profitable supply found in range — try a bigger range or "Buy near: Me".' + note
+            )
+            return
+
+        self._bgs_status_label.setText(
+            f"Found {len(results)} profitable commodit{'y' if len(results) == 1 else 'ies'}." + note
+        )
+        self._bgs_table.setSortingEnabled(False)
+        self._bgs_table.setRowCount(len(results))
+        for row, r in enumerate(results):
+            demand = r["demand"] if isinstance(r["demand"], int) else None
+            age_hours = r.get("data_age_hours")
+            age_text = "—" if age_hours is None else (
+                f"{age_hours:.0f}h" if age_hours < 24 else f"{age_hours / 24:.0f}d"
+            )
+            total_item = _NumericTableWidgetItem(f"{r['total_profit']:,}", float(r["total_profit"]))
+            total_item.setForeground(QColor("#6BCB77"))
+            numeric = [
+                _NumericTableWidgetItem(f"{r['dist_to_dest']:.1f}", r["dist_to_dest"]),
+                _NumericTableWidgetItem(f"{r['buy_price']:,}", float(r["buy_price"])),
+                _NumericTableWidgetItem(f"{r['sell_price']:,}", float(r["sell_price"])),
+                _NumericTableWidgetItem(f"{r['profit_per_unit']:,}", float(r["profit_per_unit"])),
+                _NumericTableWidgetItem(
+                    " ".join(x for x in (r.get("demand_level", ""), "" if demand is None else f"{demand:,}") if x) or "—",
+                    float(demand or 0),
+                ),
+                _NumericTableWidgetItem(f"{r['quantity']:,}", float(r["quantity"])),
+                total_item,
+                QTableWidgetItem("✓" if r["pp_large_profit"] else ""),
+                _NumericTableWidgetItem(age_text, age_hours if age_hours is not None else -1.0),
+            ]
+            self._bgs_table.setItem(row, 0, QTableWidgetItem(r["commodity_display"]))
+            self._bgs_table.setItem(row, 1, QTableWidgetItem(r["buy_station_name"]))
+            self._bgs_table.setItem(row, 2, QTableWidgetItem(r["buy_system_name"]))
+            for col, it in enumerate(numeric, start=3):
+                it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self._bgs_table.setItem(row, col, it)
+        self._bgs_table.setSortingEnabled(True)
+        self._bgs_table.sortItems(9, Qt.SortOrder.DescendingOrder)
+
+    def _on_bgs_cell_clicked(self, row: int, column: int) -> None:
+        if column not in (1, 2):
+            return
+        item = self._bgs_table.item(row, column)
         if item and item.text():
             QApplication.clipboard().setText(item.text())
