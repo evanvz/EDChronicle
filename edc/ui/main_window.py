@@ -82,7 +82,9 @@ from edc.core import service_health
 from edc.core.mission_events import MISSION_EVENT_NAMES
 from edc.core.megaship_scanner import scan_visited_megaships
 from edc.core.faction_refresh_tracker import FactionRefreshTracker
-from edc.core.bgs_tasks import bgs_limits, build_task_views, hud_line, powerplay_mode
+from edc.core.bgs_tasks import (
+    ZYADA_COALITION, allied_powers, bgs_limits, build_task_views, hud_line, is_rival_power, powerplay_mode,
+)
 from edc.core.bgs_tick import fetch_latest_tick
 from edc.ui.panels.engineering_panel import EngineeringPanel
 from edc.audio.handlers.engineering import EngineeringPhrases
@@ -810,6 +812,13 @@ class _CanonnRefreshWorker(QObject):
         poi, poi_error = self._client.get_system_poi(self._system, self._odyssey, self._cmdr)
         challenge, challenge_error = self._client.get_nearest_challenge(self._cmdr, self._x, self._y, self._z)
         self.finished.emit(poi, poi_error, challenge, challenge_error)
+
+
+def _allies_of(win) -> frozenset:
+    """Lower-cased allied power names for the current pledge (getattr-safe
+    so handler tests can pass a minimal fake window)."""
+    return allied_powers((getattr(getattr(win, "state", None), "pp_power", None) or "").strip(),
+                         getattr(getattr(win, "cfg", None), "pp_allied_powers", None))
 
 
 class MainWindow(QMainWindow):
@@ -2379,6 +2388,7 @@ class MainWindow(QMainWindow):
             exo_values=self.exo_values,
             external_intel=self.external_intel,
         )
+        self.engine.allied_powers_config = getattr(self.cfg, "pp_allied_powers", None)
 
         self.system_data_loader = SystemDataLoader(
             state=self.state,
@@ -2553,6 +2563,8 @@ class MainWindow(QMainWindow):
             edsm_powerplay=self.edsm_powerplay,
         )
         self.trade_route_panel = TradeRoutePanel(self.repo, edsm_powerplay=self.edsm_powerplay)
+        self.market_panel.allied_powers_getter = self._allies
+        self.trade_route_panel.allied_powers_getter = self._allies
         self.mining_panel.sell_search_requested.connect(self._on_mining_sell_search_requested)
         self.market_panel.destination_selected.connect(self._on_market_destination_selected)
 
@@ -2755,6 +2767,27 @@ class MainWindow(QMainWindow):
         self.bgs_population_targets_check.toggled.connect(self._on_bgs_population_targets_toggled)
         st.addWidget(self.bgs_population_targets_check)
         st.addWidget(bgs_row_widget_note)
+
+        allies_row = QHBoxLayout()
+        allies_row.addWidget(QLabel("PowerPlay allies:"))
+        configured_allies = getattr(self.cfg, "pp_allied_powers", None)
+        self.allied_powers_edit = QLineEdit(
+            ", ".join(ZYADA_COALITION if configured_allies is None else configured_allies)
+        )
+        self.allied_powers_edit.setPlaceholderText("No allies — every other power is a rival")
+        self.allied_powers_edit.setToolTip(
+            "Comma-separated power names. Allied systems are never shown as Undermining targets, "
+            "allied ships are never called out as enemies, and the trade finders' "
+            "\"Exclude enemy PowerPlay systems\" keeps them. Your own power is ignored if listed."
+        )
+        self.allied_powers_edit.editingFinished.connect(self._on_allied_powers_edited)
+        allies_reset = QPushButton("ZYADA default")
+        allies_reset.setToolTip("Reset to the ZYADA coalition: Zemina Torval, Yuri Grom, "
+                                "Arissa Lavigny-Duval, Denton Patreus, Aisling Duval.")
+        allies_reset.clicked.connect(self._on_allied_powers_reset)
+        allies_row.addWidget(self.allied_powers_edit, 1)
+        allies_row.addWidget(allies_reset)
+        st.addLayout(allies_row)
 
         # --- Database compaction (manual — see _on_compact_db_clicked) ---
         st.addWidget(QLabel("Database maintenance"))
@@ -4300,8 +4333,8 @@ class MainWindow(QMainWindow):
                                 if ctrl and ctrl.lower() == pledged.lower():
                                     self._tts_cnb_announced.add(cnb_key)
                                     return ExplorationPhrases.compromised_nav_beacon_pp_merits("reinforcement")
-                                # Undermining: another power controls this system
-                                if ctrl and ctrl.lower() != pledged.lower():
+                                # Undermining: a rival (not allied) power controls this system
+                                if ctrl and is_rival_power(ctrl, pledged, _allies_of(self)):
                                     self._tts_cnb_announced.add(cnb_key)
                                     return ExplorationPhrases.compromised_nav_beacon_pp_merits("undermining")
                                 # Acquisition merits only apply to a genuinely
@@ -4374,7 +4407,7 @@ class MainWindow(QMainWindow):
                 bounty       = int(evt.get("Bounty") or 0)
                 power        = (evt.get("Power") or "").strip()
                 faction_raw  = evt.get("Faction") or ""
-                is_friendly  = bool(pledged and power and power.lower() == pledged.lower())
+                is_friendly  = bool(pledged and power and not is_rival_power(power, pledged, _allies_of(self)))
                 top_rank     = rank.lower() in ("dangerous", "deadly", "elite")
 
                 # Never call out our own power's ships (law enforcement is
@@ -4404,6 +4437,7 @@ class MainWindow(QMainWindow):
                     ctrl, system_powers, pp_state,
                     pilot_rank=rank, player_combat_rank=player_combat_rank,
                     ship_has_weapons=getattr(state, "ship_has_weapons", None),
+                    allies=_allies_of(self),
                 )
                 if callout_reason is None:
                     return ""
@@ -4584,6 +4618,21 @@ class MainWindow(QMainWindow):
     def _on_bgs_population_targets_toggled(self, checked: bool):
         self.cfg.bgs_population_targets = bool(checked)
         self.cfg_store.save(self.cfg)
+
+    def _allies(self) -> frozenset:
+        return _allies_of(self)
+
+    def _on_allied_powers_edited(self):
+        text = self.allied_powers_edit.text()
+        self.cfg.pp_allied_powers = [p.strip() for p in text.split(",") if p.strip()]
+        self.engine.allied_powers_config = self.cfg.pp_allied_powers
+        self.cfg_store.save(self.cfg)
+
+    def _on_allied_powers_reset(self):
+        self.cfg.pp_allied_powers = None
+        self.engine.allied_powers_config = None
+        self.cfg_store.save(self.cfg)
+        self.allied_powers_edit.setText(", ".join(ZYADA_COALITION))
 
     def _on_always_on_top_changed(self, checked: bool):
         self.cfg.always_on_top = bool(checked)
@@ -4959,8 +5008,7 @@ class MainWindow(QMainWindow):
             # cause" phrasing in a system our pledged power had zero
             # presence in, purely because its power differed from ours).
             if (
-                reason == "enemy" and pledged and power
-                and power.strip().lower() != pledged.strip().lower()
+                reason == "enemy" and is_rival_power(power, pledged, _allies_of(self))
                 and in_my_pp_space(pledged, ctrl, system_powers, pp_state)
             ):
                 return CombatPhrases.powerplay_enemy_scan()
@@ -4992,6 +5040,7 @@ class MainWindow(QMainWindow):
                 pledged, squadron_faction, ctrl, system_powers, pp_state,
                 pilot_rank=contact.get("Rank", ""), player_combat_rank=player_combat_rank,
                 ship_has_weapons=getattr(self.state, "ship_has_weapons", None),
+                allies=_allies_of(self),
             )
             if reason is not None:
                 quip = CombatPhrases.npc_challenge()
@@ -5012,6 +5061,7 @@ class MainWindow(QMainWindow):
                 ctrl, system_powers, pp_state,
                 pilot_rank=pilot_rank, player_combat_rank=player_combat_rank,
                 ship_has_weapons=getattr(self.state, "ship_has_weapons", None),
+                allies=_allies_of(self),
             )
             if reason is not None:
                 quip = _wording(reason, wanted, bounty, power)

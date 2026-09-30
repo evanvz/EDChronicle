@@ -76,6 +76,7 @@ def bgs_limits(cfg) -> dict:
         "bounties": int(getattr(cfg, "bgs_limit_bounties_cr", DEFAULT_LIMITS["bounties"])),
         "exploration": int(getattr(cfg, "bgs_limit_exploration_cr", DEFAULT_LIMITS["exploration"])),
         "by_population": bool(getattr(cfg, "bgs_population_targets", True)),
+        "allied_powers": getattr(cfg, "pp_allied_powers", None),
     }
 
 
@@ -106,6 +107,26 @@ def task_title(task: dict) -> str:
 
 def _same(a, b) -> bool:
     return isinstance(a, str) and isinstance(b, str) and a.strip().lower() == b.strip().lower()
+
+
+# The ZYADA coalition (Zemina Torval, Yuri Grom, Arissa Lavigny-Duval,
+# Denton Patreus, Aisling Duval): squadron rule, never undermine each other.
+ZYADA_COALITION = ("Zemina Torval", "Yuri Grom", "Arissa Lavigny-Duval", "Denton Patreus", "Aisling Duval")
+
+
+def allied_powers(pledged: str, configured=None) -> frozenset:
+    """Lower-cased names of the powers treated as allies. configured is
+    Config.pp_allied_powers: None means the default, i.e. the rest of
+    ZYADA when pledged to one of its powers; a list (even empty) overrides."""
+    if configured is None:
+        configured = ZYADA_COALITION if any(_same(pledged, p) for p in ZYADA_COALITION) else ()
+    return frozenset(p.strip().lower() for p in configured
+                     if isinstance(p, str) and p.strip() and not _same(p, pledged))
+
+
+def is_rival_power(power: str, pledged: str, allies=frozenset()) -> bool:
+    """Another power that is neither ours nor an ally."""
+    return bool(pledged and power and not _same(power, pledged) and power.strip().lower() not in allies)
 
 
 def _missions(n: int) -> str:
@@ -332,16 +353,20 @@ _PP_STATE_MEANINGS = {
 }
 
 
-def powerplay_mode(pledged: str, controlling_power: str, pp_state: str, powers_present=None) -> str:
-    """Our power controls it -> Reinforcement; another power controls it ->
-    Undermining; nobody controls it -> Acquisition, but only if our power is
+def powerplay_mode(pledged: str, controlling_power: str, pp_state: str, powers_present=None,
+                   allies=frozenset()) -> str:
+    """Our power controls it -> Reinforcement; an allied power controls it ->
+    Allied (never undermined); another power controls it -> Undermining;
+    nobody controls it -> Acquisition, but only if our power is
     in range (Frontier: within 20 ly of its Fortified / 30 ly of its
     Stronghold systems) -- the journal shows that as our power appearing in
     the system's Powers list. When that list isn't known, stay permissive."""
     if not pledged:
         return ""
     if controlling_power:
-        return "Reinforcement" if _same(controlling_power, pledged) else "Undermining"
+        if _same(controlling_power, pledged):
+            return "Reinforcement"
+        return "Allied" if controlling_power.strip().lower() in allies else "Undermining"
     if not pp_state:
         return ""
     if powers_present and not any(_same(p, pledged) for p in powers_present):
@@ -354,15 +379,30 @@ def _powerplay_guide(mode: str, pp_state: str, pledged: str, pp_activities) -> s
         return "Pledge to a power to see PowerPlay actions for this system"
     if not mode:
         return "Not a PowerPlay target for your power right now"
+    if mode == "Allied":
+        return "Allied power's system — don't undermine it (coalition)"
     if pp_activities is None:
         return mode
+    # BGS-safe actions first (squadron rule); "joint" ones also move a minor
+    # faction's influence, so only when that faction is being boosted too.
     acts = [a for a in pp_activities.get_actions(mode.lower(), pp_state) if a.merits == "yes"]
     acts.sort(key=lambda a: not any(_same(p, pledged) for p in a.bonus_powers))
-    names = list(dict.fromkeys(a.action for a in acts))[:4]
-    return f"{mode}: {', '.join(names)}" if names else mode
+
+    def names(bgs, n):
+        picked = dict.fromkeys(a.action for a in acts if getattr(a, "bgs", "safe") == bgs)
+        return [f"{x} (cash vouchers elsewhere)" if x == "Bounty Hunting" else x for x in picked][:n]
+
+    safe, joint = names("safe", 4), names("joint", 2)
+    if not safe and not joint:
+        return mode
+    text = f"{mode} — BGS-safe: {', '.join(safe)}" if safe else mode
+    if joint:
+        text += f". Only if also boosting the station's faction: {', '.join(joint)}"
+    return text
 
 
-def _powerplay_view(pp: Optional[dict], pledged: str, merits: int, pp_activities) -> dict:
+def _powerplay_view(pp: Optional[dict], pledged: str, merits: int, pp_activities,
+                    allies=frozenset()) -> dict:
     merits_line = [f"Your merits here this PowerPlay week: {merits:,}"] if pledged else []
     merits_hud = f" · {merits:,} merits this week" if pledged else ""
     if not pp:
@@ -383,7 +423,7 @@ def _powerplay_view(pp: Optional[dict], pledged: str, merits: int, pp_activities
             or max(acquisition, key=acquisition.get)
         reading += f" — {power} {acquisition[power] * 100:.1f}%"
     powers_present = list(pp.get("pp_powers") or []) + list((pp.get("pp_conflict_progress") or {}).keys())
-    mode = powerplay_mode(pledged, pp.get("pp_controlling_power") or "", pp_state, powers_present)
+    mode = powerplay_mode(pledged, pp.get("pp_controlling_power") or "", pp_state, powers_present, allies)
     head = f"{mode}: {reading}" if mode else reading
     lines = [head]
     if pp.get("pp_controlling_power"):
@@ -432,7 +472,8 @@ def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], histor
     elif task_type in ("vote", "fight"):
         view = _conflict_view(task, report, bgs_status, task_type)
     elif task_type == "powerplay":
-        view = _powerplay_view(pp, pledged, merits, pp_activities)
+        view = _powerplay_view(pp, pledged, merits, pp_activities,
+                               allied_powers(pledged, limits.get("allied_powers")))
     else:
         note = task.get("note") or ""
         lines = [note] if note else []

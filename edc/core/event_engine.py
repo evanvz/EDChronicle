@@ -15,6 +15,7 @@ from edc.engine.handlers import exploration, exobio, inventory, powerplay, misc,
 from edc.core.squadron_events import SQUADRON_EVENT_NAMES, apply_squadron_event
 from edc.core.mission_events import MISSION_EVENT_NAMES, apply_mission_event, credit_massacre_kill
 from edc.core.bgs_conflicts import find_squadron_war_enemy, squadron_faction_name, parse_powerplay_conflict_progress
+from edc.core.bgs_tasks import allied_powers, is_rival_power
 from edc.core.res_signals import res_tier_from_signal_name
 from edc.core.ship_loadout import has_any_weapon, has_detailed_surface_scanner
 from edc.core.ring_signals import RING_NAME_RE as _RING_NAME_RE, parse_ring_hotspots
@@ -124,7 +125,7 @@ def _callout_reason(
     pledged: str, squadron_faction: str,
     ctrl: str, system_powers: list, pp_state: str,
     pilot_rank: str = "", player_combat_rank: int | None = None,
-    ship_has_weapons: bool | None = None,
+    ship_has_weapons: bool | None = None, allies=frozenset(),
 ) -> str | None:
     """
     Returns "enemy" or None -- whether a scanned contact is worth a voice
@@ -167,7 +168,8 @@ def _callout_reason(
 
     power_l = (power or "").strip().lower()
     pledged_l = (pledged or "").strip().lower()
-    is_own_power = bool(pledged_l and power_l and power_l == pledged_l)
+    # Allied powers (ZYADA by default) count as our own -- never called out.
+    is_own_power = bool(pledged_l and power_l and (power_l == pledged_l or power_l in allies))
     is_own_faction = bool(squadron_faction and faction and faction == squadron_faction)
     if (is_own_power or is_own_faction) and not (hostile or enemy):
         return None
@@ -181,7 +183,7 @@ def _callout_reason(
     if wanted and _wanted_rank_meets_player(pilot_rank, player_combat_rank):
         return "enemy"
 
-    if in_my_pp_space(pledged, ctrl, system_powers, pp_state) and bool(pledged_l and power_l and power_l != pledged_l):
+    if in_my_pp_space(pledged, ctrl, system_powers, pp_state) and is_rival_power(power, pledged, allies):
         return "enemy"
 
     return None
@@ -221,6 +223,8 @@ class EventEngine:
         self.planet_values = PlanetValueTable.load_from_paths(settings_base / "planet_values.json")
         self.exo_values = ExoValueTable.load_from_paths(settings_base / "exo_values.json")
         self.external_intel = external_intel
+        # Config.pp_allied_powers, set by the main window (None = default).
+        self.allied_powers_config = None
 
     def _apply_external_intel(self, system_name: str | None, system_address: Any = None) -> None:
         # Advisory only; never overrides journal truth.
@@ -842,7 +846,8 @@ class EventEngine:
             rank_ok = bool(rank_name.lower() in {"dangerous", "deadly", "elite"})
             bounty_target = bool(is_wanted and bounty_ok and rank_ok)
 
-            pp_enemy = bool(pledged and target_power and target_power != pledged)
+            pp_enemy = is_rival_power(target_power, pledged,
+                                      allied_powers(pledged, self.allied_powers_config))
 
             # Rules:
             # 1) Hostile is authoritative and unconditional — the game has

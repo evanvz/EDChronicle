@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
 )
 
 from edc.core.station_pads import pad_size_hint
+from edc.core.bgs_tasks import is_rival_power
 from edc.ui import formatting as fmt
 from edc.ui.busy_spinner import BusySpinner
 from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, LABEL_STYLE as _LABEL_STYLE, set_table_empty_message as _empty, set_table_rows as _rows
@@ -282,6 +283,7 @@ class MarketPanel(QWidget):
         self._rare_table = rare_table
         self._guardian_tb_table = guardian_tb_table
         self._edsm_powerplay = edsm_powerplay
+        self.allied_powers_getter = None  # set by the main window
         self._my_power: Optional[str] = None
         self._rare_dialog: Optional["_RareGoodsDialog"] = None
         self._guardian_tb_dialog: Optional["_GuardianTechBrokerDialog"] = None
@@ -1142,7 +1144,9 @@ class MarketPanel(QWidget):
                     controlling_power = self._spansh_power_cache[key] or ""
                 elif key not in self._spansh_power_pending:
                     to_resolve.add(system_name.strip())
-            if controlling_power and controlling_power != self._my_power:
+            getter = getattr(self, "allied_powers_getter", None)
+            allies = getter() if getter else frozenset()
+            if is_rival_power(controlling_power, self._my_power, allies):
                 excluded += 1
             else:
                 kept.append(r)

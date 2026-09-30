@@ -78,3 +78,13 @@ def test_pp_rival_ship_in_contested_system_gets_pp_wording():
     assert quips
     from edc.audio.handlers.combat import CombatPhrases
     assert quips[0] in CombatPhrases.POWERPLAY_ENEMY_SCAN
+
+
+def test_allied_zyada_ship_in_our_system_is_not_called_out():
+    fake_self = _fake_self(pledged="Aisling Duval", ctrl="Aisling Duval", system_powers=["Aisling Duval"], pp_state="Fortified")
+    quips = []
+    fake_self.tts.speak = lambda q, **k: quips.append(q)
+    MainWindow._handle_combat_quip(
+        fake_self, "ShipTargeted", _ship_targeted_event("Denton Patreus", "Clean"),
+    )
+    assert quips == []

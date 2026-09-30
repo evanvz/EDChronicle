@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QSpinBox, QComboBox, QCheckBox, QTableWidget, QTableWidgetItem, QHeaderView, QFrame,
 )
 
+from edc.core.bgs_tasks import is_rival_power
 from edc.core.trade_routes import (
     destination_pp_status, find_point_to_point_trades, find_supply_for_destination, find_trade_loops,
 )
@@ -45,8 +46,9 @@ class _TradeRouteWorker(QObject):
 
     def __init__(self, db_path, x, y, z, radius_ly, cargo_capacity,
                  exclude_enemy_pp, my_power, edsm_powerplay,
-                 faction_only, squadron_faction_name, required_pad):
+                 faction_only, squadron_faction_name, required_pad, allies=frozenset()):
         super().__init__()
+        self._allies = allies
         self._db_path = db_path
         self._x, self._y, self._z = x, y, z
         self._radius_ly = radius_ly
@@ -68,7 +70,7 @@ class _TradeRouteWorker(QObject):
             stations = repo.get_market_snapshot_in_radius(self._x, self._y, self._z, self._radius_ly)
 
             if self._exclude_enemy_pp:
-                stations = _drop_enemy_pp(stations, self._my_power, self._edsm_powerplay)
+                stations = _drop_enemy_pp(stations, self._my_power, self._edsm_powerplay, self._allies)
 
             if self._faction_only and self._squadron_faction_name:
                 stations = {
@@ -106,15 +108,15 @@ def _filter_pad(stations: dict, required_pad) -> dict:
     }
 
 
-def _drop_enemy_pp(stations: dict, my_power, edsm_powerplay) -> dict:
-    """Drops stations in systems EDSM says another power controls."""
+def _drop_enemy_pp(stations: dict, my_power, edsm_powerplay, allies=frozenset()) -> dict:
+    """Drops stations in systems EDSM says a rival (not allied) power controls."""
     if not my_power or not edsm_powerplay:
         return stations
 
     def is_enemy(system_name):
         controller = edsm_powerplay.get_controller_by_name(system_name)
         power = (controller or {}).get("power") or ""
-        return bool(power) and power != my_power
+        return is_rival_power(power, my_power, allies)
 
     return {mid: s for mid, s in stations.items() if not is_enemy(s["system_name"])}
 
@@ -125,8 +127,9 @@ class _BgsSupplyWorker(QObject):
     finished = pyqtSignal(list, str, str)  # (results, error, note)
 
     def __init__(self, db_path, dest, center_xyz, radius_ly, cargo_capacity,
-                 required_pad, exclude_enemy_pp, my_power, edsm_powerplay):
+                 required_pad, exclude_enemy_pp, my_power, edsm_powerplay, allies=frozenset()):
         super().__init__()
+        self._allies = allies
         self._db_path = db_path
         self._dest = dest
         self._center = center_xyz
@@ -165,7 +168,7 @@ class _BgsSupplyWorker(QObject):
             supply = repo.get_market_snapshot_in_radius(*self._center, self._radius_ly)
             supply = _filter_pad(supply, self._required_pad)
             if self._exclude_enemy_pp:
-                supply = _drop_enemy_pp(supply, self._my_power, self._edsm_powerplay)
+                supply = _drop_enemy_pp(supply, self._my_power, self._edsm_powerplay, self._allies)
             results = find_supply_for_destination(
                 dest_station, (dest["x"], dest["y"], dest["z"]), supply,
                 self._cargo_capacity, dest_market_id=dest["market_id"],
@@ -282,6 +285,7 @@ class TradeRoutePanel(QWidget):
         self._p2p_thread: Optional[QThread] = None
         self._p2p_worker: Optional[_PointToPointWorker] = None
         self._bgs_thread: Optional[QThread] = None
+        self.allied_powers_getter = None  # set by the main window
         self._bgs_worker: Optional[_BgsSupplyWorker] = None
         self._bgs_load_thread: Optional[QThread] = None
         self._bgs_load_worker: Optional[_BgsDestinationsWorker] = None
@@ -543,6 +547,9 @@ class TradeRoutePanel(QWidget):
             if idx >= 0:
                 self._bgs_dest_combo.setCurrentIndex(idx)
 
+    def _get_allies(self) -> frozenset:
+        return self.allied_powers_getter() if self.allied_powers_getter else frozenset()
+
     def _start_search(self) -> None:
         if not self._system:
             self._status_label.setText("No system location data yet — jump to a system first.")
@@ -576,7 +583,7 @@ class TradeRoutePanel(QWidget):
             self._repo.db.db_path, self._ref_x, self._ref_y, self._ref_z, radius,
             self._cargo_capacity, self._exclude_enemy_pp_check.isChecked(), self._my_power,
             self._edsm_powerplay, self._faction_only_check.isChecked(), squadron_faction_name,
-            self._pad_filter_combo.currentData(),
+            self._pad_filter_combo.currentData(), allies=self._get_allies(),
         )
         if self._thread is not None:
             self._thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
@@ -950,7 +957,7 @@ class TradeRoutePanel(QWidget):
         self._bgs_worker = _BgsSupplyWorker(
             self._repo.db.db_path, dest, center, radius, self._cargo_capacity,
             self._bgs_pad_combo.currentData(), self._bgs_enemy_pp_check.isChecked(),
-            self._my_power, self._edsm_powerplay,
+            self._my_power, self._edsm_powerplay, allies=self._get_allies(),
         )
         if self._bgs_thread is not None:
             self._bgs_thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring

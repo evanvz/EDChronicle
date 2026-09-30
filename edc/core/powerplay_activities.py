@@ -22,6 +22,7 @@ class PowerPlayActivity:
     merits:        str = "yes"   # "yes" | "no" | "suspended"
     platform:      str = "ED"    # "ED" | "Odyssey"
     notes:         str = ""
+    bgs:           str = "safe"  # "safe" | "joint" (also moves a minor faction's influence)
 
 
 class PowerPlayActivityTable:
@@ -53,6 +54,7 @@ class PowerPlayActivityTable:
                             merits=str(a.get("merits", "yes")),
                             platform=str(a.get("platform", "ED")),
                             notes=str(a.get("notes", "")),
+                            bgs=str(a.get("bgs", "safe")),
                         ))
                     types[sys_type] = acts
 

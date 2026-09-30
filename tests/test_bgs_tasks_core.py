@@ -39,7 +39,7 @@ def _conflict(war_type, f1, d1, f2, d2, status="active"):
 def test_bgs_limits_reads_cfg():
     cfg = SimpleNamespace(bgs_limit_tier_score=30, bgs_limit_bounties_cr=10_000_000, bgs_limit_exploration_cr=5_000_000)
     assert bgs_limits(cfg) == {"tier_score": 30, "bounties": 10_000_000, "exploration": 5_000_000,
-                               "by_population": True}
+                               "by_population": True, "allied_powers": None}
 
 
 def test_validate_task_input():

@@ -60,6 +60,10 @@ class AppConfig:
     # Boost targets from SINC's per-population table when the system's
     # population is known; the three limits above are the fallback.
     bgs_population_targets: bool = True
+    # PowerPlay powers treated as allies (never Undermining targets, never
+    # "enemy" callouts). None = default: the rest of the ZYADA coalition
+    # when pledged to one of its powers (edc.core.bgs_tasks.allied_powers).
+    pp_allied_powers: Optional[list] = None
 
     def __post_init__(self):
         if self.tts_events is None:
@@ -205,6 +209,10 @@ class ConfigStore:
                 bgs_limit_bounties_cr=int(data.get("bgs_limit_bounties_cr", 20_000_000) or 20_000_000),
                 bgs_limit_exploration_cr=int(data.get("bgs_limit_exploration_cr", 20_000_000) or 20_000_000),
                 bgs_population_targets=bool(data.get("bgs_population_targets", True)),
+                pp_allied_powers=(
+                    [str(p) for p in data["pp_allied_powers"]]
+                    if isinstance(data.get("pp_allied_powers"), list) else None
+                ),
             )
             if isinstance(data.get("tts_events"), dict):
                 cfg.tts_events.update(data["tts_events"])
@@ -245,6 +253,7 @@ class ConfigStore:
                         "bgs_limit_bounties_cr": int(getattr(cfg, "bgs_limit_bounties_cr", 20_000_000) or 20_000_000),
                         "bgs_limit_exploration_cr": int(getattr(cfg, "bgs_limit_exploration_cr", 20_000_000) or 20_000_000),
                         "bgs_population_targets": bool(getattr(cfg, "bgs_population_targets", True)),
+                        "pp_allied_powers": getattr(cfg, "pp_allied_powers", None),
                     },
                     indent=2,
                 ),

@@ -17,8 +17,8 @@ def _task(task_type, faction=None, opponent=None, note=None, address=12345, task
             "created_at": "2026-09-26T00:00:00Z"}
 
 
-def _act(action, bonus=(), merits="yes"):
-    return SimpleNamespace(action=action, bonus_powers=list(bonus), merits=merits)
+def _act(action, bonus=(), merits="yes", bgs="safe"):
+    return SimpleNamespace(action=action, bonus_powers=list(bonus), merits=merits, bgs=bgs)
 
 
 class _Table:
@@ -71,8 +71,8 @@ def test_pledged_card_shows_mode_merits_and_top_activities_bonus_first():
     assert view["lines"][0] == "Acquisition: Unoccupied (no power yet) — 78.9%"
     assert "Your merits here this PowerPlay week: 340" in view["lines"]
     assert view["hud"] == "PowerPlay — Acquisition: Unoccupied (no power yet) — 78.9% · 340 merits this week"
-    assert view["guide"] == ("Acquisition: Transport Powerplay Commodities, Bounty Hunting, "
-                             "Power Kills, Holoscreen Hacking")
+    assert view["guide"] == ("Acquisition — BGS-safe: Transport Powerplay Commodities, "
+                             "Bounty Hunting (cash vouchers elsewhere), Power Kills, Holoscreen Hacking")
     assert table.calls == [("acquisition", "Unoccupied")]
 
 
@@ -151,3 +151,37 @@ def test_single_mission_is_singular():
     report = {"2026-09-26": {"Tucanae": {"EUW": _entry(count=1, weighted=3)}}}
     view = build_task_view(_task("boost", "EUW"), report, None, [], None, LIMITS)
     assert view["lines"][0] == "Tier score 3 / 25 (1 mission)"
+
+
+# --- BGS-safe first; joint BGS/PP actions only when also boosting ---
+
+def test_guide_lists_bgs_safe_first_and_flags_joint_actions():
+    table = _Table([_act("Sell for Large Profits", bonus=["Aisling Duval"], bgs="joint"),
+                    _act("Scan Datalinks"), _act("Sell Rare Goods", bgs="joint")])
+    view = build_task_view(_task("powerplay"), {}, None, [], _PP, LIMITS, pledged="Aisling Duval", pp_activities=table)
+    assert view["guide"] == ("Acquisition — BGS-safe: Scan Datalinks. Only if also boosting the station's "
+                             "faction: Sell for Large Profits, Sell Rare Goods")
+
+
+# --- ZYADA allies: never Undermining ---
+
+def test_allied_power_system_is_never_undermining():
+    from edc.core.bgs_tasks import allied_powers
+    allies = allied_powers("Aisling Duval")
+    assert allies == {"zemina torval", "yuri grom", "arissa lavigny-duval", "denton patreus"}
+    assert powerplay_mode("Aisling Duval", "Denton Patreus", "Fortified", allies=allies) == "Allied"
+    assert powerplay_mode("Aisling Duval", "Zachary Hudson", "Fortified", allies=allies) == "Undermining"
+
+
+def test_allies_default_only_for_zyada_pledges_and_config_overrides():
+    from edc.core.bgs_tasks import allied_powers
+    assert allied_powers("Zachary Hudson") == frozenset()
+    assert allied_powers("Aisling Duval", []) == frozenset()
+    assert allied_powers("Aisling Duval", ["Li Yong-Rui", "Aisling Duval"]) == {"li yong-rui"}
+
+
+def test_allied_card_says_do_not_undermine():
+    pp = dict(_PP, pp_controlling_power="Arissa Lavigny-Duval", pp_state="Stronghold")
+    view = build_task_view(_task("powerplay"), {}, None, [], pp, LIMITS, pledged="Aisling Duval")
+    assert view["lines"][0].startswith("Allied:")
+    assert view["guide"] == "Allied power's system — don't undermine it (coalition)"
