@@ -139,3 +139,25 @@ def test_trade_purchases_show_on_boost_and_count_for_votes():
               "faction_states": [], "data_timestamp": "2026-09-26T12:00:00Z"}
     vote = build_task_view(_task("vote", "A", "B"), report, status, [], None, LIMITS)
     assert vote["status"] == "Done this tick"
+
+
+# --- squadron guide: bounties at most 10M per cash-in ---
+
+def _bounty_report(total, biggest):
+    entry = {"missions": {"count": 0, "weighted": 0}, "combat_bonds_total": 0, "bounties_total": total,
+             "bounties_max_cashin": biggest, "cz_kills": {},
+             "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 0, "purchase": 0}}
+    return {"2026-09-30": {"Tucanae": {"A": entry}}}
+
+
+def test_big_single_bounty_cashin_warns():
+    task = dict(_task("boost", "A"), system_name="Tucanae")
+    view = build_task_view(task, _bounty_report(12_000_000, 12_000_000), None, [], None, LIMITS)
+    assert any("single bounty cash-in" in w for w in view["warnings"])
+    view = build_task_view(task, _bounty_report(18_000_000, 9_000_000), None, [], None, LIMITS)
+    assert not any("single bounty cash-in" in w for w in view["warnings"])
+
+
+def test_war_guide_follows_squadron_priority():
+    fight = build_task_view(_task("fight", "A", "B"), {}, None, [], None, LIMITS)["guide"]
+    assert "secondary objectives" in fight and "massacre missions" in fight and "10M per cash-in" in fight

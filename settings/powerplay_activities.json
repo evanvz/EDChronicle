@@ -113,7 +113,7 @@
           "ethos": "Covert",
           "bonus_powers": ["Arissa Lavigny-Duval", "Archon Delaine", "Zemina Torval"],
           "merits": "yes", "platform": "ED", "bgs": "safe",
-          "notes": "At megaships"
+          "notes": "At megaships; Squadron notes: once per week per megaship (unconfirmed)"
         },
         {
           "action": "Scan Ships and Wakes",
@@ -200,7 +200,7 @@
             "Nakato Kaine", "Pranav Antal", "Yuri Grom", "Zemina Torval"
           ],
           "contested_only": false, "merits": "yes", "platform": "ED", "bgs": "safe",
-          "notes": "From PC in Supporting System to PC in AS"
+          "notes": "From PC in Supporting System to PC in AS; 30-minute cooldown on collecting media materials (squadron notes)"
         },
         {
           "action": "Holoscreen Hacking",
@@ -213,7 +213,7 @@
           "ethos": "Covert",
           "bonus_powers": ["Jerome Archer", "Pranav Antal", "Yuri Grom"],
           "contested_only": false, "merits": "yes", "platform": "ED", "bgs": "safe",
-          "notes": "At megaships"
+          "notes": "At megaships; Squadron notes: once per week per megaship (unconfirmed)"
         },
         {
           "action": "Retrieve Specific Goods",
@@ -346,7 +346,7 @@
           "ethos": "Covert",
           "bonus_powers": ["Denton Patreus", "Felicia Winters", "Jerome Archer", "Yuri Grom"],
           "merits": "yes", "platform": "ED", "bgs": "safe",
-          "notes": "At megaships"
+          "notes": "At megaships; Squadron notes: once per week per megaship (unconfirmed)"
         },
         {
           "action": "Retrieve Specific Goods",

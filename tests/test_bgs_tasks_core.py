@@ -66,7 +66,8 @@ def test_faction_activity_sums_across_days_case_insensitively():
     }
     act = faction_activity(report, "ekono", "Elite United Worlds")
     assert act == {"missions": 3, "tier_score": 4, "bounties": 1_000, "combat_bonds": 0, "cz_kills": 2, "cz_value": 3.2,
-                   "trade_profit": 600_000, "trade_bought": 0, "exploration": 0, "exobiology": 0}
+                   "trade_profit": 600_000, "trade_bought": 0, "exploration": 0, "exobiology": 0,
+                   "bounty_max_cashin": 0}
 
 
 def test_find_conflict_orients_to_our_faction():

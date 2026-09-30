@@ -42,6 +42,10 @@ TYPE_COLORS = {
 }
 
 # Squadron guidance defaults (Frontier publishes no per-stream limits).
+# Squadron BGS guide: bounties at most 10M per cash-in (20M total). SINC has
+# no per-cash-in rule, so this is squad guidance only.
+BOUNTY_CASHIN_LIMIT = 10_000_000
+
 DEFAULT_LIMITS = {"tier_score": 25, "bounties": 20_000_000, "exploration": 20_000_000}
 
 _LIMITED_STREAMS = (("tier_score", "Tier score"), ("bounties", "Bounties"), ("exploration", "Exploration"),
@@ -147,7 +151,7 @@ def faction_activity(report: dict, system_name: str, faction_name: str) -> dict:
     """This tick's activity for one faction in one system, summed across
     every day in the session report. Names match case-insensitively."""
     total = {k: 0 for k in ("missions", "tier_score", "bounties", "combat_bonds", "cz_kills", "cz_value",
-                            "trade_profit", "trade_bought", "exploration", "exobiology")}
+                            "trade_profit", "trade_bought", "exploration", "exobiology", "bounty_max_cashin")}
     for systems in report.values():
         for sys_name, factions in systems.items():
             if not _same(sys_name, system_name):
@@ -158,6 +162,7 @@ def faction_activity(report: dict, system_name: str, faction_name: str) -> dict:
                 total["missions"] += e["missions"]["count"]
                 total["tier_score"] += e["missions"]["weighted"]
                 total["bounties"] += e.get("bounties_total", 0)
+                total["bounty_max_cashin"] = max(total["bounty_max_cashin"], e.get("bounties_max_cashin", 0))
                 total["combat_bonds"] += e["combat_bonds_total"]
                 total["cz_kills"] += sum(e["cz_kills"].values())
                 total["cz_value"] += sum(n * _CZ_WEIGHTS.get(k, 0) for k, n in e["cz_kills"].items())
@@ -266,6 +271,9 @@ def _boost_view(task: dict, report: dict, history: list, limits: dict, today: Op
         f"{label} past the daily target — diminishing returns"
         for key, label in _LIMITED_STREAMS if limits.get(key, 0) > 0 and act[key] > limits[key]
     ]
+    if act["bounty_max_cashin"] > BOUNTY_CASHIN_LIMIT:
+        warnings.append(f"A single bounty cash-in of {_cr(act['bounty_max_cashin'])} — squadron guide: "
+                        f"keep each cash-in at {_cr(BOUNTY_CASHIN_LIMIT)} or less")
     retreat_line, retreat_warnings = _retreat_countdown(rows, today or datetime.now(timezone.utc).date())
     if retreat_line:
         lines.append(retreat_line)
@@ -446,8 +454,10 @@ def _bgs_guide(task: dict, limits: dict, population_basis: str = "") -> str:
     if task_type == "vote":
         return (f"Complete election missions for {faction} — they decide each day. Trade, exploration data "
                 f"and economic missions only break ties. Combat doesn't count in elections.")
-    return (f"Win the most conflict zones for {faction} each day — low space CZs are the most efficient. "
-            f"Combat bonds, bounties and combat missions only break ties. Don't cash bonds for {opponent}.")
+    return (f"Win the most conflict zones for {faction} each day (do the CZ secondary objectives too) — "
+            f"low space CZs are the most efficient. Combat bonds (cash about every 10M, in this system), "
+            f"massacre missions and bounties (10M per cash-in) only break ties; other actions don't count. "
+            f"Don't cash bonds for {opponent}.")
 
 
 def _population_basis(targets: Optional[dict], population) -> str:

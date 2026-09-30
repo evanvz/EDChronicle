@@ -2932,6 +2932,7 @@ class Repository:
                 },
                 "combat_bonds_total": 0,
                 "bounties_total": 0,
+                "bounties_max_cashin": 0,
                 "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 0},
                 "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 0, "purchase": 0},
             })
@@ -2979,6 +2980,7 @@ class Repository:
             if entry is None:
                 continue
             entry["bounties_total"] += r["amount"]
+            entry["bounties_max_cashin"] = max(entry["bounties_max_cashin"], r["amount"])
 
         for r in self.get_faction_cz_kills_since(since):
             entry = _bucket(r["earned_at"][:10], r["system_address"], r["faction_name"])
