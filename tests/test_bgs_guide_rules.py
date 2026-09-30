@@ -160,4 +160,5 @@ def test_big_single_bounty_cashin_warns():
 
 def test_war_guide_follows_squadron_priority():
     fight = build_task_view(_task("fight", "A", "B"), {}, None, [], None, LIMITS)["guide"]
-    assert "secondary objectives" in fight and "massacre missions" in fight and "10M per cash-in" in fight
+    assert "secondary objectives" in fight and "massacre missions" in fight
+    assert "squad advice: about every 10M" in fight  # squad-only, labelled as such

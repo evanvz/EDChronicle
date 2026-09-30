@@ -42,8 +42,9 @@ TYPE_COLORS = {
 }
 
 # Squadron guidance defaults (Frontier publishes no per-stream limits).
-# Squadron BGS guide: bounties at most 10M per cash-in (20M total). SINC has
-# no per-cash-in rule, so this is squad guidance only.
+# Squadron BGS guide (2023): bounties at most 10M per cash-in (20M total).
+# Unconfirmed: SINC 2024 has no per-cash-in rule, and says transaction
+# chunking no longer matters for trade.
 BOUNTY_CASHIN_LIMIT = 10_000_000
 
 DEFAULT_LIMITS = {"tier_score": 25, "bounties": 20_000_000, "exploration": 20_000_000}
@@ -273,7 +274,7 @@ def _boost_view(task: dict, report: dict, history: list, limits: dict, today: Op
     ]
     if act["bounty_max_cashin"] > BOUNTY_CASHIN_LIMIT:
         warnings.append(f"A single bounty cash-in of {_cr(act['bounty_max_cashin'])} — squadron guide: "
-                        f"keep each cash-in at {_cr(BOUNTY_CASHIN_LIMIT)} or less")
+                        f"keep each cash-in at {_cr(BOUNTY_CASHIN_LIMIT)} or less (squad guidance, unconfirmed)")
     retreat_line, retreat_warnings = _retreat_countdown(rows, today or datetime.now(timezone.utc).date())
     if retreat_line:
         lines.append(retreat_line)
@@ -455,8 +456,8 @@ def _bgs_guide(task: dict, limits: dict, population_basis: str = "") -> str:
         return (f"Complete election missions for {faction} — they decide each day. Trade, exploration data "
                 f"and economic missions only break ties. Combat doesn't count in elections.")
     return (f"Win the most conflict zones for {faction} each day (do the CZ secondary objectives too) — "
-            f"low space CZs are the most efficient. Combat bonds (cash about every 10M, in this system), "
-            f"massacre missions and bounties (10M per cash-in) only break ties; other actions don't count. "
+            f"low space CZs are the most efficient. Combat bonds (cashed in this system; squad advice: about every 10M), "
+            f"massacre missions and bounties only break ties; other actions don't count. "
             f"Don't cash bonds for {opponent}.")
 
 

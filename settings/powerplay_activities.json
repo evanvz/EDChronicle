@@ -47,7 +47,7 @@
           "ethos": "Finance",
           "bonus_powers": ["Edmund Mahon", "Felicia Winters", "Zemina Torval"],
           "merits": "yes", "platform": "ED", "bgs": "joint",
-          "notes": "Must mine and sell in same RS"
+          "notes": "Must mine and sell in same RS; BGS effect disputed: SINC says mined sales don't move influence, squad treats them as BGS trade"
         },
         {
           "action": "Sell Rare Goods",
@@ -182,7 +182,7 @@
           "ethos": "Finance",
           "bonus_powers": ["Edmund Mahon", "Felicia Winters", "Nakato Kaine", "Zemina Torval"],
           "contested_only": false, "merits": "yes", "platform": "ED", "bgs": "joint",
-          "notes": "Mine in Supporting System, sell in AS"
+          "notes": "Mine in Supporting System, sell in AS; BGS effect disputed: SINC says mined sales don't move influence, squad treats them as BGS trade"
         },
         {
           "action": "Sell Rare Goods",
@@ -200,7 +200,7 @@
             "Nakato Kaine", "Pranav Antal", "Yuri Grom", "Zemina Torval"
           ],
           "contested_only": false, "merits": "yes", "platform": "ED", "bgs": "safe",
-          "notes": "From PC in Supporting System to PC in AS; 30-minute cooldown on collecting media materials (squadron notes)"
+          "notes": "From PC in Supporting System to PC in AS; squadron notes: 30-minute cooldown on collecting media materials (unconfirmed)"
         },
         {
           "action": "Holoscreen Hacking",
@@ -296,7 +296,7 @@
           "ethos": "Finance",
           "bonus_powers": [],
           "merits": "yes", "platform": "ED", "bgs": "joint",
-          "notes": "Mine and sell in same US"
+          "notes": "Mine and sell in same US; BGS effect disputed: SINC says mined sales don't move influence, squad treats them as BGS trade"
         },
         {
           "action": "Transport Powerplay Commodities",
