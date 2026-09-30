@@ -2770,24 +2770,31 @@ class MainWindow(QMainWindow):
 
         allies_row = QHBoxLayout()
         allies_row.addWidget(QLabel("PowerPlay allies:"))
-        configured_allies = getattr(self.cfg, "pp_allied_powers", None)
-        self.allied_powers_edit = QLineEdit(
-            ", ".join(ZYADA_COALITION if configured_allies is None else configured_allies)
-        )
+        self.allied_powers_edit = QLineEdit()
         self.allied_powers_edit.setPlaceholderText("No allies — every other power is a rival")
         self.allied_powers_edit.setToolTip(
             "Comma-separated power names. Allied systems are never shown as Undermining targets, "
             "allied ships are never called out as enemies, and the trade finders' "
             "\"Exclude enemy PowerPlay systems\" keeps them. Your own power is ignored if listed."
         )
+        # Only a real edit saves a custom list -- editingFinished also fires
+        # on plain focus-out, which must not freeze the automatic default.
+        self._allies_edit_dirty = False
+        self.allied_powers_edit.textEdited.connect(lambda _t: setattr(self, "_allies_edit_dirty", True))
         self.allied_powers_edit.editingFinished.connect(self._on_allied_powers_edited)
-        allies_reset = QPushButton("ZYADA default")
-        allies_reset.setToolTip("Reset to the ZYADA coalition: Zemina Torval, Yuri Grom, "
-                                "Arissa Lavigny-Duval, Denton Patreus, Aisling Duval.")
+        self.allied_powers_mode_label = QLabel()
+        self.allied_powers_mode_label.setStyleSheet("color:#888888; font-size:11px;")
+        allies_reset = QPushButton("Automatic (ZYADA)")
+        allies_reset.setToolTip("Follow your pledge: when pledged to a ZYADA power (Zemina Torval, Yuri Grom, "
+                                "Arissa Lavigny-Duval, Denton Patreus, Aisling Duval), the other four are allies; "
+                                "otherwise none.")
         allies_reset.clicked.connect(self._on_allied_powers_reset)
         allies_row.addWidget(self.allied_powers_edit, 1)
+        allies_row.addWidget(self.allied_powers_mode_label)
         allies_row.addWidget(allies_reset)
         st.addLayout(allies_row)
+        self._allies_field_pledge = None
+        self._refresh_allies_field()
 
         # --- Database compaction (manual — see _on_compact_db_clicked) ---
         st.addWidget(QLabel("Database maintenance"))
@@ -4622,17 +4629,35 @@ class MainWindow(QMainWindow):
     def _allies(self) -> frozenset:
         return _allies_of(self)
 
+    def _refresh_allies_field(self):
+        """Shows the allies actually in effect for the current pledge."""
+        pledged = (getattr(self.state, "pp_power", None) or "").strip()
+        self._allies_field_pledge = pledged
+        configured = getattr(self.cfg, "pp_allied_powers", None)
+        if configured is None:
+            allies = _allies_of(self)
+            names = [p for p in ZYADA_COALITION if p.lower() in allies]
+            self.allied_powers_mode_label.setText("(automatic — follows your pledge)")
+        else:
+            names = configured
+            self.allied_powers_mode_label.setText("(custom list)")
+        self.allied_powers_edit.setText(", ".join(names))
+        self._allies_edit_dirty = False
+
     def _on_allied_powers_edited(self):
+        if not self._allies_edit_dirty:
+            return
         text = self.allied_powers_edit.text()
         self.cfg.pp_allied_powers = [p.strip() for p in text.split(",") if p.strip()]
         self.engine.allied_powers_config = self.cfg.pp_allied_powers
         self.cfg_store.save(self.cfg)
+        self._refresh_allies_field()
 
     def _on_allied_powers_reset(self):
         self.cfg.pp_allied_powers = None
         self.engine.allied_powers_config = None
         self.cfg_store.save(self.cfg)
-        self.allied_powers_edit.setText(", ".join(ZYADA_COALITION))
+        self._refresh_allies_field()
 
     def _on_always_on_top_changed(self, checked: bool):
         self.cfg.always_on_top = bool(checked)
@@ -5308,6 +5333,10 @@ class MainWindow(QMainWindow):
         return f" — ⚠ {war[0]}: {html.escape(war[1])} vs {html.escape(war[2])}, expect hostiles"
 
     def _refresh_hud(self):
+        # Keep Settings' allies field in step with a pledge change (cheap check).
+        if (getattr(self.state, "pp_power", None) or "").strip() != getattr(self, "_allies_field_pledge", None) \
+                and hasattr(self, "allied_powers_edit") and not self.allied_powers_edit.hasFocus():
+            self._refresh_allies_field()
         parts = []
         lines = []
         self._pp_action_text = ""
