@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -44,6 +45,9 @@ class EddnPowerPlayCache:
     def __init__(self, settings_dir: Path, filename: str = "eddn_powerplay_cache.json"):
         self.path = Path(settings_dir) / filename
         self._systems: Dict[str, List[Dict[str, Any]]] = {}
+        # save() runs on a background thread while ingest() mutates on the
+        # main thread; this keeps json.dumps from iterating a changing dict.
+        self._lock = threading.Lock()
         self._load()
 
     def _load(self) -> None:
@@ -60,10 +64,11 @@ class EddnPowerPlayCache:
     def save(self) -> None:
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            self.path.write_text(
-                json.dumps({"systems": self._systems}, ensure_ascii=False),
-                encoding="utf-8",
-            )
+            with self._lock:
+                self.path.write_text(
+                    json.dumps({"systems": self._systems}, ensure_ascii=False),
+                    encoding="utf-8",
+                )
         except Exception:
             log.exception("Failed to write eddn_powerplay_cache.json")
 
@@ -91,11 +96,12 @@ class EddnPowerPlayCache:
     def ingest(self, id64: int, power: str, power_state: str, timestamp: str) -> None:
         """Called from the main thread in response to the listener's system_seen signal."""
         key = str(id64)
-        rows = self._systems.setdefault(key, [])
-        for row in rows:
-            if row.get("power") == power:
-                if (timestamp or "") > (row.get("date") or ""):
-                    row["power_state"] = power_state
-                    row["date"] = timestamp
-                return
-        rows.append({"power": power, "power_state": power_state, "date": timestamp})
+        with self._lock:
+            rows = self._systems.setdefault(key, [])
+            for row in rows:
+                if row.get("power") == power:
+                    if (timestamp or "") > (row.get("date") or ""):
+                        row["power_state"] = power_state
+                        row["date"] = timestamp
+                    return
+            rows.append({"power": power, "power_state": power_state, "date": timestamp})

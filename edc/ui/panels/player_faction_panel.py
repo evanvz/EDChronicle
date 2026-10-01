@@ -513,6 +513,35 @@ class _CsvImportWorker(QObject):
         self.finished.emit(imported, fallback_used, not_found, cancelled_at, blocked_rows)
 
 
+class _OverviewLoadWorker(QObject):
+    """Loads get_player_faction_overview() off the UI thread. It's ~95ms
+    alone, but measured 526-584ms in the running app (waiting on EDDN
+    writes), every 20 minutes -- a visible UI freeze (2026-10-01 log)."""
+    finished = pyqtSignal(object)  # overview dict or None
+
+    def __init__(self, db_path):
+        super().__init__()
+        self._db_path = db_path
+
+    def run(self):
+        from persistence.database import Database
+        from persistence.repository import Repository
+
+        overview = None
+        db = Database(self._db_path)
+        try:
+            _t0 = time.perf_counter()
+            overview = Repository(db).get_player_faction_overview()
+            _elapsed_ms = (time.perf_counter() - _t0) * 1000
+            if _elapsed_ms > 500:
+                log.warning("get_player_faction_overview() took %.0fms in the background", _elapsed_ms)
+        except Exception:
+            log.exception("Failed to load player faction overview")
+        finally:
+            db.close()
+        self.finished.emit(overview)
+
+
 class _FactionRefreshWorker(QObject):
     """
     Re-queries EDSM for every currently tracked system, saving EVERY
@@ -694,6 +723,9 @@ class PlayerFactionPanel(QWidget):
         self._last_stations_system: Optional[str] = None
         self._last_local_stations: List[dict] = []
         self._station_thread: Optional[QThread] = None
+        self._overview_thread: Optional[QThread] = None
+        self._overview_worker: Optional[_OverviewLoadWorker] = None
+        self._overview_reload_pending = False
         self._station_worker: Optional[_EdsmStationLookupWorker] = None
         self._station_lookup_system: Optional[str] = None
         self._csv_stale_flash_on: bool = False
@@ -1115,26 +1147,38 @@ class PlayerFactionPanel(QWidget):
         self._bgs_contribution_label.setVisible(True)
 
     def refresh(self, state=None) -> None:
+        """Loads the overview on a background thread, then renders it.
+        Refreshes asked for while a load runs are coalesced into one more
+        load afterwards, using the latest state."""
         self._last_state = state
-        try:
-            _t0 = time.perf_counter()
-            overview = self._repo.get_player_faction_overview()
-            _elapsed_ms = (time.perf_counter() - _t0) * 1000
-            # Diagnostic: get_player_faction_overview() has a correlated
-            # MAX(snapshot_date) subquery plus a per-system Python loop
-            # calling _war_corroborated()/_election_corroborated() (each
-            # likely its own query) -- a real N+1 pattern for a faction
-            # tracked across many systems. This runs synchronously on
-            # whichever thread calls refresh() (the UI thread, per every
-            # current caller) on a 20-min timer plus every mission-driven
-            # refresh. No measurement existed to confirm whether it's
-            # actually slow enough to matter before "fixing" it.
-            if _elapsed_ms > 500:
-                log.warning("get_player_faction_overview() took %.0fms", _elapsed_ms)
-        except Exception:
-            log.exception("Failed to load player faction overview")
-            overview = None
+        if self._overview_thread is not None and self._overview_thread.isRunning():
+            self._overview_reload_pending = True
+            return
+        self._overview_worker = _OverviewLoadWorker(self._repo.db.db_path)
+        if self._overview_thread is not None:
+            self._overview_thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
+        self._overview_thread = QThread()
+        self._overview_worker.moveToThread(self._overview_thread)
+        self._overview_thread.started.connect(self._overview_worker.run)
+        self._overview_worker.finished.connect(self._on_overview_loaded)
+        self._overview_worker.finished.connect(self._overview_thread.quit)
+        # The coalesced reload starts only once the thread has really
+        # stopped -- waiting on it from _on_overview_loaded would deadlock
+        # (its queued quit() hasn't run yet at that point).
+        self._overview_thread.finished.connect(self._on_overview_thread_finished)
+        self._overview_thread.start()
 
+    def _on_overview_loaded(self, overview) -> None:
+        if self._overview_reload_pending:
+            return  # superseded; the reload after the thread stops renders fresh data
+        self._apply_overview(overview, self._last_state)
+
+    def _on_overview_thread_finished(self) -> None:
+        if self._overview_reload_pending:
+            self._overview_reload_pending = False
+            self.refresh(self._last_state)
+
+    def _apply_overview(self, overview, state) -> None:
         if not overview:
             self._faction_name = None
             self._summary_label.setText(

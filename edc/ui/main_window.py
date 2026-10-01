@@ -6,6 +6,7 @@ import html
 import json
 import logging
 import sqlite3
+import threading
 import time
 from datetime import date
 from PyQt6.QtWidgets import (
@@ -3697,18 +3698,25 @@ class MainWindow(QMainWindow):
         super().closeEvent(event)
 
     def _timed_eddn_powerplay_save(self) -> None:
-        """Diagnostic wrapper around eddn_powerplay.save() -- runs
-        synchronously on the main thread (json.dumps + write_text of a
-        cache that only grows across the app's lifetime, currently
-        12k+ systems / ~1.3MB), on the same QTimer.timeout as
-        _log_eddn_listener_stats. Temporary: remove once the freeze
-        reported 2026-08-27 is diagnosed."""
+        """Saves the EDDN PowerPlay cache on a short-lived background thread.
+        It ran on the UI thread before and the cache only grows: the
+        2026-10-01 overnight log measured 70-136ms per save at 50k systems
+        (~5MB), every 2 minutes. The cache's own lock keeps save() and the
+        main thread's ingest() apart; the shutdown save waits on that lock."""
+        running = getattr(self, "_eddn_pp_save_thread", None)
+        if running is not None and running.is_alive():
+            return
+        self._eddn_pp_save_thread = threading.Thread(
+            target=self._eddn_powerplay_save_worker, name="eddn-pp-save", daemon=True)
+        self._eddn_pp_save_thread.start()
+
+    def _eddn_powerplay_save_worker(self) -> None:
         _t0 = time.perf_counter()
         self.eddn_powerplay.save()
         _elapsed_ms = (time.perf_counter() - _t0) * 1000
         if _elapsed_ms > 50:
             log.warning(
-                "eddn_powerplay.save() took %.0fms (%d systems tracked)",
+                "eddn_powerplay.save() took %.0fms in the background (%d systems tracked)",
                 _elapsed_ms, self.eddn_powerplay.system_count(),
             )
 

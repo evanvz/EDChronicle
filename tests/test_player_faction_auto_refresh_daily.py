@@ -38,7 +38,10 @@ def test_second_call_same_day_does_not_refresh_again(tmp_path):
     start_refresh_all.assert_not_called()
 
 
-def test_call_on_a_new_day_still_triggers_refresh_without_a_permanent_latch(tmp_path):
+def test_call_on_a_new_day_still_triggers_refresh_without_a_permanent_latch(tmp_path, monkeypatch):
+    # Thursdays ~09:00-11:00 are skipped on purpose (Frontier maintenance) --
+    # keep this test independent of when it runs.
+    monkeypatch.setattr("edc.ui.panels.player_faction_panel._in_weekly_maintenance_window", lambda: False)
     # Regression for the one-shot-latch bug: last_refresh() is yesterday's
     # timestamp (the earlier attempt never actually completed -- e.g. no
     # systems to refresh, or the session closed mid-refresh), so a repeat
