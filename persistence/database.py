@@ -403,6 +403,9 @@ class Database:
             # {power: 0-1 progress} from the journal's PowerplayConflictProgress
             # -- acquisition progress in Unoccupied systems.
             "ALTER TABLE systems ADD COLUMN pp_conflict_progress TEXT",
+            # PowerPlay task mode as the squadron's objective states it
+            # ("Reinforcement"/"Acquisition"/"Undermining"); NULL = auto-detect.
+            "ALTER TABLE bgs_tasks ADD COLUMN pp_mode TEXT",
         ]
         cache_migrations = [
             "ALTER TABLE net.spansh_bodies ADD COLUMN surface_gravity REAL",

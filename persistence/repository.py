@@ -3020,16 +3020,17 @@ class Repository:
     def add_bgs_task(
         self, system_name: str, task_type: str, faction_name: Optional[str] = None,
         opponent_name: Optional[str] = None, note: Optional[str] = None,
+        pp_mode: Optional[str] = None,
     ) -> int:
         resolved = self.resolve_system(system_name)
         address, name = resolved if resolved else (None, (system_name or "").strip())
         next_order = self.db.conn.execute("SELECT COALESCE(MAX(sort_order), -1) + 1 FROM bgs_tasks").fetchone()[0]
         cur = self.db.execute(
             "INSERT INTO bgs_tasks (system_address, system_name, task_type, faction_name, opponent_name, "
-            "note, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "note, sort_order, created_at, pp_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 address, name, task_type, faction_name or None, opponent_name or None, note or None,
-                next_order, datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                next_order, datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), pp_mode or None,
             ),
         )
         return cur.lastrowid
@@ -3042,7 +3043,7 @@ class Repository:
         See resolve_bgs_tasks_for_system for the actual resolution path."""
         return [dict(r) for r in self.db.conn.execute(
             "SELECT id, system_address, system_name, task_type, faction_name, opponent_name, note, "
-            "sort_order, created_at FROM bgs_tasks ORDER BY sort_order, id"
+            "sort_order, created_at, pp_mode FROM bgs_tasks ORDER BY sort_order, id"
         ).fetchall()]
 
     def resolve_bgs_tasks_for_system(self, system_address: int, system_name: str) -> int:

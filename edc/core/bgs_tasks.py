@@ -101,6 +101,8 @@ def validate_task_input(system: str, task_type: str, faction: str, opponent: str
 
 def task_title(task: dict) -> str:
     parts = [TASK_LABELS.get(task["task_type"], task["task_type"])]
+    if task.get("pp_mode"):
+        parts[0] += f" ({task['pp_mode']})"
     if task.get("faction_name"):
         parts.append(task["faction_name"])
     if task.get("opponent_name"):
@@ -410,14 +412,96 @@ def _powerplay_guide(mode: str, pp_state: str, pledged: str, pp_activities) -> s
     return text
 
 
+PP_MODES = ("Reinforcement", "Acquisition", "Undermining")
+
+
+def _edsm_age_days(edsm_row: dict) -> Optional[int]:
+    try:
+        when = datetime.fromisoformat(str(edsm_row.get("date"))[:10]).date()
+    except (TypeError, ValueError):
+        return None
+    return (datetime.now(timezone.utc).date() - when).days
+
+
+def detect_powerplay_mode(pledged: str, pp: Optional[dict], edsm_row: Optional[dict] = None,
+                          allies=frozenset()) -> dict:
+    """The PowerPlay job in a system for our pledge: {"mode", "source",
+    "controller", "state", "range_unconfirmed"}. Our own journal reading
+    (pp, repo.get_system_powerplay_snapshot shape) wins; EDSM's daily dump
+    row (EdsmPowerPlayCache.get_controller_by_name shape) is the fallback
+    for systems not visited yet. EDSM can't show whether our power is in
+    range, so an Acquisition guess from it is flagged range_unconfirmed."""
+    if pp:
+        state = pp.get("pp_state") or ""
+        controller = pp.get("pp_controlling_power") or ""
+        powers_present = list(pp.get("pp_powers") or []) + list((pp.get("pp_conflict_progress") or {}).keys())
+        return {"mode": powerplay_mode(pledged, controller, state, powers_present, allies),
+                "source": "your journal", "controller": controller, "state": state, "range_unconfirmed": False}
+    if edsm_row:
+        state = edsm_row.get("power_state") or ""
+        # An Unoccupied EDSM row is a foothold, not control.
+        controller = "" if state == "Unoccupied" else (edsm_row.get("power") or "")
+        mode = powerplay_mode(pledged, controller, state or "Unoccupied", None, allies)
+        age = _edsm_age_days(edsm_row)
+        source = "EDSM" if age is None else f"EDSM, {age} day{'s' if age != 1 else ''} old"
+        return {"mode": mode, "source": source, "controller": controller, "state": state,
+                "range_unconfirmed": mode == "Acquisition"}
+    return {"mode": "", "source": "", "controller": "", "state": "", "range_unconfirmed": False}
+
+
+def describe_detection(det: dict) -> str:
+    """One line for the add-task preview, e.g. "Detected: Reinforcement
+    (Aisling Duval, Fortified — EDSM, 2 days old)"."""
+    if not det["source"]:
+        return "No PowerPlay data for this system yet — pick the mode your squadron gave you."
+    if not det["mode"]:
+        return f"Detected: not a PowerPlay target for your power ({det['source']})"
+    who = det["controller"] or "no controlling power"
+    extra = " — range unconfirmed until you visit" if det["range_unconfirmed"] else ""
+    return f"Detected: {det['mode']} ({who}, {det['state'] or 'unknown state'} — {det['source']}){extra}"
+
+
 def _powerplay_view(pp: Optional[dict], pledged: str, merits: int, pp_activities,
-                    allies=frozenset()) -> dict:
+                    allies=frozenset(), declared: str = "", edsm_row: Optional[dict] = None) -> dict:
     merits_line = [f"Your merits here this PowerPlay week: {merits:,}"] if pledged else []
     merits_hud = f" · {merits:,} merits this week" if pledged else ""
+    det = detect_powerplay_mode(pledged, pp, edsm_row, allies)
+    detected = det["mode"]
+    mode = declared or detected
+    warnings = []
+    if declared and det["source"]:
+        if detected == "Allied":
+            warnings.append(f"Task says {declared}, but {det['controller']} is an allied (ZYADA) power — "
+                            f"check with your coordinator before undermining")
+        elif detected and detected != declared and not (det["range_unconfirmed"] and declared == "Acquisition"):
+            who = f"controlled by {det['controller']}" if det["controller"] else "not controlled by any power"
+            warnings.append(f"Task says {declared}, but the system is {who} ({detected}) — "
+                            f"it may have changed since the objective was set")
+        elif not detected and declared == "Acquisition":
+            warnings.append("Task says Acquisition, but your power isn't in range here per your journal")
+
     if not pp:
-        return {"status": STATUS_NO_DATA, "lines": ["No PowerPlay reading yet"] + merits_line, "warnings": [],
-                "hud": "PowerPlay — no data yet" + merits_hud, "updated_at": None,
-                "guide": "" if pledged else _powerplay_guide("", "", "", None)}
+        if det["source"]:
+            reading = f"{det['state'] or 'Unknown'}" + (f", {det['controller']}" if det["controller"] else "")
+            head = f"{mode}: {reading} ({det['source']})" if mode else f"{reading} ({det['source']})"
+            lines = [head]
+            if det["range_unconfirmed"] and mode == "Acquisition":
+                lines.append("Range unconfirmed until you visit")
+        else:
+            head = f"{mode} (from your squadron's objective)" if mode else "No PowerPlay reading yet"
+            lines = [head]
+        hud_head = head if (mode or det["source"]) else "no data yet"
+        if pledged and not mode and not det["source"]:
+            # Nothing known and no mode given -- don't claim it's "not a target".
+            guide = ("No PowerPlay data for this system yet — visit it, or re-add the task with the "
+                     "mode from your squadron's objective")
+        else:
+            guide = _powerplay_guide(mode, det["state"], pledged, pp_activities)
+        return {"status": STATUS_NO_DATA if not det["source"] else STATUS_TRACKING,
+                "lines": lines + merits_line, "warnings": warnings,
+                "hud": f"PowerPlay — {hud_head}{merits_hud}", "updated_at": None,
+                "guide": guide}
+
     pp_state = pp.get("pp_state") or ""
     # "Unoccupied" is a PowerPlay state (no controlling power), not population.
     reading = f"{pp_state} ({_PP_STATE_MEANINGS[pp_state]})" if pp_state in _PP_STATE_MEANINGS \
@@ -431,14 +515,12 @@ def _powerplay_view(pp: Optional[dict], pledged: str, merits: int, pp_activities
         power = next((p for p in acquisition if _same(p, pledged)), None) \
             or max(acquisition, key=acquisition.get)
         reading += f" — {power} {acquisition[power] * 100:.1f}%"
-    powers_present = list(pp.get("pp_powers") or []) + list((pp.get("pp_conflict_progress") or {}).keys())
-    mode = powerplay_mode(pledged, pp.get("pp_controlling_power") or "", pp_state, powers_present, allies)
     head = f"{mode}: {reading}" if mode else reading
     lines = [head]
     if pp.get("pp_controlling_power"):
         lines.append(f"Controlled by {pp['pp_controlling_power']}")
     lines += merits_line
-    return {"status": STATUS_TRACKING, "lines": lines, "warnings": [],
+    return {"status": STATUS_TRACKING, "lines": lines, "warnings": warnings,
             "hud": f"PowerPlay — {head}{merits_hud}", "updated_at": pp.get("pp_data_timestamp"),
             "guide": _powerplay_guide(mode, pp_state, pledged, pp_activities)}
 
@@ -471,7 +553,7 @@ def _population_basis(targets: Optional[dict], population) -> str:
 def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], history: list,
                     pp: Optional[dict], limits: dict, pledged: str = "", merits: int = 0,
                     pp_activities=None, population: Optional[int] = None,
-                    today: Optional[date] = None) -> dict:
+                    today: Optional[date] = None, edsm_row: Optional[dict] = None) -> dict:
     task_type = task["task_type"]
     population_basis = ""
     if task_type == "boost":
@@ -484,7 +566,8 @@ def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], histor
         view = _conflict_view(task, report, bgs_status, task_type)
     elif task_type == "powerplay":
         view = _powerplay_view(pp, pledged, merits, pp_activities,
-                               allied_powers(pledged, limits.get("allied_powers")))
+                               allied_powers(pledged, limits.get("allied_powers")),
+                               declared=task.get("pp_mode") or "", edsm_row=edsm_row)
     else:
         note = task.get("note") or ""
         lines = [note] if note else []
@@ -502,7 +585,8 @@ def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], histor
 
 
 def build_task_views(repo, since: str, limits: dict, system_address: Optional[int] = None,
-                     pledged: str = "", pp_activities=None, now: Optional[datetime] = None) -> list[dict]:
+                     pledged: str = "", pp_activities=None, now: Optional[datetime] = None,
+                     edsm_powerplay=None) -> list[dict]:
     """Views for every task (or only those in system_address), in the
     user's priority order."""
     tasks = repo.list_bgs_tasks()
@@ -522,9 +606,12 @@ def build_task_views(repo, since: str, limits: dict, system_address: Optional[in
                   if t["task_type"] == "powerplay" and pledged and addr is not None else 0)
         population = (repo.get_system_population(addr)
                       if t["task_type"] == "boost" and addr is not None else None)
+        # EDSM's daily dump fills in systems we haven't visited yet.
+        edsm_row = (edsm_powerplay.get_controller_by_name(t["system_name"])
+                    if t["task_type"] == "powerplay" and not pp and edsm_powerplay else None)
         views.append(build_task_view(t, report, bgs_status, history, pp, limits,
                                      pledged=pledged, merits=merits, pp_activities=pp_activities,
-                                     population=population))
+                                     population=population, edsm_row=edsm_row))
     return views
 
 

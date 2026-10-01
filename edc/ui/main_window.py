@@ -2577,6 +2577,8 @@ class MainWindow(QMainWindow):
         self.player_faction_panel.bgs_limits_getter = lambda: bgs_limits(self.cfg)
         self.player_faction_panel.pledged_power_getter = lambda: (getattr(self.state, "pp_power", None) or "").strip()
         self.player_faction_panel.pp_activities = self.pp_activities
+        self.player_faction_panel.edsm_powerplay = self.edsm_powerplay
+        self.player_faction_panel.allies_getter = self._allies
         self.player_faction_panel.bgs_tasks_changed.connect(self._refresh_bgs_task_hint)
         self.player_faction_panel.tick_refresh_started.connect(self.overview_panel.show_tick_flash)
 
@@ -6103,6 +6105,7 @@ class MainWindow(QMainWindow):
                     self.repo, since, bgs_limits(self.cfg), system_address=system_address,
                     pledged=(getattr(self.state, "pp_power", None) or "").strip(),
                     pp_activities=getattr(self, "pp_activities", None),
+                    edsm_powerplay=getattr(self, "edsm_powerplay", None),
                 )
                 text = hud_line(views)
             except Exception:

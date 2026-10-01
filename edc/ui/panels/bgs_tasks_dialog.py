@@ -17,7 +17,8 @@ from PyQt6.QtWidgets import (
 )
 
 from edc.core.bgs_tasks import (
-    DEFAULT_LIMITS, STATUS_COLORS, STATUS_DONE, TASK_LABELS, TASK_TYPES, TYPE_COLORS, build_task_views, task_title, validate_task_input,
+    DEFAULT_LIMITS, PP_MODES, STATUS_COLORS, STATUS_DONE, TASK_LABELS, TASK_TYPES, TYPE_COLORS, build_task_views,
+    describe_detection, detect_powerplay_mode, task_title, validate_task_input,
 )
 from edc.ui import formatting as fmt
 from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE
@@ -70,14 +71,26 @@ class BgsTasksDialog(QDialog):
         self._faction_edit.setPlaceholderText("Faction to support")
         self._opponent_edit = QLineEdit()
         self._opponent_edit.setPlaceholderText("Opposing faction")
+        # PowerPlay job as the squadron's objective states it; Auto-detect
+        # uses your journal, else EDSM's daily dump.
+        self._pp_mode_combo = QComboBox()
+        self._pp_mode_combo.addItem("Auto-detect", "")
+        for m in PP_MODES:
+            self._pp_mode_combo.addItem(m, m)
         self._note_edit = QLineEdit()
         self._note_edit.setPlaceholderText("Note (optional)")
         add_btn = QPushButton("Add task")
         add_btn.clicked.connect(self._on_add)
-        for w in (self._system_edit, self._type_combo, self._faction_edit, self._opponent_edit, self._note_edit):
+        for w in (self._system_edit, self._type_combo, self._pp_mode_combo, self._faction_edit,
+                  self._opponent_edit, self._note_edit):
             form.addWidget(w)
         form.addWidget(add_btn)
         layout.addLayout(form)
+
+        self._pp_detect_label = QLabel("")
+        self._pp_detect_label.setWordWrap(True)
+        self._pp_detect_label.setStyleSheet(_DIM_STYLE)
+        layout.addWidget(self._pp_detect_label)
 
         self._form_error = QLabel("")
         self._form_error.setStyleSheet("background:transparent; border:none; color:#FF6B6B;")
@@ -117,6 +130,7 @@ class BgsTasksDialog(QDialog):
         self._completers_loaded = False
         self._type_combo.currentIndexChanged.connect(self._update_form_fields)
         self._system_edit.editingFinished.connect(self._update_faction_completers)
+        self._system_edit.editingFinished.connect(self._update_pp_detection)
         self._update_form_fields()
 
     # ── form ──────────────────────────────────────────────────────────────
@@ -125,6 +139,31 @@ class BgsTasksDialog(QDialog):
         t = self._type_combo.currentData()
         self._faction_edit.setEnabled(t in ("boost", "vote", "fight"))
         self._opponent_edit.setEnabled(t in ("vote", "fight"))
+        self._pp_mode_combo.setVisible(t == "powerplay")
+        self._update_pp_detection()
+
+    def _update_pp_detection(self) -> None:
+        """Preview of the PowerPlay job for the typed system, before adding."""
+        system = self._system_edit.text().strip()
+        if self._type_combo.currentData() != "powerplay" or not system:
+            self._pp_detect_label.setText("")
+            return
+        pledged_getter = getattr(self._panel, "pledged_power_getter", None)
+        pledged = pledged_getter() if pledged_getter else ""
+        if not pledged:
+            self._pp_detect_label.setText("Pledge to a power to detect the PowerPlay job here.")
+            return
+        try:
+            resolved = self._panel._repo.resolve_system(system)
+            pp = self._panel._repo.get_system_powerplay_snapshot(resolved[0]) if resolved else None
+        except Exception:
+            log.exception("Failed to read PowerPlay snapshot for task preview")
+            pp = None
+        edsm = getattr(self._panel, "edsm_powerplay", None)
+        edsm_row = edsm.get_controller_by_name(resolved[1] if resolved else system) if (edsm and not pp) else None
+        allies_getter = getattr(self._panel, "allies_getter", None)
+        det = detect_powerplay_mode(pledged, pp, edsm_row, allies_getter() if allies_getter else frozenset())
+        self._pp_detect_label.setText(describe_detection(det))
 
     def _make_completer(self, names: list) -> QCompleter:
         completer = QCompleter(names, self)
@@ -162,13 +201,17 @@ class BgsTasksDialog(QDialog):
         if error:
             return
         try:
-            self._panel._repo.add_bgs_task(system, task_type, faction or None, opponent or None, note or None)
+            pp_mode = self._pp_mode_combo.currentData() if task_type == "powerplay" else None
+            self._panel._repo.add_bgs_task(system, task_type, faction or None, opponent or None, note or None,
+                                           pp_mode=pp_mode or None)
         except Exception:
             log.exception("Failed to add BGS task")
             self._form_error.setText("Couldn't save the task — see the log.")
             return
         for edit in (self._system_edit, self._faction_edit, self._opponent_edit, self._note_edit):
             edit.clear()
+        self._pp_mode_combo.setCurrentIndex(0)
+        self._pp_detect_label.setText("")
         self.refresh()
         self._changed()
 
@@ -220,6 +263,7 @@ class BgsTasksDialog(QDialog):
                 self._panel._repo, since, limits,
                 pledged=pledged_getter() if pledged_getter else "",
                 pp_activities=getattr(self._panel, "pp_activities", None),
+                edsm_powerplay=getattr(self._panel, "edsm_powerplay", None),
             )
         except Exception:
             log.exception("Failed to build BGS task views")
