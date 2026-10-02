@@ -51,6 +51,10 @@ class GameState:
     pp_last_collect: Dict[str, str] = field(default_factory=dict)
     # {commodity name lower-cased: system it was last collected in}
     pp_collect_system: Dict[str, str] = field(default_factory=dict)
+    # {system name lower-cased: {"timestamp","type","count","merits"}} -- the
+    # latest PowerplayDeliver there and the merits it earned.
+    pp_deliveries: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    pp_pending_delivery: Optional[Dict[str, Any]] = None
     system_powerplay_conflict_progress: Dict[str, float] = field(default_factory=dict)
     system_conflicts: List[dict] = field(default_factory=list)
     system_powerplay_control_progress: Optional[float] = None

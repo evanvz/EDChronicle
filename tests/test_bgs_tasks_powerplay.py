@@ -225,7 +225,10 @@ def test_commodity_lines_show_carrying_and_next_allocation():
                             {"aisling media materials": "2026-10-02T20:53:19Z"}, now=now)
     assert lines[0].startswith("Commodity: Aisling Media Materials · carrying 83 t · next allocation ~")
     assert "30 min after your last collection" in lines[0]
-    assert lines[1].startswith("Merits come per hand-in, not per tonne — your history: ≈4,050")
+    assert len(lines) == 1  # no generic merits claim any more
+    with_history = commodity_lines("Acquisition", "Aisling Duval", cargo, None, now=now, last_delivery={
+        "timestamp": "2026-10-02T22:11:03Z", "count": 83, "type": "Aisling Media Materials", "merits": 547})
+    assert with_history[-1] == "Your last hand-in here: 83 t Aisling Media Materials → 547 merits (2026-10-02)"
     later = commodity_lines("Acquisition", "Aisling Duval", cargo,
                             {"aisling media materials": "2026-10-02T20:00:00Z"}, now=now)
     assert "allocation should be available again" in later[0]
@@ -277,3 +280,29 @@ def test_carried_goods_from_a_non_supporting_system_warn():
     ok = commodity_lines("Acquisition", "Aisling Duval", {"aisling media materials": 83}, None,
                          supporting=support, collect_system={"aisling media materials": "HIP 114709"})
     assert not any(l.startswith("⚠") for l in ok)
+
+
+
+def test_one_hand_in_paid_in_several_merits_events_adds_up(tmp_path):
+    from edc.core.event_engine import EventEngine
+    from edc.core.state import GameState
+    eng = EventEngine(GameState(), tmp_path)
+    eng.state.system = "ICZ AG-O b6-5"
+    eng.process({"event": "PowerplayDeliver", "timestamp": "2026-09-05T14:42:27Z", "Power": "Aisling Duval",
+                 "Type_Localised": "Aisling Media Materials", "Count": 16})
+    eng.process({"event": "PowerplayMerits", "timestamp": "2026-09-05T14:42:47Z", "MeritsGained": 105, "TotalMerits": 1})
+    eng.process({"event": "PowerplayMerits", "timestamp": "2026-09-05T14:42:47Z", "MeritsGained": 3960, "TotalMerits": 2})
+    eng.process({"event": "PowerplayMerits", "timestamp": "2026-09-05T14:50:00Z", "MeritsGained": 50, "TotalMerits": 3})
+    assert eng.state.pp_deliveries["icz ag-o b6-5"]["merits"] == 4065
+
+
+def test_delivery_history_scan_sums_merits_within_a_minute(tmp_path):
+    import json
+    from edc.core.powerplay_pledge_scanner import scan_deliveries
+    events = [{"event": "FSDJump", "StarSystem": "ICZ AG-O b6-5", "timestamp": "2026-09-05T14:30:00Z"},
+              {"event": "PowerplayDeliver", "timestamp": "2026-09-05T14:42:27Z", "Type_Localised": "Aisling Media Materials", "Count": 16},
+              {"event": "PowerplayMerits", "timestamp": "2026-09-05T14:42:47Z", "MeritsGained": 105},
+              {"event": "PowerplayMerits", "timestamp": "2026-09-05T14:42:47Z", "MeritsGained": 3960},
+              {"event": "PowerplayMerits", "timestamp": "2026-09-05T15:10:00Z", "MeritsGained": 99}]
+    (tmp_path / "Journal.2026-09-05T140000.01.log").write_text(chr(10).join(json.dumps(e) for e in events), encoding="utf-8")
+    assert scan_deliveries(tmp_path)["icz ag-o b6-5"]["merits"] == 4065

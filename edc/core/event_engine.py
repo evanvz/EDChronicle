@@ -63,6 +63,16 @@ def _derive_conflicts_from_factions(factions: list) -> list:
     return conflicts
 
 
+def _seconds_between(earlier, later) -> float:
+    """Seconds between two journal ISO timestamps; inf if either is unusable."""
+    try:
+        a = datetime.fromisoformat(str(earlier).replace("Z", "+00:00"))
+        b = datetime.fromisoformat(str(later).replace("Z", "+00:00"))
+    except ValueError:
+        return float("inf")
+    return (b - a).total_seconds()
+
+
 def _engage_risk(wanted: bool, hostile: bool, power: str | None, pledged: str | None,
                   ctrl: str | None, government: str | None, enemy: bool = False) -> str:
     """
@@ -949,7 +959,18 @@ class EventEngine:
                     f"Merits {self.state.pp_merits:,})"
                 )
 
+        elif name == "PowerplayDeliver":
+            # A hand-in can be paid in several PowerplayMerits events (seen:
+            # 105 + 3,960 twenty seconds later), so merits in the next 60s add up.
+            system = self.state.system or ""
+            if system:
+                record = {"timestamp": event.get("timestamp") or "", "count": event.get("Count") or 0,
+                          "type": event.get("Type_Localised") or event.get("Type") or "", "merits": 0}
+                self.state.pp_deliveries[system.lower()] = record
+                self.state.pp_pending_delivery = {"key": system.lower(), "timestamp": record["timestamp"]}
+
         elif name == "PowerplayCollect":
+            self.state.pp_pending_delivery = None
             commodity = (event.get("Type_Localised") or event.get("Type") or "").strip().lower()
             if commodity:
                 self.state.pp_last_collect[commodity] = event.get("timestamp") or ""
@@ -971,6 +992,12 @@ class EventEngine:
 
         elif name == "PowerplayMerits":
             gained = event.get("MeritsGained")
+            pending = self.state.pp_pending_delivery
+            if pending and isinstance(gained, int):
+                if _seconds_between(pending["timestamp"], event.get("timestamp")) <= 60:
+                    self.state.pp_deliveries[pending["key"]]["merits"] += gained
+                else:
+                    self.state.pp_pending_delivery = None
             total = event.get("TotalMerits")
             if isinstance(total, int):
                 self.state.pp_merits = total

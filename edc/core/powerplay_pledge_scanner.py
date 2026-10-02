@@ -84,6 +84,57 @@ def scan_conflict_progress(journal_dir: Path) -> Dict[int, tuple]:
     return found
 
 
+def _seconds(earlier, later) -> float:
+    from datetime import datetime
+    try:
+        a = datetime.fromisoformat(str(earlier).replace("Z", "+00:00"))
+        b = datetime.fromisoformat(str(later).replace("Z", "+00:00"))
+    except ValueError:
+        return float("inf")
+    return (b - a).total_seconds()
+
+
+def scan_deliveries(journal_dir: Path) -> Dict[str, Dict[str, Any]]:
+    """{system name lower-cased: {"timestamp","type","count","merits"}} --
+    the latest PowerplayDeliver per system and the merits from the
+    PowerplayMerits event that follows it."""
+    journal_dir = Path(journal_dir)
+    found: Dict[str, Dict[str, Any]] = {}
+    if not journal_dir.exists():
+        return found
+    for path in sorted(journal_dir.glob("Journal.*.log")):
+        system, pending = None, None
+        try:
+            with path.open("r", encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    if '"Powerplay' not in line and '"StarSystem"' not in line:
+                        continue
+                    try:
+                        event = json.loads(line)
+                    except Exception:
+                        continue
+                    name = event.get("event")
+                    if name in ("FSDJump", "Location", "CarrierJump"):
+                        system = event.get("StarSystem") or system
+                    elif name == "PowerplayDeliver" and system:
+                        # merits in the next 60s add up (one hand-in can pay in
+                        # several PowerplayMerits events)
+                        pending = {"timestamp": event.get("timestamp") or "", "count": event.get("Count") or 0,
+                                   "type": event.get("Type_Localised") or event.get("Type") or "", "merits": 0}
+                        found[system.lower()] = pending
+                    elif name == "PowerplayCollect":
+                        pending = None
+                    elif name == "PowerplayMerits" and pending:
+                        gained = event.get("MeritsGained")
+                        if isinstance(gained, int) and _seconds(pending["timestamp"], event.get("timestamp")) <= 60:
+                            pending["merits"] += gained
+                        else:
+                            pending = None
+        except OSError:
+            continue
+    return found
+
+
 def scan_last_collects(journal_dir: Path, newest_files: int = 3,
                        where: Optional[Dict[str, str]] = None) -> Dict[str, str]:
     """{commodity name lower-cased: ISO timestamp} of the latest

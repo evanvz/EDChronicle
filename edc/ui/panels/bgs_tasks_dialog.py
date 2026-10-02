@@ -270,6 +270,7 @@ class BgsTasksDialog(QDialog):
                 cargo=cargo_by_name(getattr(getattr(self._panel, "_last_state", None), "cargo_inventory", None)),
                 last_collect=getattr(getattr(self._panel, "_last_state", None), "pp_last_collect", None),
                 collect_system=getattr(getattr(self._panel, "_last_state", None), "pp_collect_system", None),
+                deliveries=getattr(getattr(self._panel, "_last_state", None), "pp_deliveries", None),
             )
         except Exception:
             log.exception("Failed to build BGS task views")

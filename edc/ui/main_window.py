@@ -109,7 +109,9 @@ from edc.core.materials_scanner import scan_latest_materials
 from edc.core.notoriety_scanner import scan_latest_notoriety
 from edc.core.rank_scanner import scan_latest_rank_progress
 from edc.core.squadron_scanner import scan_squadron_status
-from edc.core.powerplay_pledge_scanner import scan_conflict_progress, scan_last_collects, scan_powerplay_pledge
+from edc.core.powerplay_pledge_scanner import (
+    scan_conflict_progress, scan_deliveries, scan_last_collects, scan_powerplay_pledge,
+)
 from edc.core.squadron_events import SQUADRON_EVENT_NAMES, membership_since
 from persistence.repository import set_squadron_membership_since
 from edc.core.carrier_scanner import scan_carrier_status
@@ -398,7 +400,7 @@ class _StartupHistoryScanWorker(QObject):
             "active_bounties": {}, "active_fines": {}, "combat_unsold_total": None,
             "active_combat_bonds": {},
             "squadron_rec": None, "carrier_rec": None, "active_missions": {}, "pp_pledge": None,
-            "conflict_progress": {}, "pp_last_collect": {},
+            "conflict_progress": {}, "pp_last_collect": {}, "pp_deliveries": {},
             "bounty_last_commit": {}, "visited_megaships": set(),
         }
         if not self._journal_dir:
@@ -422,6 +424,10 @@ class _StartupHistoryScanWorker(QObject):
             result["squadron_rec"] = scan_squadron_status(path)
         except Exception:
             log.exception("Failed to scan journal history for squadron status")
+        try:
+            result["pp_deliveries"] = scan_deliveries(path)
+        except Exception:
+            log.exception("Failed to scan journals for PowerPlay deliveries")
         try:
             result["pp_collect_system"] = {}
             result["pp_last_collect"] = scan_last_collects(path, where=result["pp_collect_system"])
@@ -3198,6 +3204,11 @@ class MainWindow(QMainWindow):
                 where = (result.get("pp_collect_system") or {}).get(name)
                 if where:
                     self.state.pp_collect_system[name] = where
+
+        for system, rec in (result.get("pp_deliveries") or {}).items():
+            current = self.state.pp_deliveries.get(system)
+            if not current or rec["timestamp"] > current.get("timestamp", ""):
+                self.state.pp_deliveries[system] = rec
 
         if result.get("conflict_progress"):
             try:
@@ -6314,6 +6325,7 @@ class MainWindow(QMainWindow):
                     cargo=cargo_by_name(getattr(self.state, "cargo_inventory", None)),
                     last_collect=getattr(self.state, "pp_last_collect", None),
                     collect_system=getattr(self.state, "pp_collect_system", None),
+                    deliveries=getattr(self.state, "pp_deliveries", None),
                 )
                 text = hud_line(views)
             except Exception:
