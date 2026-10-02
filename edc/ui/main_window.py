@@ -84,7 +84,8 @@ from edc.core.mission_events import MISSION_EVENT_NAMES
 from edc.core.megaship_scanner import scan_visited_megaships
 from edc.core.faction_refresh_tracker import FactionRefreshTracker
 from edc.core.bgs_tasks import (
-    ZYADA_COALITION, allied_powers, bgs_limits, build_task_views, hud_line, is_rival_power, powerplay_mode,
+    ZYADA_COALITION, allied_powers, bgs_limits, build_task_views, cargo_by_name, hud_line, is_rival_power,
+    powerplay_mode,
 )
 from edc.core.bgs_tick import fetch_latest_tick
 from edc.ui.panels.engineering_panel import EngineeringPanel
@@ -108,7 +109,7 @@ from edc.core.materials_scanner import scan_latest_materials
 from edc.core.notoriety_scanner import scan_latest_notoriety
 from edc.core.rank_scanner import scan_latest_rank_progress
 from edc.core.squadron_scanner import scan_squadron_status
-from edc.core.powerplay_pledge_scanner import scan_conflict_progress, scan_powerplay_pledge
+from edc.core.powerplay_pledge_scanner import scan_conflict_progress, scan_last_collects, scan_powerplay_pledge
 from edc.core.squadron_events import SQUADRON_EVENT_NAMES, membership_since
 from persistence.repository import set_squadron_membership_since
 from edc.core.carrier_scanner import scan_carrier_status
@@ -397,7 +398,7 @@ class _StartupHistoryScanWorker(QObject):
             "active_bounties": {}, "active_fines": {}, "combat_unsold_total": None,
             "active_combat_bonds": {},
             "squadron_rec": None, "carrier_rec": None, "active_missions": {}, "pp_pledge": None,
-            "conflict_progress": {},
+            "conflict_progress": {}, "pp_last_collect": {},
             "bounty_last_commit": {}, "visited_megaships": set(),
         }
         if not self._journal_dir:
@@ -421,6 +422,10 @@ class _StartupHistoryScanWorker(QObject):
             result["squadron_rec"] = scan_squadron_status(path)
         except Exception:
             log.exception("Failed to scan journal history for squadron status")
+        try:
+            result["pp_last_collect"] = scan_last_collects(path)
+        except Exception:
+            log.exception("Failed to scan journals for PowerPlay collections")
         try:
             result["conflict_progress"] = scan_conflict_progress(path)
         except Exception:
@@ -3184,6 +3189,11 @@ class MainWindow(QMainWindow):
                 self.state.pp_merits = pp_pledge.get("merits")
             self._refresh_powerplay()
             self._refresh_bgs_task_hint()
+
+        for name, when in (result.get("pp_last_collect") or {}).items():
+            # a live collection since startup is newer -- keep it
+            if when > self.state.pp_last_collect.get(name, ""):
+                self.state.pp_last_collect[name] = when
 
         if result.get("conflict_progress"):
             try:
@@ -6297,6 +6307,8 @@ class MainWindow(QMainWindow):
                     pp_activities=getattr(self, "pp_activities", None),
                     edsm_powerplay=getattr(self, "edsm_powerplay", None),
                     eddn_powerplay=getattr(self, "eddn_powerplay", None),
+                    cargo=cargo_by_name(getattr(self.state, "cargo_inventory", None)),
+                    last_collect=getattr(self.state, "pp_last_collect", None),
                 )
                 text = hud_line(views)
             except Exception:

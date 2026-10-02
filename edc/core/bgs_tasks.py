@@ -174,7 +174,8 @@ ZYADA_COALITION = ("Zemina Torval", "Yuri Grom", "A. Lavigny-Duval", "Denton Pat
 # Each power's PowerPlay commodity per job: (Acquisition, Reinforcement,
 # Undermining). ED wiki "Powerplay commodities" table.
 POWERPLAY_COMMODITIES = {
-    "aisling duval": ("Aisling Media Material", "Aisling Sealed Contract", "Aisling Programme Material"),
+    # Aisling's as the journal/cargo spell them (plural); others per the wiki.
+    "aisling duval": ("Aisling Media Materials", "Aisling Sealed Contracts", "Aisling Programme Materials"),
     "archon delaine": ("Kumo Contraband Packages", "Unmarked Military Supplies", "Marked Slaves"),
     "a. lavigny-duval": ("Lavigny Corruption Reports", "Lavigny Garrison Supplies", "Lavigny Strategic Reports"),
     "denton patreus": ("Marked Military Arms", "Patreus Field Supplies", "Patreus Garrison Supplies"),
@@ -206,6 +207,62 @@ def transport_text(mode: str, pledged: str) -> str:
         return "Transport Powerplay Commodities"
     index, how = route
     return f"Transport {commodities[index]} ({how})"
+
+
+# Merits observed per hand-in in Evan's own journal history (23 deliveries,
+# 2025-08..2026-09): roughly flat per delivery, not per tonne -- 12, 16 and
+# 32 t of Sealed Contracts all earned ~2,050-2,250. Not official.
+_OBSERVED_MERITS = {"Acquisition": "≈4,050", "Undermining": "≈4,050", "Reinforcement": "≈2,100–2,250"}
+ALLOCATION_REFRESH_MIN = 30  # community-reported, per Power Contact allocation
+
+
+def cargo_by_name(inventory) -> dict:
+    """{commodity name lower-cased (in-game spelling): count} from the
+    Cargo.json Inventory list (state.cargo_inventory)."""
+    out = {}
+    for item in inventory or []:
+        if isinstance(item, dict):
+            name = (item.get("Name_Localised") or item.get("Name") or "").strip().lower()
+            if name:
+                out[name] = out.get(name, 0) + int(item.get("Count", 0) or 0)
+    return out
+
+
+def commodity_lines(mode: str, pledged: str, cargo: Optional[dict] = None,
+                    last_collect: Optional[dict] = None, now: Optional[datetime] = None) -> list:
+    """Card lines for the job's commodity: what you're carrying, when the
+    next allocation is (30 min after your last collection, community-
+    reported), and the observed merits-per-hand-in note. cargo /
+    last_collect are keyed by lower-cased commodity name (in-game spelling);
+    last_collect values are ISO timestamps."""
+    commodities = POWERPLAY_COMMODITIES.get(_key(pledged or ""))
+    route = _COMMODITY_ROUTE.get(mode)
+    if not commodities or not route:
+        return []
+    name = commodities[route[0]]
+    key = name.lower()
+    parts = [f"Commodity: {name}"]
+    carrying = (cargo or {}).get(key, 0)
+    if carrying:
+        parts.append(f"carrying {carrying} t")
+    when = (last_collect or {}).get(key)
+    if when:
+        try:
+            collected = datetime.fromisoformat(when.replace("Z", "+00:00"))
+            ready = collected + timedelta(minutes=ALLOCATION_REFRESH_MIN)
+            now = now or datetime.now(timezone.utc)
+            if ready > now:
+                parts.append(f"next allocation ~{ready.astimezone().strftime('%H:%M')} "
+                             f"({ALLOCATION_REFRESH_MIN} min after your last collection, community-reported)")
+            else:
+                parts.append("allocation should be available again")
+        except ValueError:
+            pass
+    lines = [" · ".join(parts)]
+    if mode in _OBSERVED_MERITS:
+        lines.append(f"Merits come per hand-in, not per tonne — your history: {_OBSERVED_MERITS[mode]} "
+                     f"per {mode} delivery (observed, not official)")
+    return lines
 
 
 def allied_powers(pledged: str, configured=None) -> frozenset:
@@ -632,7 +689,8 @@ def _acquisition_lines(acquisition: dict, pledged: str, source: str) -> tuple:
 
 def _powerplay_view(pp: Optional[dict], pledged: str, merits: int, pp_activities,
                     allies=frozenset(), declared: str = "", edsm_row: Optional[dict] = None,
-                    eddn_progress: Optional[dict] = None, population: Optional[int] = None) -> dict:
+                    eddn_progress: Optional[dict] = None, population: Optional[int] = None,
+                    cargo: Optional[dict] = None, last_collect: Optional[dict] = None) -> dict:
     merits_line = [f"Your merits here this PowerPlay week: {merits:,}"] if pledged else []
     merits_hud = f" · {merits:,} merits this week" if pledged else ""
     det = detect_powerplay_mode(pledged, pp, edsm_row, allies)
@@ -665,6 +723,7 @@ def _powerplay_view(pp: Optional[dict], pledged: str, merits: int, pp_activities
         else:
             head = f"{mode} (from your squadron's objective)" if mode else "No PowerPlay reading yet"
             lines = [head]
+        lines += commodity_lines(mode, pledged, cargo, last_collect)
         if population is not None:
             lines.append(f"Population: {population_text(population)}")
         hud_head = head if (mode or det["source"]) else "no data yet"
@@ -699,6 +758,7 @@ def _powerplay_view(pp: Optional[dict], pledged: str, merits: int, pp_activities
         reading += suffix
     head = f"{mode}: {reading}" if mode else reading
     lines = [head] + (extra if mode == "Acquisition" else [])
+    lines += commodity_lines(mode, pledged, cargo, last_collect)
     if population is not None:
         lines.append(f"Population: {population_text(population)}")
     if pp.get("pp_controlling_power"):
@@ -746,7 +806,8 @@ def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], histor
                     pp: Optional[dict], limits: dict, pledged: str = "", merits: int = 0,
                     pp_activities=None, population: Optional[int] = None,
                     today: Optional[date] = None, edsm_row: Optional[dict] = None,
-                    squadron_faction: str = "", eddn_progress: Optional[dict] = None) -> dict:
+                    squadron_faction: str = "", eddn_progress: Optional[dict] = None,
+                    cargo: Optional[dict] = None, last_collect: Optional[dict] = None) -> dict:
     task_type = task["task_type"]
     population_basis = ""
     if task_type == "boost":
@@ -763,7 +824,8 @@ def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], histor
         view = _powerplay_view(pp, pledged, merits, pp_activities,
                                allied_powers(pledged, limits.get("allied_powers")),
                                declared=task.get("pp_mode") or "", edsm_row=edsm_row,
-                               eddn_progress=eddn_progress, population=population)
+                               eddn_progress=eddn_progress, population=population,
+                               cargo=cargo, last_collect=last_collect)
     else:
         note = task.get("note") or ""
         lines = [note] if note else []
@@ -782,7 +844,8 @@ def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], histor
 
 def build_task_views(repo, since: str, limits: dict, system_address: Optional[int] = None,
                      pledged: str = "", pp_activities=None, now: Optional[datetime] = None,
-                     edsm_powerplay=None, eddn_powerplay=None) -> list[dict]:
+                     edsm_powerplay=None, eddn_powerplay=None,
+                     cargo: Optional[dict] = None, last_collect: Optional[dict] = None) -> list[dict]:
     """Views for every task (or only those in system_address), in the
     user's priority order."""
     tasks = repo.list_bgs_tasks()
@@ -811,7 +874,8 @@ def build_task_views(repo, since: str, limits: dict, system_address: Optional[in
                                      population=population, edsm_row=edsm_row,
                                      squadron_faction=squadron_faction,
                                      eddn_progress=(eddn_powerplay.get_conflict_progress(addr)
-                                                    if t["task_type"] == "powerplay" and eddn_powerplay else None)))
+                                                    if t["task_type"] == "powerplay" and eddn_powerplay else None),
+                                     cargo=cargo, last_collect=last_collect))
     return views
 
 

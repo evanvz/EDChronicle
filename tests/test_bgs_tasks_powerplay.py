@@ -71,7 +71,7 @@ def test_pledged_card_shows_mode_merits_and_top_activities_bonus_first():
     assert view["lines"][0] == "Acquisition: Unoccupied (no power yet) — 78.9%"
     assert "Your merits here this PowerPlay week: 340" in view["lines"]
     assert view["hud"] == "PowerPlay — Acquisition: Unoccupied (no power yet) — 78.9% · 340 merits this week"
-    assert view["guide"] == ("Acquisition — BGS-safe: Transport Aisling Media Material (collect at a Power "
+    assert view["guide"] == ("Acquisition — BGS-safe: Transport Aisling Media Materials (collect at a Power "
                              "Contact in a supporting system in range (your Fortified within 20 ly / Stronghold "
                              "within 30 ly), deliver to the Power Contact here), "
                              "Bounty Hunting (cash vouchers elsewhere), Power Kills, Holoscreen Hacking")
@@ -205,10 +205,35 @@ def test_allied_card_says_do_not_undermine():
 
 def test_transport_names_the_commodity_for_the_power_and_job():
     from edc.core.bgs_tasks import transport_text
-    assert transport_text("Acquisition", "Aisling Duval").startswith("Transport Aisling Media Material (")
-    assert transport_text("Reinforcement", "Aisling Duval").startswith("Transport Aisling Sealed Contract (")
-    assert transport_text("Undermining", "Aisling Duval").startswith("Transport Aisling Programme Material (")
+    assert transport_text("Acquisition", "Aisling Duval").startswith("Transport Aisling Media Materials (")
+    assert transport_text("Reinforcement", "Aisling Duval").startswith("Transport Aisling Sealed Contracts (")
+    assert transport_text("Undermining", "Aisling Duval").startswith("Transport Aisling Programme Materials (")
     # the game writes Arissa as "A. Lavigny-Duval"; both spellings work
     assert "Lavigny Corruption Reports" in transport_text("Acquisition", "A. Lavigny-Duval")
     assert "Lavigny Corruption Reports" in transport_text("Acquisition", "Arissa Lavigny-Duval")
     assert transport_text("Acquisition", "Unknown Power") == "Transport Powerplay Commodities"
+
+
+def test_commodity_lines_show_carrying_and_next_allocation():
+    from edc.core.bgs_tasks import cargo_by_name, commodity_lines
+    cargo = cargo_by_name([{"Name": "aislingmediamaterials", "Name_Localised": "Aisling Media Materials", "Count": 83},
+                           {"Name": "drones", "Name_Localised": "Limpet", "Count": 4}])
+    now = datetime(2026, 10, 2, 21, 0, tzinfo=timezone.utc)
+    lines = commodity_lines("Acquisition", "Aisling Duval", cargo,
+                            {"aisling media materials": "2026-10-02T20:53:19Z"}, now=now)
+    assert lines[0].startswith("Commodity: Aisling Media Materials · carrying 83 t · next allocation ~")
+    assert "30 min after your last collection" in lines[0]
+    assert lines[1].startswith("Merits come per hand-in, not per tonne — your history: ≈4,050")
+    later = commodity_lines("Acquisition", "Aisling Duval", cargo,
+                            {"aisling media materials": "2026-10-02T20:00:00Z"}, now=now)
+    assert "allocation should be available again" in later[0]
+    assert commodity_lines("Acquisition", "", None, None) == []
+
+
+def test_collect_event_records_the_time(tmp_path):
+    from edc.core.event_engine import EventEngine
+    from edc.core.state import GameState
+    eng = EventEngine(GameState(), tmp_path)
+    state, _ = eng.process({"event": "PowerplayCollect", "timestamp": "2026-10-02T20:53:19Z", "Power": "Aisling Duval",
+                            "Type": "aislingmediamaterials", "Type_Localised": "Aisling Media Materials", "Count": 83})
+    assert state.pp_last_collect == {"aisling media materials": "2026-10-02T20:53:19Z"}

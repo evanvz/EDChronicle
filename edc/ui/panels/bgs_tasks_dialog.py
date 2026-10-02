@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (
 
 from edc.core.bgs_tasks import (
     DEFAULT_LIMITS, PP_MODES, STATUS_COLORS, STATUS_DONE, TASK_LABELS, TASK_TYPES, TYPE_COLORS, build_task_views,
-    describe_detection, detect_powerplay_mode, distance_text, task_title, validate_task_input,
+    cargo_by_name, describe_detection, detect_powerplay_mode, distance_text, task_title, validate_task_input,
 )
 from edc.ui import formatting as fmt
 from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE
@@ -267,6 +267,8 @@ class BgsTasksDialog(QDialog):
                 pp_activities=getattr(self._panel, "pp_activities", None),
                 edsm_powerplay=getattr(self._panel, "edsm_powerplay", None),
                 eddn_powerplay=getattr(self._panel, "eddn_powerplay", None),
+                cargo=cargo_by_name(getattr(getattr(self._panel, "_last_state", None), "cargo_inventory", None)),
+                last_collect=getattr(getattr(self._panel, "_last_state", None), "pp_last_collect", None),
             )
         except Exception:
             log.exception("Failed to build BGS task views")
