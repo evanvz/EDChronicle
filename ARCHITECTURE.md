@@ -79,7 +79,7 @@ Builds and maintains the full system-presence list for your squadron-aligned min
 
 Flow:
 
-1. `edc/core/squadron_scanner.py` scans full journal history at startup to detect the squadron-aligned faction and any already-known presence
+1. `edc/core/squadron_scanner.py` scans full journal history at startup to detect the squadron-aligned faction and any already-known presence. The latest squadron membership change (join/leave/kick/disband/create, `squadron_events.membership_since()`) is passed to `persistence.repository.set_squadron_membership_since()` at startup and on every live squadron event; `SquadronFaction:true` flags recorded before it belong to a previous membership and are ignored, so leaving a squadron stops the old faction being treated as yours
 2. Live `Docked`/`FSDJump`/`Location` events save a faction snapshot for the current system (`faction_snapshots` table) via `MainWindow._save_faction_snapshots()`, and `MainWindow.update_reference_state()` pushes the current position to the panel on every event (cheap — just a reference update, not a rebuild) so distance calculations stay correct even without the tab open
 3. The EDDN network-wide listener (path 4) supplies presence data for systems never personally visited
 4. `edc/core/edsm_faction_lookup.py` + `edc/core/inara_faction_csv.py` support manual add and bulk CSV import, resolving each system live against EDSM with retry-on-block; a `_FactionRefreshWorker` re-queries every tracked system once per local calendar day (so a fresh day's first session always gets one, matching the BGS's own daily tick — not a rolling 24h window) and backfills `system_coords` via `fetch_system_coords()`
@@ -109,13 +109,13 @@ Notable files:
 - `fdev_powerplay.py` — Frontier's own official PowerPlay control-vote CSV feed (a daily-cached download, distinct from the live per-visit journal PowerplayState fields), used to cross-check the PowerPlay Target Finder and shown as a supplementary "control vote" line on the Faction Expansion Tracker
 - `inara_faction_csv.py` — parses Inara's faction-presence CSV export format
 - `bgs_conflicts.py` — squadron-aligned faction lookup, finds who it's at active war with in the current system, and backs BGS activity attribution (bounty/trade crediting)
-- `bgs_tasks.py` — Pure logic for the BGS Tasks tracker — per-task progress/status from the session activity tables, `net.system_bgs_status` (now including elections), `faction_snapshots` and `systems.pp_*`; Boost limits are squadron guidance from Settings
+- `bgs_tasks.py` — Pure logic for the BGS Tasks tracker (Boost/Hinder/Vote/Fight/PowerPlay/Note) — per-task progress/status from the session activity tables, `net.system_bgs_status` (including elections), `faction_snapshots` and `systems.pp_*`. PowerPlay tasks use the stated `pp_mode` or `detect_powerplay_mode()` (journal reading, else the EDSM daily dump), with BGS-safe actions listed first from `settings/powerplay_activities.json`'s `bgs` tags. Also owns the PowerPlay allies helpers (`allied_powers()`, `is_rival_power()`; ZYADA by default) used by the event engine, callouts and trade filters. Boost limits are squadron guidance from Settings; squad-only advice is labelled as unconfirmed
 - `ship_loadout.py` — classifies current ship hardpoints as armed/unarmed from `Loadout` events
 - `faction_refresh_tracker.py` — persists the last full-EDSM-refresh timestamp for the Player Faction tab's 24h auto-refresh gate
 - `rank_names.py` — Rank/Progress category index → real rank name tables (Elite I-V aware), verified against the community Journal Manual
 - `rank_scanner.py` — full-journal-history scan for the most recent Rank/Progress values at startup (same reasoning as `notoriety_scanner.py`)
 - `bounty_scanner.py` / `notoriety_scanner.py` / `squadron_scanner.py` / `carrier_scanner.py` / `mission_scanner.py` / `combat_bond_scanner.py` / `materials_scanner.py` — full-journal-history scanners that reconstruct current state at startup (bounties, notoriety, squadron, fleet carrier, active missions, unredeemed combat bonds, held materials). The five that have no periodic snapshot event to jump to (bounties, combat bonds, squadron, carrier, missions) run on a background thread (`_StartupHistoryScanWorker` in `main_window.py`) so a long journal history doesn't block the window from appearing
-- `trade_routes.py` — pure A↔B↔A trade-loop-finding logic for the Trade Route Loop Planner
+- `trade_routes.py` — pure trade-finding logic: A↔B↔A loops (Loop Planner), what to buy here for a destination (Point-to-Point), and destination-first supply for a BGS sale (`find_supply_for_destination()`, quantity capped by demand), plus the destination PowerPlay check (`destination_pp_status()`)
 - `material_trading.py` — Material Trader up/down-trade suggestion logic and material grouping/grade data
 - `experimental_effects.py` — Experimental Effect material costs and blueprint/weapon-type compatibility
 - `odyssey_material_source.py` — Bartender-tradeable vs farm/loot-only classification for Odyssey materials
@@ -185,7 +185,7 @@ Notable files:
 - `powerplay_finder_panel.py`
 - `mining_panel.py`
 - `market_panel.py`
-- `trade_route_panel.py`
+- `trade_route_panel.py` — Loop Planner, Point-to-Point Trade Finder and BGS Supply Run cards
 - `engineering_panel.py`
 - `fleet_carrier_panel.py`
 - `player_faction_panel.py`
@@ -224,7 +224,7 @@ Notable files:
 | `faction_mission_completions` | One row per faction a `MissionCompleted`'s `FactionEffects` actually moved — system, faction, timestamp, influence tier, primary/secondary, Trend-signed weight, cleaned mission type, and CR reward. Backs both the Faction Expansion Tracker's mission tally and the Session BGS Activity Report |
 | `faction_combat_bonds` | One row per combat bond cash-in (`RedeemVoucher`), for the Session BGS Activity Report — only for a faction present in the system where it's cashed in |
 | `faction_bounties` | One row per faction credited by a bounty voucher cash-in (`RedeemVoucher` `Factions` list), same present-in-system rule |
-| `bgs_tasks` | Squadron BGS objectives entered by hand for the BGS Tasks tracker (system, type, faction, opponent, note, priority order); system name resolved to `system_address` when first seen |
+| `bgs_tasks` | Squadron BGS objectives entered by hand for the BGS Tasks tracker (system, type, faction, opponent, note, priority order, and `pp_mode` — the PowerPlay job as stated in the objective, NULL = auto-detect); system name resolved to `system_address` when first seen |
 | `powerplay_merits` | One row per `PowerplayMerits` journal event, credited to the system the player was in — the BGS Tasks tracker's "merits here this PowerPlay week" (week starts Thursday ~07:00 UTC) |
 | `faction_cz_kills` | One row per confirmed conflict-zone kill (ground/space, size), for the Session BGS Activity Report |
 | `faction_trade_sold` | One row per commodity/exploration/exobiology sale, credited to the docked station's owning faction (fleet carriers skipped); commodity value is profit, for the Session BGS Activity Report |

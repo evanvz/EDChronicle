@@ -11,9 +11,9 @@ Inspired by [EDCoPilot](https://www.razzafrag.com/) by CMDR RazzaFrag.
 - **Exploration** — live body/signal tracking, first-discovery/mapping/footfall status, ring hotspot tracking, Spansh backfill for missing physical stats, Canonn Codex intel, nearest notable Point of Interest (EDAstro)
 - **Exobiology** — genus/species/sample tracking, estimated credit values, Codex logging
 - **Combat** — combat contacts table with real Crime & Punishment engage-risk detection, gated voice callouts (never your own faction/power), notoriety and bounty tracking, massacre-mission stacking, System Status (wars, RES sites) for nearby systems
-- **PowerPlay** — live system-type detection, PowerPlay Target Finder cross-checked against two independent data sources, megaship alerts
-- **Player Faction (BGS)** — tracks your squadron-aligned faction galaxy-wide (not just where you've been), risk-bucket dashboard (War/Expansion/Retreat/Conflict), Inara CSV import, per-system BGS history and forecasting, a Faction Expansion Tracker for pushing one target system toward the 75% expansion threshold (influence trend, live PowerPlay standing, mission tally), a Session BGS Activity Report covering every faction's mission/combat/CZ/trade activity for the whole session, grouped by day, and a BGS Tasks tracker for your squadron's objectives (Boost/Vote/Fight/PowerPlay) with live per-task progress and an Overview HUD hint
-- **Market & Trading** — galaxy-wide best price search, Trade Opportunities, Trade Route Loop Planner, rare goods finder, broker/service finder (Black Market, Interstellar Factors, Material Trader, etc.)
+- **PowerPlay** — live system-type detection, PowerPlay Target Finder cross-checked against two independent data sources, megaship alerts, and a PowerPlay allies setting (the ZYADA coalition by default when you're pledged to one of its powers) so allied systems are never shown as undermining targets and allied ships are never called out
+- **Player Faction (BGS)** — tracks your squadron-aligned faction galaxy-wide (not just where you've been), risk-bucket dashboard (War/Expansion/Retreat/Conflict), Inara CSV import, per-system BGS history and forecasting, a Faction Expansion Tracker for pushing one target system toward the 75% expansion threshold (influence trend, live PowerPlay standing, mission tally), a Session BGS Activity Report covering every faction's mission/combat/CZ/trade activity for the whole session, grouped by day, and a BGS Tasks tracker for your squadron's objectives (Boost/Hinder/Vote/Fight/PowerPlay) with live per-task progress, what-to-do guidance and an Overview HUD hint. PowerPlay tasks take the Reinforcement/Acquisition/Undermining job from your squadron's objective or detect it (your journal, else EDSM), and list BGS-safe actions first
+- **Market & Trading** — galaxy-wide best price search, Trade Opportunities, Trade Route Loop Planner, Point-to-Point Trade Finder, a BGS Supply Run finder (pick a station your squadron faction controls in your power's systems; it finds what that station buys at a profit and the best nearby place to buy it), rare goods finder, broker/service finder (Black Market, Interstellar Factors, Material Trader, etc.)
 - **Mining** — session stats, ring/hotspot finder, sell-price lookup for refined cargo
 - **Engineering** — live material inventory, blueprint wishlist with real per-grade roll costs, Material Trader advisor, engineer distance/rank lookup
 - **Fleet Carrier** — cargo/jump status tracking, squadron vs. personal carrier separation
@@ -92,6 +92,10 @@ launch.bat
 Double-click `launch.bat` from anywhere — it always resolves paths relative to the project folder.
 
 > **First launch:** EDChronicle imports all your existing journal files on first run — can take a minute or two, with progress shown on the startup screen. Subsequent launches only process new journals and are fast.
+
+## Changing squadron or PowerPlay pledge
+
+EDChronicle follows joining, leaving or defecting from a PowerPlay power, and joining or leaving a squadron, from your journal as it happens. Restart the app afterwards so every tab reloads with your new faction and pledge.
 
 ## Updating
 
