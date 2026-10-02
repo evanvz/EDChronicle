@@ -9,6 +9,7 @@ docs/superpowers/specs/2026-09-26-bgs-tasks-tracker-design.md."""
 from __future__ import annotations
 
 import json
+import math
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
@@ -103,6 +104,23 @@ def validate_task_input(system: str, task_type: str, faction: str, opponent: str
     if task_type == "note" and not note:
         return "Enter the note text."
     return ""
+
+
+def distance_text(here: Optional[tuple], there: Optional[tuple], same_system: bool = False,
+                  jump_range: Optional[float] = None) -> str:
+    """Card corner text: "here", "42.3 ly · ~3 jumps", "42.3 ly", or "— ly"
+    when either end's coordinates are unknown. Jumps are a best case
+    (straight line / unladen max range), hence "~"."""
+    if same_system:
+        return "here"
+    if not here or not there:
+        return "— ly"
+    dist = sum((a - b) ** 2 for a, b in zip(here, there)) ** 0.5
+    text = f"{dist:,.1f} ly"
+    if jump_range and jump_range > 0:
+        jumps = max(1, math.ceil(dist / jump_range))
+        text += f" · ~{jumps} jump{'s' if jumps != 1 else ''}"
+    return text
 
 
 def task_title(task: dict) -> str:

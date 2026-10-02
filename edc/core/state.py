@@ -44,6 +44,8 @@ class GameState:
     # From Loadout's CargoCapacity — always reflects the ship currently
     # being flown, for the Trade Route Loop Planner's profit-per-loop math.
     cargo_capacity: Optional[int] = None
+    # Loadout MaxJumpRange: the current ship's unladen best-case jump range (ly).
+    ship_max_jump_range: Optional[float] = None
     system_powerplay_conflict_progress: Dict[str, float] = field(default_factory=dict)
     system_conflicts: List[dict] = field(default_factory=list)
     system_powerplay_control_progress: Optional[float] = None

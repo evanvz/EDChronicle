@@ -921,6 +921,9 @@ class EventEngine:
             ship = event.get("Ship")
             if isinstance(ship, str) and ship:
                 self.state.ship = ship
+            jump_range = event.get("MaxJumpRange")
+            if isinstance(jump_range, (int, float)) and jump_range > 0:
+                self.state.ship_max_jump_range = float(jump_range)
             ship_id = event.get("ShipID")
             if isinstance(ship_id, int):
                 self.state.ship_id = ship_id

@@ -12,13 +12,13 @@ import logging
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
-    QComboBox, QCompleter, QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QScrollArea, QVBoxLayout, QWidget,
+    QApplication, QComboBox, QCompleter, QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton,
+    QScrollArea, QToolTip, QVBoxLayout, QWidget,
 )
 
 from edc.core.bgs_tasks import (
     DEFAULT_LIMITS, PP_MODES, STATUS_COLORS, STATUS_DONE, TASK_LABELS, TASK_TYPES, TYPE_COLORS, build_task_views,
-    describe_detection, detect_powerplay_mode, task_title, validate_task_input,
+    describe_detection, detect_powerplay_mode, distance_text, task_title, validate_task_input,
 )
 from edc.ui import formatting as fmt
 from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE
@@ -127,6 +127,7 @@ class BgsTasksDialog(QDialog):
         layout.addWidget(footer)
 
         self._cards: list = []
+        self._distance_by_task: dict = {}
         self._completers_loaded = False
         self._type_combo.currentIndexChanged.connect(self._update_form_fields)
         self._system_edit.editingFinished.connect(self._update_faction_completers)
@@ -271,12 +272,45 @@ class BgsTasksDialog(QDialog):
             views = []
         self._render(views)
 
+    def _distances(self, views: list) -> dict:
+        """{task id: corner text} from the player's current position, with
+        one coordinate lookup for every task's system."""
+        state = getattr(self._panel, "_last_state", None)
+        here_name = (getattr(state, "system", None) or "").strip()
+        here = None
+        if here_name and any(getattr(state, k, None) is not None for k in ("system_x", "system_y", "system_z")):
+            here = tuple(float(getattr(state, k, 0.0) or 0.0) for k in ("system_x", "system_y", "system_z"))
+        jump_range = getattr(state, "ship_max_jump_range", None)
+        names = [v["task"]["system_name"] for v in views if v["task"].get("system_name")]
+        try:
+            coords = self._panel._repo.get_system_coords_for_names(names) if names else {}
+        except Exception:
+            log.exception("Failed to look up BGS task system coordinates")
+            coords = {}
+        out = {}
+        for v in views:
+            name = v["task"].get("system_name") or ""
+            if not name or v["task"]["task_type"] == "note":
+                continue
+            out[v["task"]["id"]] = distance_text(
+                here, coords.get(name), same_system=bool(here_name) and here_name.lower() == name.lower(),
+                jump_range=jump_range)
+        return out
+
+    def _copy_system(self, label: QLabel, system_name: str) -> None:
+        # A transient popup only -- no timer touching the label afterwards:
+        # cards are rebuilt on refresh, and a timer firing on a deleted
+        # label aborts the app.
+        QApplication.clipboard().setText(system_name)
+        QToolTip.showText(label.mapToGlobal(label.rect().bottomLeft()), f"Copied {system_name} ✓", label)
+
     def _render(self, views: list) -> None:
         for card in self._cards:
             self._content_layout.removeWidget(card)
             card.deleteLater()
         self._cards = []
         self._empty_label.setVisible(not views)
+        self._distance_by_task = self._distances(views)
         for view in views:
             card = self._make_card(view)
             self._content_layout.addWidget(card)
@@ -296,7 +330,21 @@ class BgsTasksDialog(QDialog):
         title = QLabel(task_title(task))
         title.setStyleSheet(_HDR_STYLE + f" color:{accent};")
         title.setWordWrap(True)
+        system_name = task.get("system_name") or ""
+        if system_name and task["task_type"] != "note":
+            # Single click copies, like every table in the app.
+            title.setCursor(Qt.CursorShape.PointingHandCursor)
+            title.setToolTip("Click to copy the system name")
+            title.mousePressEvent = lambda _e, lbl=title, name=system_name: self._copy_system(lbl, name)
         top.addWidget(title, 1)
+        dist = self._distance_by_task.get(task["id"])
+        if dist:
+            dist_lbl = QLabel(dist)
+            dist_lbl.setStyleSheet("background:transparent; border:none; color:#9aa4b0;")
+            dist_lbl.setToolTip("From your current system. Jumps are a best case: straight line, "
+                                "your ship's unladen max jump range.")
+            top.addWidget(dist_lbl)
+            top.addSpacing(12)
         if view["status"]:
             status = QLabel(view["status"])
             color = STATUS_COLORS.get(view["status"], "#c8c8c8")
