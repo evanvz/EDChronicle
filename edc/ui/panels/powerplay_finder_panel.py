@@ -328,11 +328,11 @@ class PowerplayFinderPanel(QWidget):
         h.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
         h.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
-        self._table.cellDoubleClicked.connect(self._copy_system_name)
+        self._table.cellClicked.connect(self._copy_system_name)
         root.addWidget(self._table, 1)
         self._loading_spinner = BusySpinner(self)
 
-        copy_hint = QLabel("Double-click a row to copy system name to clipboard.")
+        copy_hint = QLabel("Click a row to copy the system name to the clipboard.")
         copy_hint.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent;")
         root.addWidget(copy_hint)
 
