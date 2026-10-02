@@ -493,6 +493,16 @@ class Repository:
             ),
         )
 
+    def get_held_systems_from_journal(self, power: str) -> dict:
+        """{system name: (pp_state, pp_data_timestamp)} from our own last
+        visit to every system where `power` was the controlling power."""
+        rows = self.db.conn.execute(
+            "SELECT system_name, pp_state, pp_data_timestamp FROM systems "
+            "WHERE pp_controlling_power = ? COLLATE NOCASE AND system_name IS NOT NULL",
+            (power,),
+        ).fetchall()
+        return {r["system_name"]: (r["pp_state"], r["pp_data_timestamp"]) for r in rows}
+
     def backfill_conflict_progress(self, found: dict) -> int:
         """Fills pp_conflict_progress for snapshots saved before the app kept
         it -- only where it's empty and the journal event is the very visit

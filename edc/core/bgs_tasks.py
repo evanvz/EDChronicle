@@ -216,6 +216,42 @@ _OBSERVED_MERITS = {"Acquisition": "≈4,050", "Undermining": "≈4,050", "Reinf
 ALLOCATION_REFRESH_MIN = 30  # community-reported, per Power Contact allocation
 
 
+# Frontier: Acquisition commodities must come from a supporting system --
+# your Fortified within 20 ly or Stronghold within 30 ly of the target.
+SUPPORT_RANGE_LY = {"Fortified": 20.0, "Stronghold": 30.0}
+_held_cache: dict = {}
+
+
+def supporting_systems(repo, pledged: str, target_name: str, edsm_powerplay=None) -> list:
+    """[(name, state, distance_ly)] nearest first: the pledged power's
+    Fortified systems within 20 ly and Strongholds within 30 ly of the
+    target. Held systems come from EDSM's daily dump, overridden by our own
+    journal reading where we visited more recently; their coordinates are
+    cached per pledge/EDSM day (the dump is ~1,300 systems for a power)."""
+    key = (_key(pledged or ""), getattr(edsm_powerplay, "fetched_date", None))
+    held = _held_cache.get(key)
+    if held is None:
+        states = dict(edsm_powerplay.held_systems(pledged)) if edsm_powerplay else {}
+        for name, (state, _ts) in repo.get_held_systems_from_journal(pledged).items():
+            if state in SUPPORT_RANGE_LY:
+                states[name] = state
+            else:
+                states.pop(name, None)  # our own visit says it isn't Fortified/Stronghold now
+        coords = repo.get_system_coords_for_names(list(states)) if states else {}
+        held = [(n, s, coords[n]) for n, s in states.items() if n in coords]
+        _held_cache.clear()
+        _held_cache[key] = held
+    target = repo.get_system_coords_for_names([target_name]).get(target_name)
+    if not target:
+        return []
+    out = []
+    for name, state, xyz in held:
+        dist = sum((a - b) ** 2 for a, b in zip(xyz, target)) ** 0.5
+        if dist <= SUPPORT_RANGE_LY[state] and name.lower() != target_name.lower():
+            out.append((name, state, dist))
+    return sorted(out, key=lambda t: t[2])
+
+
 def cargo_by_name(inventory) -> dict:
     """{commodity name lower-cased (in-game spelling): count} from the
     Cargo.json Inventory list (state.cargo_inventory)."""
@@ -229,7 +265,8 @@ def cargo_by_name(inventory) -> dict:
 
 
 def commodity_lines(mode: str, pledged: str, cargo: Optional[dict] = None,
-                    last_collect: Optional[dict] = None, now: Optional[datetime] = None) -> list:
+                    last_collect: Optional[dict] = None, now: Optional[datetime] = None,
+                    supporting: Optional[list] = None, collect_system: Optional[dict] = None) -> list:
     """Card lines for the job's commodity: what you're carrying, when the
     next allocation is (30 min after your last collection, community-
     reported), and the observed merits-per-hand-in note. cargo /
@@ -259,6 +296,18 @@ def commodity_lines(mode: str, pledged: str, cargo: Optional[dict] = None,
         except ValueError:
             pass
     lines = [" · ".join(parts)]
+    if mode == "Acquisition" and supporting is not None:
+        if supporting:
+            shown = ", ".join(f"{n} ({s}, {d:.1f} ly)" for n, s, d in supporting[:3])
+            lines.append(f"Collect at a supporting system: {shown}")
+        else:
+            lines.append("No supporting system known in range (Fortified ≤20 ly / Stronghold ≤30 ly) — "
+                         "check the galaxy map's strategic view")
+        source = (collect_system or {}).get(key)
+        if carrying and source and not any(n.lower() == source.lower() for n, _s, _d in supporting):
+            fix = f" — collect at {supporting[0][0]} instead" if supporting else ""
+            lines.append(f"⚠ Your {carrying} t were collected at {source}, which isn't a supporting system "
+                         f"for this target, so they won't be accepted here{fix}")
     if mode in _OBSERVED_MERITS:
         lines.append(f"Merits come per hand-in, not per tonne — your history: {_OBSERVED_MERITS[mode]} "
                      f"per {mode} delivery (observed, not official)")
@@ -690,7 +739,8 @@ def _acquisition_lines(acquisition: dict, pledged: str, source: str) -> tuple:
 def _powerplay_view(pp: Optional[dict], pledged: str, merits: int, pp_activities,
                     allies=frozenset(), declared: str = "", edsm_row: Optional[dict] = None,
                     eddn_progress: Optional[dict] = None, population: Optional[int] = None,
-                    cargo: Optional[dict] = None, last_collect: Optional[dict] = None) -> dict:
+                    cargo: Optional[dict] = None, last_collect: Optional[dict] = None,
+                    supporting: Optional[list] = None, collect_system: Optional[dict] = None) -> dict:
     merits_line = [f"Your merits here this PowerPlay week: {merits:,}"] if pledged else []
     merits_hud = f" · {merits:,} merits this week" if pledged else ""
     det = detect_powerplay_mode(pledged, pp, edsm_row, allies)
@@ -723,7 +773,8 @@ def _powerplay_view(pp: Optional[dict], pledged: str, merits: int, pp_activities
         else:
             head = f"{mode} (from your squadron's objective)" if mode else "No PowerPlay reading yet"
             lines = [head]
-        lines += commodity_lines(mode, pledged, cargo, last_collect)
+        lines += commodity_lines(mode, pledged, cargo, last_collect,
+                                 supporting=supporting, collect_system=collect_system)
         if population is not None:
             lines.append(f"Population: {population_text(population)}")
         hud_head = head if (mode or det["source"]) else "no data yet"
@@ -758,7 +809,8 @@ def _powerplay_view(pp: Optional[dict], pledged: str, merits: int, pp_activities
         reading += suffix
     head = f"{mode}: {reading}" if mode else reading
     lines = [head] + (extra if mode == "Acquisition" else [])
-    lines += commodity_lines(mode, pledged, cargo, last_collect)
+    lines += commodity_lines(mode, pledged, cargo, last_collect,
+                             supporting=supporting, collect_system=collect_system)
     if population is not None:
         lines.append(f"Population: {population_text(population)}")
     if pp.get("pp_controlling_power"):
@@ -807,7 +859,8 @@ def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], histor
                     pp_activities=None, population: Optional[int] = None,
                     today: Optional[date] = None, edsm_row: Optional[dict] = None,
                     squadron_faction: str = "", eddn_progress: Optional[dict] = None,
-                    cargo: Optional[dict] = None, last_collect: Optional[dict] = None) -> dict:
+                    cargo: Optional[dict] = None, last_collect: Optional[dict] = None,
+                    supporting: Optional[list] = None, collect_system: Optional[dict] = None) -> dict:
     task_type = task["task_type"]
     population_basis = ""
     if task_type == "boost":
@@ -825,7 +878,8 @@ def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], histor
                                allied_powers(pledged, limits.get("allied_powers")),
                                declared=task.get("pp_mode") or "", edsm_row=edsm_row,
                                eddn_progress=eddn_progress, population=population,
-                               cargo=cargo, last_collect=last_collect)
+                               cargo=cargo, last_collect=last_collect,
+                               supporting=supporting, collect_system=collect_system)
     else:
         note = task.get("note") or ""
         lines = [note] if note else []
@@ -845,7 +899,8 @@ def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], histor
 def build_task_views(repo, since: str, limits: dict, system_address: Optional[int] = None,
                      pledged: str = "", pp_activities=None, now: Optional[datetime] = None,
                      edsm_powerplay=None, eddn_powerplay=None,
-                     cargo: Optional[dict] = None, last_collect: Optional[dict] = None) -> list[dict]:
+                     cargo: Optional[dict] = None, last_collect: Optional[dict] = None,
+                     collect_system: Optional[dict] = None) -> list[dict]:
     """Views for every task (or only those in system_address), in the
     user's priority order."""
     tasks = repo.list_bgs_tasks()
@@ -875,7 +930,10 @@ def build_task_views(repo, since: str, limits: dict, system_address: Optional[in
                                      squadron_faction=squadron_faction,
                                      eddn_progress=(eddn_powerplay.get_conflict_progress(addr)
                                                     if t["task_type"] == "powerplay" and eddn_powerplay else None),
-                                     cargo=cargo, last_collect=last_collect))
+                                     cargo=cargo, last_collect=last_collect,
+                                     supporting=(supporting_systems(repo, pledged, t["system_name"], edsm_powerplay)
+                                                 if t["task_type"] == "powerplay" and pledged else None),
+                                     collect_system=collect_system))
     return views
 
 

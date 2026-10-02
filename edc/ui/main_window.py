@@ -423,7 +423,8 @@ class _StartupHistoryScanWorker(QObject):
         except Exception:
             log.exception("Failed to scan journal history for squadron status")
         try:
-            result["pp_last_collect"] = scan_last_collects(path)
+            result["pp_collect_system"] = {}
+            result["pp_last_collect"] = scan_last_collects(path, where=result["pp_collect_system"])
         except Exception:
             log.exception("Failed to scan journals for PowerPlay collections")
         try:
@@ -3194,6 +3195,9 @@ class MainWindow(QMainWindow):
             # a live collection since startup is newer -- keep it
             if when > self.state.pp_last_collect.get(name, ""):
                 self.state.pp_last_collect[name] = when
+                where = (result.get("pp_collect_system") or {}).get(name)
+                if where:
+                    self.state.pp_collect_system[name] = where
 
         if result.get("conflict_progress"):
             try:
@@ -6309,6 +6313,7 @@ class MainWindow(QMainWindow):
                     eddn_powerplay=getattr(self, "eddn_powerplay", None),
                     cargo=cargo_by_name(getattr(self.state, "cargo_inventory", None)),
                     last_collect=getattr(self.state, "pp_last_collect", None),
+                    collect_system=getattr(self.state, "pp_collect_system", None),
                 )
                 text = hud_line(views)
             except Exception:

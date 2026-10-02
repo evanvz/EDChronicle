@@ -116,6 +116,8 @@ def test_build_task_views_queries_merits_since_week_start():
         get_system_powerplay_snapshot=lambda addr: _PP,
         get_powerplay_merits_since=lambda addr, since: calls.append((addr, since)) or 55,
         get_system_population=lambda addr: 51_900_000,
+        get_held_systems_from_journal=lambda power: {},
+        get_system_coords_for_names=lambda names: {},
     )
     now = datetime(2026, 9, 26, 18, 0, tzinfo=timezone.utc)
     views = build_task_views(repo, "t", LIMITS, pledged="Aisling Duval", now=now)
@@ -237,3 +239,41 @@ def test_collect_event_records_the_time(tmp_path):
     state, _ = eng.process({"event": "PowerplayCollect", "timestamp": "2026-10-02T20:53:19Z", "Power": "Aisling Duval",
                             "Type": "aislingmediamaterials", "Type_Localised": "Aisling Media Materials", "Count": 83})
     assert state.pp_last_collect == {"aisling media materials": "2026-10-02T20:53:19Z"}
+
+
+
+# --- Acquisition: commodities only count from a supporting system ---
+
+def _support_fixture():
+    from edc.core import bgs_tasks
+    bgs_tasks._held_cache.clear()
+    coords = {"Tucanae": (0.0, 0.0, 0.0), "HIP 114709": (28.1, 0.0, 0.0), "HIP 109203": (67.8, 0.0, 0.0),
+              "Near Fort": (15.0, 0.0, 0.0), "Far Fort": (25.0, 0.0, 0.0)}
+    repo = SimpleNamespace(
+        get_held_systems_from_journal=lambda power: {"HIP 109203": ("Stronghold", "2026-10-02T20:45:33Z")},
+        get_system_coords_for_names=lambda names: {n: coords[n] for n in names if n in coords},
+    )
+    edsm = SimpleNamespace(fetched_date="2026-10-02", held_systems=lambda power: {
+        "HIP 114709": "Stronghold", "Near Fort": "Fortified", "Far Fort": "Fortified"})
+    return repo, edsm
+
+
+def test_supporting_systems_use_20ly_fortified_and_30ly_stronghold():
+    from edc.core.bgs_tasks import supporting_systems
+    repo, edsm = _support_fixture()
+    found = supporting_systems(repo, "Aisling Duval", "Tucanae", edsm)
+    assert [(n, s) for n, s, _d in found] == [("Near Fort", "Fortified"), ("HIP 114709", "Stronghold")]
+
+
+def test_carried_goods_from_a_non_supporting_system_warn():
+    from edc.core.bgs_tasks import commodity_lines, supporting_systems
+    repo, edsm = _support_fixture()
+    support = supporting_systems(repo, "Aisling Duval", "Tucanae", edsm)
+    lines = commodity_lines("Acquisition", "Aisling Duval", {"aisling media materials": 83}, None,
+                            supporting=support, collect_system={"aisling media materials": "HIP 109203"})
+    assert "Collect at a supporting system: Near Fort (Fortified, 15.0 ly), HIP 114709 (Stronghold, 28.1 ly)" in lines
+    assert any(l.startswith("⚠ Your 83 t were collected at HIP 109203") and "collect at Near Fort instead" in l
+               for l in lines)
+    ok = commodity_lines("Acquisition", "Aisling Duval", {"aisling media materials": 83}, None,
+                         supporting=support, collect_system={"aisling media materials": "HIP 114709"})
+    assert not any(l.startswith("⚠") for l in ok)

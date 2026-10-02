@@ -49,6 +49,8 @@ class GameState:
     # {commodity name lower-cased (in-game spelling): ISO timestamp} of the
     # latest PowerplayCollect -- for the 30-min allocation countdown.
     pp_last_collect: Dict[str, str] = field(default_factory=dict)
+    # {commodity name lower-cased: system it was last collected in}
+    pp_collect_system: Dict[str, str] = field(default_factory=dict)
     system_powerplay_conflict_progress: Dict[str, float] = field(default_factory=dict)
     system_conflicts: List[dict] = field(default_factory=list)
     system_powerplay_control_progress: Optional[float] = None

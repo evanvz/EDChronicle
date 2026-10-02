@@ -84,27 +84,37 @@ def scan_conflict_progress(journal_dir: Path) -> Dict[int, tuple]:
     return found
 
 
-def scan_last_collects(journal_dir: Path, newest_files: int = 3) -> Dict[str, str]:
+def scan_last_collects(journal_dir: Path, newest_files: int = 3,
+                       where: Optional[Dict[str, str]] = None) -> Dict[str, str]:
     """{commodity name lower-cased: ISO timestamp} of the latest
     PowerplayCollect per commodity in the newest journals -- the 30-minute
-    allocation countdown only cares about recent ones."""
+    allocation countdown only cares about recent ones. If `where` is given
+    it's filled with {commodity: system it was collected in}."""
     journal_dir = Path(journal_dir)
     found: Dict[str, str] = {}
     if not journal_dir.exists():
         return found
+    system = None
     for path in sorted(journal_dir.glob("Journal.*.log"))[-newest_files:]:
         try:
             with path.open("r", encoding="utf-8", errors="replace") as f:
                 for line in f:
-                    if '"PowerplayCollect"' not in line:
+                    if '"PowerplayCollect"' not in line and '"StarSystem"' not in line:
                         continue
                     try:
                         event = json.loads(line)
                     except Exception:
                         continue
+                    if event.get("event") in ("FSDJump", "Location", "CarrierJump"):
+                        system = event.get("StarSystem") or system
+                        continue
+                    if event.get("event") != "PowerplayCollect":
+                        continue
                     name = (event.get("Type_Localised") or event.get("Type") or "").strip().lower()
                     if name:
                         found[name] = event.get("timestamp") or ""
+                        if where is not None and system:
+                            where[name] = system
         except OSError:
             continue
     return found

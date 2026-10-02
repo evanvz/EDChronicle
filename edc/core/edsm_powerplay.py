@@ -126,6 +126,20 @@ class EdsmPowerPlayCache:
             return None
         return self._best_row(rows)
 
+    def held_systems(self, power: str, states=("Fortified", "Stronghold")) -> Dict[str, str]:
+        """{system name: state} where `power` is the controlling power in one
+        of `states` -- e.g. the supporting systems an Acquisition can draw
+        commodities from."""
+        out: Dict[str, str] = {}
+        want = (power or "").strip().lower()
+        for rows in self._systems.values():
+            best = self._best_row(rows)
+            if (best.get("power") or "").strip().lower() == want and best.get("power_state") in states:
+                name = best.get("name")
+                if name:
+                    out[name] = best["power_state"]
+        return out
+
     def get_controller_by_name(self, system_name: Optional[str]) -> Optional[Dict[str, Any]]:
         """Same as get_controller(), keyed by system name instead of id64 —
         for cross-referencing data that only carries a name (e.g. Market

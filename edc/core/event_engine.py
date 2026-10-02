@@ -953,6 +953,8 @@ class EventEngine:
             commodity = (event.get("Type_Localised") or event.get("Type") or "").strip().lower()
             if commodity:
                 self.state.pp_last_collect[commodity] = event.get("timestamp") or ""
+                if self.state.system:
+                    self.state.pp_collect_system[commodity] = self.state.system
 
         elif name in ("PowerplayJoin", "PowerplayDefect", "PowerplayLeave"):
             # Pledge changes mid-session; the "Powerplay" summary event is only
