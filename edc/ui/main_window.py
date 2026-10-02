@@ -108,6 +108,7 @@ from edc.core.materials_scanner import scan_latest_materials
 from edc.core.notoriety_scanner import scan_latest_notoriety
 from edc.core.rank_scanner import scan_latest_rank_progress
 from edc.core.squadron_scanner import scan_squadron_status
+from edc.core.powerplay_pledge_scanner import scan_powerplay_pledge
 from edc.core.squadron_events import SQUADRON_EVENT_NAMES, membership_since
 from persistence.repository import set_squadron_membership_since
 from edc.core.carrier_scanner import scan_carrier_status
@@ -395,7 +396,7 @@ class _StartupHistoryScanWorker(QObject):
         result = {
             "active_bounties": {}, "active_fines": {}, "combat_unsold_total": None,
             "active_combat_bonds": {},
-            "squadron_rec": None, "carrier_rec": None, "active_missions": {},
+            "squadron_rec": None, "carrier_rec": None, "active_missions": {}, "pp_pledge": None,
             "bounty_last_commit": {}, "visited_megaships": set(),
         }
         if not self._journal_dir:
@@ -419,6 +420,10 @@ class _StartupHistoryScanWorker(QObject):
             result["squadron_rec"] = scan_squadron_status(path)
         except Exception:
             log.exception("Failed to scan journal history for squadron status")
+        try:
+            result["pp_pledge"] = scan_powerplay_pledge(path)
+        except Exception:
+            log.exception("Failed to scan journal history for PowerPlay pledge")
         try:
             result["carrier_rec"] = scan_carrier_status(path)
         except Exception:
@@ -3058,6 +3063,19 @@ class MainWindow(QMainWindow):
             self.state.squadron_status_timestamp = squadron_rec.get("status_timestamp")
             set_squadron_membership_since(
                 membership_since(self.state.squadron_status, self.state.squadron_status_timestamp))
+
+        # The login "Powerplay" event isn't in the startup replay (it comes
+        # before the last jump); recover the pledge from history unless a
+        # live event already set it.
+        pp_pledge = result.get("pp_pledge")
+        if pp_pledge and pp_pledge.get("power") and not getattr(self.state, "pp_power", None):
+            self.state.pp_power = pp_pledge["power"]
+            if self.state.pp_rank is None:
+                self.state.pp_rank = pp_pledge.get("rank")
+            if self.state.pp_merits is None:
+                self.state.pp_merits = pp_pledge.get("merits")
+            self._refresh_powerplay()
+            self._refresh_bgs_task_hint()
 
         carrier_rec = result["carrier_rec"]
         if carrier_rec:

@@ -538,7 +538,7 @@ def _powerplay_view(pp: Optional[dict], pledged: str, merits: int, pp_activities
     detected = det["mode"]
     mode = declared or detected
     warnings = []
-    if declared and det["source"]:
+    if declared and det["source"] and pledged:
         if detected == "Allied":
             warnings.append(f"Task says {declared}, but {det['controller']} is an allied (ZYADA) power — "
                             f"check with your coordinator before undermining")
