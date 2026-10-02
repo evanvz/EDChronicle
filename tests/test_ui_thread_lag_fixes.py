@@ -71,3 +71,27 @@ def test_facilitator_candidates_worker_runs_off_the_ui_thread(tmp_path):
     worker.finished.connect(lambda key, cands: out.append((key, cands)))
     worker.run()
     assert out == [(frozenset({"Faction A"}), [])]
+
+
+def test_bulk_table_fill_restores_auto_columns_and_fills_fast():
+    from PyQt6.QtWidgets import QHeaderView, QTableWidget, QTableWidgetItem
+    from edc.ui.style import bulk_table_fill
+
+    table = QTableWidget(0, 3)
+    h = table.horizontalHeader()
+    h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+    h.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+    h.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+    table.show()
+    start = time.perf_counter()
+    with bulk_table_fill(table):
+        assert h.sectionResizeMode(1) == QHeaderView.ResizeMode.Interactive
+        table.setRowCount(2000)
+        for r in range(2000):
+            for c in range(3):
+                table.setItem(r, c, QTableWidgetItem(f"Some Station Name {r} — {c}"))
+    _app.processEvents()
+    assert time.perf_counter() - start < 5  # was quadratic: minutes for ~2000 rows
+    assert h.sectionResizeMode(0) == QHeaderView.ResizeMode.Stretch
+    assert h.sectionResizeMode(1) == QHeaderView.ResizeMode.ResizeToContents
+    assert h.sectionResizeMode(2) == QHeaderView.ResizeMode.ResizeToContents

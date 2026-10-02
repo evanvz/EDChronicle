@@ -22,7 +22,7 @@ from edc.core.station_pads import pad_size_hint
 from edc.core.bgs_tasks import is_rival_power
 from edc.ui import formatting as fmt
 from edc.ui.busy_spinner import BusySpinner
-from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, LABEL_STYLE as _LABEL_STYLE, set_table_empty_message as _empty, set_table_rows as _rows
+from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, LABEL_STYLE as _LABEL_STYLE, set_table_empty_message as _empty, set_table_rows as _rows, bulk_table_fill as _bulk_fill
 
 log = logging.getLogger(__name__)
 
@@ -876,41 +876,42 @@ class MarketPanel(QWidget):
         self._trade_loading_spinner.stop()
         self._trade_table.setVisible(True)
 
-        self._trade_table.setSortingEnabled(False)
-        if not opportunities:
-            _empty(
-                self._trade_table,
-                "No profitable destinations found for this cargo within range.",
-            )
-        else:
-            _rows(self._trade_table, len(opportunities))
-        for row, o in enumerate(opportunities):
-            name_item = QTableWidgetItem(o["name"])
-            buy_item = _NumericTableWidgetItem(f"{o['buy_price']:,}", float(o["buy_price"]))
-            stock_item = _NumericTableWidgetItem(f"{o.get('stock', 0):,}", float(o.get("stock", 0)))
-            sell_item = _NumericTableWidgetItem(f"{o['sell_price']:,}", float(o["sell_price"]))
-            dest_station_item = QTableWidgetItem(o.get("station_name") or "—")
-            dest_system_item = QTableWidgetItem(o.get("system_name") or "—")
-            pad_item = QTableWidgetItem(o.get("pad_size") or pad_size_hint(o.get("station_type")))
-            dist_item = _NumericTableWidgetItem(f"{o['distance_ly']:.1f}", float(o["distance_ly"]))
-            profit_item = _NumericTableWidgetItem(f"+{o['profit_pct']:.1f}%", float(o["profit_pct"]))
-            profit_item.setForeground(QColor("#6BCB77"))
-            if pad_item.text() == "?":
-                pad_item.setForeground(QColor("#888888"))
-                pad_item.setToolTip("Landing pad size unknown for this station type")
-            for it in (buy_item, stock_item, sell_item, pad_item, dist_item, profit_item):
-                it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        with _bulk_fill(self._trade_table):
+            self._trade_table.setSortingEnabled(False)
+            if not opportunities:
+                _empty(
+                    self._trade_table,
+                    "No profitable destinations found for this cargo within range.",
+                )
+            else:
+                _rows(self._trade_table, len(opportunities))
+            for row, o in enumerate(opportunities):
+                name_item = QTableWidgetItem(o["name"])
+                buy_item = _NumericTableWidgetItem(f"{o['buy_price']:,}", float(o["buy_price"]))
+                stock_item = _NumericTableWidgetItem(f"{o.get('stock', 0):,}", float(o.get("stock", 0)))
+                sell_item = _NumericTableWidgetItem(f"{o['sell_price']:,}", float(o["sell_price"]))
+                dest_station_item = QTableWidgetItem(o.get("station_name") or "—")
+                dest_system_item = QTableWidgetItem(o.get("system_name") or "—")
+                pad_item = QTableWidgetItem(o.get("pad_size") or pad_size_hint(o.get("station_type")))
+                dist_item = _NumericTableWidgetItem(f"{o['distance_ly']:.1f}", float(o["distance_ly"]))
+                profit_item = _NumericTableWidgetItem(f"+{o['profit_pct']:.1f}%", float(o["profit_pct"]))
+                profit_item.setForeground(QColor("#6BCB77"))
+                if pad_item.text() == "?":
+                    pad_item.setForeground(QColor("#888888"))
+                    pad_item.setToolTip("Landing pad size unknown for this station type")
+                for it in (buy_item, stock_item, sell_item, pad_item, dist_item, profit_item):
+                    it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
-            self._trade_table.setItem(row, 0, name_item)
-            self._trade_table.setItem(row, 1, buy_item)
-            self._trade_table.setItem(row, 2, stock_item)
-            self._trade_table.setItem(row, 3, sell_item)
-            self._trade_table.setItem(row, 4, dest_station_item)
-            self._trade_table.setItem(row, 5, dest_system_item)
-            self._trade_table.setItem(row, 6, pad_item)
-            self._trade_table.setItem(row, 7, dist_item)
-            self._trade_table.setItem(row, 8, profit_item)
-        self._trade_table.setSortingEnabled(True)
+                self._trade_table.setItem(row, 0, name_item)
+                self._trade_table.setItem(row, 1, buy_item)
+                self._trade_table.setItem(row, 2, stock_item)
+                self._trade_table.setItem(row, 3, sell_item)
+                self._trade_table.setItem(row, 4, dest_station_item)
+                self._trade_table.setItem(row, 5, dest_system_item)
+                self._trade_table.setItem(row, 6, pad_item)
+                self._trade_table.setItem(row, 7, dist_item)
+                self._trade_table.setItem(row, 8, profit_item)
+            self._trade_table.setSortingEnabled(True)
         # Auto-sort best-profit-first by default — still click-sortable by
         # any column afterward like the search results table.
         self._trade_table.sortItems(8, Qt.SortOrder.DescendingOrder)
@@ -1211,55 +1212,56 @@ class MarketPanel(QWidget):
         )
         cargo_qty = self._cargo_qty_of(normalize_commodity_name(raw)) if not buy_mode else 0
 
-        self._table.setSortingEnabled(False)
-        if not results:
-            _empty(
-                self._table,
-                "No stations found — try a wider range, a different pad-size filter, or check the "
-                "commodity spelling.",
-            )
-        else:
-            _rows(self._table, len(results))
-        for row, r in enumerate(results):
-            station_item = QTableWidgetItem(r.get("station_name") or "—")
-            pad_item = QTableWidgetItem(r.get("pad_size") or pad_size_hint(r.get("station_type")))
-            system_item = QTableWidgetItem(r.get("system_name") or "—")
-            price = r.get("buy_price") if buy_mode else r.get("sell_price")
-            price_value = float(price or 0)
-            price_item = _NumericTableWidgetItem(f"{price or 0:,}", price_value)
-            dist_value = float(r.get("distance_ly", 0.0) or 0.0)
-            dist_item = _NumericTableWidgetItem(f"{dist_value:.1f}", dist_value)
-            count_value = float((r.get("stock") if buy_mode else r.get("demand")) or 0)
-            count_item = _NumericTableWidgetItem(str(int(count_value)), count_value)
-            updated_text, updated_age = _format_relative_time(r.get("last_updated") or "")
-            updated_item = _NumericTableWidgetItem(updated_text, updated_age)
-            if pad_item.text() == "?":
-                pad_item.setForeground(QColor("#888888"))
-                pad_item.setToolTip("Landing pad size unknown for this station type")
-
-            # Selling more than ~25% of a station's demand tapers the price
-            # down per unit past that point (real game mechanic).
-            if not buy_mode and cargo_qty > 0 and count_value > 0 and cargo_qty > 0.25 * count_value:
-                warn = (
-                    f"Your {cargo_qty} in cargo is {cargo_qty / count_value * 100:.0f}% of the "
-                    f"{int(count_value)} demand here — expect a lower price than shown for the excess."
+        with _bulk_fill(self._table):
+            self._table.setSortingEnabled(False)
+            if not results:
+                _empty(
+                    self._table,
+                    "No stations found — try a wider range, a different pad-size filter, or check the "
+                    "commodity spelling.",
                 )
-                count_item.setForeground(QColor("#FF8C00"))
-                count_item.setToolTip(warn)
-                price_item.setForeground(QColor("#FF8C00"))
-                price_item.setToolTip(warn)
+            else:
+                _rows(self._table, len(results))
+            for row, r in enumerate(results):
+                station_item = QTableWidgetItem(r.get("station_name") or "—")
+                pad_item = QTableWidgetItem(r.get("pad_size") or pad_size_hint(r.get("station_type")))
+                system_item = QTableWidgetItem(r.get("system_name") or "—")
+                price = r.get("buy_price") if buy_mode else r.get("sell_price")
+                price_value = float(price or 0)
+                price_item = _NumericTableWidgetItem(f"{price or 0:,}", price_value)
+                dist_value = float(r.get("distance_ly", 0.0) or 0.0)
+                dist_item = _NumericTableWidgetItem(f"{dist_value:.1f}", dist_value)
+                count_value = float((r.get("stock") if buy_mode else r.get("demand")) or 0)
+                count_item = _NumericTableWidgetItem(str(int(count_value)), count_value)
+                updated_text, updated_age = _format_relative_time(r.get("last_updated") or "")
+                updated_item = _NumericTableWidgetItem(updated_text, updated_age)
+                if pad_item.text() == "?":
+                    pad_item.setForeground(QColor("#888888"))
+                    pad_item.setToolTip("Landing pad size unknown for this station type")
 
-            for it in (pad_item, price_item, dist_item, count_item, updated_item):
-                it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                # Selling more than ~25% of a station's demand tapers the price
+                # down per unit past that point (real game mechanic).
+                if not buy_mode and cargo_qty > 0 and count_value > 0 and cargo_qty > 0.25 * count_value:
+                    warn = (
+                        f"Your {cargo_qty} in cargo is {cargo_qty / count_value * 100:.0f}% of the "
+                        f"{int(count_value)} demand here — expect a lower price than shown for the excess."
+                    )
+                    count_item.setForeground(QColor("#FF8C00"))
+                    count_item.setToolTip(warn)
+                    price_item.setForeground(QColor("#FF8C00"))
+                    price_item.setToolTip(warn)
 
-            self._table.setItem(row, 0, station_item)
-            self._table.setItem(row, 1, pad_item)
-            self._table.setItem(row, 2, system_item)
-            self._table.setItem(row, 3, price_item)
-            self._table.setItem(row, 4, dist_item)
-            self._table.setItem(row, 5, count_item)
-            self._table.setItem(row, 6, updated_item)
-        self._table.setSortingEnabled(True)
+                for it in (pad_item, price_item, dist_item, count_item, updated_item):
+                    it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
+                self._table.setItem(row, 0, station_item)
+                self._table.setItem(row, 1, pad_item)
+                self._table.setItem(row, 2, system_item)
+                self._table.setItem(row, 3, price_item)
+                self._table.setItem(row, 4, dist_item)
+                self._table.setItem(row, 5, count_item)
+                self._table.setItem(row, 6, updated_item)
+            self._table.setSortingEnabled(True)
 
 
 class _RareGoodsDialog(QDialog):

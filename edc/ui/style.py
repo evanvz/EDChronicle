@@ -30,6 +30,7 @@ from __future__ import annotations
 
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QFrame, QLabel, QVBoxLayout
+from contextlib import contextmanager
 
 # ── Card container (the "box" a section of related widgets sits in) ───────
 CARD_STYLE = "QFrame { background:#0d1a2a; border:1px solid #1e3a5a; border-radius:5px; }"
@@ -143,6 +144,29 @@ def make_card(title: str = "", variant: str = "blue") -> tuple[QFrame, QVBoxLayo
         hdr.setStyleSheet(hdr_style(variant))
         layout.addWidget(hdr)
     return frame, layout
+
+
+@contextmanager
+def bulk_table_fill(table):
+    """Fill a QTableWidget without per-cell column re-measuring. With a
+    ResizeToContents column, every setItem() fires dataChanged -> repaint ->
+    header resizeSections -> sizeHintForColumn, which text-shapes EVERY
+    cell in the column again: filling is quadratic (confirmed 2026-10-02
+    with native py-spy frames -- a few hundred Market rows froze the UI for
+    80-100s). Those columns are switched to Interactive for the fill and
+    restored after, so they're measured once."""
+    from PyQt6.QtWidgets import QHeaderView
+
+    header = table.horizontalHeader()
+    auto = [c for c in range(header.count())
+            if header.sectionResizeMode(c) == QHeaderView.ResizeMode.ResizeToContents]
+    for c in auto:
+        header.setSectionResizeMode(c, QHeaderView.ResizeMode.Interactive)
+    try:
+        yield
+    finally:
+        for c in auto:
+            header.setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
 
 
 def set_table_empty_message(table, message: str) -> None:
