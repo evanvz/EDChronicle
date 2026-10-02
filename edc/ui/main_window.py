@@ -445,6 +445,31 @@ class _StartupHistoryScanWorker(QObject):
         self.finished.emit(result)
 
 
+class _FacilitatorCandidatesWorker(QObject):
+    """Interstellar Factors candidate stations for the outstanding bounties'
+    factions, off the UI thread (own DB connection)."""
+    finished = pyqtSignal(object, object)  # key (frozenset of factions), candidates
+
+    def __init__(self, db_path, factions_key):
+        super().__init__()
+        self._db_path = db_path
+        self._key = factions_key
+
+    def run(self):
+        from persistence.database import Database
+        from persistence.repository import Repository
+
+        candidates = []
+        db = Database(self._db_path)
+        try:
+            candidates = Repository(db).get_facilitator_candidates(list(self._key))
+        except Exception:
+            log.exception("Failed to load Interstellar Factors candidates")
+        finally:
+            db.close()
+        self.finished.emit(self._key, candidates)
+
+
 class _IntelDataWorker(QObject):
     """Loads the Intel tab's two slow queries (~2.5s each) off the UI thread,
     with its own DB connection per the cross-thread rule."""
@@ -2151,6 +2176,8 @@ class MainWindow(QMainWindow):
         # closest-distance pass is redone each tick.
         self._if_candidates: list = []
         self._if_candidates_key: frozenset = frozenset()
+        self._if_thread: QThread | None = None
+        self._if_worker = None
 
         # Canonical paths: app_dir for shipped assets, settings_dir for writable JSON/caches.
         app_dir = Path(getattr(self.cfg_store, "app_dir", Path.cwd()))
@@ -6086,6 +6113,24 @@ class MainWindow(QMainWindow):
         self.squadron_panel.refresh(self.state)
         self.colonisation_panel.refresh(self.state)
 
+    def _start_if_candidates_load(self, key) -> None:
+        if self._if_thread and self._if_thread.isRunning():
+            return  # the key is re-checked on the next refresh after it lands
+        self._if_worker = _FacilitatorCandidatesWorker(self.repo.db.db_path, key)
+        if self._if_thread is not None:
+            self._if_thread.wait()
+        self._if_thread = QThread()
+        self._if_worker.moveToThread(self._if_thread)
+        self._if_thread.started.connect(self._if_worker.run)
+        self._if_worker.finished.connect(self._on_facilitator_candidates)
+        self._if_worker.finished.connect(self._if_thread.quit)
+        self._if_thread.start()
+
+    def _on_facilitator_candidates(self, key, candidates) -> None:
+        self._if_candidates = candidates
+        self._if_candidates_key = key
+        self._schedule_hud_refresh()
+
     def _refresh_bounty_status(self):
         """
         If a bounty is currently outstanding (CommitCrime with no matching
@@ -6115,10 +6160,13 @@ class MainWindow(QMainWindow):
         if not all(isinstance(v, (int, float)) for v in (x, y, z)):
             return
         payable_key = frozenset(payable.keys())
+        if self._if_candidates_key != payable_key:
+            # The candidates query took 2.7s on the UI thread at startup
+            # (stall detector, 2026-10-02) -- load it in the background; the
+            # distance pick below runs once it arrives.
+            self._start_if_candidates_load(payable_key)
+            return
         try:
-            if self._if_candidates_key != payable_key:
-                self._if_candidates = self.repo.get_facilitator_candidates(list(payable.keys()))
-                self._if_candidates_key = payable_key
             self.state.closest_interstellar_factors = self.repo.closest_facilitator_from_candidates(
                 self._if_candidates, x, y, z, exclude_factions=list(payable.keys())
             )

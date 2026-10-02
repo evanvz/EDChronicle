@@ -21,7 +21,7 @@ def _fake_self(x=0.0, y=0.0, z=0.0, active_bounties=None, get_candidates_calls=N
     def _closest(candidates, x, y, z, exclude_factions=None):
         return {"candidates": candidates, "pos": (x, y, z)}
 
-    return SimpleNamespace(
+    fake = SimpleNamespace(
         state=SimpleNamespace(
             active_bounties=active_bounties or {"Faction A": 1000},
             bounty_last_commit={},
@@ -36,6 +36,13 @@ def _fake_self(x=0.0, y=0.0, z=0.0, active_bounties=None, get_candidates_calls=N
         _if_candidates_key=frozenset(),
         _calls=calls,
     )
+    # The candidates query runs on a background thread in the app; here it's
+    # loaded synchronously, then the real callback stores it and the HUD
+    # refresh it schedules recomputes the closest station.
+    fake._start_if_candidates_load = lambda key: MainWindow._on_facilitator_candidates(
+        fake, key, fake.repo.get_facilitator_candidates(list(key)))
+    fake._schedule_hud_refresh = lambda: MainWindow._refresh_bounty_status(fake)
+    return fake
 
 
 def test_first_call_queries_candidates():

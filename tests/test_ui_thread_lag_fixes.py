@@ -55,3 +55,19 @@ def test_watchdog_logs_where_the_ui_thread_is_stuck(caplog):
     stuck = [r.message for r in caplog.records if "unresponsive" in r.message]
     assert stuck and "LoadGame" in stuck[0] and "test_watchdog_logs_where_the_ui_thread_is_stuck" in stuck[0]
     assert any("recovered after" in r.message for r in caplog.records)
+
+
+def test_facilitator_candidates_worker_runs_off_the_ui_thread(tmp_path):
+    from persistence.database import Database
+    from persistence.schema import SCHEMA_SQL
+    from edc.ui.main_window import _FacilitatorCandidatesWorker
+
+    db = Database(tmp_path / "t.db")
+    db.executescript(SCHEMA_SQL)
+    db.run_migrations()
+    db.close()
+    out = []
+    worker = _FacilitatorCandidatesWorker(tmp_path / "t.db", frozenset({"Faction A"}))
+    worker.finished.connect(lambda key, cands: out.append((key, cands)))
+    worker.run()
+    assert out == [(frozenset({"Faction A"}), [])]
