@@ -27,7 +27,7 @@ def _fake(pledged, configured=None):
 def test_automatic_shows_the_other_zyada_powers_for_a_zyada_pledge():
     win = _fake("Aisling Duval")
     MainWindow._refresh_allies_field(win)
-    assert win.allied_powers_edit.text() == "Zemina Torval, Yuri Grom, Arissa Lavigny-Duval, Denton Patreus"
+    assert win.allied_powers_edit.text() == "Zemina Torval, Yuri Grom, A. Lavigny-Duval, Denton Patreus"
     assert "automatic" in win.allied_powers_mode_label.text()
 
 

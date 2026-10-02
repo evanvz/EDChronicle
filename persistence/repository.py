@@ -493,6 +493,22 @@ class Repository:
             ),
         )
 
+    def backfill_conflict_progress(self, found: dict) -> int:
+        """Fills pp_conflict_progress for snapshots saved before the app kept
+        it -- only where it's empty and the journal event is the very visit
+        the snapshot came from (same timestamp). found:
+        {system_address: (timestamp, {power: progress})}."""
+        updated = 0
+        with self.db.deferred_commit():
+            for addr, (timestamp, progress) in found.items():
+                cur = self.db.execute(
+                    "UPDATE systems SET pp_conflict_progress = ? WHERE system_address = ? "
+                    "AND pp_data_timestamp = ? AND (pp_conflict_progress IS NULL OR pp_conflict_progress = '')",
+                    (json.dumps(progress), addr, timestamp),
+                )
+                updated += cur.rowcount or 0
+        return updated
+
     def get_system_powerplay_snapshot(self, system_address: int) -> Optional[dict]:
         """{"pp_state", "pp_control_progress", "pp_reinforcement", "pp_undermining",
         "pp_controlling_power", "pp_powers" (list), "pp_data_timestamp"} for the

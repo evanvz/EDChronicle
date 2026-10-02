@@ -45,6 +45,9 @@ class EddnPowerPlayCache:
     def __init__(self, settings_dir: Path, filename: str = "eddn_powerplay_cache.json"):
         self.path = Path(settings_dir) / filename
         self._systems: Dict[str, List[Dict[str, Any]]] = {}
+        # "<id64>": {"progress": {power: 0-1}, "date": ISO} -- latest
+        # acquisition progress other commanders' jumps reported.
+        self._progress: Dict[str, Dict[str, Any]] = {}
         # save() runs on a background thread while ingest() mutates on the
         # main thread; this keeps json.dumps from iterating a changing dict.
         self._lock = threading.Lock()
@@ -57,6 +60,8 @@ class EddnPowerPlayCache:
             data = json.loads(self.path.read_text(encoding="utf-8"))
             systems = data.get("systems") if isinstance(data, dict) else None
             self._systems = systems if isinstance(systems, dict) else {}
+            progress = data.get("conflict_progress") if isinstance(data, dict) else None
+            self._progress = progress if isinstance(progress, dict) else {}
         except Exception:
             log.exception("Failed to load eddn_powerplay_cache.json")
             self._systems = {}
@@ -66,7 +71,8 @@ class EddnPowerPlayCache:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             with self._lock:
                 self.path.write_text(
-                    json.dumps({"systems": self._systems}, ensure_ascii=False),
+                    json.dumps({"systems": self._systems, "conflict_progress": self._progress},
+                               ensure_ascii=False),
                     encoding="utf-8",
                 )
         except Exception:
@@ -92,6 +98,20 @@ class EddnPowerPlayCache:
         if not rows:
             return None
         return max(rows, key=lambda r: r.get("date") or "")
+
+    def ingest_conflict_progress(self, id64: int, progress: Dict[str, float], timestamp: str) -> None:
+        """Keeps the newest acquisition-progress sighting per system."""
+        key = str(id64)
+        with self._lock:
+            current = self._progress.get(key)
+            if current is None or (timestamp or "") > (current.get("date") or ""):
+                self._progress[key] = {"progress": dict(progress), "date": timestamp}
+
+    def get_conflict_progress(self, id64: Optional[int]) -> Optional[Dict[str, Any]]:
+        """{"progress": {power: 0-1}, "date": ISO} or None."""
+        if not isinstance(id64, int):
+            return None
+        return self._progress.get(str(id64))
 
     def ingest(self, id64: int, power: str, power_state: str, timestamp: str) -> None:
         """Called from the main thread in response to the listener's system_seen signal."""

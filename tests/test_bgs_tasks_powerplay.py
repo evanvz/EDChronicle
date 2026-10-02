@@ -168,7 +168,9 @@ def test_guide_lists_bgs_safe_first_and_flags_joint_actions():
 def test_allied_power_system_is_never_undermining():
     from edc.core.bgs_tasks import allied_powers
     allies = allied_powers("Aisling Duval")
-    assert allies == {"zemina torval", "yuri grom", "arissa lavigny-duval", "denton patreus"}
+    assert allies == {"zemina torval", "yuri grom", "a. lavigny-duval", "denton patreus"}
+    # The game writes Arissa as "A. Lavigny-Duval"; both spellings must match.
+    assert powerplay_mode("Aisling Duval", "A. Lavigny-Duval", "Fortified", allies=allies) == "Allied"
     assert powerplay_mode("Aisling Duval", "Denton Patreus", "Fortified", allies=allies) == "Allied"
     assert powerplay_mode("Aisling Duval", "Zachary Hudson", "Fortified", allies=allies) == "Undermining"
 

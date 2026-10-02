@@ -50,3 +50,35 @@ def scan_powerplay_pledge(journal_dir: Path) -> Optional[Dict[str, Any]]:
             return {"power": last.get("Power"), "rank": None, "merits": None}
         return {"power": last.get("Power"), "rank": last.get("Rank"), "merits": last.get("Merits")}
     return None
+
+
+def scan_conflict_progress(journal_dir: Path) -> Dict[int, tuple]:
+    """{SystemAddress: (timestamp, {power: 0-1})} from the latest jump into
+    each system that carried PowerplayConflictProgress -- recovers progress
+    for visits saved before the app kept it."""
+    journal_dir = Path(journal_dir)
+    found: Dict[int, tuple] = {}
+    if not journal_dir.exists():
+        return found
+    for path in sorted(journal_dir.glob("Journal.*.log")):
+        try:
+            with path.open("r", encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    if '"PowerplayConflictProgress"' not in line:
+                        continue
+                    try:
+                        event = json.loads(line)
+                    except Exception:
+                        continue
+                    addr = event.get("SystemAddress")
+                    progress = {
+                        p.get("Power"): float(p.get("ConflictProgress"))
+                        for p in (event.get("PowerplayConflictProgress") or [])
+                        if isinstance(p, dict) and isinstance(p.get("Power"), str)
+                        and isinstance(p.get("ConflictProgress"), (int, float))
+                    }
+                    if isinstance(addr, int) and progress:
+                        found[addr] = (event.get("timestamp") or "", progress)
+        except OSError:
+            continue
+    return found

@@ -108,7 +108,7 @@ from edc.core.materials_scanner import scan_latest_materials
 from edc.core.notoriety_scanner import scan_latest_notoriety
 from edc.core.rank_scanner import scan_latest_rank_progress
 from edc.core.squadron_scanner import scan_squadron_status
-from edc.core.powerplay_pledge_scanner import scan_powerplay_pledge
+from edc.core.powerplay_pledge_scanner import scan_conflict_progress, scan_powerplay_pledge
 from edc.core.squadron_events import SQUADRON_EVENT_NAMES, membership_since
 from persistence.repository import set_squadron_membership_since
 from edc.core.carrier_scanner import scan_carrier_status
@@ -397,6 +397,7 @@ class _StartupHistoryScanWorker(QObject):
             "active_bounties": {}, "active_fines": {}, "combat_unsold_total": None,
             "active_combat_bonds": {},
             "squadron_rec": None, "carrier_rec": None, "active_missions": {}, "pp_pledge": None,
+            "conflict_progress": {},
             "bounty_last_commit": {}, "visited_megaships": set(),
         }
         if not self._journal_dir:
@@ -420,6 +421,10 @@ class _StartupHistoryScanWorker(QObject):
             result["squadron_rec"] = scan_squadron_status(path)
         except Exception:
             log.exception("Failed to scan journal history for squadron status")
+        try:
+            result["conflict_progress"] = scan_conflict_progress(path)
+        except Exception:
+            log.exception("Failed to scan journal history for acquisition progress")
         try:
             result["pp_pledge"] = scan_powerplay_pledge(path)
         except Exception:
@@ -2585,6 +2590,7 @@ class MainWindow(QMainWindow):
         self.player_faction_panel.pledged_power_getter = lambda: (getattr(self.state, "pp_power", None) or "").strip()
         self.player_faction_panel.pp_activities = self.pp_activities
         self.player_faction_panel.edsm_powerplay = self.edsm_powerplay
+        self.player_faction_panel.eddn_powerplay = self.eddn_powerplay
         self.player_faction_panel.allies_getter = self._allies
         self.player_faction_panel.bgs_tasks_changed.connect(self._refresh_bgs_task_hint)
         self.player_faction_panel.tick_refresh_started.connect(self.overview_panel.show_tick_flash)
@@ -2796,7 +2802,7 @@ class MainWindow(QMainWindow):
         self.allied_powers_mode_label.setStyleSheet("color:#888888; font-size:11px;")
         allies_reset = QPushButton("Automatic (ZYADA)")
         allies_reset.setToolTip("Follow your pledge: when pledged to a ZYADA power (Zemina Torval, Yuri Grom, "
-                                "Arissa Lavigny-Duval, Denton Patreus, Aisling Duval), the other four are allies; "
+                                "A. Lavigny-Duval (Arissa), Denton Patreus, Aisling Duval), the other four are allies; "
                                 "otherwise none.")
         allies_reset.clicked.connect(self._on_allied_powers_reset)
         allies_row.addWidget(self.allied_powers_edit, 1)
@@ -3077,6 +3083,14 @@ class MainWindow(QMainWindow):
             self._refresh_powerplay()
             self._refresh_bgs_task_hint()
 
+        if result.get("conflict_progress"):
+            try:
+                filled = self.repo.backfill_conflict_progress(result["conflict_progress"])
+                if filled:
+                    log.info("Recovered acquisition progress for %d visited system(s)", filled)
+            except Exception:
+                log.exception("Failed to backfill acquisition progress")
+
         carrier_rec = result["carrier_rec"]
         if carrier_rec:
             self.state.carrier_owned_market_id = carrier_rec.carrier_owned_market_id
@@ -3130,6 +3144,7 @@ class MainWindow(QMainWindow):
         self._eddn_worker.moveToThread(self._eddn_thread)
         self._eddn_thread.started.connect(self._eddn_worker.run)
         self._eddn_worker.system_seen.connect(self._on_eddn_system_seen)
+        self._eddn_worker.conflict_progress_seen.connect(self.eddn_powerplay.ingest_conflict_progress)
         self._eddn_worker.system_coords_seen.connect(self.eddn_market_cache.on_coords_seen)
         self._eddn_worker.commodity_seen.connect(self.eddn_market_cache.on_commodity_message)
         self._eddn_worker.faction_seen.connect(self.eddn_market_cache.on_faction_seen)
@@ -4673,7 +4688,7 @@ class MainWindow(QMainWindow):
         configured = getattr(self.cfg, "pp_allied_powers", None)
         if configured is None:
             allies = _allies_of(self)
-            names = [p for p in ZYADA_COALITION if p.lower() in allies]
+            names = [p for p in ZYADA_COALITION if p.lower() in allies]  # game spellings
             self.allied_powers_mode_label.setText("(automatic — follows your pledge)")
         else:
             names = configured
@@ -6133,6 +6148,7 @@ class MainWindow(QMainWindow):
                     pledged=(getattr(self.state, "pp_power", None) or "").strip(),
                     pp_activities=getattr(self, "pp_activities", None),
                     edsm_powerplay=getattr(self, "edsm_powerplay", None),
+                    eddn_powerplay=getattr(self, "eddn_powerplay", None),
                 )
                 text = hud_line(views)
             except Exception:

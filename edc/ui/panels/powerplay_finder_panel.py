@@ -42,6 +42,7 @@ def _tier_label(edsm_powerplay, system_name: str) -> str:
 _SHORT_POWER = {
     "Aisling Duval":        "Aisling",
     "Arissa Lavigny-Duval": "ALD",
+    "A. Lavigny-Duval":     "ALD",  # as the journal/EDSM/EDDN write it
     "Archon Delaine":       "Archon",
     "Denton Patreus":       "Patreus",
     "Edmund Mahon":         "Mahon",

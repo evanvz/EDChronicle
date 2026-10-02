@@ -266,6 +266,7 @@ class BgsTasksDialog(QDialog):
                 pledged=pledged_getter() if pledged_getter else "",
                 pp_activities=getattr(self._panel, "pp_activities", None),
                 edsm_powerplay=getattr(self._panel, "edsm_powerplay", None),
+                eddn_powerplay=getattr(self._panel, "eddn_powerplay", None),
             )
         except Exception:
             log.exception("Failed to build BGS task views")

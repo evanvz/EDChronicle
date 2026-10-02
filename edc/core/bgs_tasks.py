@@ -136,13 +136,24 @@ def task_title(task: dict) -> str:
     return f"{system} — {head}" if system else head
 
 
+# The journal, EDSM and EDDN all spell Arissa as "A. Lavigny-Duval"; people
+# (and the activity table) write her full name. Compare on one form.
+_POWER_ALIASES = {"arissa lavigny-duval": "a. lavigny-duval"}
+
+
+def _key(name: str) -> str:
+    key = name.strip().lower()
+    return _POWER_ALIASES.get(key, key)
+
+
 def _same(a, b) -> bool:
-    return isinstance(a, str) and isinstance(b, str) and a.strip().lower() == b.strip().lower()
+    return isinstance(a, str) and isinstance(b, str) and _key(a) == _key(b)
 
 
 # The ZYADA coalition (Zemina Torval, Yuri Grom, Arissa Lavigny-Duval,
 # Denton Patreus, Aisling Duval): squadron rule, never undermine each other.
-ZYADA_COALITION = ("Zemina Torval", "Yuri Grom", "Arissa Lavigny-Duval", "Denton Patreus", "Aisling Duval")
+# Names as the game writes them.
+ZYADA_COALITION = ("Zemina Torval", "Yuri Grom", "A. Lavigny-Duval", "Denton Patreus", "Aisling Duval")
 
 
 def allied_powers(pledged: str, configured=None) -> frozenset:
@@ -151,13 +162,13 @@ def allied_powers(pledged: str, configured=None) -> frozenset:
     ZYADA when pledged to one of its powers; a list (even empty) overrides."""
     if configured is None:
         configured = ZYADA_COALITION if any(_same(pledged, p) for p in ZYADA_COALITION) else ()
-    return frozenset(p.strip().lower() for p in configured
+    return frozenset(_key(p) for p in configured
                      if isinstance(p, str) and p.strip() and not _same(p, pledged))
 
 
 def is_rival_power(power: str, pledged: str, allies=frozenset()) -> bool:
     """Another power that is neither ours nor an ally."""
-    return bool(pledged and power and not _same(power, pledged) and power.strip().lower() not in allies)
+    return bool(pledged and power and not _same(power, pledged) and _key(power) not in allies)
 
 
 def _missions(n: int) -> str:
@@ -446,7 +457,7 @@ def powerplay_mode(pledged: str, controlling_power: str, pp_state: str, powers_p
     if controlling_power:
         if _same(controlling_power, pledged):
             return "Reinforcement"
-        return "Allied" if controlling_power.strip().lower() in allies else "Undermining"
+        return "Allied" if _key(controlling_power) in allies else "Undermining"
     if not pp_state:
         return ""
     if powers_present and not any(_same(p, pledged) for p in powers_present):
@@ -530,8 +541,39 @@ def describe_detection(det: dict) -> str:
     return f"Detected: {det['mode']} ({who}, {det['state'] or 'unknown state'} — {det['source']}){extra}"
 
 
+def _hours_ago(iso: str) -> str:
+    try:
+        when = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return ""
+    hours = max(0.0, (datetime.now(timezone.utc) - when).total_seconds() / 3600)
+    return f"{hours:.0f}h ago" if hours < 48 else f"{hours / 24:.0f}d ago"
+
+
+def _acquisition_lines(acquisition: dict, pledged: str, source: str) -> tuple:
+    """(reading suffix, extra lines) for per-power acquisition progress
+    (0-1, 1.0 = the control threshold). Reaching it by the weekly cycle
+    (Thursday ~07:00 UTC) takes the system; two or more powers reaching it
+    make it Contested (ED wiki, from Frontier's PowerPlay 2.0 stream)."""
+    ours = next((p for p in acquisition if _same(p, pledged)), None)
+    shown = ours or max(acquisition, key=acquisition.get)
+    suffix = f" — {shown} {acquisition[shown] * 100:.1f}%" + (f" ({source})" if source else "")
+    extra = []
+    if ours is not None:
+        value = acquisition[ours]
+        rivals = [p for p, v in acquisition.items() if p != ours and v >= 1.0]
+        if value >= 1.0:
+            extra.append(f"Threshold reached — {ours} takes it at Thursday's cycle"
+                         + (f" unless it's Contested ({', '.join(rivals)} also reached it)" if rivals else ""))
+        else:
+            extra.append(f"{(1.0 - value) * 100:.1f}% to go before Thursday's cycle "
+                         f"(100% = {ours} takes the system)")
+    return suffix, extra
+
+
 def _powerplay_view(pp: Optional[dict], pledged: str, merits: int, pp_activities,
-                    allies=frozenset(), declared: str = "", edsm_row: Optional[dict] = None) -> dict:
+                    allies=frozenset(), declared: str = "", edsm_row: Optional[dict] = None,
+                    eddn_progress: Optional[dict] = None) -> dict:
     merits_line = [f"Your merits here this PowerPlay week: {merits:,}"] if pledged else []
     merits_hud = f" · {merits:,} merits this week" if pledged else ""
     det = detect_powerplay_mode(pledged, pp, edsm_row, allies)
@@ -554,6 +596,11 @@ def _powerplay_view(pp: Optional[dict], pledged: str, merits: int, pp_activities
             reading = f"{det['state'] or 'Unknown'}" + (f", {det['controller']}" if det["controller"] else "")
             head = f"{mode}: {reading} ({det['source']})" if mode else f"{reading} ({det['source']})"
             lines = [head]
+            if eddn_progress and eddn_progress.get("progress"):
+                suffix, extra = _acquisition_lines(eddn_progress["progress"], pledged,
+                                                   f"EDDN, {_hours_ago(eddn_progress.get('date'))}")
+                lines[0] += suffix
+                lines += extra
             if det["range_unconfirmed"] and mode == "Acquisition":
                 lines.append("Range unconfirmed until you visit")
         else:
@@ -577,15 +624,20 @@ def _powerplay_view(pp: Optional[dict], pledged: str, merits: int, pp_activities
         else (pp_state or "Unknown")
     progress = pp.get("pp_control_progress")
     acquisition = pp.get("pp_conflict_progress") or {}
+    source = ""
+    # Other commanders' EDDN sighting wins when it's newer than our visit.
+    if (eddn_progress and eddn_progress.get("progress") and not isinstance(progress, (int, float))
+            and (not acquisition or (eddn_progress.get("date") or "") > (pp.get("pp_data_timestamp") or ""))):
+        acquisition = eddn_progress["progress"]
+        source = f"EDDN, {_hours_ago(eddn_progress.get('date'))}"
+    extra = []
     if isinstance(progress, (int, float)):
         reading += f" — {progress * 100:.1f}%"
     elif acquisition:
-        # Acquisition progress per power; show ours if we're in it, else the leader.
-        power = next((p for p in acquisition if _same(p, pledged)), None) \
-            or max(acquisition, key=acquisition.get)
-        reading += f" — {power} {acquisition[power] * 100:.1f}%"
+        suffix, extra = _acquisition_lines(acquisition, pledged, source)
+        reading += suffix
     head = f"{mode}: {reading}" if mode else reading
-    lines = [head]
+    lines = [head] + (extra if mode == "Acquisition" else [])
     if pp.get("pp_controlling_power"):
         lines.append(f"Controlled by {pp['pp_controlling_power']}")
     lines += merits_line
@@ -631,7 +683,7 @@ def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], histor
                     pp: Optional[dict], limits: dict, pledged: str = "", merits: int = 0,
                     pp_activities=None, population: Optional[int] = None,
                     today: Optional[date] = None, edsm_row: Optional[dict] = None,
-                    squadron_faction: str = "") -> dict:
+                    squadron_faction: str = "", eddn_progress: Optional[dict] = None) -> dict:
     task_type = task["task_type"]
     population_basis = ""
     if task_type == "boost":
@@ -647,7 +699,8 @@ def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], histor
     elif task_type == "powerplay":
         view = _powerplay_view(pp, pledged, merits, pp_activities,
                                allied_powers(pledged, limits.get("allied_powers")),
-                               declared=task.get("pp_mode") or "", edsm_row=edsm_row)
+                               declared=task.get("pp_mode") or "", edsm_row=edsm_row,
+                               eddn_progress=eddn_progress)
     else:
         note = task.get("note") or ""
         lines = [note] if note else []
@@ -666,7 +719,7 @@ def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], histor
 
 def build_task_views(repo, since: str, limits: dict, system_address: Optional[int] = None,
                      pledged: str = "", pp_activities=None, now: Optional[datetime] = None,
-                     edsm_powerplay=None) -> list[dict]:
+                     edsm_powerplay=None, eddn_powerplay=None) -> list[dict]:
     """Views for every task (or only those in system_address), in the
     user's priority order."""
     tasks = repo.list_bgs_tasks()
@@ -693,7 +746,9 @@ def build_task_views(repo, since: str, limits: dict, system_address: Optional[in
         views.append(build_task_view(t, report, bgs_status, history, pp, limits,
                                      pledged=pledged, merits=merits, pp_activities=pp_activities,
                                      population=population, edsm_row=edsm_row,
-                                     squadron_faction=squadron_faction))
+                                     squadron_faction=squadron_faction,
+                                     eddn_progress=(eddn_powerplay.get_conflict_progress(addr)
+                                                    if t["task_type"] == "powerplay" and eddn_powerplay else None)))
     return views
 
 

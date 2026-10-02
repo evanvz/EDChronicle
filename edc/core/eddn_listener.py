@@ -107,6 +107,9 @@ class EddnPowerPlayWorker(QObject):
     # any SystemAddress above ~2.1 billion. Declared as "object" instead to
     # pass the Python int through unmodified.
     system_seen = pyqtSignal(object, str, str, str)  # id64, power, power_state, timestamp
+    # id64, {power: 0-1 acquisition progress}, timestamp -- from other
+    # commanders' jumps into Unoccupied/Expansion systems (PowerplayConflictProgress)
+    conflict_progress_seen = pyqtSignal(object, dict, str)
     system_coords_seen = pyqtSignal(str, float, float, float)  # StarSystem, x, y, z
     commodity_seen = pyqtSignal(dict)  # raw commodity/3 message body
     fcmaterials_seen = pyqtSignal(dict)  # raw fcmaterials_journal/1 message body
@@ -334,6 +337,14 @@ class EddnPowerPlayWorker(QObject):
 
             timestamp = msg.get("timestamp") or ""
             self.system_seen.emit(id64, power, power_state, timestamp)
+            progress = {
+                p.get("Power"): float(p.get("ConflictProgress"))
+                for p in (msg.get("PowerplayConflictProgress") or [])
+                if isinstance(p, dict) and isinstance(p.get("Power"), str)
+                and isinstance(p.get("ConflictProgress"), (int, float))
+            }
+            if progress:
+                self.conflict_progress_seen.emit(id64, progress, timestamp)
 
             if self._watched_factions:
                 self._maybe_emit_faction_seen(msg, timestamp)
