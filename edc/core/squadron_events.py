@@ -24,6 +24,14 @@ SQUADRON_EVENT_NAMES = _MEMBERSHIP_EVENTS | {
 }
 
 
+def membership_since(status, status_timestamp):
+    """The journal timestamp from which SquadronFaction:true flags belong to
+    the current squadron: the latest join/leave/kick/disband/create/apply/
+    invite event. Flags recorded before it came from a previous membership.
+    None when no membership change is known."""
+    return status_timestamp if status in _MEMBERSHIP_EVENTS and status_timestamp else None
+
+
 def apply_squadron_event(current: Dict[str, Any], event: Dict[str, Any]) -> Dict[str, Any]:
     """
     current keys: name, rank, rank_history (list), trophies (int), status,

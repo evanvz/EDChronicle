@@ -946,6 +946,19 @@ class EventEngine:
                     f"Merits {self.state.pp_merits:,})"
                 )
 
+        elif name in ("PowerplayJoin", "PowerplayDefect", "PowerplayLeave"):
+            # Pledge changes mid-session; the "Powerplay" summary event is only
+            # written at login (and only while pledged).
+            new_power = event.get("Power") if name == "PowerplayJoin" else event.get("ToPower")
+            self.state.pp_power = new_power if name != "PowerplayLeave" else None
+            self.state.pp_rank = None
+            self.state.pp_merits = None
+            self.state.pp_merits_start = None
+            self.state.pp_merits_session = 0
+            msgs.append(f"PP: left {event.get('Power') or 'your power'}" if name == "PowerplayLeave"
+                        else f"PP: now pledged to {new_power}")
+            msgs.append("refresh_powerplay")
+
         elif name == "PowerplayMerits":
             gained = event.get("MeritsGained")
             total = event.get("TotalMerits")

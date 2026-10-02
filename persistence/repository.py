@@ -43,6 +43,19 @@ def _bgs_status_cutoff() -> str:
     return (datetime.now(timezone.utc) - timedelta(days=_BGS_STATUS_MAX_AGE_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+# Set by the main window from the journal's latest squadron membership change
+# (edc.core.squadron_events.membership_since). Squadron-aligned faction flags
+# recorded before it belong to a previous membership -- after leaving a
+# squadron they'd otherwise keep naming the old faction forever. Module-level
+# so every thread's own Repository sees it.
+_squadron_membership_since: Optional[str] = None
+
+
+def set_squadron_membership_since(timestamp: Optional[str]) -> None:
+    global _squadron_membership_since
+    _squadron_membership_since = _normalize_data_timestamp(timestamp) if timestamp else None
+
+
 def _normalize_data_timestamp(value) -> str:
     """Normalizes an EDSM Unix epoch (int/float) or an ISO8601 string
     (with a 'Z' or '+00:00' suffix) into one consistent
@@ -874,7 +887,9 @@ class Repository:
         per-system work get_player_faction_overview() does."""
         row = self.db.conn.execute(
             "SELECT faction_name FROM faction_snapshots WHERE is_squadron_faction = 1 "
-            "ORDER BY snapshot_date DESC, data_timestamp DESC LIMIT 1"
+            "AND (? IS NULL OR data_timestamp > ?) "
+            "ORDER BY snapshot_date DESC, data_timestamp DESC LIMIT 1",
+            (_squadron_membership_since, _squadron_membership_since),
         ).fetchone()
         return row["faction_name"] if row else None
 
@@ -899,9 +914,11 @@ class Repository:
             """
             SELECT faction_name FROM faction_snapshots
             WHERE is_squadron_faction = 1
+              AND (? IS NULL OR data_timestamp > ?)
             ORDER BY snapshot_date DESC, data_timestamp DESC
             LIMIT 1
-            """
+            """,
+            (_squadron_membership_since, _squadron_membership_since),
         ).fetchone()
         if not row:
             return None

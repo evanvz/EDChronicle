@@ -108,6 +108,8 @@ from edc.core.materials_scanner import scan_latest_materials
 from edc.core.notoriety_scanner import scan_latest_notoriety
 from edc.core.rank_scanner import scan_latest_rank_progress
 from edc.core.squadron_scanner import scan_squadron_status
+from edc.core.squadron_events import SQUADRON_EVENT_NAMES, membership_since
+from persistence.repository import set_squadron_membership_since
 from edc.core.carrier_scanner import scan_carrier_status
 from edc.core.mission_scanner import scan_active_missions
 from edc.ui.panels.squadron_panel import SquadronPanel
@@ -3054,6 +3056,8 @@ class MainWindow(QMainWindow):
             self.state.squadron_trophies = int(squadron_rec.get("trophies", 0) or 0)
             self.state.squadron_status = squadron_rec.get("status")
             self.state.squadron_status_timestamp = squadron_rec.get("status_timestamp")
+            set_squadron_membership_since(
+                membership_since(self.state.squadron_status, self.state.squadron_status_timestamp))
 
         carrier_rec = result["carrier_rec"]
         if carrier_rec:
@@ -3945,6 +3949,11 @@ class MainWindow(QMainWindow):
                 # since event_engine.py's own per-system state clear has
                 # the same fix (see its StartJump/FSDJump comments).
                 self._clear_all_panels()
+
+        if name in SQUADRON_EVENT_NAMES:
+            set_squadron_membership_since(membership_since(
+                getattr(self.state, "squadron_status", None),
+                getattr(self.state, "squadron_status_timestamp", None)))
 
         if name == "SupercruiseDestinationDrop":
             # Confirms an actual visit to this specific destination — a
