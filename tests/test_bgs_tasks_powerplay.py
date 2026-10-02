@@ -75,7 +75,7 @@ def test_pledged_card_shows_mode_merits_and_top_activities_bonus_first():
                              "Contact in a supporting system in range (your Fortified within 20 ly / Stronghold "
                              "within 30 ly), deliver to the Power Contact here), "
                              "Bounty Hunting (cash vouchers elsewhere), Power Kills, Holoscreen Hacking")
-    assert table.calls == [("acquisition", "Unoccupied")]
+    assert set(table.calls) == {("acquisition", "Unoccupied")}  # full + short guide both read it
 
 
 def test_pledged_card_in_a_system_not_targetable():
@@ -306,3 +306,36 @@ def test_delivery_history_scan_sums_merits_within_a_minute(tmp_path):
               {"event": "PowerplayMerits", "timestamp": "2026-09-05T15:10:00Z", "MeritsGained": 99}]
     (tmp_path / "Journal.2026-09-05T140000.01.log").write_text(chr(10).join(json.dumps(e) for e in events), encoding="utf-8")
     assert scan_deliveries(tmp_path)["icz ag-o b6-5"]["merits"] == 4065
+
+
+# --- compact cards: bars + chips + short guide ---
+
+def test_boost_card_has_bars_per_stream_and_influence_chip():
+    report = {"2026-10-03": {"Tucanae": {"EUW": {"missions": {"count": 3, "weighted": 30}, "combat_bonds_total": 0,
+              "bounties_total": 5_000_000, "cz_kills": {}, "trade_sold": {"commodity": 0, "exploration": 0,
+                                                                             "exobiology": 0, "purchase": 0}}}}}
+    task = dict(_task("boost"), faction_name="EUW", system_name="Tucanae")
+    hist = [{"faction_name": "EUW", "snapshot_date": "2026-10-03", "influence": 0.43},
+            {"faction_name": "EUW", "snapshot_date": "2026-10-02", "influence": 0.41}]
+    view = build_task_view(task, report, None, hist, None, LIMITS)
+    bars = {b["label"]: b for b in view["bars"]}
+    assert bars["Missions"]["state"] == "over" and bars["Missions"]["text"] == "30 / 25 INF"
+    assert bars["Bounties"]["value"] == 5_000_000 and bars["Bounties"]["state"] == ""
+    assert view["chips"][0]["text"] == "Influence 43.0% ▲"
+    assert view["guide_short"].startswith("Missions · bounties")
+
+
+def test_powerplay_card_has_progress_bar_and_short_guide():
+    table = _Table([_act("Transport Powerplay Commodities"), _act("Holoscreen Hacking"),
+                    _act("Sell Rare Goods", bgs="joint")])
+    pp = dict(_PP, pp_control_progress=None, pp_conflict_progress={"Aisling Duval": 0.835}, pp_powers=["Aisling Duval"])
+    view = build_task_view(_task("powerplay"), {}, None, [], pp, LIMITS, pledged="Aisling Duval",
+                           merits=554, pp_activities=table)
+    assert view["bars"][0]["label"] == "Acquired" and view["bars"][0]["text"].startswith("83.5% — 16.5% to go")
+    assert view["guide_short"] == "Transport Aisling Media Materials · Holoscreen Hacking"
+    assert any(c["text"] == "554 merits this week" for c in view["chips"])
+
+
+def test_rgba_helper_keeps_the_colour():
+    from edc.ui.panels.bgs_tasks_dialog import _rgba
+    assert _rgba("#FFB347", 0.7) == "rgba(255, 179, 71, 178)"

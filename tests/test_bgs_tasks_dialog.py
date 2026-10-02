@@ -41,7 +41,8 @@ def test_add_boost_task_renders_a_card(tmp_path):
     assert len(dlg._cards) == 1
     text = _card_texts(dlg)[0]
     assert "Ekono — Boost Elite United Worlds" in text
-    assert "Tier score 0 / 25" in text
+    from PyQt6.QtWidgets import QProgressBar
+    assert "0 / 25 INF" in [b.format() for b in dlg._cards[0].findChildren(QProgressBar)]
     assert "To do" in text
     assert dlg._system_edit.text() == ""  # form cleared
     assert changed == [1]
@@ -131,8 +132,9 @@ def test_done_card_gets_green_tint_and_met_line_is_green(tmp_path):
     dlg.refresh()
     card = dlg._cards[0]
     assert "#0f2418" in card.styleSheet()
-    bounty_line = [l for l in card.findChildren(QLabel) if l.text().startswith("Bounties")][0]
-    assert "#6BCB77" in bounty_line.styleSheet()
+    from PyQt6.QtWidgets import QProgressBar
+    bounty_bar = [b for b in card.findChildren(QProgressBar) if b.format().startswith("20.0M")][0]
+    assert "rgba(107, 203, 119" in bounty_bar.styleSheet()  # met target = green (#6BCB77)
 
 
 def test_unfinished_card_has_no_tint(tmp_path):

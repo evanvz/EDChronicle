@@ -12,8 +12,8 @@ import logging
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
-    QApplication, QComboBox, QCompleter, QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QScrollArea, QToolTip, QVBoxLayout, QWidget,
+    QApplication, QComboBox, QCompleter, QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QProgressBar,
+    QPushButton, QScrollArea, QToolTip, QVBoxLayout, QWidget,
 )
 
 from edc.core.bgs_tasks import (
@@ -38,6 +38,14 @@ _SMALL_BTN = (
     " border-radius:3px; padding:1px 8px; }"
     "QPushButton:hover { background:#1a2a3a; }"
 )
+
+
+def _rgba(hex_color: str, alpha: float) -> str:
+    """'#RRGGBB' -> 'rgba(r, g, b, a)'. Qt reads 8-digit hex as #AARRGGBB,
+    so appending alpha to the hex silently changes the colour."""
+    h = hex_color.lstrip("#")
+    r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+    return f"rgba({r}, {g}, {b}, {int(alpha * 255)})"
 
 
 class BgsTasksDialog(QDialog):
@@ -321,6 +329,68 @@ class BgsTasksDialog(QDialog):
             self._content_layout.addWidget(card)
             self._cards.append(card)
 
+    def _add_structured_body(self, card_l, view: dict, accent: str) -> None:
+        """Numbers first: a one-line guide (full text on hover), progress
+        bars, a row of fact chips, then at most one warning (others on hover)."""
+        short = view.get("guide_short") or view.get("guide") or ""
+        if short:
+            lbl = QLabel(f'<span style="color:{accent}; font-weight:700;">What to do:</span> {html.escape(short)}')
+            lbl.setTextFormat(Qt.TextFormat.RichText)
+            lbl.setWordWrap(True)
+            lbl.setStyleSheet(_GUIDE_STYLE)
+            if view.get("guide") and view["guide"] != short:
+                lbl.setToolTip(view["guide"])
+            card_l.addWidget(lbl)
+        for bar in view.get("bars") or []:
+            row = QHBoxLayout()
+            row.setSpacing(8)
+            name = QLabel(bar["label"])
+            name.setStyleSheet(_LINE_STYLE)
+            name.setFixedWidth(110)
+            row.addWidget(name)
+            pb = QProgressBar()
+            pb.setRange(0, 1000)
+            ratio = (bar["value"] / bar["max"]) if bar.get("max") else 0.0
+            pb.setValue(int(max(0.0, min(ratio, 1.0)) * 1000))
+            pb.setFormat(bar.get("text") or "")
+            pb.setFixedHeight(16)
+            chunk = {"met": "#6BCB77", "over": "#FFB347"}.get(bar.get("state"), accent)
+            pb.setStyleSheet(
+                "QProgressBar { background:#0a1520; border:1px solid #1e3a5a; border-radius:3px;"
+                " color:#e8e8e8; text-align:center; font-size:11px; }"
+                f"QProgressBar::chunk {{ background:{_rgba(chunk, 0.7)}; border-radius:2px; }}")
+            row.addWidget(pb, 1)
+            card_l.addLayout(row)
+        chips = view.get("chips") or []
+        if chips:
+            parts, tips = [], []
+            for c in chips:
+                color = c.get("color") or "#c8c8c8"
+                parts.append(f'<span style="background-color:#16263a; color:{color};">&nbsp;{html.escape(c["text"])}&nbsp;</span>')
+                if c.get("tooltip"):
+                    tips.append(f"{c['text']}: {c['tooltip']}")
+            lbl = QLabel("&nbsp; ".join(parts))
+            lbl.setTextFormat(Qt.TextFormat.RichText)
+            lbl.setWordWrap(True)
+            lbl.setStyleSheet("background:transparent; border:none; font-size:11px;")
+            if tips:
+                lbl.setToolTip("\n".join(tips))
+            card_l.addWidget(lbl)
+        for line in view.get("detail_lines") or []:
+            lbl = QLabel(line)
+            lbl.setWordWrap(True)
+            lbl.setStyleSheet(_LINE_STYLE)
+            card_l.addWidget(lbl)
+        warnings = view.get("warnings") or []
+        if warnings:
+            extra = f"  (+{len(warnings) - 1} more — hover)" if len(warnings) > 1 else ""
+            lbl = QLabel(f"⚠ {warnings[0]}{extra}")
+            lbl.setWordWrap(True)
+            lbl.setStyleSheet(_WARN_STYLE)
+            if len(warnings) > 1:
+                lbl.setToolTip("\n".join(f"⚠ {w}" for w in warnings))
+            card_l.addWidget(lbl)
+
     def _make_card(self, view: dict) -> QFrame:
         task = view["task"]
         card = QFrame()
@@ -353,7 +423,8 @@ class BgsTasksDialog(QDialog):
         if view["status"]:
             status = QLabel(view["status"])
             color = STATUS_COLORS.get(view["status"], "#c8c8c8")
-            status.setStyleSheet(f"background:transparent; border:none; color:{color}; font-weight:700;")
+            status.setStyleSheet(f"background:{_rgba(color, 0.15)}; border:1px solid {color}; border-radius:8px;"
+                                 f" color:{color}; font-weight:700; padding:0px 8px;")
             top.addWidget(status)
         task_id = task["id"]
         for text, handler in (
@@ -367,24 +438,27 @@ class BgsTasksDialog(QDialog):
             top.addWidget(btn)
         card_l.addLayout(top)
 
-        if view.get("guide"):
-            lbl = QLabel(
-                f'<span style="color:{accent}; font-weight:700;">What to do:</span> {html.escape(view["guide"])}'
-            )
-            lbl.setTextFormat(Qt.TextFormat.RichText)
-            lbl.setWordWrap(True)
-            lbl.setStyleSheet(_GUIDE_STYLE)
-            card_l.addWidget(lbl)
-        for line, state in zip(view["lines"], view.get("line_states") or [""] * len(view["lines"])):
-            lbl = QLabel(line)
-            lbl.setWordWrap(True)
-            lbl.setStyleSheet(_LINE_STATE_STYLES.get(state, _LINE_STYLE))
-            card_l.addWidget(lbl)
-        for warning in view["warnings"]:
-            lbl = QLabel(f"⚠ {warning}")
-            lbl.setWordWrap(True)
-            lbl.setStyleSheet(_WARN_STYLE)
-            card_l.addWidget(lbl)
+        if "bars" in view:
+            self._add_structured_body(card_l, view, accent)
+        else:
+            if view.get("guide"):
+                lbl = QLabel(
+                    f'<span style="color:{accent}; font-weight:700;">What to do:</span> {html.escape(view["guide"])}'
+                )
+                lbl.setTextFormat(Qt.TextFormat.RichText)
+                lbl.setWordWrap(True)
+                lbl.setStyleSheet(_GUIDE_STYLE)
+                card_l.addWidget(lbl)
+            for line, state in zip(view["lines"], view.get("line_states") or [""] * len(view["lines"])):
+                lbl = QLabel(line)
+                lbl.setWordWrap(True)
+                lbl.setStyleSheet(_LINE_STATE_STYLES.get(state, _LINE_STYLE))
+                card_l.addWidget(lbl)
+            for warning in view["warnings"]:
+                lbl = QLabel(f"⚠ {warning}")
+                lbl.setWordWrap(True)
+                lbl.setStyleSheet(_WARN_STYLE)
+                card_l.addWidget(lbl)
         if task["system_address"] is None and task["task_type"] != "note":
             lbl = QLabel("System not seen yet — progress appears once you visit it or EDDN reports it.")
             lbl.setStyleSheet(_DIM_STYLE)

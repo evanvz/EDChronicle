@@ -263,6 +263,37 @@ def cargo_by_name(inventory) -> dict:
     return out
 
 
+def commodity_info(mode: str, pledged: str, cargo: Optional[dict] = None,
+                   last_collect: Optional[dict] = None, now: Optional[datetime] = None,
+                   supporting: Optional[list] = None, collect_system: Optional[dict] = None,
+                   last_delivery: Optional[dict] = None) -> Optional[dict]:
+    """The facts behind commodity_lines(), for compact card chips."""
+    commodities = POWERPLAY_COMMODITIES.get(_key(pledged or ""))
+    route = _COMMODITY_ROUTE.get(mode)
+    if not commodities or not route:
+        return None
+    name = commodities[route[0]]
+    key = name.lower()
+    info = {"name": name, "carrying": (cargo or {}).get(key, 0), "next_allocation": "",
+            "supporting": supporting if mode == "Acquisition" else None, "warning": "",
+            "last_delivery": last_delivery}
+    when = (last_collect or {}).get(key)
+    if when:
+        try:
+            ready = datetime.fromisoformat(when.replace("Z", "+00:00")) + timedelta(minutes=ALLOCATION_REFRESH_MIN)
+            info["next_allocation"] = (ready.astimezone().strftime("%H:%M")
+                                       if ready > (now or datetime.now(timezone.utc)) else "now")
+        except ValueError:
+            pass
+    source = (collect_system or {}).get(key)
+    if (mode == "Acquisition" and supporting is not None and info["carrying"] and source
+            and not any(n.lower() == source.lower() for n, _s, _d in supporting)):
+        fix = f" — collect at {supporting[0][0]} instead" if supporting else ""
+        info["warning"] = (f"Your {info['carrying']} t were collected at {source}, which isn't a supporting "
+                           f"system for this target, so they won't be accepted here{fix}")
+    return info
+
+
 def commodity_lines(mode: str, pledged: str, cargo: Optional[dict] = None,
                     last_collect: Optional[dict] = None, now: Optional[datetime] = None,
                     supporting: Optional[list] = None, collect_system: Optional[dict] = None,
@@ -525,7 +556,32 @@ def _boost_view(task: dict, report: dict, history: list, limits: dict, today: Op
         status = STATUS_LOSING
     else:
         status = STATUS_TODO
-    return {"status": status, "lines": lines, "warnings": warnings, "line_states": line_states,
+    view_bars = []
+    for key, label in _LIMITED_STREAMS:
+        limit = limits.get(key, 0)
+        if limit <= 0 and not act[key]:
+            continue
+        value = act[key]
+        text = (f"{value} / {limit} INF" if key == "tier_score"
+                else f"{_cr(value)} / {_cr(limit)}" if limit > 0 else _cr(value))
+        view_bars.append({"label": "Missions" if key == "tier_score" else label, "value": value,
+                          "max": limit, "text": text,
+                          "state": ("over" if value > limit else "met") if limit > 0 and value >= limit else ""})
+    chips = []
+    if latest is not None:
+        trend = "" if previous is None else ("▲" if latest > previous else "▼" if latest < previous else "▶")
+        color = "#FF6B6B" if latest < 0.025 else ("#6BCB77" if trend == "▲" else "#FFB347" if trend == "▼" else "")
+        chips.append({"text": f"Influence {latest * 100:.1f}% {trend}".strip(), "color": color,
+                      "tooltip": (f"{previous * 100:.1f}% → {latest * 100:.1f}%{as_of}" if previous is not None
+                                  else f"{latest * 100:.1f}%{as_of}")})
+    if act["trade_bought"]:
+        chips.append({"text": f"Trade buys {_cr(act['trade_bought'])}"})
+    if act["combat_bonds"]:
+        chips.append({"text": f"Combat bonds {_cr(act['combat_bonds'])}"})
+    structure = {"bars": view_bars, "chips": chips,
+                 "detail_lines": [retreat_line] if retreat_line else [],
+                 "guide_short": f"Missions · bounties · exploration data · profitable high-demand trade for {faction}"}
+    return {"status": status, "lines": lines, "warnings": warnings, "line_states": line_states, **structure,
             "hud": f"Boost {faction} — tier score {act['tier_score']}/{limits['tier_score']}",
             "updated_at": None}
 
@@ -621,6 +677,24 @@ def powerplay_mode(pledged: str, controlling_power: str, pp_state: str, powers_p
     if powers_present and not any(_same(p, pledged) for p in powers_present):
         return ""
     return "Acquisition"
+
+
+def _powerplay_guide_short(mode: str, pp_state: str, pledged: str, pp_activities) -> str:
+    """One glanceable line: the top three BGS-safe actions, commodity named
+    without its collect/deliver route (that's in the full guide tooltip)."""
+    if not pledged or not mode or mode == "Allied" or pp_activities is None:
+        return _powerplay_guide(mode, pp_state, pledged, pp_activities)
+    acts = [a for a in pp_activities.get_actions(mode.lower(), pp_state)
+            if a.merits == "yes" and getattr(a, "bgs", "safe") == "safe"]
+    acts.sort(key=lambda a: not any(_same(p, pledged) for p in a.bonus_powers))
+    names = []
+    for a in dict.fromkeys(x.action for x in acts):
+        if a == "Transport Powerplay Commodities":
+            commodities = POWERPLAY_COMMODITIES.get(_key(pledged))
+            route = _COMMODITY_ROUTE.get(mode)
+            a = f"Transport {commodities[route[0]]}" if commodities and route else a
+        names.append(a)
+    return " · ".join(names[:3]) if names else mode
 
 
 def _powerplay_guide(mode: str, pp_state: str, pledged: str, pp_activities) -> str:
@@ -786,10 +860,20 @@ def _powerplay_view(pp: Optional[dict], pledged: str, merits: int, pp_activities
                      "mode from your squadron's objective")
         else:
             guide = _powerplay_guide(mode, det["state"], pledged, pp_activities)
-        return {"status": STATUS_NO_DATA if not det["source"] else STATUS_TRACKING,
+        view = {"status": STATUS_NO_DATA if not det["source"] else STATUS_TRACKING,
                 "lines": lines + merits_line, "warnings": warnings,
                 "hud": f"PowerPlay — {hud_head}{merits_hud}", "updated_at": None,
                 "guide": guide}
+        ep = (eddn_progress or {}).get("progress") or {}
+        _add_powerplay_structure(view, mode, det["state"], pledged, pp_activities, None, ep,
+                                 f"EDDN, {_hours_ago(eddn_progress.get('date'))}" if ep else "",
+                                 det["controller"], population, merits,
+                                 commodity_info(mode, pledged, cargo, last_collect, supporting=supporting,
+                                                collect_system=collect_system, last_delivery=last_delivery),
+                                 source_note=det["source"], range_unconfirmed=det["range_unconfirmed"])
+        if not det["source"] and not mode:
+            view["guide_short"] = guide
+        return view
 
     pp_state = pp.get("pp_state") or ""
     # "Unoccupied" is a PowerPlay state (no controlling power), not population.
@@ -818,9 +902,70 @@ def _powerplay_view(pp: Optional[dict], pledged: str, merits: int, pp_activities
     if pp.get("pp_controlling_power"):
         lines.append(f"Controlled by {pp['pp_controlling_power']}")
     lines += merits_line
-    return {"status": STATUS_TRACKING, "lines": lines, "warnings": warnings,
+    view = {"status": STATUS_TRACKING, "lines": lines, "warnings": warnings,
             "hud": f"PowerPlay — {head}{merits_hud}", "updated_at": pp.get("pp_data_timestamp"),
             "guide": _powerplay_guide(mode, pp_state, pledged, pp_activities)}
+    _add_powerplay_structure(view, mode, pp_state, pledged, pp_activities, progress, acquisition, source,
+                             pp.get("pp_controlling_power") or "", population, merits,
+                             commodity_info(mode, pledged, cargo, last_collect, supporting=supporting,
+                                            collect_system=collect_system, last_delivery=last_delivery))
+    return view
+
+
+def _add_powerplay_structure(view: dict, mode: str, pp_state: str, pledged: str, pp_activities,
+                             control_progress, acquisition: dict, progress_source: str, controller: str,
+                             population, merits: int, info: Optional[dict],
+                             source_note: str = "", range_unconfirmed: bool = False) -> None:
+    """Bars / chips / short guide for a PowerPlay card (see _make_card)."""
+    bars, chips = [], []
+    if isinstance(control_progress, (int, float)):
+        bars.append({"label": "Control", "value": control_progress, "max": 1.0,
+                     "text": f"{control_progress * 100:.1f}%", "state": ""})
+    elif acquisition:
+        ours = next((p for p in acquisition if _same(p, pledged)), None)
+        shown = ours or max(acquisition, key=acquisition.get)
+        value = acquisition[shown]
+        left = f" — {(1 - value) * 100:.1f}% to go" if ours and value < 1 else (" — threshold reached" if ours else "")
+        bars.append({"label": shown if not ours else "Acquired", "value": min(value, 1.0), "max": 1.0,
+                     "text": f"{value * 100:.1f}%{left}" + (f" ({progress_source})" if progress_source else ""),
+                     "state": "met" if ours and value >= 1 else ""})
+    state_txt = f"{pp_state} ({_PP_STATE_MEANINGS[pp_state]})" if pp_state in _PP_STATE_MEANINGS else pp_state
+    if state_txt:
+        chips.append({"text": state_txt + (f" · {controller}" if controller else ""),
+                      "tooltip": source_note or "", "color": ""})
+    if range_unconfirmed and mode == "Acquisition":
+        chips.append({"text": "range unconfirmed", "color": "#FFB347",
+                      "tooltip": "From EDSM -- visit the system to confirm your power is in range"})
+    if population is not None:
+        chips.append({"text": f"Pop {population_text(population)}"})
+    if info:
+        if info["carrying"]:
+            chips.append({"text": f"Carrying {info['carrying']} t", "color": "#6BCB77",
+                          "tooltip": info["name"]})
+        if info["next_allocation"]:
+            chips.append({"text": ("Allocation ready" if info["next_allocation"] == "now"
+                                   else f"Next allocation {info['next_allocation']}"),
+                          "tooltip": f"{ALLOCATION_REFRESH_MIN} min after your last collection (community-reported)"})
+        if info["supporting"]:
+            n, st, d = info["supporting"][0]
+            chips.append({"text": f"Collect at {n} · {d:.1f} ly", "color": "#4DD8C8",
+                          "tooltip": "Supporting systems (Fortified ≤20 ly / Stronghold ≤30 ly):\n" + "\n".join(
+                              f"{a} ({b}, {c:.1f} ly)" for a, b, c in info["supporting"])})
+        elif info["supporting"] is not None:
+            chips.append({"text": "No supporting system known", "color": "#FFB347",
+                          "tooltip": "Fortified ≤20 ly / Stronghold ≤30 ly -- check the galaxy map's strategic view"})
+        if info["last_delivery"]:
+            ld = info["last_delivery"]
+            chips.append({"text": f"Last hand-in {ld['merits']:,} merits",
+                          "tooltip": f"{ld['count']} t {ld['type']} on {str(ld['timestamp'])[:10]}"})
+        if info["warning"]:
+            view["warnings"] = [info["warning"]] + list(view.get("warnings") or [])
+    if pledged:
+        chips.append({"text": f"{merits:,} merits this week", "tooltip": "Earned in this system this PowerPlay week"})
+    view["bars"] = bars
+    view["chips"] = chips
+    view["detail_lines"] = []
+    view["guide_short"] = _powerplay_guide_short(mode, pp_state, pledged, pp_activities)
 
 
 def _bgs_guide(task: dict, limits: dict, population_basis: str = "") -> str:
