@@ -71,7 +71,9 @@ def test_pledged_card_shows_mode_merits_and_top_activities_bonus_first():
     assert view["lines"][0] == "Acquisition: Unoccupied (no power yet) — 78.9%"
     assert "Your merits here this PowerPlay week: 340" in view["lines"]
     assert view["hud"] == "PowerPlay — Acquisition: Unoccupied (no power yet) — 78.9% · 340 merits this week"
-    assert view["guide"] == ("Acquisition — BGS-safe: Transport Powerplay Commodities, "
+    assert view["guide"] == ("Acquisition — BGS-safe: Transport Aisling Media Material (collect at a Power "
+                             "Contact in a supporting system in range (your Fortified within 20 ly / Stronghold "
+                             "within 30 ly), deliver to the Power Contact here), "
                              "Bounty Hunting (cash vouchers elsewhere), Power Kills, Holoscreen Hacking")
     assert table.calls == [("acquisition", "Unoccupied")]
 
@@ -197,3 +199,16 @@ def test_allied_card_says_do_not_undermine():
     view = build_task_view(_task("powerplay"), {}, None, [], pp, LIMITS, pledged="Aisling Duval")
     assert view["lines"][0].startswith("Allied:")
     assert view["guide"] == "Allied power's system — don't undermine it (coalition)"
+
+
+# --- the commodity for the job ---
+
+def test_transport_names_the_commodity_for_the_power_and_job():
+    from edc.core.bgs_tasks import transport_text
+    assert transport_text("Acquisition", "Aisling Duval").startswith("Transport Aisling Media Material (")
+    assert transport_text("Reinforcement", "Aisling Duval").startswith("Transport Aisling Sealed Contract (")
+    assert transport_text("Undermining", "Aisling Duval").startswith("Transport Aisling Programme Material (")
+    # the game writes Arissa as "A. Lavigny-Duval"; both spellings work
+    assert "Lavigny Corruption Reports" in transport_text("Acquisition", "A. Lavigny-Duval")
+    assert "Lavigny Corruption Reports" in transport_text("Acquisition", "Arissa Lavigny-Duval")
+    assert transport_text("Acquisition", "Unknown Power") == "Transport Powerplay Commodities"

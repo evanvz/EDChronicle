@@ -171,6 +171,43 @@ def _same(a, b) -> bool:
 ZYADA_COALITION = ("Zemina Torval", "Yuri Grom", "A. Lavigny-Duval", "Denton Patreus", "Aisling Duval")
 
 
+# Each power's PowerPlay commodity per job: (Acquisition, Reinforcement,
+# Undermining). ED wiki "Powerplay commodities" table.
+POWERPLAY_COMMODITIES = {
+    "aisling duval": ("Aisling Media Material", "Aisling Sealed Contract", "Aisling Programme Material"),
+    "archon delaine": ("Kumo Contraband Packages", "Unmarked Military Supplies", "Marked Slaves"),
+    "a. lavigny-duval": ("Lavigny Corruption Reports", "Lavigny Garrison Supplies", "Lavigny Strategic Reports"),
+    "denton patreus": ("Marked Military Arms", "Patreus Field Supplies", "Patreus Garrison Supplies"),
+    "edmund mahon": ("Alliance Trade Agreements", "Alliance Legislative Contract", "Alliance Legislative Records"),
+    "felicia winters": ("Liberal Federal Aid", "Liberal Federal Packages", "Liberal Propaganda"),
+    "jerome archer": ("Archer's Restricted Intel", "Archer's Field Supplies", "Archer's Garrison Supplies"),
+    "li yong-rui": ("Sirius Franchise Package", "Sirius Industrial Equipment", "Sirius Corporate Contracts"),
+    "nakato kaine": ("Kaine Lobbying Material", "Kaine Aid Supplies", "Kaine Misinformation"),
+    "pranav antal": ("Utopian Publicity", "Utopian Supplies", "Utopian Dissident"),
+    "yuri grom": ("Grom Underground Support", "Grom Military Supplies", "Grom Counter Intelligence"),
+    "zemina torval": ("Torval Trade Agreements", "Torval Deeds", "Torval Political Servants"),
+}
+_COMMODITY_ROUTE = {
+    "Acquisition": (0, "collect at a Power Contact in a supporting system in range (your Fortified within "
+                       "20 ly / Stronghold within 30 ly), deliver to the Power Contact here"),
+    "Reinforcement": (1, "collect at a Power Contact in one of your Strongholds (not this system), "
+                         "deliver to the Power Contact here"),
+    "Undermining": (2, "collect at a Power Contact in one of your Strongholds, deliver to the Power Contact here"),
+}
+
+
+def transport_text(mode: str, pledged: str) -> str:
+    """ "Transport Aisling Media Material (collect ..., deliver ...)" for the
+    pledged power and job; the generic activity name when unknown. Only the
+    commodity for THIS job counts -- the other two earn nothing here."""
+    commodities = POWERPLAY_COMMODITIES.get(_key(pledged or ""))
+    route = _COMMODITY_ROUTE.get(mode)
+    if not commodities or not route:
+        return "Transport Powerplay Commodities"
+    index, how = route
+    return f"Transport {commodities[index]} ({how})"
+
+
 def allied_powers(pledged: str, configured=None) -> frozenset:
     """Lower-cased names of the powers treated as allies. configured is
     Config.pp_allied_powers: None means the default, i.e. the rest of
@@ -496,7 +533,14 @@ def _powerplay_guide(mode: str, pp_state: str, pledged: str, pp_activities) -> s
 
     def names(bgs, n):
         picked = dict.fromkeys(a.action for a in acts if getattr(a, "bgs", "safe") == bgs)
-        return [f"{x} (cash vouchers elsewhere)" if x == "Bounty Hunting" else x for x in picked][:n]
+        named = []
+        for x in picked:
+            if x == "Bounty Hunting":
+                x = f"{x} (cash vouchers elsewhere)"
+            elif x == "Transport Powerplay Commodities":
+                x = transport_text(mode, pledged)
+            named.append(x)
+        return named[:n]
 
     safe, joint = names("safe", 4), names("joint", 2)
     if not safe and not joint:
