@@ -3,7 +3,6 @@
 # See the LICENSE file in the project root for full terms.
 
 import logging
-import time
 from urllib.parse import quote, unquote
 
 from persistence.repository import _parse_states
@@ -314,8 +313,6 @@ class IntelPanel(QWidget):
         self._farming_locations = None
         self._nearby_farming_cache_live_rows = None
         self._nearby_farming_cache_coords = None
-        self._nearby_farming_cache_time = 0.0
-        self._nearby_farming_cache_system_address = None
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -706,6 +703,12 @@ class IntelPanel(QWidget):
         return f"{days} days ago"
 
 
+    def set_nearby_farming_data(self, coords_by_name_lower: dict, live_rows: list) -> None:
+        """Data for the Nearby Farming search, loaded on a background thread
+        (the live-rows query takes ~2.5s on a real database)."""
+        self._nearby_farming_cache_coords = coords_by_name_lower or {}
+        self._nearby_farming_cache_live_rows = live_rows or []
+
     def _search_nearby_farming(self, material_filter: str) -> list:
         if not self._farming_locations or self._repo is None:
             return []
@@ -718,19 +721,10 @@ class IntelPanel(QWidget):
         all_records = getattr(self._farming_locations, "_records", []) or []
         static_sites = [r for r in all_records if isinstance(r, dict) and r.get("system")]
 
-        cur_system_address = getattr(self._state, "system_address", None) if self._state else None
-        now = time.monotonic()
-        stale = now - self._nearby_farming_cache_time >= 30.0
-        system_changed = cur_system_address != self._nearby_farming_cache_system_address
-        if self._nearby_farming_cache_live_rows is None or stale or system_changed:
-            static_names = [str(r.get("system")) for r in static_sites]
-            coords_raw = self._repo.get_system_coords_for_names(static_names) if static_names else {}
-            self._nearby_farming_cache_coords = {
-                name.lower(): coords for name, coords in coords_raw.items()
-            }
-            self._nearby_farming_cache_live_rows = self._repo.get_controlling_faction_snapshots_with_coords()
-            self._nearby_farming_cache_time = now
-            self._nearby_farming_cache_system_address = cur_system_address
+        # Loaded off the UI thread by the main window (set_nearby_farming_data);
+        # nothing to show until the first load arrives.
+        if self._nearby_farming_cache_live_rows is None:
+            return []
 
         return _build_nearby_farming_results(
             static_sites, self._nearby_farming_cache_coords, self._nearby_farming_cache_live_rows,

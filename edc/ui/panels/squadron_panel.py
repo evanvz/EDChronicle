@@ -12,6 +12,7 @@ moved to their own Colonisation tab.
 from __future__ import annotations
 
 import logging
+import time
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
@@ -101,6 +102,9 @@ class SquadronPanel(QWidget):
 
         root.addWidget(history_card, 1)
 
+    _faction_name = None
+    _faction_name_checked_at = float("-inf")
+
     def refresh(self, state) -> None:
         self._last_state = state
 
@@ -125,14 +129,19 @@ class SquadronPanel(QWidget):
             lines.append(f"Last status: {status} ({status_ts or 'unknown date'})")
         self._status_label.setText("<br>".join(lines))
 
-        try:
-            overview = self._repo.get_player_faction_overview()
-        except Exception:
-            log.exception("Failed to load player faction overview")
-            overview = None
-        if overview:
+        # Runs on every HUD refresh (many times a second in game) -- only the
+        # name is needed, so the cheap lookup, at most once a minute.
+        now = time.monotonic()
+        if now - self._faction_name_checked_at >= 60.0:
+            try:
+                self._faction_name = self._repo.get_squadron_faction_name()
+            except Exception:
+                log.exception("Failed to load squadron faction name")
+                self._faction_name = None
+            self._faction_name_checked_at = now
+        if self._faction_name:
             self._bgs_label.setText(
-                f"{overview['faction_name']} — see the Player Faction tab for full system-by-system detail."
+                f"{self._faction_name} — see the Player Faction tab for full system-by-system detail."
             )
         else:
             self._bgs_label.setText("No squadron-aligned minor faction recorded yet.")

@@ -445,6 +445,75 @@ class _StartupHistoryScanWorker(QObject):
         self.finished.emit(result)
 
 
+class _IntelDataWorker(QObject):
+    """Loads the Intel tab's two slow queries (~2.5s each) off the UI thread,
+    with its own DB connection per the cross-thread rule."""
+    finished = pyqtSignal(object, object, object)  # candidates, live_rows, {name_lower: coords}
+
+    def __init__(self, db_path, static_names):
+        super().__init__()
+        self._db_path = db_path
+        self._static_names = static_names
+
+    def run(self):
+        from persistence.database import Database
+        from persistence.repository import Repository
+
+        candidates, live_rows, coords = [], [], {}
+        db = Database(self._db_path)
+        try:
+            repo = Repository(db)
+            candidates = repo.get_odyssey_farming_candidates()
+            live_rows = repo.get_controlling_faction_snapshots_with_coords()
+            raw = repo.get_system_coords_for_names(self._static_names) if self._static_names else {}
+            coords = {name.lower(): xyz for name, xyz in raw.items()}
+        except Exception:
+            log.exception("Failed to load Intel farming data")
+        finally:
+            db.close()
+        self.finished.emit(candidates, live_rows, coords)
+
+
+class _UiStallWatchdog:
+    """Logs where the UI thread is stuck when it stops responding for more
+    than STALL_S seconds, and how long the stall lasted -- so a freeze names
+    its own cause in the log. A QTimer on the UI thread bumps a heartbeat; a
+    daemon thread checks it."""
+    STALL_S = 2.0
+
+    def __init__(self, parent: QObject, describe=lambda: ""):
+        import sys as _sys
+        self._sys = _sys
+        self._main_ident = threading.get_ident()
+        self._describe = describe
+        self._beat = time.monotonic()
+        self._timer = QTimer(parent)
+        self._timer.setInterval(250)
+        self._timer.timeout.connect(self._heartbeat)
+        self._timer.start()
+        threading.Thread(target=self._watch, name="ui-stall-watchdog", daemon=True).start()
+
+    def _heartbeat(self):
+        self._beat = time.monotonic()
+
+    def _watch(self):
+        import traceback
+        reported_for = None
+        while True:
+            time.sleep(0.5)
+            beat = self._beat
+            stalled = time.monotonic() - beat
+            if stalled >= self.STALL_S and reported_for != beat:
+                reported_for = beat
+                frame = self._sys._current_frames().get(self._main_ident)
+                stack = "".join(traceback.format_stack(frame)) if frame else "(no frame)"
+                log.warning("UI thread unresponsive for %.1fs%s — currently at:\n%s",
+                            stalled, self._describe(), stack)
+            elif reported_for is not None and reported_for != beat:
+                log.warning("UI thread recovered after a %.1fs stall", beat - reported_for)
+                reported_for = None
+
+
 class _EddnFlushWorker(QObject):
     """
     Writes a snapshot of EddnMarketCache's buffered EDDN data (popped by
@@ -2176,6 +2245,12 @@ class MainWindow(QMainWindow):
         self.farming_locations = FarmingLocations(settings_base)
         self._odyssey_candidates_cache = []
         self._odyssey_candidates_cache_time = 0.0
+        self._intel_data_system = object()  # never equal -> first refresh loads
+        self._intel_thread: QThread | None = None
+        self._intel_worker = None
+        self._last_event_name = ""
+        self._ui_watchdog = _UiStallWatchdog(
+            self, describe=lambda: f" (last journal event: {self._last_event_name or 'none'})")
         self.edsm_powerplay = EdsmPowerPlayCache(settings_base)
         self._edsm_powerplay_thread: QThread | None = None
         self._edsm_powerplay_worker: _EdsmPowerPlayRefreshWorker | None = None
@@ -3787,6 +3862,7 @@ class MainWindow(QMainWindow):
 
     def _on_event(self, evt: dict):
         name = evt.get("event", "UNKNOWN")
+        self._last_event_name = name
 
         if name == "_BootstrapStart":
             self._replaying = True
@@ -5972,17 +6048,36 @@ class MainWindow(QMainWindow):
         self.market_panel.search_for(commodity_name, mode="buy")
 
     def _refresh_intel(self):
+        """The two Intel queries take ~2.5s each on a real database, so they
+        load on a background thread when the system changes, or at most
+        every 5 minutes; the panel renders the last result (measured
+        2026-10-02: they ran on the UI thread every 30s while in game)."""
         now = time.monotonic()
-        if now - self._odyssey_candidates_cache_time >= 30.0:
-            try:
-                self._odyssey_candidates_cache = self.repo.get_odyssey_farming_candidates()
-            except Exception:
-                log.exception("Failed to load Odyssey farming candidates")
+        system_address = getattr(self.state, "system_address", None)
+        due = (system_address != self._intel_data_system
+               or now - self._odyssey_candidates_cache_time >= 300.0)
+        if due and not (self._intel_thread and self._intel_thread.isRunning()):
+            self._intel_data_system = system_address
             self._odyssey_candidates_cache_time = now
-        farming_candidates = self._odyssey_candidates_cache
+            records = getattr(self.farming_locations, "_records", []) or []
+            names = [str(r.get("system")) for r in records if isinstance(r, dict) and r.get("system")]
+            self._intel_worker = _IntelDataWorker(self.repo.db.db_path, names)
+            if self._intel_thread is not None:
+                self._intel_thread.wait()
+            self._intel_thread = QThread()
+            self._intel_worker.moveToThread(self._intel_thread)
+            self._intel_thread.started.connect(self._intel_worker.run)
+            self._intel_worker.finished.connect(self._on_intel_data)
+            self._intel_worker.finished.connect(self._intel_thread.quit)
+            self._intel_thread.start()
         self.intel_panel.refresh(
-            self.state, self.farming_locations, farming_candidates
+            self.state, self.farming_locations, self._odyssey_candidates_cache
         )
+
+    def _on_intel_data(self, candidates, live_rows, coords) -> None:
+        self._odyssey_candidates_cache = candidates
+        self.intel_panel.set_nearby_farming_data(coords, live_rows)
+        self.intel_panel.refresh(self.state, self.farming_locations, candidates)
 
     def _refresh_combat(self):
         self.combat_panel.refresh(self.state)
@@ -6046,6 +6141,11 @@ class MainWindow(QMainWindow):
         x, y, z = self.state.system_x, self.state.system_y, self.state.system_z
         if not all(isinstance(v, (int, float)) for v in (x, y, z)):
             return
+        # ~126ms per faction; only changes with the system or the fines.
+        key = (getattr(self.state, "system_address", None), frozenset(active))
+        if key == getattr(self, "_fine_stations_key", None):
+            return
+        self._fine_stations_key = key
         stations = {}
         for faction in active:
             try:
