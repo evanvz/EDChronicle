@@ -113,11 +113,21 @@ def test_build_task_views_queries_merits_since_week_start():
         get_faction_history=lambda addr: [],
         get_system_powerplay_snapshot=lambda addr: _PP,
         get_powerplay_merits_since=lambda addr, since: calls.append((addr, since)) or 55,
+        get_system_population=lambda addr: 51_900_000,
     )
     now = datetime(2026, 9, 26, 18, 0, tzinfo=timezone.utc)
     views = build_task_views(repo, "t", LIMITS, pledged="Aisling Duval", now=now)
     assert calls == [(12345, "2026-09-24T07:00:00Z")]
     assert "Your merits here this PowerPlay week: 55" in views[0]["lines"]
+    assert "Population: 51.9 million (large)" in views[0]["lines"]
+
+
+def test_population_text():
+    from edc.core.bgs_tasks import population_text
+    assert population_text(51_900_000) == "51.9 million (large)"
+    assert population_text(850_000) == "850k (small)"
+    assert population_text(3_200_000_000) == "3.2 billion (large)"
+    assert population_text(None) == "unknown"
 
 
 # --- per-line target state on Boost cards ---

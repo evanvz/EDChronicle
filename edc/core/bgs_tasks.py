@@ -69,6 +69,21 @@ _POPULATION_TARGETS = (
 )
 
 
+def population_text(population) -> str:
+    """ "51.9 million (large)", "850k (small)" or "unknown" -- sizes as in
+    SINC's targets table (small < 1m, medium 1-25m, large > 25m)."""
+    if not isinstance(population, int) or population <= 0:
+        return "unknown"
+    size = "small" if population < 1_000_000 else "medium" if population <= 25_000_000 else "large"
+    if population >= 1_000_000_000:
+        amount = f"{population / 1_000_000_000:.1f} billion"
+    elif population >= 1_000_000:
+        amount = f"{population / 1_000_000:.1f} million"
+    else:
+        amount = f"{population / 1_000:.0f}k"
+    return f"{amount} ({size})"
+
+
 def population_targets(population) -> Optional[dict]:
     """SINC daily targets for a system of this population, or None if the
     population isn't known. Small < 1m, medium 1m-25m, large > 25m."""
@@ -573,7 +588,7 @@ def _acquisition_lines(acquisition: dict, pledged: str, source: str) -> tuple:
 
 def _powerplay_view(pp: Optional[dict], pledged: str, merits: int, pp_activities,
                     allies=frozenset(), declared: str = "", edsm_row: Optional[dict] = None,
-                    eddn_progress: Optional[dict] = None) -> dict:
+                    eddn_progress: Optional[dict] = None, population: Optional[int] = None) -> dict:
     merits_line = [f"Your merits here this PowerPlay week: {merits:,}"] if pledged else []
     merits_hud = f" · {merits:,} merits this week" if pledged else ""
     det = detect_powerplay_mode(pledged, pp, edsm_row, allies)
@@ -606,6 +621,8 @@ def _powerplay_view(pp: Optional[dict], pledged: str, merits: int, pp_activities
         else:
             head = f"{mode} (from your squadron's objective)" if mode else "No PowerPlay reading yet"
             lines = [head]
+        if population is not None:
+            lines.append(f"Population: {population_text(population)}")
         hud_head = head if (mode or det["source"]) else "no data yet"
         if pledged and not mode and not det["source"]:
             # Nothing known and no mode given -- don't claim it's "not a target".
@@ -638,6 +655,8 @@ def _powerplay_view(pp: Optional[dict], pledged: str, merits: int, pp_activities
         reading += suffix
     head = f"{mode}: {reading}" if mode else reading
     lines = [head] + (extra if mode == "Acquisition" else [])
+    if population is not None:
+        lines.append(f"Population: {population_text(population)}")
     if pp.get("pp_controlling_power"):
         lines.append(f"Controlled by {pp['pp_controlling_power']}")
     lines += merits_line
@@ -700,7 +719,7 @@ def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], histor
         view = _powerplay_view(pp, pledged, merits, pp_activities,
                                allied_powers(pledged, limits.get("allied_powers")),
                                declared=task.get("pp_mode") or "", edsm_row=edsm_row,
-                               eddn_progress=eddn_progress)
+                               eddn_progress=eddn_progress, population=population)
     else:
         note = task.get("note") or ""
         lines = [note] if note else []
@@ -739,7 +758,7 @@ def build_task_views(repo, since: str, limits: dict, system_address: Optional[in
         merits = (repo.get_powerplay_merits_since(addr, week_start)
                   if t["task_type"] == "powerplay" and pledged and addr is not None else 0)
         population = (repo.get_system_population(addr)
-                      if t["task_type"] == "boost" and addr is not None else None)
+                      if t["task_type"] in ("boost", "powerplay") and addr is not None else None)
         # EDSM's daily dump fills in systems we haven't visited yet.
         edsm_row = (edsm_powerplay.get_controller_by_name(t["system_name"])
                     if t["task_type"] == "powerplay" and not pp and edsm_powerplay else None)

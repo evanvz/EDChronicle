@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
 )
 
 from edc.core.spansh_client import SpanshClient, SpanshSystem
+from edc.core.bgs_tasks import population_text
 from edc.core.powerplay_activities import PowerPlayActivityTable
 from edc.ui.busy_spinner import BusySpinner
 from edc.ui.style import CARD_STYLE, HDR_STYLE, LABEL_STYLE, TABLE_STYLE, card_style, hdr_style
@@ -311,8 +312,9 @@ class PowerplayFinderPanel(QWidget):
 
         # ── Results table ─────────────────────────────────────────────────
         self._table = QTableWidget()
-        self._table.setColumnCount(5)
-        self._table.setHorizontalHeaderLabels(["System", "Dist (ly)", "PP State", "Powers Present", "Facilities"])
+        self._table.setColumnCount(6)
+        self._table.setHorizontalHeaderLabels(
+            ["System", "Dist (ly)", "Population", "PP State", "Powers Present", "Facilities"])
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
@@ -323,8 +325,9 @@ class PowerplayFinderPanel(QWidget):
         h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         h.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        h.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
-        h.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
+        h.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
         self._table.cellDoubleClicked.connect(self._copy_system_name)
         root.addWidget(self._table, 1)
         self._loading_spinner = BusySpinner(self)
@@ -618,6 +621,13 @@ class PowerplayFinderPanel(QWidget):
         if self._eddn_powerplay is not None:
             n = self._eddn_powerplay.system_count()
             status_txt += f"  EDDN live cross-check active ({n} systems seen this session)." if n else "  EDDN live cross-check active (no sightings yet)."
+        # Squadrons pick acquisition targets by size: largest population
+        # first (harder to take, worth more held). Other searches stay
+        # nearest-first. The table itself isn't sortable -- the Powers
+        # column is a cell widget, which Qt doesn't move on sort.
+        if getattr(self, "_search_mission", None) == "acquisition":
+            results = sorted(results, key=lambda s: s.population or 0, reverse=True)
+            status_txt += "  Sorted by population, largest first."
         self._status_label.setText(status_txt)
         self._table.setRowCount(len(results))
         for row, sys in enumerate(results):
@@ -719,11 +729,14 @@ class PowerplayFinderPanel(QWidget):
             if tooltip:
                 power_label.setToolTip(tooltip)
 
+            pop_item = QTableWidgetItem(population_text(sys.population).replace(" (", "  ("))
+            pop_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self._table.setItem(row, 0, name_item)
             self._table.setItem(row, 1, dist_item)
-            self._table.setItem(row, 2, state_item)
-            self._table.setCellWidget(row, 3, power_label)
-            self._table.setItem(row, 4, fac_item)
+            self._table.setItem(row, 2, pop_item)
+            self._table.setItem(row, 3, state_item)
+            self._table.setCellWidget(row, 4, power_label)
+            self._table.setItem(row, 5, fac_item)
 
     def _copy_system_name(self, row: int, _col: int):
         item = self._table.item(row, 0)
