@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
     QHeaderView, QFrame, QTabWidget, QScrollArea,
 )
 
+from edc.ui.style import bulk_table_fill as _bulk_fill
 from edc.core.engineering_blueprints import EngineeringBlueprintTable
 from edc.core.engineering_wishlist import EngineeringWishlist
 from edc.core.experimental_effects import ExperimentalEffectsTable
@@ -514,23 +515,24 @@ class _ShipEngineeringTab(QWidget):
 
         self._detail_table.setSortingEnabled(False)
         _rows(self._detail_table, len(rows))
-        for r, (sym, qty) in enumerate(rows):
-            held = self._held_count(sym)
-            name_item = QTableWidgetItem(self._blueprints.material_name(sym))
-            type_item = QTableWidgetItem(self._blueprints.material_type(sym))
-            held_item = _NumericTableWidgetItem(str(held), held)
-            req_item = _NumericTableWidgetItem(str(qty), qty)
-            for it in (held_item, req_item):
-                it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        with _bulk_fill(self._detail_table):
+            for r, (sym, qty) in enumerate(rows):
+                held = self._held_count(sym)
+                name_item = QTableWidgetItem(self._blueprints.material_name(sym))
+                type_item = QTableWidgetItem(self._blueprints.material_type(sym))
+                held_item = _NumericTableWidgetItem(str(held), held)
+                req_item = _NumericTableWidgetItem(str(qty), qty)
+                for it in (held_item, req_item):
+                    it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
-            color = QColor("#6BCB77") if held >= qty else QColor("#FF6B6B")
-            name_item.setForeground(color)
-            held_item.setForeground(color)
+                color = QColor("#6BCB77") if held >= qty else QColor("#FF6B6B")
+                name_item.setForeground(color)
+                held_item.setForeground(color)
 
-            self._detail_table.setItem(r, 0, name_item)
-            self._detail_table.setItem(r, 1, type_item)
-            self._detail_table.setItem(r, 2, held_item)
-            self._detail_table.setItem(r, 3, req_item)
+                self._detail_table.setItem(r, 0, name_item)
+                self._detail_table.setItem(r, 1, type_item)
+                self._detail_table.setItem(r, 2, held_item)
+                self._detail_table.setItem(r, 3, req_item)
         self._detail_table.setSortingEnabled(True)
 
         self._refresh_engineer_table()
@@ -1044,29 +1046,30 @@ class _OdysseyEngineeringTab(QWidget):
 
         self._detail_table.setSortingEnabled(False)
         _rows(self._detail_table, len(rows))
-        for r, (sym, qty) in enumerate(rows):
-            held = self._held_count(sym)
-            name_item = QTableWidgetItem(self._material_name(sym))
-            held_item = _NumericTableWidgetItem(str(held), held)
-            req_item = _NumericTableWidgetItem(str(qty), qty)
-            held_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            req_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        with _bulk_fill(self._detail_table):
+            for r, (sym, qty) in enumerate(rows):
+                held = self._held_count(sym)
+                name_item = QTableWidgetItem(self._material_name(sym))
+                held_item = _NumericTableWidgetItem(str(held), held)
+                req_item = _NumericTableWidgetItem(str(qty), qty)
+                held_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                req_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
-            color = QColor("#6BCB77") if held >= qty else QColor("#FF6B6B")
-            name_item.setForeground(color)
-            held_item.setForeground(color)
+                color = QColor("#6BCB77") if held >= qty else QColor("#FF6B6B")
+                name_item.setForeground(color)
+                held_item.setForeground(color)
 
-            if is_bartender_tradeable(sym):
-                source_item = QTableWidgetItem("Bartender")
-                source_item.setForeground(QColor("#6BCB77"))
-            else:
-                source_item = QTableWidgetItem("Farm/loot only")
-                source_item.setForeground(QColor("#888888"))
+                if is_bartender_tradeable(sym):
+                    source_item = QTableWidgetItem("Bartender")
+                    source_item.setForeground(QColor("#6BCB77"))
+                else:
+                    source_item = QTableWidgetItem("Farm/loot only")
+                    source_item.setForeground(QColor("#888888"))
 
-            self._detail_table.setItem(r, 0, name_item)
-            self._detail_table.setItem(r, 1, held_item)
-            self._detail_table.setItem(r, 2, req_item)
-            self._detail_table.setItem(r, 3, source_item)
+                self._detail_table.setItem(r, 0, name_item)
+                self._detail_table.setItem(r, 1, held_item)
+                self._detail_table.setItem(r, 2, req_item)
+                self._detail_table.setItem(r, 3, source_item)
         self._detail_table.setSortingEnabled(True)
 
         self._refresh_engineer_table(entry)

@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
 from edc.core.spansh_client import SpanshClient, MiningRingResult
 from edc.core.station_pads import pad_size_hint
 from edc.ui.busy_spinner import BusySpinner
+from edc.ui.style import bulk_table_fill as _bulk_fill
 from edc.ui.panels.market_panel import normalize_commodity_name, _NumericTableWidgetItem
 from edc.ui.style import (
     CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, LABEL_STYLE as _LABEL_STYLE,
@@ -605,22 +606,23 @@ class MiningPanel(QWidget):
         )
         self._table.setSortingEnabled(False)
         self._table.setRowCount(len(results))
-        for row, r in enumerate(results):
-            name_item = QTableWidgetItem(r.system_name)
-            body_item = QTableWidgetItem(r.body_name)
-            type_item = QTableWidgetItem(r.ring_type)
-            reserve_item = QTableWidgetItem(r.reserve_level)
-            dist_item = _NumericTableWidgetItem(f"{r.distance:.1f}", r.distance)
-            hotspot_item = _NumericTableWidgetItem(str(r.hotspot_count), float(r.hotspot_count))
-            for it in (type_item, reserve_item, dist_item, hotspot_item):
-                it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        with _bulk_fill(self._table):
+            for row, r in enumerate(results):
+                name_item = QTableWidgetItem(r.system_name)
+                body_item = QTableWidgetItem(r.body_name)
+                type_item = QTableWidgetItem(r.ring_type)
+                reserve_item = QTableWidgetItem(r.reserve_level)
+                dist_item = _NumericTableWidgetItem(f"{r.distance:.1f}", r.distance)
+                hotspot_item = _NumericTableWidgetItem(str(r.hotspot_count), float(r.hotspot_count))
+                for it in (type_item, reserve_item, dist_item, hotspot_item):
+                    it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
-            self._table.setItem(row, 0, name_item)
-            self._table.setItem(row, 1, body_item)
-            self._table.setItem(row, 2, type_item)
-            self._table.setItem(row, 3, reserve_item)
-            self._table.setItem(row, 4, dist_item)
-            self._table.setItem(row, 5, hotspot_item)
+                self._table.setItem(row, 0, name_item)
+                self._table.setItem(row, 1, body_item)
+                self._table.setItem(row, 2, type_item)
+                self._table.setItem(row, 3, reserve_item)
+                self._table.setItem(row, 4, dist_item)
+                self._table.setItem(row, 5, hotspot_item)
         self._table.setSortingEnabled(True)
         self._table.sortItems(4, Qt.SortOrder.AscendingOrder)
 

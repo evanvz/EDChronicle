@@ -31,6 +31,7 @@ from edc.ui.style import (
 from edc.core.spansh_client import SpanshClient
 from edc.core import raven_colonial
 from edc.ui.formatting import clean_token
+from edc.ui.style import bulk_table_fill as _bulk_fill
 
 log = logging.getLogger(__name__)
 
@@ -1535,21 +1536,22 @@ class ColonisationPanel(QWidget):
         self._colonisation_candidates_system = system_name
 
         self._candidates_table.setRowCount(len(candidates))
-        for row, c in enumerate(candidates):
-            name_item = QTableWidgetItem(c.get("name") or "—")
-            dist_item = QTableWidgetItem(f"{c.get('distance_ly', 0):.1f}")
-            dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            via = c.get("via")
-            via_item = QTableWidgetItem(f"colony: {via}" if via else "current system")
-            self._candidates_table.setItem(row, 0, name_item)
-            self._candidates_table.setItem(row, 1, dist_item)
-            self._candidates_table.setItem(row, 2, via_item)
+        with _bulk_fill(self._candidates_table):
+            for row, c in enumerate(candidates):
+                name_item = QTableWidgetItem(c.get("name") or "—")
+                dist_item = QTableWidgetItem(f"{c.get('distance_ly', 0):.1f}")
+                dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                via = c.get("via")
+                via_item = QTableWidgetItem(f"colony: {via}" if via else "current system")
+                self._candidates_table.setItem(row, 0, name_item)
+                self._candidates_table.setItem(row, 1, dist_item)
+                self._candidates_table.setItem(row, 2, via_item)
 
-            name = c.get("name") or ""
-            info_btn = QPushButton("Details")
-            info_btn.setStyleSheet(_BTN_STYLE)
-            info_btn.clicked.connect(lambda _checked=False, n=name: self._show_system_detail(n))
-            self._candidates_table.setCellWidget(row, 3, info_btn)
+                name = c.get("name") or ""
+                info_btn = QPushButton("Details")
+                info_btn.setStyleSheet(_BTN_STYLE)
+                info_btn.clicked.connect(lambda _checked=False, n=name: self._show_system_detail(n))
+                self._candidates_table.setCellWidget(row, 3, info_btn)
 
         if lookup_failed:
             self._candidates_status_label.setText("Lookup failed — EDSM unreachable.")

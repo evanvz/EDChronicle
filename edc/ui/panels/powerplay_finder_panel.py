@@ -22,6 +22,7 @@ from edc.core.bgs_tasks import population_text
 from edc.core.powerplay_activities import PowerPlayActivityTable
 from edc.ui.busy_spinner import BusySpinner
 from edc.ui.style import CARD_STYLE, HDR_STYLE, LABEL_STYLE, TABLE_STYLE, card_style, hdr_style
+from edc.ui.style import bulk_table_fill as _bulk_fill
 
 log = logging.getLogger(__name__)
 
@@ -630,113 +631,114 @@ class PowerplayFinderPanel(QWidget):
             status_txt += "  Sorted by population, largest first."
         self._status_label.setText(status_txt)
         self._table.setRowCount(len(results))
-        for row, sys in enumerate(results):
-            name_item  = QTableWidgetItem(sys.name)
-            dist_item  = QTableWidgetItem(f"{sys.distance:.1f}")
-            state_item = QTableWidgetItem(sys.pp_state or sys.controlling_power or "—")
-            fac_item   = QTableWidgetItem(sys.facility_summary())
+        with _bulk_fill(self._table):
+            for row, sys in enumerate(results):
+                name_item  = QTableWidgetItem(sys.name)
+                dist_item  = QTableWidgetItem(f"{sys.distance:.1f}")
+                state_item = QTableWidgetItem(sys.pp_state or sys.controlling_power or "—")
+                fac_item   = QTableWidgetItem(sys.facility_summary())
 
-            dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                dist_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
-            # Colour the state cell using consistent Acquisition/Reinforcement palette
-            state_lower = (sys.pp_state or "").lower()
-            state_color = _STATE_COLORS.get(state_lower)
-            if state_color:
-                state_item.setForeground(QColor(state_color))
-            state_tip = _STATE_TOOLTIPS.get(state_lower)
+                # Colour the state cell using consistent Acquisition/Reinforcement palette
+                state_lower = (sys.pp_state or "").lower()
+                state_color = _STATE_COLORS.get(state_lower)
+                if state_color:
+                    state_item.setForeground(QColor(state_color))
+                state_tip = _STATE_TOOLTIPS.get(state_lower)
 
-            # Cross-check against independent sources, keyed by system id64.
-            # Only compares controlling power (vocab for tier/state differs
-            # between Spansh and these sources, so tier itself isn't compared).
-            cross_notes = []
-            any_disagreement = False
-            if self._fdev_powerplay is not None:
-                fdev_rec = self._fdev_powerplay.get_by_name(sys.name)
-                if fdev_rec:
-                    fdev_power = fdev_rec.get("power") or ""
-                    fdev_state = fdev_rec.get("state") or ""
-                    cross_notes.append(f"Frontier (official): {fdev_power or '—'} ({fdev_state})")
+                # Cross-check against independent sources, keyed by system id64.
+                # Only compares controlling power (vocab for tier/state differs
+                # between Spansh and these sources, so tier itself isn't compared).
+                cross_notes = []
+                any_disagreement = False
+                if self._fdev_powerplay is not None:
+                    fdev_rec = self._fdev_powerplay.get_by_name(sys.name)
+                    if fdev_rec:
+                        fdev_power = fdev_rec.get("power") or ""
+                        fdev_state = fdev_rec.get("state") or ""
+                        cross_notes.append(f"Frontier (official): {fdev_power or '—'} ({fdev_state})")
+                    else:
+                        cross_notes.append("Not found in Frontier's official data.")
+                for label, source in (("EDSM", self._edsm_powerplay), ("EDDN (live)", self._eddn_powerplay)):
+                    if source is None:
+                        continue
+                    rec = source.get_controller(sys.id64)
+                    if rec:
+                        rec_power = rec.get("power") or ""
+                        rec_state = rec.get("power_state") or ""
+                        rec_date  = rec.get("date") or ""
+                        # A source reporting no controller (EDDN's explicit
+                        # power="" sighting, or EDSM's power_state=="Unoccupied"
+                        # fallback) is just as much a disagreement as reporting
+                        # a different power -- Spansh's snapshot can lag a
+                        # system losing control, which is exactly the case a
+                        # Reinforcement search must not silently trust
+                        # (confirmed live: a Finder result stayed unflagged for
+                        # a system that no longer had a controller to reinforce).
+                        lost_control = sys.controlling_power and (rec_power == "" or rec_state == "Unoccupied")
+                        if lost_control:
+                            any_disagreement = True
+                            cross_notes.append(f"⚠ {label} disagrees: no longer controlled as of {rec_date}")
+                        elif rec_power and sys.controlling_power and rec_power.lower() != sys.controlling_power.lower():
+                            any_disagreement = True
+                            cross_notes.append(f"⚠ {label} disagrees: {rec_power} ({rec_state}) as of {rec_date}")
+                        else:
+                            cross_notes.append(f"{label} confirms: {rec_power or '—'} ({rec_state}) as of {rec_date}")
+                    elif sys.id64 is not None:
+                        cross_notes.append(f"Not found in {label} data.")
+
+                if any_disagreement:
+                    state_item.setText(f"⚠ {state_item.text()}")
+
+                tooltip = state_tip or ""
+                if cross_notes:
+                    tooltip += "\n\n" + "\n".join(cross_notes)
+                if tooltip:
+                    state_item.setToolTip(tooltip)
+
+                # Powers present column
+                all_p = sys.all_powers()
+                ctrl  = sys.controlling_power
+                if all_p:
+                    parts = []
+                    tip_lines = []
+                    for p in all_p:
+                        abbr      = _SHORT_POWER.get(p, p.split()[-1])
+                        is_ctrl   = bool(ctrl) and p == ctrl
+                        is_player = p == self._power
+                        if is_player:
+                            color = "#4D96FF"
+                        elif is_ctrl:
+                            color = "#FF6B6B"
+                        else:
+                            color = "#FF8C00"
+                        tag = f"<b>{abbr}★</b>" if is_ctrl else abbr
+                        parts.append(f'<span style="color:{color};">{tag}</span>')
+                        role = " (controls)" if is_ctrl else (" (yours)" if is_player else "")
+                        tip_lines.append(f"{p}{role}")
+                    html    = ' <span style="color:#3a3a3a;">/</span> '.join(parts)
+                    tooltip = "\n".join(tip_lines)
                 else:
-                    cross_notes.append("Not found in Frontier's official data.")
-            for label, source in (("EDSM", self._edsm_powerplay), ("EDDN (live)", self._eddn_powerplay)):
-                if source is None:
-                    continue
-                rec = source.get_controller(sys.id64)
-                if rec:
-                    rec_power = rec.get("power") or ""
-                    rec_state = rec.get("power_state") or ""
-                    rec_date  = rec.get("date") or ""
-                    # A source reporting no controller (EDDN's explicit
-                    # power="" sighting, or EDSM's power_state=="Unoccupied"
-                    # fallback) is just as much a disagreement as reporting
-                    # a different power -- Spansh's snapshot can lag a
-                    # system losing control, which is exactly the case a
-                    # Reinforcement search must not silently trust
-                    # (confirmed live: a Finder result stayed unflagged for
-                    # a system that no longer had a controller to reinforce).
-                    lost_control = sys.controlling_power and (rec_power == "" or rec_state == "Unoccupied")
-                    if lost_control:
-                        any_disagreement = True
-                        cross_notes.append(f"⚠ {label} disagrees: no longer controlled as of {rec_date}")
-                    elif rec_power and sys.controlling_power and rec_power.lower() != sys.controlling_power.lower():
-                        any_disagreement = True
-                        cross_notes.append(f"⚠ {label} disagrees: {rec_power} ({rec_state}) as of {rec_date}")
-                    else:
-                        cross_notes.append(f"{label} confirms: {rec_power or '—'} ({rec_state}) as of {rec_date}")
-                elif sys.id64 is not None:
-                    cross_notes.append(f"Not found in {label} data.")
+                    html    = '<span style="color:#9aa4b0;">—</span>'
+                    tooltip = ""
 
-            if any_disagreement:
-                state_item.setText(f"⚠ {state_item.text()}")
+                power_label = QLabel()
+                power_label.setTextFormat(Qt.TextFormat.RichText)
+                power_label.setText(html)
+                power_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                power_label.setStyleSheet("background:transparent; padding:2px;")
+                if tooltip:
+                    power_label.setToolTip(tooltip)
 
-            tooltip = state_tip or ""
-            if cross_notes:
-                tooltip += "\n\n" + "\n".join(cross_notes)
-            if tooltip:
-                state_item.setToolTip(tooltip)
-
-            # Powers present column
-            all_p = sys.all_powers()
-            ctrl  = sys.controlling_power
-            if all_p:
-                parts = []
-                tip_lines = []
-                for p in all_p:
-                    abbr      = _SHORT_POWER.get(p, p.split()[-1])
-                    is_ctrl   = bool(ctrl) and p == ctrl
-                    is_player = p == self._power
-                    if is_player:
-                        color = "#4D96FF"
-                    elif is_ctrl:
-                        color = "#FF6B6B"
-                    else:
-                        color = "#FF8C00"
-                    tag = f"<b>{abbr}★</b>" if is_ctrl else abbr
-                    parts.append(f'<span style="color:{color};">{tag}</span>')
-                    role = " (controls)" if is_ctrl else (" (yours)" if is_player else "")
-                    tip_lines.append(f"{p}{role}")
-                html    = ' <span style="color:#3a3a3a;">/</span> '.join(parts)
-                tooltip = "\n".join(tip_lines)
-            else:
-                html    = '<span style="color:#9aa4b0;">—</span>'
-                tooltip = ""
-
-            power_label = QLabel()
-            power_label.setTextFormat(Qt.TextFormat.RichText)
-            power_label.setText(html)
-            power_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            power_label.setStyleSheet("background:transparent; padding:2px;")
-            if tooltip:
-                power_label.setToolTip(tooltip)
-
-            pop_item = QTableWidgetItem(population_text(sys.population).replace(" (", "  ("))
-            pop_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            self._table.setItem(row, 0, name_item)
-            self._table.setItem(row, 1, dist_item)
-            self._table.setItem(row, 2, pop_item)
-            self._table.setItem(row, 3, state_item)
-            self._table.setCellWidget(row, 4, power_label)
-            self._table.setItem(row, 5, fac_item)
+                pop_item = QTableWidgetItem(population_text(sys.population).replace(" (", "  ("))
+                pop_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                self._table.setItem(row, 0, name_item)
+                self._table.setItem(row, 1, dist_item)
+                self._table.setItem(row, 2, pop_item)
+                self._table.setItem(row, 3, state_item)
+                self._table.setCellWidget(row, 4, power_label)
+                self._table.setItem(row, 5, fac_item)
 
     def _copy_system_name(self, row: int, _col: int):
         item = self._table.item(row, 0)

@@ -1354,31 +1354,32 @@ class _RareGoodsDialog(QDialog):
 
         self._table.setSortingEnabled(False)
         _rows(self._table, len(rows))
-        for row, r in enumerate(rows):
-            name_item = QTableWidgetItem(r.get("rare_name") or "—")
-            station_item = QTableWidgetItem(r.get("station_name") or "—")
-            pad_item = QTableWidgetItem(r.get("pad_size") or pad_size_hint(r.get("station_type")))
-            system_item = QTableWidgetItem(r.get("system_name") or "—")
-            dist_value = r.get("distance_ly")
-            dist_text = f"{dist_value:.1f}" if isinstance(dist_value, (int, float)) else "—"
-            dist_item = _NumericTableWidgetItem(dist_text, dist_value if isinstance(dist_value, (int, float)) else float("inf"))
-            stock_value = float(r.get("stock") or 0)
-            stock_item = _NumericTableWidgetItem(str(int(stock_value)), stock_value)
-            updated_text, updated_age = _format_relative_time(r.get("last_updated") or "")
-            updated_item = _NumericTableWidgetItem(updated_text, updated_age)
-            if pad_item.text() == "?":
-                pad_item.setForeground(QColor("#888888"))
-                pad_item.setToolTip("Landing pad size unknown for this station type")
-            for it in (pad_item, dist_item, stock_item, updated_item):
-                it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        with _bulk_fill(self._table):
+            for row, r in enumerate(rows):
+                name_item = QTableWidgetItem(r.get("rare_name") or "—")
+                station_item = QTableWidgetItem(r.get("station_name") or "—")
+                pad_item = QTableWidgetItem(r.get("pad_size") or pad_size_hint(r.get("station_type")))
+                system_item = QTableWidgetItem(r.get("system_name") or "—")
+                dist_value = r.get("distance_ly")
+                dist_text = f"{dist_value:.1f}" if isinstance(dist_value, (int, float)) else "—"
+                dist_item = _NumericTableWidgetItem(dist_text, dist_value if isinstance(dist_value, (int, float)) else float("inf"))
+                stock_value = float(r.get("stock") or 0)
+                stock_item = _NumericTableWidgetItem(str(int(stock_value)), stock_value)
+                updated_text, updated_age = _format_relative_time(r.get("last_updated") or "")
+                updated_item = _NumericTableWidgetItem(updated_text, updated_age)
+                if pad_item.text() == "?":
+                    pad_item.setForeground(QColor("#888888"))
+                    pad_item.setToolTip("Landing pad size unknown for this station type")
+                for it in (pad_item, dist_item, stock_item, updated_item):
+                    it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
-            self._table.setItem(row, 0, name_item)
-            self._table.setItem(row, 1, station_item)
-            self._table.setItem(row, 2, pad_item)
-            self._table.setItem(row, 3, system_item)
-            self._table.setItem(row, 4, dist_item)
-            self._table.setItem(row, 5, stock_item)
-            self._table.setItem(row, 6, updated_item)
+                self._table.setItem(row, 0, name_item)
+                self._table.setItem(row, 1, station_item)
+                self._table.setItem(row, 2, pad_item)
+                self._table.setItem(row, 3, system_item)
+                self._table.setItem(row, 4, dist_item)
+                self._table.setItem(row, 5, stock_item)
+                self._table.setItem(row, 6, updated_item)
         self._table.setSortingEnabled(True)
 
     def _on_cell_clicked(self, row: int, column: int) -> None:
@@ -1454,26 +1455,27 @@ class _StationServiceDialog(QDialog):
 
         self._table.setSortingEnabled(False)
         _rows(self._table, len(rows))
-        for row, r in enumerate(rows):
-            station_item = QTableWidgetItem(r.get("station_name") or "—")
-            pad_item = QTableWidgetItem(r.get("pad_size") or pad_size_hint(r.get("station_type")))
-            system_item = QTableWidgetItem(r.get("system_name") or "—")
-            dist_value = r.get("distance_ly")
-            dist_text = f"{dist_value:.1f}" if isinstance(dist_value, (int, float)) else "—"
-            dist_item = _NumericTableWidgetItem(dist_text, dist_value if isinstance(dist_value, (int, float)) else float("inf"))
-            visited_text, visited_age = _format_relative_time(r.get("last_visited") or "")
-            visited_item = _NumericTableWidgetItem(visited_text, visited_age)
-            if pad_item.text() == "?":
-                pad_item.setForeground(QColor("#888888"))
-                pad_item.setToolTip("Landing pad size unknown for this station type")
-            for it in (pad_item, dist_item, visited_item):
-                it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        with _bulk_fill(self._table):
+            for row, r in enumerate(rows):
+                station_item = QTableWidgetItem(r.get("station_name") or "—")
+                pad_item = QTableWidgetItem(r.get("pad_size") or pad_size_hint(r.get("station_type")))
+                system_item = QTableWidgetItem(r.get("system_name") or "—")
+                dist_value = r.get("distance_ly")
+                dist_text = f"{dist_value:.1f}" if isinstance(dist_value, (int, float)) else "—"
+                dist_item = _NumericTableWidgetItem(dist_text, dist_value if isinstance(dist_value, (int, float)) else float("inf"))
+                visited_text, visited_age = _format_relative_time(r.get("last_visited") or "")
+                visited_item = _NumericTableWidgetItem(visited_text, visited_age)
+                if pad_item.text() == "?":
+                    pad_item.setForeground(QColor("#888888"))
+                    pad_item.setToolTip("Landing pad size unknown for this station type")
+                for it in (pad_item, dist_item, visited_item):
+                    it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
-            self._table.setItem(row, 0, station_item)
-            self._table.setItem(row, 1, pad_item)
-            self._table.setItem(row, 2, system_item)
-            self._table.setItem(row, 3, dist_item)
-            self._table.setItem(row, 4, visited_item)
+                self._table.setItem(row, 0, station_item)
+                self._table.setItem(row, 1, pad_item)
+                self._table.setItem(row, 2, system_item)
+                self._table.setItem(row, 3, dist_item)
+                self._table.setItem(row, 4, visited_item)
         self._table.setSortingEnabled(True)
 
     def _on_cell_clicked(self, row: int, column: int) -> None:
@@ -1553,23 +1555,24 @@ class _GuardianTechBrokerDialog(QDialog):
 
         self._table.setSortingEnabled(False)
         _rows(self._table, len(rows))
-        for row, r in enumerate(rows):
-            station_item = QTableWidgetItem(r.get("station_name") or "—")
-            pad_item = QTableWidgetItem(r.get("pad_size") or pad_size_hint(r.get("station_type")))
-            system_item = QTableWidgetItem(r.get("system_name") or "—")
-            dist_value = r.get("distance_ly")
-            dist_text = f"{dist_value:.1f}" if isinstance(dist_value, (int, float)) else "—"
-            dist_item = _NumericTableWidgetItem(dist_text, dist_value if isinstance(dist_value, (int, float)) else float("inf"))
-            if pad_item.text() == "?":
-                pad_item.setForeground(QColor("#888888"))
-                pad_item.setToolTip("Landing pad size unknown for this station type")
-            for it in (pad_item, dist_item):
-                it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        with _bulk_fill(self._table):
+            for row, r in enumerate(rows):
+                station_item = QTableWidgetItem(r.get("station_name") or "—")
+                pad_item = QTableWidgetItem(r.get("pad_size") or pad_size_hint(r.get("station_type")))
+                system_item = QTableWidgetItem(r.get("system_name") or "—")
+                dist_value = r.get("distance_ly")
+                dist_text = f"{dist_value:.1f}" if isinstance(dist_value, (int, float)) else "—"
+                dist_item = _NumericTableWidgetItem(dist_text, dist_value if isinstance(dist_value, (int, float)) else float("inf"))
+                if pad_item.text() == "?":
+                    pad_item.setForeground(QColor("#888888"))
+                    pad_item.setToolTip("Landing pad size unknown for this station type")
+                for it in (pad_item, dist_item):
+                    it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
-            self._table.setItem(row, 0, station_item)
-            self._table.setItem(row, 1, pad_item)
-            self._table.setItem(row, 2, system_item)
-            self._table.setItem(row, 3, dist_item)
+                self._table.setItem(row, 0, station_item)
+                self._table.setItem(row, 1, pad_item)
+                self._table.setItem(row, 2, system_item)
+                self._table.setItem(row, 3, dist_item)
         self._table.setSortingEnabled(True)
 
     def _on_cell_clicked(self, row: int, column: int) -> None:
