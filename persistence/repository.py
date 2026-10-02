@@ -869,6 +869,15 @@ class Repository:
             "data_timestamp": row["data_timestamp"],
         }
 
+    def get_squadron_faction_name(self) -> Optional[str]:
+        """The squadron-aligned faction's name (latest snapshot), without the
+        per-system work get_player_faction_overview() does."""
+        row = self.db.conn.execute(
+            "SELECT faction_name FROM faction_snapshots WHERE is_squadron_faction = 1 "
+            "ORDER BY snapshot_date DESC, data_timestamp DESC LIMIT 1"
+        ).fetchone()
+        return row["faction_name"] if row else None
+
     def get_player_faction_overview(self) -> Optional[dict]:
         """
         Detects the player's squadron-aligned minor faction (if any, from

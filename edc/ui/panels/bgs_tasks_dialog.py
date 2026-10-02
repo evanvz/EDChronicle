@@ -137,7 +137,8 @@ class BgsTasksDialog(QDialog):
 
     def _update_form_fields(self) -> None:
         t = self._type_combo.currentData()
-        self._faction_edit.setEnabled(t in ("boost", "vote", "fight"))
+        self._faction_edit.setEnabled(t in ("boost", "hinder", "vote", "fight"))
+        self._faction_edit.setPlaceholderText("Faction to hinder" if t == "hinder" else "Faction to support")
         self._opponent_edit.setEnabled(t in ("vote", "fight"))
         self._pp_mode_combo.setVisible(t == "powerplay")
         self._update_pp_detection()

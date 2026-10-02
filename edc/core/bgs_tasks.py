@@ -12,8 +12,9 @@ import json
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
-TASK_TYPES = ("boost", "vote", "fight", "powerplay", "note")
-TASK_LABELS = {"boost": "Boost", "vote": "Vote", "fight": "Fight", "powerplay": "PowerPlay", "note": "Note"}
+TASK_TYPES = ("boost", "hinder", "vote", "fight", "powerplay", "note")
+TASK_LABELS = {"boost": "Boost", "hinder": "Hinder", "vote": "Vote", "fight": "Fight", "powerplay": "PowerPlay",
+               "note": "Note"}
 
 STATUS_DONE = "Done this tick"
 STATUS_TODO = "To do"
@@ -21,6 +22,7 @@ STATUS_LOSING = "Losing ground"
 STATUS_ENDED = "Conflict ended"
 STATUS_NO_DATA = "No data yet"
 STATUS_TRACKING = "Tracking"
+STATUS_DROPPING = "Dropping"
 
 STATUS_COLORS = {
     STATUS_DONE: "#6BCB77",
@@ -29,12 +31,14 @@ STATUS_COLORS = {
     STATUS_ENDED: "#888888",
     STATUS_NO_DATA: "#666666",
     STATUS_TRACKING: "#4DD8C8",
+    STATUS_DROPPING: "#6BCB77",
 }
 
 # One accent per task type, matching colours already used elsewhere
 # (missions green, Overview election yellow / war red).
 TYPE_COLORS = {
     "boost": "#6BCB77",
+    "hinder": "#FF9F43",
     "vote": "#FFD93D",
     "fight": "#FF6B6B",
     "powerplay": "#B983FF",
@@ -92,6 +96,8 @@ def validate_task_input(system: str, task_type: str, faction: str, opponent: str
         return "Enter a system name."
     if task_type in ("boost", "vote", "fight") and not faction:
         return "Enter the faction to support."
+    if task_type == "hinder" and not faction:
+        return "Enter the faction to hinder."
     if task_type in ("vote", "fight") and not opponent:
         return "Enter the opposing faction."
     if task_type == "note" and not note:
@@ -234,6 +240,51 @@ def _retreat_countdown(rows: list, today: date) -> tuple:
     if isinstance(influence, (int, float)) and influence < 0.025:
         warnings.append(f"Influence {influence * 100:.1f}% is below 2.5% — the faction retreats unless it's raised")
     return line, warnings
+
+
+def _hinder_view(task: dict, report: dict, history: list, today: Optional[date] = None,
+                 squadron_faction: str = "") -> dict:
+    """Pushing a faction's influence down. Only the influence trend and our
+    missions' signed effect on it are measurable -- failed missions, trade
+    at a loss and kills aren't credited to a faction in the journal."""
+    faction = task.get("faction_name") or ""
+    act = faction_activity(report, task["system_name"], faction)
+    lines, warnings = [], []
+    if squadron_faction and _same(faction, squadron_faction):
+        warnings.append(f"{faction} is your squadron's own faction — check the objective")
+    if act["tier_score"] < 0:
+        lines.append(f"Your missions this tick: {-act['tier_score']} INF against {faction}")
+    elif act["tier_score"] > 0:
+        warnings.append(f"Your missions this tick helped {faction} by {act['tier_score']} INF")
+    if act["trade_profit"] > 0 or act["exploration"] > 0 or act["bounties"] > 0:
+        warnings.append(f"Profitable trade, exploration data or bounties for {faction} this tick help them")
+
+    rows = [h for h in history if _same(h.get("faction_name"), faction) and isinstance(h.get("influence"), (int, float))]
+    latest = rows[0]["influence"] if rows else None
+    previous = rows[1]["influence"] if len(rows) > 1 else None
+    as_of = f" (as of {rows[0]['snapshot_date']})" if rows else ""
+    if latest is not None and previous is not None:
+        lines.append(f"Influence {previous * 100:.1f}% → {latest * 100:.1f}%{as_of}")
+    elif latest is not None:
+        lines.append(f"Influence {latest * 100:.1f}%{as_of}")
+
+    retreat_line, _ = _retreat_countdown(rows, today or datetime.now(timezone.utc).date())
+    if retreat_line:
+        lines.append(retreat_line)
+        if latest is not None and latest < 0.025:
+            warnings.append(f"Influence {latest * 100:.1f}% is below 2.5% — keep it there through the check day")
+        else:
+            warnings.append("In retreat — pushing them below 2.5% by the check day removes them from the system")
+
+    if latest is None:
+        status = STATUS_NO_DATA
+    elif previous is not None and latest < previous:
+        status = STATUS_DROPPING
+    else:
+        status = STATUS_TODO
+    influence_txt = f"{latest * 100:.1f}%" if latest is not None else "no data"
+    return {"status": status, "lines": lines, "warnings": warnings, "line_states": [""] * len(lines),
+            "hud": f"Hinder {faction} — {influence_txt}", "updated_at": rows[0].get("snapshot_date") if rows else None}
 
 
 def _boost_view(task: dict, report: dict, history: list, limits: dict, today: Optional[date] = None) -> dict:
@@ -530,6 +581,14 @@ def _bgs_guide(task: dict, limits: dict, population_basis: str = "") -> str:
     faction = task.get("faction_name") or "the faction"
     opponent = task.get("opponent_name") or "the other side"
     task_type = task["task_type"]
+    if task_type == "hinder":
+        # SINC Complete BGS Guide 2024, "Reducing influence" (p36-39), cheapest first.
+        return (f"Influence is zero-sum, so boosting the other factions here pushes {faction} down without "
+                f"costing reputation. Take missions that show a red − effect on them. Letting their missions "
+                f"expire (failing them) costs them about 1 INF each, and you lose reputation with them. "
+                f"Trading at a loss or into zero demand, or smuggling, at stations they control also hurts "
+                f"them. Clean kills of their ships work but bring big bounties and notoriety — only when "
+                f"your coordinator asks.")
     if task_type == "boost":
         return (f"A bit of each: missions for {faction} (about {limits['tier_score']} INF+ per tick), bounties, "
                 f"exploration data and high-demand profitable trade at {faction}-controlled stations "
@@ -553,7 +612,8 @@ def _population_basis(targets: Optional[dict], population) -> str:
 def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], history: list,
                     pp: Optional[dict], limits: dict, pledged: str = "", merits: int = 0,
                     pp_activities=None, population: Optional[int] = None,
-                    today: Optional[date] = None, edsm_row: Optional[dict] = None) -> dict:
+                    today: Optional[date] = None, edsm_row: Optional[dict] = None,
+                    squadron_faction: str = "") -> dict:
     task_type = task["task_type"]
     population_basis = ""
     if task_type == "boost":
@@ -562,6 +622,8 @@ def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], histor
             limits = dict(limits, **{k: v for k, v in targets.items() if k != "size"})
         population_basis = _population_basis(targets, population)
         view = _boost_view(task, report, history, limits, today)
+    elif task_type == "hinder":
+        view = _hinder_view(task, report, history, today, squadron_faction)
     elif task_type in ("vote", "fight"):
         view = _conflict_view(task, report, bgs_status, task_type)
     elif task_type == "powerplay":
@@ -596,6 +658,7 @@ def build_task_views(repo, since: str, limits: dict, system_address: Optional[in
         return []
     report = repo.get_session_activity_report(since)
     week_start = powerplay_week_start(now)
+    squadron_faction = (repo.get_squadron_faction_name() or "") if any(t["task_type"] == "hinder" for t in tasks) else ""
     views = []
     for t in tasks:
         addr = t["system_address"]
@@ -611,7 +674,8 @@ def build_task_views(repo, since: str, limits: dict, system_address: Optional[in
                     if t["task_type"] == "powerplay" and not pp and edsm_powerplay else None)
         views.append(build_task_view(t, report, bgs_status, history, pp, limits,
                                      pledged=pledged, merits=merits, pp_activities=pp_activities,
-                                     population=population, edsm_row=edsm_row))
+                                     population=population, edsm_row=edsm_row,
+                                     squadron_faction=squadron_faction))
     return views
 
 
