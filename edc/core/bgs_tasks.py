@@ -294,7 +294,33 @@ def commodity_info(mode: str, pledged: str, cargo: Optional[dict] = None,
                            f"system for this target, so they won't be accepted here{fix}")
     elif mode == "Acquisition" and supporting and info["carrying"] and source:
         info["collected_ok"] = source
+    batch = info["batch"]
+    info["next_station"] = None
+    info["refill_min"] = None
+    if batch:
+        ago = _seconds_ago(batch["last"], now)
+        if ago is not None and ago < ALLOCATION_REFRESH_MIN * 60:
+            info["refill_min"] = int(ago // 60)
+            if mode == "Acquisition" and supporting:
+                # each station has its own pool -- the next supporting system
+                # not collected from in the last 30 min should still be full
+                recent = batch.get("recent") or {}
+                for n, _st, d in supporting:
+                    r = recent.get(n.lower())
+                    r_ago = _seconds_ago(r["last"], now) if r else None
+                    if n.lower() != (batch["system"] or "").lower() and (
+                            r_ago is None or r_ago >= ALLOCATION_REFRESH_MIN * 60):
+                        info["next_station"] = (n, r["station"] if r else "", d)
+                        break
     return info
+
+
+def _seconds_ago(when: str, now: Optional[datetime] = None) -> Optional[float]:
+    try:
+        then = datetime.fromisoformat(str(when).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return ((now or datetime.now(timezone.utc)) - then).total_seconds()
 
 
 def commodity_lines(mode: str, pledged: str, cargo: Optional[dict] = None,
@@ -989,18 +1015,27 @@ def _add_powerplay_structure(view: dict, mode: str, pp_state: str, pledged: str,
         if info["collected_ok"]:
             chips.append({"text": f"✓ Collected at {info['collected_ok']} (supporting)", "color": "#6BCB77",
                           "tooltip": "Within range of this target, so the hand-in will be accepted"})
-        if info["next_allocation"]:
-            batch = info["batch"]
-            if info["next_allocation"] == "now":
-                text = "Allocation ready"
-            elif batch:
-                text = f"{batch['station']}: {batch['tonnes']} t taken · refill ≈{info['next_allocation']}"
-            else:
-                text = f"Next allocation {info['next_allocation']}"
-            chips.append({"text": text, "color": "" if info["next_allocation"] == "now" else "#FFB347",
-                          "tooltip": (f"Estimated: {ALLOCATION_REFRESH_MIN} min after your last collection "
-                                      "(community-reported). The journal doesn't say when a Power Contact is empty.")})
-        if info["supporting"]:
+        batch = info["batch"]
+        if batch and info["refill_min"] is not None:
+            chips.append({"text": f"{batch['station']}: {batch['tonnes']} t taken {info['refill_min']} min ago "
+                                  f"· refill ≈{ALLOCATION_REFRESH_MIN} min+",
+                          "color": "#FFB347",
+                          "tooltip": (f"Unconfirmed: community sources say {ALLOCATION_REFRESH_MIN} min, but one "
+                                      "station was seen still empty after ~40 min. Each station has its own pool.")})
+        elif batch:
+            chips.append({"text": f"{batch['station']} likely refilled",
+                          "tooltip": f"Over {ALLOCATION_REFRESH_MIN} min since your last collection there (unconfirmed)"})
+        elif info["next_allocation"]:
+            chips.append({"text": ("Allocation ready" if info["next_allocation"] == "now"
+                                   else f"Next allocation {info['next_allocation']}"),
+                          "tooltip": f"{ALLOCATION_REFRESH_MIN} min after your last collection (community-reported)"})
+        if info.get("next_station"):
+            n, st, d = info["next_station"]
+            chips.append({"text": f"{batch['station']} used · next: {st + ' (' + n + ')' if st and st != n else n}"
+                                  f" · {d:.1f} ly", "color": "#4DD8C8",
+                          "tooltip": ("Each station has its own allocation pool (confirmed in game 2026-10-03), so "
+                                      "this supporting system should offer a full amount. Distance is from the target.")})
+        elif info["supporting"]:
             n, st, d = info["supporting"][0]
             chips.append({"text": f"Collect at {n} · {d:.1f} ly", "color": "#4DD8C8",
                           "tooltip": "Supporting systems (Fortified ≤20 ly / Stronghold ≤30 ly):\n" + "\n".join(

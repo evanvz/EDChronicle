@@ -979,8 +979,12 @@ class EventEngine:
                 self.state.pp_last_collect[commodity] = event.get("timestamp") or ""
                 if self.state.system:
                     self.state.pp_collect_system[commodity] = self.state.system
-                add_collect(self.state.pp_collect_batch, commodity, self.state.station_name or "",
-                            self.state.system or "", event.get("timestamp") or "", event.get("Count") or 0)
+                since = add_collect(self.state.pp_collect_batch, commodity, self.state.station_name or "",
+                                    self.state.system or "", event.get("timestamp") or "", event.get("Count") or 0)
+                # refill-time evidence: how long this station took to offer more
+                log.info("PowerPlay collect: %s t %s at %s (%s)%s", event.get("Count"), commodity,
+                         self.state.station_name, self.state.system,
+                         f", {since:.0f} min since last collect here" if since is not None else "")
 
         elif name in ("PowerplayJoin", "PowerplayDefect", "PowerplayLeave"):
             # Pledge changes mid-session; the "Powerplay" summary event is only

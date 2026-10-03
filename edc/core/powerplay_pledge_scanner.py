@@ -136,16 +136,26 @@ def scan_deliveries(journal_dir: Path) -> Dict[str, Dict[str, Any]]:
 
 
 def add_collect(batches: Dict[str, Dict[str, Any]], commodity: str, station: str, system: str,
-                timestamp: str, count: int, window_min: int = 30) -> None:
+                timestamp: str, count: int, window_min: int = 30) -> Optional[float]:
     """Tonnes taken per commodity in the current allocation window: a
     collect at the same station within window_min of the previous one adds
-    to it, anything else starts a new one."""
+    to it, anything else starts a new one. "recent" keeps the last collect
+    per system -- each station has its own allocation pool (confirmed in
+    game 2026-10-03), so another supporting system can still be full.
+    Returns the minutes since the previous collect in this system, if any."""
     prev = batches.get(commodity)
     gap = _seconds(prev["last"], timestamp) if prev else None
     same = bool(prev and prev["station"] == (station or system or "?")
                 and gap is not None and 0 <= gap <= window_min * 60)
+    recent = dict((prev or {}).get("recent") or {})
+    before = recent.get((system or "").lower())
+    since = _seconds(before["last"], timestamp) / 60 if before else None
+    if system:
+        recent[system.lower()] = {"station": station or system, "last": timestamp}
     batches[commodity] = {"station": station or system or "?", "system": system,
-                          "tonnes": (prev["tonnes"] if same else 0) + (count or 0), "last": timestamp}
+                          "tonnes": (prev["tonnes"] if same else 0) + (count or 0), "last": timestamp,
+                          "recent": recent}
+    return since
 
 
 def scan_last_collects(journal_dir: Path, newest_files: int = 3,
