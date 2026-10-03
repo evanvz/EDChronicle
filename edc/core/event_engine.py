@@ -984,7 +984,7 @@ class EventEngine:
                 # refill-time evidence: how long this station took to offer more
                 log.info("PowerPlay collect: %s t %s at %s (%s)%s", event.get("Count"), commodity,
                          self.state.station_name, self.state.system,
-                         f", {since:.0f} min since last collect here" if since is not None else "")
+                         f", {since:.0f} min since your previous collect" if since is not None else "")
 
         elif name in ("PowerplayJoin", "PowerplayDefect", "PowerplayLeave"):
             # Pledge changes mid-session; the "Powerplay" summary event is only

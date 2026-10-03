@@ -142,27 +142,15 @@ def add_collect(batches: Dict[str, Dict[str, Any]], commodity: str, station: str
                 timestamp: str, count: int, window_min: int = 30) -> Optional[float]:
     """Tonnes taken per commodity in the current allocation window: a
     collect at the same station within window_min of the previous one adds
-    to it, anything else starts a new one. "recent" keeps the last collect
-    per system -- each station has its own allocation pool (confirmed in
-    game 2026-10-03), so another supporting system can still be full.
-    Returns the minutes since the previous collect in this system, if any."""
+    to it, anything else starts a new one. Returns the minutes since the
+    previous collect anywhere -- the allocation is one pool per commander."""
     prev = batches.get(commodity)
     gap = _seconds(prev["last"], timestamp) if prev else None
     same = bool(prev and prev["station"] == (station or system or "?")
                 and gap is not None and 0 <= gap <= window_min * 60)
-    recent = dict((prev or {}).get("recent") or {})
-    before = recent.get((system or "").lower())
-    since = _seconds(before["last"], timestamp) / 60 if before else None
-    if system:
-        # per-system collect log (last 4 h) -- a station locks after ~2 loads
-        kept = [e for e in ((before or {}).get("log") or [])
-                if 0 <= _seconds(e[0], timestamp) <= 4 * 3600]
-        recent[system.lower()] = {"station": station or system, "last": timestamp,
-                                  "log": kept + [(timestamp, count or 0)]}
     batches[commodity] = {"station": station or system or "?", "system": system,
-                          "tonnes": (prev["tonnes"] if same else 0) + (count or 0), "last": timestamp,
-                          "recent": recent}
-    return since
+                          "tonnes": (prev["tonnes"] if same else 0) + (count or 0), "last": timestamp}
+    return gap / 60 if gap is not None and gap != float("inf") else None
 
 
 def scan_last_collects(journal_dir: Path, newest_files: int = 3,
