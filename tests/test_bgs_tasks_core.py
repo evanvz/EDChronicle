@@ -89,21 +89,21 @@ def test_boost_todo_with_progress_lines():
     view = build_task_view(_task("boost", "EUW"), report, None, history, None, LIMITS)
     assert view["status"] == STATUS_TODO
     assert view["lines"] == [
-        "Tier score 12 / 25 (3 missions)",
+        "INF 12 / 25 (3 missions)",
         "Bounties 5.0M / 20.0M",
         "Exploration 0 / 20.0M",
         "Trade profit 3.4M",
         "Influence 41.2% → 42.0% (as of 2026-09-26)",
     ]
     assert view["warnings"] == []
-    assert view["hud"] == "Boost EUW — tier score 12/25"
+    assert view["hud"] == "Boost EUW — INF 12/25"
 
 
 def test_boost_done_when_a_stream_reaches_its_limit_and_warns_past_it():
     report = {"2026-09-26": {"Ekono": {"EUW": _entry(count=6, weighted=27)}}}
     view = build_task_view(_task("boost", "EUW"), report, None, [], None, LIMITS)
     assert view["status"] == STATUS_DONE
-    assert view["warnings"] == ["Tier score past the daily target — diminishing returns"]
+    assert view["warnings"] == ["INF past the daily target — diminishing returns"]
 
 
 def test_boost_losing_ground_when_influence_dropped():
@@ -127,7 +127,7 @@ def test_vote_shows_score_and_counts_non_combat_actions():
                            _status(_conflict("election", "A", 2, "B", 0)), [], None, LIMITS)
     assert view["status"] == STATUS_DONE
     assert view["lines"][0] == "Days won 2 - 0 (active)"
-    assert view["lines"][1] == "Your actions: 2 missions (tier score 4), trade profit 1.2M, exploration 0"
+    assert view["lines"][1] == "Your actions: 2 missions (INF 4), trade profit 1.2M, exploration 0"
     assert view["hud"] == "Vote A vs B — 2-0"
     assert view["updated_at"] == "2026-09-26T12:00:00Z"
 
@@ -229,8 +229,8 @@ def test_note_view():
 
 def test_hud_line_joins_views():
     assert hud_line([]) == ""
-    assert hud_line([{"hud": "Boost A — tier score 1/25"}, {"hud": "Note: x"}]) == \
-        "Squadron task: Boost A — tier score 1/25 · Note: x"
+    assert hud_line([{"hud": "Boost A — INF 1/25"}, {"hud": "Note: x"}]) == \
+        "Squadron task: Boost A — INF 1/25 · Note: x"
 
 
 def test_build_task_views_filters_by_system_and_uses_repo():

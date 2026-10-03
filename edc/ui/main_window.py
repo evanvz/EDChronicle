@@ -1504,20 +1504,9 @@ class MainWindow(QMainWindow):
         # split handles internal names with no underscore between words
         # at all (confirmed live 2026-09-25: "AltruismCredits" rendered
         # as one unbroken word without it).
-        import re
+        from persistence.repository import clean_mission_type
 
-        raw_name = evt.get("Name")
-        mission_type = None
-        if isinstance(raw_name, str) and raw_name:
-            cleaned = raw_name
-            if cleaned.startswith("Mission_"):
-                cleaned = cleaned[len("Mission_"):]
-            if cleaned.endswith("_name"):
-                cleaned = cleaned[:-len("_name")]
-            cleaned = cleaned.replace("_", " ")
-            cleaned = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", cleaned)
-            cleaned = cleaned.strip()
-            mission_type = cleaned or None
+        mission_type = clean_mission_type(evt.get("Name"))
 
         reward = evt.get("Reward")
         reward = reward if isinstance(reward, int) else None
@@ -2862,7 +2851,7 @@ class MainWindow(QMainWindow):
 
         # --- Squadron BGS limits (BGS Tasks tracker) ---
         bgs_row = QHBoxLayout()
-        bgs_row.addWidget(QLabel("Squadron BGS limits per tick — missions tier score:"))
+        bgs_row.addWidget(QLabel("Squadron BGS limits per tick — missions INF:"))
         self.bgs_limit_tier_spin = QSpinBox()
         self.bgs_limit_tier_spin.setRange(1, 500)
         self.bgs_limit_tier_spin.setValue(int(getattr(self.cfg, "bgs_limit_tier_score", 25) or 25))

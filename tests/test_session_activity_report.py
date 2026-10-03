@@ -61,7 +61,7 @@ def test_missions_are_broken_down_by_type(tmp_path):
     )  # no mission_type -- older row shape
     report = repo.get_session_activity_report("2026-09-25T00:00:00Z")
     by_type = report["2026-09-25"]["Ekono"]["Elite United Worlds"]["missions"]["by_type"]
-    assert by_type == {"Courier": 2, "Massacre Conflict CivilWar": 1, "Unknown": 1}
+    assert by_type == {"Courier": 2, "Massacre Conflict Civil War": 1, "Unknown": 1}
 
 
 def test_reward_is_summed_by_type_from_primary_rows_only(tmp_path):
@@ -230,3 +230,27 @@ def test_mixed_signed_and_unsigned_rows_sum_correctly(tmp_path):
     report = repo.get_session_activity_report("2026-09-25T00:00:00Z")
     m = report["2026-09-25"]["Ekono"]["Elite United Worlds"]["missions"]
     assert m["weighted"] == 7  # 5 + 2, both positive
+
+
+def test_clean_mission_type_merges_old_and_new_spellings():
+    from persistence.repository import clean_mission_type
+    assert clean_mission_type("Mission_Courier_Boom_name") == "Courier Boom"
+    assert clean_mission_type("MISSION_Salvage_Refinery") == "Salvage Refinery"
+    assert clean_mission_type("MISSION Salvage Refinery") == "Salvage Refinery"
+    assert clean_mission_type("AltruismCredits") == "Altruism Credits"
+    assert clean_mission_type("Altruism Credits") == "Altruism Credits"
+    assert clean_mission_type("") is None
+
+
+def test_session_merits_split_per_system_and_day(tmp_path):
+    repo = _repo(tmp_path)
+    _seed_system(repo, 1, "Alpha")
+    _seed_system(repo, 2, "Beta")
+    repo.record_powerplay_merits(1, "Aisling Duval", 105, "2026-09-25T10:00:00Z")
+    repo.record_powerplay_merits(1, "Aisling Duval", 3960, "2026-09-25T10:00:15Z")
+    repo.record_powerplay_merits(2, "Aisling Duval", 547, "2026-09-26T01:00:00Z")
+    repo.record_powerplay_merits(2, "Aisling Duval", 999, "2026-09-24T01:00:00Z")
+    assert repo.get_session_merits("2026-09-25T00:00:00Z") == {
+        "2026-09-25": {"Alpha": {"Aisling Duval": 4065}},
+        "2026-09-26": {"Beta": {"Aisling Duval": 547}},
+    }

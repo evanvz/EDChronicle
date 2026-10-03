@@ -3,11 +3,26 @@
 # See the LICENSE file in the project root for full terms.
 
 import json
+import re
 import time
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from .database import Database
+
+
+def clean_mission_type(raw) -> Optional[str]:
+    """"Mission_Courier_Boom_name" -> "Courier Boom",
+    "MISSION_Salvage_Refinery" -> "Salvage Refinery",
+    "Mission_AltruismCredits_name" -> "Altruism Credits". Idempotent, so it
+    also merges rows stored before a rule here existed."""
+    if not isinstance(raw, str) or not raw:
+        return None
+    cleaned = re.sub(r"^mission[_ ]", "", raw, flags=re.IGNORECASE)
+    cleaned = re.sub(r"_name$", "", cleaned, flags=re.IGNORECASE)
+    cleaned = cleaned.replace("_", " ")
+    cleaned = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", cleaned)
+    return " ".join(cleaned.split()) or None
 from edc.core.station_pads import effective_pad_size
 from edc.core.bgs_conflicts import has_raid_opportunity_state, is_multistate_faction
 
@@ -2907,6 +2922,21 @@ class Repository:
         ).fetchone()
         return row[0]
 
+    def get_session_merits(self, since: str) -> dict:
+        """{date: {system_name: {power: merits}}} for every PowerplayMerits
+        row earned_at >= since -- the per-system split BGS-Tally can't give
+        (it keeps one merits total per power per tick)."""
+        out: dict = {}
+        for r in self.db.conn.execute(
+            "SELECT p.earned_at, s.system_name, p.power, p.merits FROM powerplay_merits p "
+            "JOIN systems s ON s.system_address = p.system_address "
+            "WHERE p.earned_at >= ? AND s.system_name IS NOT NULL",
+            (since,),
+        ).fetchall():
+            powers = out.setdefault(r[0][:10], {}).setdefault(r[1], {})
+            powers[r[2] or "Unknown"] = powers.get(r[2] or "Unknown", 0) + (r[3] or 0)
+        return out
+
     def record_faction_cz_kill(
         self, system_address: int, faction_name: str, zone_type: str, size: str, earned_at: str,
     ) -> None:
@@ -3003,7 +3033,7 @@ class Repository:
             m = entry["missions"]
             m["count"] += 1
             m["weighted"] += _signed_tier_value(r["influence_tier"], r["trend"])
-            mtype = r["mission_type"] if isinstance(r["mission_type"], str) and r["mission_type"] else "Unknown"
+            mtype = clean_mission_type(r["mission_type"]) or "Unknown"
             m["by_type"][mtype] = m["by_type"].get(mtype, 0) + 1
             if r["is_primary"]:
                 m["primary_count"] += 1

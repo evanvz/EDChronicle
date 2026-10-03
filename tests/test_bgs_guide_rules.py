@@ -45,20 +45,20 @@ def test_boost_card_uses_population_targets_when_given():
     report = {"d": {"Tucanae": {"EUW": _entry(count=3, weighted=12, bounties=5_000_000, profit=3_400_000)}}}
     view = build_task_view(_task("boost", "EUW"), report, None, [], None, LIMITS, population=51_850_712)
     assert view["lines"][:4] == [
-        "Tier score 12 / 50 (3 missions)",
+        "INF 12 / 50 (3 missions)",
         "Bounties 5.0M / 30.0M",
         "Exploration 0 / 15.0M",
         "Trade profit 3.4M / 30.0M",
     ]
     assert "large system" in view["guide"]
     assert "SINC" in view["guide"]
-    assert view["hud"] == "Boost EUW — tier score 12/50"
+    assert view["hud"] == "Boost EUW — INF 12/50"
 
 
 def test_boost_card_falls_back_to_settings_when_population_unknown():
     report = {"d": {"Tucanae": {"EUW": _entry(count=1, weighted=3)}}}
     view = build_task_view(_task("boost", "EUW"), report, None, [], None, LIMITS)
-    assert view["lines"][0] == "Tier score 3 / 25 (1 mission)"
+    assert view["lines"][0] == "INF 3 / 25 (1 mission)"
     assert "Settings" in view["guide"]
 
 
@@ -66,7 +66,7 @@ def test_population_targets_can_be_switched_off():
     report = {"d": {"Tucanae": {"EUW": _entry(count=1, weighted=3)}}}
     limits = dict(LIMITS, by_population=False)
     view = build_task_view(_task("boost", "EUW"), report, None, [], None, limits, population=51_850_712)
-    assert view["lines"][0] == "Tier score 3 / 25 (1 mission)"
+    assert view["lines"][0] == "INF 3 / 25 (1 mission)"
 
 
 def test_builder_reads_population_for_boost_tasks():
@@ -81,7 +81,7 @@ def test_builder_reads_population_for_boost_tasks():
     )
     views = build_task_views(repo, "t", LIMITS)
     assert calls == [12345]
-    assert views[0]["lines"][0] == "Tier score 0 / 15 (0 missions)"
+    assert views[0]["lines"][0] == "INF 0 / 15 (0 missions)"
 
 
 # --- exobiology has no BGS effect (guide p32) ---

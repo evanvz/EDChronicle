@@ -41,7 +41,7 @@ def test_hint_shows_task_for_current_system(tmp_path):
     repo.add_bgs_task("Ekono", "boost", faction_name="Elite United Worlds")
     fake_self = _fake_self(repo)
     MainWindow._refresh_bgs_task_hint(fake_self)
-    assert fake_self._hints == ["Squadron task: Boost Elite United Worlds — tier score 0/25"]
+    assert fake_self._hints == ["Squadron task: Boost Elite United Worlds — INF 0/25"]
 
 
 def test_hint_empty_in_a_system_without_tasks(tmp_path):

@@ -150,7 +150,7 @@ def test_boost_line_states_under_met_and_over():
     report = {"2026-09-26": {"Tucanae": {"EUW": _entry(count=5, weighted=25, bounties=21_000_000, exploration=1)}}}
     view = build_task_view(_task("boost", "EUW"), report, None, [], None, LIMITS)
     assert view["line_states"][:3] == ["met", "over", ""]
-    assert view["lines"][0] == "Tier score 25 / 25 (5 missions) ✓"
+    assert view["lines"][0] == "INF 25 / 25 (5 missions) ✓"
     assert view["lines"][1] == "Bounties 21.0M / 20.0M ✓"
     assert view["lines"][2] == "Exploration 1 / 20.0M"
     assert len(view["line_states"]) == len(view["lines"])
@@ -164,7 +164,7 @@ def test_non_boost_line_states_are_blank_and_aligned():
 def test_single_mission_is_singular():
     report = {"2026-09-26": {"Tucanae": {"EUW": _entry(count=1, weighted=3)}}}
     view = build_task_view(_task("boost", "EUW"), report, None, [], None, LIMITS)
-    assert view["lines"][0] == "Tier score 3 / 25 (1 mission)"
+    assert view["lines"][0] == "INF 3 / 25 (1 mission)"
 
 
 # --- BGS-safe first; joint BGS/PP actions only when also boosting ---

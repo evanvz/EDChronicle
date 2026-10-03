@@ -15,6 +15,7 @@ fetching the tick itself -- no new network code needed.
 """
 from __future__ import annotations
 
+import html
 import logging
 import zlib
 from datetime import datetime, timezone
@@ -44,6 +45,7 @@ _FACTION_COLORS = [
 _CHIP_MISSIONS = "#6BCB77"
 _CHIP_COMBAT = "#FF6B6B"
 _CHIP_TRADE = "#4DD8C8"
+_CHIP_MERITS = "#C77DFF"
 
 
 class SessionActivityDialog(QDialog):
@@ -123,7 +125,12 @@ class SessionActivityDialog(QDialog):
         except Exception:
             log.exception("Failed to load session activity report")
             report = {}
-        self._render_report(report)
+        try:
+            merits = self._panel._repo.get_session_merits(since)
+        except Exception:
+            log.exception("Failed to load session merits")
+            merits = {}
+        self._render_report(report, merits)
 
     @staticmethod
     def _faction_color(faction_name: str) -> str:
@@ -151,8 +158,8 @@ class SessionActivityDialog(QDialog):
         m = entry["missions"]
         if m["count"]:
             chips.append(
-                f'<span style="color:{_CHIP_MISSIONS};">Tier score</span> {m["weighted"]:+d} '
-                f'({m["count"]} missions: {m["primary_count"]} issued, {m["secondary_count"]} secondary)'
+                f'<span style="color:{_CHIP_MISSIONS};">INF</span> {m["weighted"]:+d} '
+                f'({m["count"]} missions: {m["primary_count"]} primary, {m["secondary_count"]} secondary)'
             )
 
         if entry["combat_bonds_total"]:
@@ -220,20 +227,22 @@ class SessionActivityDialog(QDialog):
             return f"Yesterday — {date_str}"
         return f"{d.strftime('%A')} — {date_str}"
 
-    def _render_report(self, report: dict) -> None:
+    def _render_report(self, report: dict, merits: dict = None) -> None:
         self._clear_cards()
-        self._empty_label.setVisible(not report)
-        if not report:
+        merits = merits or {}
+        self._empty_label.setVisible(not report and not merits)
+        if not report and not merits:
             return
 
-        for date_str in sorted(report.keys(), reverse=True):  # most recent day first
+        for date_str in sorted(set(report) | set(merits), reverse=True):  # most recent day first
             day_hdr = QLabel(self._format_day_header(date_str))
             day_hdr.setStyleSheet(_HDR_STYLE + " font-size:15px;")
             self._content_layout.addWidget(day_hdr)
             self._day_headers.append(day_hdr)
 
-            systems = report[date_str]
-            for system_name in sorted(systems.keys()):
+            systems = report.get(date_str, {})
+            day_merits = merits.get(date_str, {})
+            for system_name in sorted(set(systems) | set(day_merits)):
                 card = QFrame()
                 card.setStyleSheet(_CARD_STYLE)
                 card_l = QVBoxLayout(card)
@@ -244,7 +253,13 @@ class SessionActivityDialog(QDialog):
                 hdr.setStyleSheet(_HDR_STYLE)
                 card_l.addWidget(hdr)
 
-                factions = systems[system_name]
+                for power, total in sorted(day_merits.get(system_name, {}).items()):
+                    row = QLabel(f'<span style="color:{_CHIP_MERITS};">Merits</span> {total:,} ({html.escape(power)})')
+                    row.setTextFormat(Qt.TextFormat.RichText)
+                    row.setStyleSheet("background:transparent; border:none;")
+                    card_l.addWidget(row)
+
+                factions = systems.get(system_name, {})
                 for faction_name in sorted(factions.keys()):
                     entry = factions[faction_name]
                     color = self._faction_color(faction_name)

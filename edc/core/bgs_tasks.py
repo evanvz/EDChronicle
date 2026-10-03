@@ -54,7 +54,7 @@ BOUNTY_CASHIN_LIMIT = 10_000_000
 
 DEFAULT_LIMITS = {"tier_score": 25, "bounties": 20_000_000, "exploration": 20_000_000}
 
-_LIMITED_STREAMS = (("tier_score", "Tier score"), ("bounties", "Bounties"), ("exploration", "Exploration"),
+_LIMITED_STREAMS = (("tier_score", "INF"), ("bounties", "Bounties"), ("exploration", "Exploration"),
                     ("trade_profit", "Trade profit"))
 
 # SINC's recommended effort per player per day per system, by population
@@ -523,7 +523,7 @@ def _boost_view(task: dict, report: dict, history: list, limits: dict, today: Op
     for key, label in _LIMITED_STREAMS:
         limit = limits.get(key, 0)
         if key == "tier_score":
-            text = f"Tier score {act[key]} / {limit} ({_missions(act['missions'])})"
+            text = f"INF {act[key]} / {limit} ({_missions(act['missions'])})"
         elif limit > 0:
             text = f"{label} {_cr(act[key])} / {_cr(limit)}"
         elif act[key]:
@@ -593,7 +593,7 @@ def _boost_view(task: dict, report: dict, history: list, limits: dict, today: Op
                  "detail_lines": [retreat_line] if retreat_line else [],
                  "guide_short": f"Missions · bounties · exploration data · profitable high-demand trade for {faction}"}
     return {"status": status, "lines": lines, "warnings": warnings, "line_states": line_states, **structure,
-            "hud": f"Boost {faction} — tier score {act['tier_score']}/{limits['tier_score']}",
+            "hud": f"Boost {faction} — INF {act['tier_score']}/{limits['tier_score']}",
             "updated_at": None}
 
 
@@ -617,7 +617,7 @@ def _conflict_view(task: dict, report: dict, bgs_status: Optional[dict], kind: s
 
     if kind == "vote":
         lines.append(
-            f"Your actions: {_missions(act['missions'])} (tier score {act['tier_score']}), "
+            f"Your actions: {_missions(act['missions'])} (INF {act['tier_score']}), "
             f"trade profit {_cr(act['trade_profit'])}, exploration {_cr(act['exploration'])}"
         )
         acted = bool(act["missions"] or act["trade_profit"] > 0 or act["trade_bought"] or act["exploration"])
