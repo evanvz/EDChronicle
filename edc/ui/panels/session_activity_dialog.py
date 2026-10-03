@@ -230,19 +230,21 @@ class SessionActivityDialog(QDialog):
     def _render_report(self, report: dict, merits: dict = None) -> None:
         self._clear_cards()
         merits = merits or {}
-        self._empty_label.setVisible(not report and not merits)
-        if not report and not merits:
+        self._empty_label.setVisible(not report)
+        if not report:
             return
 
-        for date_str in sorted(set(report) | set(merits), reverse=True):  # most recent day first
+        # Merits only ride along on systems with BGS activity -- a system
+        # where you only earned merits isn't BGS work.
+        for date_str in sorted(report.keys(), reverse=True):  # most recent day first
             day_hdr = QLabel(self._format_day_header(date_str))
             day_hdr.setStyleSheet(_HDR_STYLE + " font-size:15px;")
             self._content_layout.addWidget(day_hdr)
             self._day_headers.append(day_hdr)
 
-            systems = report.get(date_str, {})
+            systems = report[date_str]
             day_merits = merits.get(date_str, {})
-            for system_name in sorted(set(systems) | set(day_merits)):
+            for system_name in sorted(systems.keys()):
                 card = QFrame()
                 card.setStyleSheet(_CARD_STYLE)
                 card_l = QVBoxLayout(card)
@@ -259,7 +261,7 @@ class SessionActivityDialog(QDialog):
                     row.setStyleSheet("background:transparent; border:none;")
                     card_l.addWidget(row)
 
-                factions = systems.get(system_name, {})
+                factions = systems[system_name]
                 for faction_name in sorted(factions.keys()):
                     entry = factions[faction_name]
                     color = self._faction_color(faction_name)
