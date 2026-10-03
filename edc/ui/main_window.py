@@ -430,7 +430,9 @@ class _StartupHistoryScanWorker(QObject):
             log.exception("Failed to scan journals for PowerPlay deliveries")
         try:
             result["pp_collect_system"] = {}
-            result["pp_last_collect"] = scan_last_collects(path, where=result["pp_collect_system"])
+            result["pp_collect_batch"] = {}
+            result["pp_last_collect"] = scan_last_collects(path, where=result["pp_collect_system"],
+                                                           batches=result["pp_collect_batch"])
         except Exception:
             log.exception("Failed to scan journals for PowerPlay collections")
         try:
@@ -3193,6 +3195,9 @@ class MainWindow(QMainWindow):
                 where = (result.get("pp_collect_system") or {}).get(name)
                 if where:
                     self.state.pp_collect_system[name] = where
+                batch = (result.get("pp_collect_batch") or {}).get(name)
+                if batch:
+                    self.state.pp_collect_batch[name] = batch
 
         for system, rec in (result.get("pp_deliveries") or {}).items():
             current = self.state.pp_deliveries.get(system)
@@ -6314,6 +6319,7 @@ class MainWindow(QMainWindow):
                     cargo=cargo_by_name(getattr(self.state, "cargo_inventory", None)),
                     last_collect=getattr(self.state, "pp_last_collect", None),
                     collect_system=getattr(self.state, "pp_collect_system", None),
+                    collect_batch=getattr(self.state, "pp_collect_batch", None),
                     deliveries=getattr(self.state, "pp_deliveries", None),
                 )
                 text = hud_line(views)

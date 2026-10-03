@@ -16,6 +16,7 @@ from edc.core.squadron_events import SQUADRON_EVENT_NAMES, apply_squadron_event
 from edc.core.mission_events import MISSION_EVENT_NAMES, apply_mission_event, credit_massacre_kill
 from edc.core.bgs_conflicts import find_squadron_war_enemy, squadron_faction_name, parse_powerplay_conflict_progress
 from edc.core.bgs_tasks import allied_powers, is_rival_power
+from edc.core.powerplay_pledge_scanner import add_collect
 from edc.core.res_signals import res_tier_from_signal_name
 from edc.core.ship_loadout import has_any_weapon, has_detailed_surface_scanner
 from edc.core.ring_signals import RING_NAME_RE as _RING_NAME_RE, parse_ring_hotspots
@@ -456,9 +457,11 @@ class EventEngine:
             station_faction = event.get("StationFaction")
             self.state.station_faction = station_faction.get("Name") if isinstance(station_faction, dict) else None
             self.state.station_type = event.get("StationType")
+            self.state.station_name = event.get("StationName")
         elif name in ("Undocked", "Location", "FSDJump", "CarrierJump"):
             self.state.station_faction = None
             self.state.station_type = None
+            self.state.station_name = None
 
         if name == "Location":
             # Happens on login; great for HUD
@@ -976,6 +979,8 @@ class EventEngine:
                 self.state.pp_last_collect[commodity] = event.get("timestamp") or ""
                 if self.state.system:
                     self.state.pp_collect_system[commodity] = self.state.system
+                add_collect(self.state.pp_collect_batch, commodity, self.state.station_name or "",
+                            self.state.system or "", event.get("timestamp") or "", event.get("Count") or 0)
 
         elif name in ("PowerplayJoin", "PowerplayDefect", "PowerplayLeave"):
             # Pledge changes mid-session; the "Powerplay" summary event is only

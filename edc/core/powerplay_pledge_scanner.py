@@ -135,8 +135,22 @@ def scan_deliveries(journal_dir: Path) -> Dict[str, Dict[str, Any]]:
     return found
 
 
+def add_collect(batches: Dict[str, Dict[str, Any]], commodity: str, station: str, system: str,
+                timestamp: str, count: int, window_min: int = 30) -> None:
+    """Tonnes taken per commodity in the current allocation window: a
+    collect at the same station within window_min of the previous one adds
+    to it, anything else starts a new one."""
+    prev = batches.get(commodity)
+    gap = _seconds(prev["last"], timestamp) if prev else None
+    same = bool(prev and prev["station"] == (station or system or "?")
+                and gap is not None and 0 <= gap <= window_min * 60)
+    batches[commodity] = {"station": station or system or "?", "system": system,
+                          "tonnes": (prev["tonnes"] if same else 0) + (count or 0), "last": timestamp}
+
+
 def scan_last_collects(journal_dir: Path, newest_files: int = 3,
-                       where: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+                       where: Optional[Dict[str, str]] = None,
+                       batches: Optional[Dict[str, Dict[str, Any]]] = None) -> Dict[str, str]:
     """{commodity name lower-cased: ISO timestamp} of the latest
     PowerplayCollect per commodity in the newest journals -- the 30-minute
     allocation countdown only cares about recent ones. If `where` is given
@@ -145,7 +159,7 @@ def scan_last_collects(journal_dir: Path, newest_files: int = 3,
     found: Dict[str, str] = {}
     if not journal_dir.exists():
         return found
-    system = None
+    system = station = None
     for path in sorted(journal_dir.glob("Journal.*.log"))[-newest_files:]:
         try:
             with path.open("r", encoding="utf-8", errors="replace") as f:
@@ -156,8 +170,9 @@ def scan_last_collects(journal_dir: Path, newest_files: int = 3,
                         event = json.loads(line)
                     except Exception:
                         continue
-                    if event.get("event") in ("FSDJump", "Location", "CarrierJump"):
+                    if event.get("event") in ("FSDJump", "Location", "CarrierJump", "Docked"):
                         system = event.get("StarSystem") or system
+                        station = event.get("StationName")
                         continue
                     if event.get("event") != "PowerplayCollect":
                         continue
@@ -166,6 +181,9 @@ def scan_last_collects(journal_dir: Path, newest_files: int = 3,
                         found[name] = event.get("timestamp") or ""
                         if where is not None and system:
                             where[name] = system
+                        if batches is not None:
+                            add_collect(batches, name, station or "", system or "",
+                                        event.get("timestamp") or "", event.get("Count") or 0)
         except OSError:
             continue
     return found

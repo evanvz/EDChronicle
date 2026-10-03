@@ -51,6 +51,9 @@ class GameState:
     pp_last_collect: Dict[str, str] = field(default_factory=dict)
     # {commodity name lower-cased: system it was last collected in}
     pp_collect_system: Dict[str, str] = field(default_factory=dict)
+    # {commodity name lower-cased: {"station","system","tonnes","last"}} --
+    # tonnes taken in the current 30-min allocation window (add_collect).
+    pp_collect_batch: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     # {system name lower-cased: {"timestamp","type","count","merits"}} -- the
     # latest PowerplayDeliver there and the merits it earned.
     pp_deliveries: Dict[str, Dict[str, Any]] = field(default_factory=dict)
@@ -188,6 +191,7 @@ class GameState:
     # sales goes to the station's owner, and a FleetCarrier carries none.
     station_faction: Optional[str] = None
     station_type: Optional[str] = None
+    station_name: Optional[str] = None
 
     # Current station's commodity market (Market.json, read on the "Market" event)
     current_market_id: Optional[int] = None
