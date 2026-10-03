@@ -650,10 +650,10 @@ def _conflict_view(task: dict, report: dict, bgs_status: Optional[dict], kind: s
     bars, chips = [], []
     if c:
         if days_for is not None:
-            bars.append({"label": f"Days won ({faction})"[:30], "value": days_for, "max": 4,
+            bars.append({"label": f"Days won ({faction})", "value": days_for, "max": 4,
                          "text": f"{days_for} / 4", "state": "met" if days_for >= 4 else ""})
         if days_against is not None:
-            bars.append({"label": f"Days won ({opponent or 'other'})"[:30], "value": days_against, "max": 4,
+            bars.append({"label": f"Days won ({opponent or 'other'})", "value": days_against, "max": 4,
                          "text": f"{days_against} / 4", "state": "against"})
         chips.append({"text": (c["status"] or "pending").capitalize()})
         if c["stake_for"] or c["stake_against"]:

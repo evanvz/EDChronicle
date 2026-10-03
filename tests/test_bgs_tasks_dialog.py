@@ -144,3 +144,23 @@ def test_unfinished_card_has_no_tint(tmp_path):
     repo.add_bgs_task("Ekono", "boost", faction_name="Elite United Worlds")
     dlg.refresh()
     assert "#0f2418" not in dlg._cards[0].styleSheet()
+
+
+def test_long_bar_labels_are_not_cut_off(tmp_path):
+    from types import SimpleNamespace
+    from edc.ui.panels.bgs_tasks_dialog import BgsTasksDialog
+    fake = SimpleNamespace(_distance_by_task={}, _copy_system=lambda *a: None)
+    fake._add_structured_body = lambda lay, v, a: BgsTasksDialog._add_structured_body(fake, lay, v, a)
+    view = {"task": {"id": 1, "system_name": "Delta Indi", "task_type": "vote", "faction_name": "Elite United Worlds",
+                     "opponent_name": "Hexare Ducal Society", "note": None, "system_address": 1, "pp_mode": None},
+            "status": "To do", "lines": [], "warnings": [], "guide": "", "guide_short": "x", "chips": [],
+            "detail_lines": [],
+            "bars": [{"label": "Days won (Elite United Worlds)", "value": 4, "max": 4, "text": "4 / 4", "state": "met"},
+                     {"label": "Days won (Hexare Ducal Society)", "value": 0, "max": 4, "text": "0 / 4", "state": "against"}]}
+    card = BgsTasksDialog._make_card(fake, view)
+    names = [l for l in card.findChildren(QLabel) if l.text().startswith("Days won")]
+    assert len(names) == 2
+    for lbl, full in zip(names, ("Days won (Elite United Worlds)", "Days won (Hexare Ducal Society)")):
+        assert lbl.width() > 110  # was a fixed 110 px that cut every long label
+        # shown in full, or (only past the 280 px cap) elided with the full name on hover
+        assert lbl.text() == full or lbl.toolTip() == full

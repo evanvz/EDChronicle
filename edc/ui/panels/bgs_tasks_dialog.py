@@ -341,12 +341,22 @@ class BgsTasksDialog(QDialog):
             if view.get("guide") and view["guide"] != short:
                 lbl.setToolTip(view["guide"])
             card_l.addWidget(lbl)
-        for bar in view.get("bars") or []:
+        bars = view.get("bars") or []
+        # Label column fits this card's longest label (capped so the bars keep
+        # room); anything longer is elided with the full text on hover.
+        probe = QLabel()
+        probe.setStyleSheet(_LINE_STYLE)
+        metrics = probe.fontMetrics()
+        label_w = min(max((metrics.horizontalAdvance(b["label"]) for b in bars), default=0) + 12, 280)
+        for bar in bars:
             row = QHBoxLayout()
             row.setSpacing(8)
-            name = QLabel(bar["label"])
+            shown = metrics.elidedText(bar["label"], Qt.TextElideMode.ElideRight, label_w - 6)
+            name = QLabel(shown)
             name.setStyleSheet(_LINE_STYLE)
-            name.setFixedWidth(110)
+            name.setFixedWidth(label_w)
+            if shown != bar["label"]:
+                name.setToolTip(bar["label"])
             row.addWidget(name)
             pb = QProgressBar()
             pb.setRange(0, 1000)
