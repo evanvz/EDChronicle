@@ -282,8 +282,8 @@ def commodity_info(mode: str, pledged: str, cargo: Optional[dict] = None,
     key = name.lower()
     info = {"name": name, "carrying": (cargo or {}).get(key, 0), "next_allocation": "",
             "supporting": supporting if mode == "Acquisition" else None, "warning": "",
-            "last_delivery": last_delivery, "collected_ok": "", "batch": (collect_batch or {}).get(key)}
-    when = (last_collect or {}).get(key)
+            "last_delivery": last_delivery, "collected_ok": "", "batch": max((collect_batch or {}).values(), key=lambda x: x["last"], default=None)}
+    when = max((last_collect or {}).values(), default=None)   # one pool for all commodity types
     if when:
         try:
             ready = datetime.fromisoformat(when.replace("Z", "+00:00")) + timedelta(minutes=ALLOCATION_REFRESH_MIN)
@@ -337,7 +337,7 @@ def commodity_lines(mode: str, pledged: str, cargo: Optional[dict] = None,
     carrying = (cargo or {}).get(key, 0)
     if carrying:
         parts.append(f"carrying {carrying} t")
-    when = (last_collect or {}).get(key)
+    when = max((last_collect or {}).values(), default=None)   # one pool for all commodity types
     if when:
         try:
             collected = datetime.fromisoformat(when.replace("Z", "+00:00"))

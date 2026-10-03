@@ -56,3 +56,15 @@ def test_next_load_chip_is_shared_across_stations():
     assert "Last load: 250 t at Altuna Port (Isiti)" in chip["tooltip"]
     assert _chip(view(21, 30), "Load ready")["text"] == "Load ready · any supporting station"
     assert _chip(view(21, 30), "Collect at")["text"] == "Collect at Lagar · 15.8 ly"
+
+
+def test_any_commodity_collect_starts_the_shared_timer():
+    """All three commodities grey out together (seen in game 2026-10-03)."""
+    b = {}
+    add_collect(b, K, "Altuna Port", "Isiti", "2026-10-03T20:58:17Z", 250)
+    add_collect(b, "aisling sealed contracts", "Ban Vision", "Lagar", "2026-10-03T21:20:00Z", 250)
+    last = {K: "2026-10-03T20:58:17Z", "aisling sealed contracts": "2026-10-03T21:20:00Z"}
+    info = bt.commodity_info("Acquisition", "Aisling Duval", {}, last,
+                             now=datetime(2026, 10, 3, 21, 35, tzinfo=timezone.utc), collect_batch=b)
+    assert info["next_allocation"] != "now"
+    assert info["batch"]["station"] == "Ban Vision"
