@@ -612,7 +612,7 @@ class _EddnFlushWorker(QObject):
 _BGS_ACTIVITY_EVENTS = frozenset({
     "FSDJump", "Location", "CarrierJump", "Docked", "MissionCompleted", "RedeemVoucher",
     "FactionKillBond", "MarketBuy", "MarketSell", "MultiSellExplorationData", "SellExplorationData", "SellOrganicData",
-    "PowerplayMerits",
+    "PowerplayMerits", "PowerplayCollect", "Cargo",
 })
 
 

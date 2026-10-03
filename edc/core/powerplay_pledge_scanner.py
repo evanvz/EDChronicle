@@ -154,7 +154,11 @@ def add_collect(batches: Dict[str, Dict[str, Any]], commodity: str, station: str
     before = recent.get((system or "").lower())
     since = _seconds(before["last"], timestamp) / 60 if before else None
     if system:
-        recent[system.lower()] = {"station": station or system, "last": timestamp}
+        # per-system collect log (last 4 h) -- a station locks after ~2 loads
+        kept = [e for e in ((before or {}).get("log") or [])
+                if 0 <= _seconds(e[0], timestamp) <= 4 * 3600]
+        recent[system.lower()] = {"station": station or system, "last": timestamp,
+                                  "log": kept + [(timestamp, count or 0)]}
     batches[commodity] = {"station": station or system or "?", "system": system,
                           "tonnes": (prev["tonnes"] if same else 0) + (count or 0), "last": timestamp,
                           "recent": recent}

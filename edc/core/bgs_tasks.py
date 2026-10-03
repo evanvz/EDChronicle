@@ -213,6 +213,11 @@ def transport_text(mode: str, pledged: str) -> str:
 # AG-O b6-5, 83 t -> 547 at Tucanae, same job), so cards show the player's
 # own last hand-in at that system rather than a generic figure.
 ALLOCATION_REFRESH_MIN = 30  # community-reported, per Power Contact allocation
+# Seen in game 2026-10-03 (3 runs, rank 175): a station gives ~2 loads
+# (~500 t) quickly, then its Power Contact greys out (no countdown shown)
+# -- still locked 50 min after the last collect, free again by 87 min.
+STATION_LOCK_LOADS = 1.9   # tonnes in the window >= this x the biggest single collect
+STATION_LOCK_MIN = 90
 
 
 # Frontier: Acquisition commodities must come from a supporting system --
@@ -295,24 +300,39 @@ def commodity_info(mode: str, pledged: str, cargo: Optional[dict] = None,
     elif mode == "Acquisition" and supporting and info["carrying"] and source:
         info["collected_ok"] = source
     batch = info["batch"]
+    recent = (batch or {}).get("recent") or {}
+    info["station"] = None   # {"station", "tonnes", "locked"} for the latest collect's system
     info["next_station"] = None
-    info["refill_min"] = None
+    info["open_supporting"] = None
     if batch:
-        ago = _seconds_ago(batch["last"], now)
-        if ago is not None and ago < ALLOCATION_REFRESH_MIN * 60:
-            info["refill_min"] = int(ago // 60)
-            if mode == "Acquisition" and supporting:
-                # each station has its own pool -- the next supporting system
-                # not collected from in the last 30 min should still be full
-                recent = batch.get("recent") or {}
-                for n, _st, d in supporting:
-                    r = recent.get(n.lower())
-                    r_ago = _seconds_ago(r["last"], now) if r else None
-                    if n.lower() != (batch["system"] or "").lower() and (
-                            r_ago is None or r_ago >= ALLOCATION_REFRESH_MIN * 60):
-                        info["next_station"] = (n, r["station"] if r else "", d)
-                        break
+        tonnes, locked = _station_status(recent.get((batch["system"] or "").lower()), now)
+        info["station"] = {"station": batch["station"], "tonnes": tonnes, "locked": locked}
+    if mode == "Acquisition" and supporting:
+        # each station has its own pool (confirmed 2026-10-03) -- skip the
+        # ones that likely locked after ~2 loads
+        open_ = [(n, (recent.get(n.lower()) or {}).get("station", ""), d) for n, _st, d in supporting
+                 if not _station_status(recent.get(n.lower()), now)[1]]
+        info["open_supporting"] = open_
+        if info["warning"] and open_:
+            info["warning"] = info["warning"].replace(f"collect at {supporting[0][0]} instead",
+                                                      f"collect at {open_[0][0]} instead")
+        if batch and not any(n.lower() == (batch["system"] or "").lower() for n, _s, _d in supporting):
+            info["station"] = None   # collected outside this target's range -- not relevant here
+        if info["station"] and info["station"]["locked"]:
+            info["next_station"] = next(
+                (c for c in open_ if c[0].lower() != (batch["system"] or "").lower()), None)
     return info
+
+
+def _station_status(entry: Optional[dict], now: Optional[datetime] = None) -> tuple:
+    """(tonnes collected there in the last STATION_LOCK_MIN, likely locked)."""
+    if not entry:
+        return 0, False
+    log_ = [(ts, n) for ts, n in (entry.get("log") or [])
+            if (_seconds_ago(ts, now) or 0) < STATION_LOCK_MIN * 60]
+    tonnes = sum(n for _ts, n in log_)
+    biggest = max((n for _ts, n in entry.get("log") or []), default=0)
+    return tonnes, bool(biggest and tonnes >= STATION_LOCK_LOADS * biggest)
 
 
 def _seconds_ago(when: str, now: Optional[datetime] = None) -> Optional[float]:
@@ -1015,28 +1035,29 @@ def _add_powerplay_structure(view: dict, mode: str, pp_state: str, pledged: str,
         if info["collected_ok"]:
             chips.append({"text": f"✓ Collected at {info['collected_ok']} (supporting)", "color": "#6BCB77",
                           "tooltip": "Within range of this target, so the hand-in will be accepted"})
-        batch = info["batch"]
-        if batch and info["refill_min"] is not None:
-            chips.append({"text": f"{batch['station']}: {batch['tonnes']} t taken {info['refill_min']} min ago "
-                                  f"· refill ≈{ALLOCATION_REFRESH_MIN} min+",
-                          "color": "#FFB347",
-                          "tooltip": (f"Unconfirmed: community sources say {ALLOCATION_REFRESH_MIN} min, but one "
-                                      "station was seen still empty after ~40 min. Each station has its own pool.")})
-        elif batch:
-            chips.append({"text": f"{batch['station']} likely refilled",
-                          "tooltip": f"Over {ALLOCATION_REFRESH_MIN} min since your last collection there (unconfirmed)"})
-        elif info["next_allocation"]:
-            chips.append({"text": ("Allocation ready" if info["next_allocation"] == "now"
-                                   else f"Next allocation {info['next_allocation']}"),
-                          "tooltip": f"{ALLOCATION_REFRESH_MIN} min after your last collection (community-reported)"})
+        st_ = info.get("station")
+        if st_ and st_["tonnes"]:
+            chips.append({"text": (f"{st_['station']}: {st_['tonnes']} t in last {STATION_LOCK_MIN} min · "
+                                   + ("likely locked" if st_["locked"] else "1 more load likely")),
+                          "color": "#FF6B6B" if st_["locked"] else "#FFB347",
+                          "tooltip": ("Seen in game: a station gives about 2 loads quickly, then greys out with no "
+                                      "countdown for roughly an hour (still locked 50 min after, free by 87 min). "
+                                      "Each station has its own pool. Unconfirmed rule.")})
+        elif st_:
+            chips.append({"text": f"{st_['station']} likely available",
+                          "tooltip": f"Nothing collected there in the last {STATION_LOCK_MIN} min"})
         if info.get("next_station"):
             n, st, d = info["next_station"]
-            chips.append({"text": f"{batch['station']} used · next: {st + ' (' + n + ')' if st and st != n else n}"
-                                  f" · {d:.1f} ly", "color": "#4DD8C8",
+            chips.append({"text": f"Next: {st + ' (' + n + ')' if st and st != n else n} · {d:.1f} ly",
+                          "color": "#4DD8C8",
                           "tooltip": ("Each station has its own allocation pool (confirmed in game 2026-10-03), so "
                                       "this supporting system should offer a full amount. Distance is from the target.")})
+        elif info["supporting"] and info.get("open_supporting") == []:
+            chips.append({"text": "All supporting stations likely locked", "color": "#FF6B6B",
+                          "tooltip": "Every known supporting system had ~2 loads taken in the last "
+                                     f"{STATION_LOCK_MIN} min"})
         elif info["supporting"]:
-            n, st, d = info["supporting"][0]
+            n, st, d = (info.get("open_supporting") or info["supporting"])[0]
             chips.append({"text": f"Collect at {n} · {d:.1f} ly", "color": "#4DD8C8",
                           "tooltip": "Supporting systems (Fortified ≤20 ly / Stronghold ≤30 ly):\n" + "\n".join(
                               f"{a} ({b}, {c:.1f} ly)" for a, b, c in info["supporting"])})
