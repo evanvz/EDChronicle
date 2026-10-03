@@ -354,7 +354,7 @@ class BgsTasksDialog(QDialog):
             pb.setValue(int(max(0.0, min(ratio, 1.0)) * 1000))
             pb.setFormat(bar.get("text") or "")
             pb.setFixedHeight(16)
-            chunk = {"met": "#6BCB77", "over": "#FFB347"}.get(bar.get("state"), accent)
+            chunk = {"met": "#6BCB77", "over": "#FFB347", "against": "#FF6B6B"}.get(bar.get("state"), accent)
             pb.setStyleSheet(
                 "QProgressBar { background:#0a1520; border:1px solid #1e3a5a; border-radius:3px;"
                 " color:#e8e8e8; text-align:center; font-size:11px; }"
@@ -425,7 +425,8 @@ class BgsTasksDialog(QDialog):
             color = STATUS_COLORS.get(view["status"], "#c8c8c8")
             status.setStyleSheet(f"background:{_rgba(color, 0.15)}; border:1px solid {color}; border-radius:8px;"
                                  f" color:{color}; font-weight:700; padding:0px 8px;")
-            top.addWidget(status)
+            status.setFixedHeight(22)  # a wrapped two-line title mustn't stretch the pill
+            top.addWidget(status, 0, Qt.AlignmentFlag.AlignTop)
         task_id = task["id"]
         for text, handler in (
             ("↑", lambda _checked=False, i=task_id: self._move(i, -1)),

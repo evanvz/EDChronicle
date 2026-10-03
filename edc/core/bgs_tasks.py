@@ -501,7 +501,18 @@ def _hinder_view(task: dict, report: dict, history: list, today: Optional[date] 
     else:
         status = STATUS_TODO
     influence_txt = f"{latest * 100:.1f}%" if latest is not None else "no data"
+    bars, chips = [], []
+    if latest is not None:
+        trend = "" if previous is None else ("▼" if latest < previous else "▲" if latest > previous else "▶")
+        bars.append({"label": "Their influence", "value": latest, "max": 1.0,
+                     "text": f"{latest * 100:.1f}% {trend}".strip() + (f"  (was {previous * 100:.1f}%)" if previous is not None and previous != latest else ""),
+                     "state": "met" if trend == "▼" else ("against" if trend == "▲" else "")})
+    if act["tier_score"] < 0:
+        chips.append({"text": f"Your missions −{-act['tier_score']} INF", "color": "#6BCB77"})
+    short = f"Boost the other factions · missions with a red − on {faction} · fail their missions"
     return {"status": status, "lines": lines, "warnings": warnings, "line_states": [""] * len(lines),
+            "bars": bars, "chips": chips, "guide_short": short,
+            "detail_lines": [retreat_line] if retreat_line else [],
             "hud": f"Hinder {faction} — {influence_txt}", "updated_at": rows[0].get("snapshot_date") if rows else None}
 
 
@@ -635,7 +646,35 @@ def _conflict_view(task: dict, report: dict, bgs_status: Optional[dict], kind: s
     verb = TASK_LABELS[kind]
     who = f"{faction} vs {opponent}" if opponent else faction
     score = f"{days_for if days_for is not None else '?'}-{days_against if days_against is not None else '?'}" if c else "no score yet"
+    # First side to win 4 days takes the conflict.
+    bars, chips = [], []
+    if c:
+        if days_for is not None:
+            bars.append({"label": f"Days won ({faction})"[:30], "value": days_for, "max": 4,
+                         "text": f"{days_for} / 4", "state": "met" if days_for >= 4 else ""})
+        if days_against is not None:
+            bars.append({"label": f"Days won ({opponent or 'other'})"[:30], "value": days_against, "max": 4,
+                         "text": f"{days_against} / 4", "state": "against"})
+        chips.append({"text": (c["status"] or "pending").capitalize()})
+        if c["stake_for"] or c["stake_against"]:
+            chips.append({"text": "Stakes", "tooltip": f"{c['stake_for'] or 'none'} vs {c['stake_against'] or 'none'}"})
+    if kind == "vote":
+        chips.append({"text": f"{act['missions']} missions", "color": "#6BCB77" if act["missions"] else ""})
+        if act["trade_profit"] > 0:
+            chips.append({"text": f"Trade {_cr(act['trade_profit'])}"})
+        if act["exploration"]:
+            chips.append({"text": f"Exploration {_cr(act['exploration'])}"})
+        short = f"Election missions for {faction} · trade / exploration break ties · no combat"
+    else:
+        chips.append({"text": f"{act['cz_kills']} CZ{'s' if act['cz_kills'] != 1 else ''} "
+                              f"(≈{act['cz_value']:.1f} low space)", "color": "#6BCB77" if act["cz_kills"] else ""})
+        if act["combat_bonds"]:
+            chips.append({"text": f"Bonds {_cr(act['combat_bonds'])}"})
+        if act["missions"]:
+            chips.append({"text": f"{act['missions']} missions"})
+        short = f"Win conflict zones for {faction} · bonds, massacre missions, bounties break ties"
     return {"status": status, "lines": lines, "warnings": warnings,
+            "bars": bars, "chips": chips, "detail_lines": [], "guide_short": short,
             "hud": f"{verb} {who} — {score}", "updated_at": updated_at}
 
 

@@ -60,3 +60,11 @@ def test_retreat_countdown_is_aimed_at_pushing_them_out():
     view = build_task_view(_task(), {}, None, hist, None, LIMITS, today=date(2026, 10, 2))
     assert any(line.startswith("Retreat active") for line in view["lines"])
     assert any("keep it there through the check day" in w for w in view["warnings"])
+
+
+def test_hinder_card_has_an_influence_bar():
+    view = build_task_view(_task(), _report(weighted=-6), None, _hist(("2026-10-02", 0.10), ("2026-10-01", 0.12)),
+                           None, LIMITS)
+    bar = view["bars"][0]
+    assert bar["label"] == "Their influence" and bar["text"] == "10.0% ▼  (was 12.0%)" and bar["state"] == "met"
+    assert view["chips"][0]["text"] == "Your missions −6 INF"

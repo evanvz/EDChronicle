@@ -54,7 +54,9 @@ def test_card_shows_what_to_do_line(tmp_path):
     dlg.refresh()
     text = _card_texts(dlg)[0]
     assert "What to do:" in text
-    assert "Complete election missions for A" in text
+    assert "Election missions for A" in text  # short line
+    guide = [l for l in dlg._cards[0].findChildren(QLabel) if "What to do:" in l.text()][0]
+    assert "Complete election missions for A" in guide.toolTip()  # full guidance on hover
 
 
 def test_cards_use_one_accent_colour_per_task_type(tmp_path):
