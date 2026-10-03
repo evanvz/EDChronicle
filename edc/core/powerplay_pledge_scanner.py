@@ -52,10 +52,11 @@ def scan_powerplay_pledge(journal_dir: Path) -> Optional[Dict[str, Any]]:
     return None
 
 
-def scan_conflict_progress(journal_dir: Path) -> Dict[int, tuple]:
+def scan_conflict_progress(journal_dir: Path, history: Optional[list] = None) -> Dict[int, tuple]:
     """{SystemAddress: (timestamp, {power: 0-1})} from the latest jump into
     each system that carried PowerplayConflictProgress -- recovers progress
-    for visits saved before the app kept it."""
+    for visits saved before the app kept it. `history`, if given, gets every
+    reading as (SystemAddress, timestamp, {power: 0-1}), oldest first."""
     journal_dir = Path(journal_dir)
     found: Dict[int, tuple] = {}
     if not journal_dir.exists():
@@ -79,6 +80,8 @@ def scan_conflict_progress(journal_dir: Path) -> Dict[int, tuple]:
                     }
                     if isinstance(addr, int) and progress:
                         found[addr] = (event.get("timestamp") or "", progress)
+                        if history is not None:
+                            history.append((addr, event.get("timestamp") or "", progress))
         except OSError:
             continue
     return found

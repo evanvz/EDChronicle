@@ -406,6 +406,16 @@ class Database:
             # PowerPlay task mode as the squadron's objective states it
             # ("Reinforcement"/"Acquisition"/"Undermining"); NULL = auto-detect.
             "ALTER TABLE bgs_tasks ADD COLUMN pp_mode TEXT",
+            # Every change in a system's acquisition progress (journal + EDDN),
+            # to see what deliveries actually move.
+            """CREATE TABLE IF NOT EXISTS pp_progress_history (
+                system_address INTEGER NOT NULL,
+                power          TEXT    NOT NULL,
+                progress       REAL    NOT NULL,
+                observed_at    TEXT    NOT NULL,
+                source         TEXT,
+                PRIMARY KEY (system_address, power, observed_at)
+            )""",
         ]
         cache_migrations = [
             "ALTER TABLE net.spansh_bodies ADD COLUMN surface_gravity REAL",

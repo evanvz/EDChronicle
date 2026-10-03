@@ -1175,7 +1175,32 @@ def build_task_views(repo, since: str, limits: dict, system_address: Optional[in
                                                  if t["task_type"] == "powerplay" and pledged else None),
                                      collect_system=collect_system, collect_batch=collect_batch,
                                      last_delivery=(deliveries or {}).get((t["system_name"] or "").lower())))
+        if t["task_type"] == "powerplay" and pledged and addr is not None:
+            _add_progress_trend(views[-1], repo, addr, pledged)
     return views
+
+
+def _add_progress_trend(view: dict, repo, addr: int, pledged: str) -> None:
+    """Chip: how your power's acquisition progress moved over the stored
+    readings, with your merits here between each pair on hover -- the raw
+    data for measuring merits per control point."""
+    getter = getattr(repo, "get_pp_progress_history", None)
+    hist = getter(addr, pledged) if getter else []
+    if len(hist) < 2 or "chips" not in view:
+        return
+    (new_at, new_p, _s), (old_at, old_p, _s2) = hist[0], hist[-1]
+    delta = (new_p - old_p) * 100
+    tips = []
+    for (b_at, b_p, b_src), (a_at, a_p, _x) in zip(hist, hist[1:]):
+        mine = repo.get_powerplay_merits_between(addr, a_at, b_at)
+        tips.append(f"{a_at[5:16].replace('T', ' ')} → {b_at[5:16].replace('T', ' ')}: "
+                    f"{(b_p - a_p) * 100:+.3f}% ({b_src}) · your merits here: {mine:,}")
+    view["chips"].insert(0, {
+        "text": f"{delta:+.2f}% since {old_at[5:16].replace('T', ' ')}",
+        "color": "#6BCB77" if delta > 0 else ("#FF6B6B" if delta < 0 else ""),
+        "tooltip": "Acquisition progress changes (UTC), newest first:\n" + "\n".join(tips)
+                   + "\nOther commanders move it too; Frontier updates it in batches, not per hand-in.",
+    })
 
 
 def hud_line(views: list) -> str:

@@ -436,7 +436,8 @@ class _StartupHistoryScanWorker(QObject):
         except Exception:
             log.exception("Failed to scan journals for PowerPlay collections")
         try:
-            result["conflict_progress"] = scan_conflict_progress(path)
+            result["conflict_history"] = []
+            result["conflict_progress"] = scan_conflict_progress(path, history=result["conflict_history"])
         except Exception:
             log.exception("Failed to scan journal history for acquisition progress")
         try:
@@ -1077,8 +1078,28 @@ class MainWindow(QMainWindow):
                 data_timestamp=getattr(self.state, "factions_timestamp", "") or "",
                 conflict_progress=getattr(self.state, "system_powerplay_conflict_progress", None) or {},
             )
+            if getattr(self.state, "system_powerplay_conflict_progress", None):
+                self.repo.record_pp_progress(system_address, self.state.system_powerplay_conflict_progress,
+                                             getattr(self.state, "factions_timestamp", "") or "", "journal")
         except Exception:
             log.exception("Failed to save PowerPlay snapshot")
+
+    def _on_eddn_conflict_progress(self, id64, progress: dict, timestamp: str) -> None:
+        """History only for systems on the BGS task list -- EDDN reports
+        acquisitions galaxy-wide."""
+        now = time.monotonic()
+        if now - getattr(self, "_pp_watch_at", -1e9) > 60:
+            try:
+                self._pp_watch = {t["system_address"] for t in self.repo.list_bgs_tasks()
+                                  if t["task_type"] == "powerplay" and t["system_address"]}
+            except Exception:
+                self._pp_watch = set()
+            self._pp_watch_at = now
+        if id64 in self._pp_watch:
+            try:
+                self.repo.record_pp_progress(id64, progress, timestamp, "eddn")
+            except Exception:
+                log.exception("Failed to record EDDN acquisition progress")
 
     def _save_system_coords_from_state(self, system_name: str, timestamp: str) -> None:
         """system_coords is fed live only by the EDDN listener's
@@ -3204,6 +3225,16 @@ class MainWindow(QMainWindow):
             if not current or rec["timestamp"] > current.get("timestamp", ""):
                 self.state.pp_deliveries[system] = rec
 
+        if result.get("conflict_history"):
+            try:
+                with self.repo.db.deferred_commit():
+                    added = sum(self.repo.record_pp_progress(addr, prog, ts, "journal")
+                                for addr, ts, prog in result["conflict_history"])
+                if added:
+                    log.info("Recorded %d acquisition progress change(s) from journal history", added)
+            except Exception:
+                log.exception("Failed to record acquisition progress history")
+
         if result.get("conflict_progress"):
             try:
                 filled = self.repo.backfill_conflict_progress(result["conflict_progress"])
@@ -3266,6 +3297,7 @@ class MainWindow(QMainWindow):
         self._eddn_thread.started.connect(self._eddn_worker.run)
         self._eddn_worker.system_seen.connect(self._on_eddn_system_seen)
         self._eddn_worker.conflict_progress_seen.connect(self.eddn_powerplay.ingest_conflict_progress)
+        self._eddn_worker.conflict_progress_seen.connect(self._on_eddn_conflict_progress)
         self._eddn_worker.system_coords_seen.connect(self.eddn_market_cache.on_coords_seen)
         self._eddn_worker.commodity_seen.connect(self.eddn_market_cache.on_commodity_message)
         self._eddn_worker.faction_seen.connect(self.eddn_market_cache.on_faction_seen)

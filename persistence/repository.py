@@ -2907,6 +2907,43 @@ class Repository:
         ).fetchone()
         return row["population"] if row and isinstance(row["population"], int) else None
 
+    def record_pp_progress(self, system_address: int, progress: dict, observed_at: str, source: str) -> int:
+        """Stores each power's acquisition progress when it differs from the
+        latest stored reading (unchanged readings add nothing). Returns rows added."""
+        added = 0
+        for power, value in (progress or {}).items():
+            if not isinstance(power, str) or not isinstance(value, (int, float)) or not observed_at:
+                continue
+            last = self.db.conn.execute(
+                "SELECT progress, observed_at FROM pp_progress_history WHERE system_address = ? AND power = ? "
+                "ORDER BY observed_at DESC LIMIT 1", (system_address, power),
+            ).fetchone()
+            if last and (observed_at <= last["observed_at"] or abs(last["progress"] - value) < 1e-9):
+                continue
+            self.db.execute(
+                "INSERT OR IGNORE INTO pp_progress_history (system_address, power, progress, observed_at, source) "
+                "VALUES (?, ?, ?, ?, ?)", (system_address, power, float(value), observed_at, source),
+            )
+            added += 1
+        return added
+
+    def get_pp_progress_history(self, system_address: int, power: str, limit: int = 8) -> list:
+        """[(observed_at, progress, source)] newest first."""
+        rows = self.db.conn.execute(
+            "SELECT observed_at, progress, source FROM pp_progress_history "
+            "WHERE system_address = ? AND power = ? COLLATE NOCASE ORDER BY observed_at DESC LIMIT ?",
+            (system_address, power, limit),
+        ).fetchall()
+        return [(r["observed_at"], r["progress"], r["source"]) for r in rows]
+
+    def get_powerplay_merits_between(self, system_address: int, start: str, end: str) -> int:
+        row = self.db.conn.execute(
+            "SELECT COALESCE(SUM(merits), 0) FROM powerplay_merits "
+            "WHERE system_address = ? AND earned_at > ? AND earned_at <= ?",
+            (system_address, start, end),
+        ).fetchone()
+        return row[0]
+
     def record_powerplay_merits(self, system_address: int, power: str, merits: int, earned_at: str) -> None:
         """One row per PowerplayMerits journal event, credited to the system
         the player was in -- for the BGS Tasks tracker's merits-per-system."""
