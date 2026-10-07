@@ -6,9 +6,15 @@ it controls the specific station offering the service. Real SQLite
 (temp file), same fixture shape as test_bgs_status_repository.py."""
 import pytest
 
+from datetime import date
+
 from persistence.database import Database
 from persistence.repository import Repository
 from persistence.schema import SCHEMA_SQL
+
+# Snapshots older than 30 days are pruned on save (save_faction_snapshot), so a
+# fixed date makes this test fail once the calendar passes it.
+TODAY = date.today().isoformat()
 
 
 @pytest.fixture
@@ -38,7 +44,7 @@ def _add_system_faction_presence(repo, system_address, system_name, faction_name
         (system_address, system_name),
     )
     repo.save_faction_snapshot(
-        system_address, {"Name": faction_name, "Influence": 0.1}, "2026-08-24", False, "2026-08-24T00:00:00Z", "journal",
+        system_address, {"Name": faction_name, "Influence": 0.1}, TODAY, False, "2026-08-24T00:00:00Z", "journal",
     )
 
 

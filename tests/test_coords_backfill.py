@@ -7,10 +7,16 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from datetime import date
+
 from persistence.database import Database
 from persistence.repository import Repository
 from persistence.schema import SCHEMA_SQL
 from edc.core.edsm_faction_lookup import fetch_system_coords
+
+# Snapshots older than 30 days are pruned on save (save_faction_snapshot), so a
+# fixed date makes this test fail once the calendar passes it.
+TODAY = date.today().isoformat()
 
 
 def _fake_response(status_code=200, json_value=None):
@@ -94,7 +100,7 @@ def _track_system(repo, system_address, system_name, faction_name):
         (system_address, system_name),
     )
     repo.save_faction_snapshot(
-        system_address, {"Name": faction_name, "Influence": 0.1}, "2026-08-25", False, "2026-08-25T00:00:00Z", "journal",
+        system_address, {"Name": faction_name, "Influence": 0.1}, TODAY, False, "2026-08-25T00:00:00Z", "journal",
     )
 
 

@@ -7,11 +7,17 @@ which isn't how a real two-sided war looks. get_player_faction_overview()
 and get_player_faction_system_status() both attach war_corroborated
 (None/True/False) to each system dict; player_faction_panel.py's
 _bgs_action_core() downgrades its message when it's False."""
+from datetime import date
+
 from persistence.database import Database
 from persistence.repository import Repository
 from persistence.schema import SCHEMA_SQL
 
 from edc.ui.panels.player_faction_panel import _bgs_action_core
+
+# Snapshots older than 30 days are pruned on save (save_faction_snapshot), so a
+# fixed date makes this test fail once the calendar passes it.
+TODAY = date.today().isoformat()
 
 
 def _repo(tmp_path):
@@ -34,11 +40,11 @@ def test_war_with_no_opponent_is_not_corroborated(tmp_path):
     repo = _repo(tmp_path)
     repo.save_faction_snapshot(
         1, _faction("Elite United Worlds", influence=0.66, faction_state="War", squadron=True),
-        "2026-09-03", True, "2026-08-30T15:20:00Z", "edsm",
+        TODAY, True, "2026-08-30T15:20:00Z", "edsm",
     )
     repo.save_faction_snapshot(
         1, _faction("Rival Faction", influence=0.19, faction_state="None"),
-        "2026-09-03", False, "2026-08-30T15:20:00Z", "edsm",
+        TODAY, False, "2026-08-30T15:20:00Z", "edsm",
     )
 
     overview = repo.get_player_faction_overview()
@@ -51,11 +57,11 @@ def test_war_with_matching_opponent_is_corroborated(tmp_path):
     repo = _repo(tmp_path)
     repo.save_faction_snapshot(
         1, _faction("Elite United Worlds", influence=0.5, faction_state="War", squadron=True),
-        "2026-09-03", True, "2026-08-30T15:20:00Z", "edsm",
+        TODAY, True, "2026-08-30T15:20:00Z", "edsm",
     )
     repo.save_faction_snapshot(
         1, _faction("Rival Faction", influence=0.45, faction_state="War"),
-        "2026-09-03", False, "2026-08-30T15:20:00Z", "edsm",
+        TODAY, False, "2026-08-30T15:20:00Z", "edsm",
     )
 
     overview = repo.get_player_faction_overview()
@@ -67,7 +73,7 @@ def test_no_war_state_is_not_applicable(tmp_path):
     repo = _repo(tmp_path)
     repo.save_faction_snapshot(
         1, _faction("Elite United Worlds", influence=0.5, faction_state="Boom", squadron=True),
-        "2026-09-03", True, "2026-08-30T15:20:00Z", "edsm",
+        TODAY, True, "2026-08-30T15:20:00Z", "edsm",
     )
 
     overview = repo.get_player_faction_overview()
@@ -79,7 +85,7 @@ def test_get_player_faction_system_status_also_attaches_corroboration(tmp_path):
     repo = _repo(tmp_path)
     repo.save_faction_snapshot(
         1, _faction("Elite United Worlds", influence=0.66, faction_state="War", squadron=True),
-        "2026-09-03", True, "2026-08-30T15:20:00Z", "edsm",
+        TODAY, True, "2026-08-30T15:20:00Z", "edsm",
     )
 
     result = repo.get_player_faction_system_status("Elite United Worlds", 1)
@@ -137,11 +143,11 @@ def test_election_with_no_contestant_is_not_corroborated(tmp_path):
     repo = _repo(tmp_path)
     repo.save_faction_snapshot(
         1, _faction("Elite United Worlds", influence=0.5, faction_state="Election", squadron=True),
-        "2026-09-03", True, "2026-08-30T15:20:00Z", "edsm",
+        TODAY, True, "2026-08-30T15:20:00Z", "edsm",
     )
     repo.save_faction_snapshot(
         1, _faction("Peaceful Faction", influence=0.2, faction_state="None"),
-        "2026-09-03", False, "2026-08-30T15:20:00Z", "edsm",
+        TODAY, False, "2026-08-30T15:20:00Z", "edsm",
     )
 
     overview = repo.get_player_faction_overview()
@@ -153,11 +159,11 @@ def test_election_with_matching_contestant_is_corroborated(tmp_path):
     repo = _repo(tmp_path)
     repo.save_faction_snapshot(
         1, _faction("Elite United Worlds", influence=0.5, faction_state="Election", squadron=True),
-        "2026-09-03", True, "2026-08-30T15:20:00Z", "edsm",
+        TODAY, True, "2026-08-30T15:20:00Z", "edsm",
     )
     repo.save_faction_snapshot(
         1, _faction("Rival Faction", influence=0.45, faction_state="Election"),
-        "2026-09-03", False, "2026-08-30T15:20:00Z", "edsm",
+        TODAY, False, "2026-08-30T15:20:00Z", "edsm",
     )
 
     overview = repo.get_player_faction_overview()
@@ -171,7 +177,7 @@ def test_war_and_election_corroboration_are_independent(tmp_path):
     repo = _repo(tmp_path)
     repo.save_faction_snapshot(
         1, _faction("Elite United Worlds", influence=0.5, faction_state="War", squadron=True),
-        "2026-09-03", True, "2026-08-30T15:20:00Z", "edsm",
+        TODAY, True, "2026-08-30T15:20:00Z", "edsm",
     )
     overview = repo.get_player_faction_overview()
     sys_row = overview["systems"][0]
