@@ -7,6 +7,9 @@ from persistence.repository import Repository
 from persistence.schema import SCHEMA_SQL
 
 EKONO = 3205949786483
+from datetime import datetime, timezone
+NOW = datetime(2026, 10, 7, 12, tzinfo=timezone.utc)   # cycle started Thu 2026-10-01
+NEXT = datetime(2026, 10, 8, 13, tzinfo=timezone.utc)   # after the 10-08 reset
 W = {EKONO: "PowerPlay task"}
 
 
@@ -36,24 +39,24 @@ def test_alert_when_undermining_grew_since_tick_and_leads(tmp_path):
     repo = _repo(tmp_path)
     repo.record_pp_control(EKONO, "2026-10-05T10:00:00Z", "Stronghold", 1500, 3200, 0.28, "journal")
     repo.record_pp_control(EKONO, "2026-10-06T16:12:56Z", "Stronghold", 1910, 5333, 0.27, "journal")
-    assert bt.undermining_alerts(repo, "2026-10-06T00:00:00Z", W) == [("Ekono", 2133, 5333, 1910, "PowerPlay task")]
+    assert bt.undermining_alerts(repo, "2026-10-06T00:00:00Z", W, NOW) == [("Ekono", 2133, 5333, 1910, "PowerPlay task")]
     # reinforcement ahead -> no alert
     repo.record_pp_control(EKONO, "2026-10-06T20:00:00Z", "Stronghold", 6000, 5400, 0.3, "eddn")
-    assert bt.undermining_alerts(repo, "2026-10-06T00:00:00Z", W) == []
+    assert bt.undermining_alerts(repo, "2026-10-06T00:00:00Z", W, NOW) == []
 
 
 def test_weekly_reset_counts_from_zero(tmp_path):
     repo = _repo(tmp_path)
     repo.record_pp_control(EKONO, "2026-10-07T20:00:00Z", "Stronghold", 900, 5000, 0.3, "eddn")
     repo.record_pp_control(EKONO, "2026-10-08T12:00:00Z", "Stronghold", 10, 400, 0.3, "eddn")  # after Thursday reset
-    assert bt.undermining_alerts(repo, "2026-10-08T00:00:00Z", W) == [("Ekono", 400, 400, 10, "PowerPlay task")]
+    assert bt.undermining_alerts(repo, "2026-10-08T00:00:00Z", W, NEXT) == [("Ekono", 400, 400, 10, "PowerPlay task")]
 
 
 def test_card_chip_shows_real_totals_and_your_share(tmp_path):
     repo = _repo(tmp_path)
     repo.record_pp_control(EKONO, "2026-10-06T16:12:56Z", "Stronghold", 1910, 5333, 0.27, "journal")
     view = {"chips": []}
-    bt._add_control_chip(view, repo, EKONO, 948)
+    bt._add_control_chip(view, repo, EKONO, 948, NOW)
     chip = view["chips"][0]
     assert chip["text"] == "Reinforced 1,910 vs undermined 5,333 CP · losing · your share ≈237 (12%)"
     assert chip["color"] == "#FF6B6B"
@@ -84,3 +87,25 @@ def test_watch_list_tasks_supporting_and_squad_systems(tmp_path):
     assert watch[KAU] == "supports Tucanae Sector DW-V b2-3"
     assert watch[ISI] == "supports Tucanae Sector DW-V b2-3"   # first reason wins
     assert watch[FAR] == "squad system"
+
+
+def test_watch_rows_losing_first_and_no_data_rows(tmp_path):
+    repo = _repo(tmp_path)
+    repo.db.execute("INSERT INTO systems (system_address, system_name) VALUES (5, 'Kauruku'), (6, 'Lagar')")
+    repo.record_pp_control(EKONO, "2026-10-06T16:12:56Z", "Stronghold", 1910, 5333, 0.27, "journal")
+    repo.record_pp_control(5, "2026-10-06T10:00:00Z", "Stronghold", 900, 1200, 0.25, "eddn")
+    watch = {EKONO: "PowerPlay task", 5: "supports Tucanae", 6: "squad system"}
+    rows = bt.watch_rows(repo, "2026-10-06T00:00:00Z", watch, NOW)
+    assert [r["name"] for r in rows] == ["Ekono", "Kauruku", "Lagar"]   # biggest gap first, no data last
+    assert rows[0]["losing"] and rows[0]["gained"] == 5333
+    assert rows[2]["undermining"] is None and not rows[2]["losing"]
+
+
+def test_reading_from_an_earlier_cycle_counts_as_no_data(tmp_path):
+    repo = _repo(tmp_path)
+    repo.record_pp_control(EKONO, "2026-08-16T10:00:00Z", "Exploited", 0, 191, 0.2, "journal")   # 52 days old
+    rows = bt.watch_rows(repo, "2026-10-06T00:00:00Z", {EKONO: "squad system"}, NOW)
+    assert rows[0]["undermining"] is None and not rows[0]["losing"]
+    view = {"chips": []}
+    bt._add_control_chip(view, repo, EKONO, 0, NOW)
+    assert view["chips"] == []

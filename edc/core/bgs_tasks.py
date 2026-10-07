@@ -1185,11 +1185,19 @@ def build_task_views(repo, since: str, limits: dict, system_address: Optional[in
     return views
 
 
-def _add_control_chip(view: dict, repo, addr: int, merits_week: int) -> None:
-    """Chip: this cycle's real reinforcement vs undermining control points
-    (journal/EDDN) and your estimated share."""
+def _cycle_reading(repo, addr: int, now: Optional[datetime] = None):
+    """Latest reinforcement/undermining reading from the current PowerPlay
+    cycle only -- both reset at the weekly tick, so an older one says
+    nothing about this week."""
     getter = getattr(repo, "get_pp_control_reading", None)
     row = getter(addr) if getter else None
+    return row if row and row["observed_at"] >= powerplay_week_start(now) else None
+
+
+def _add_control_chip(view: dict, repo, addr: int, merits_week: int, now: Optional[datetime] = None) -> None:
+    """Chip: this cycle's real reinforcement vs undermining control points
+    (journal/EDDN) and your estimated share."""
+    row = _cycle_reading(repo, addr, now)
     if not row or "chips" not in view or (row["reinforcement"] is None and row["undermining"] is None):
         return
     r, u = row["reinforcement"] or 0, row["undermining"] or 0
@@ -1236,14 +1244,39 @@ def pp_watch(repo, pledged: str, edsm_powerplay=None) -> dict:
     return out
 
 
-def undermining_alerts(repo, since: str, watch: dict) -> list:
+def watch_rows(repo, since: str, watch: dict, now: Optional[datetime] = None) -> list:
+    """One row per watched system for the PowerPlay Watch List: latest
+    reinforcement/undermining this cycle, undermining gained since the BGS
+    tick, why it's watched. Systems losing (undermining ahead) first, biggest
+    gap first; then the rest by name. No reading yet -> numbers are None."""
+    names = repo.get_system_names_for_addresses(list(watch))
+    rows = []
+    for addr, why in watch.items():
+        row = _cycle_reading(repo, addr, now)
+        r = u = gained = None
+        if row:
+            r, u = row["reinforcement"] or 0, row["undermining"] or 0
+            base = repo.get_pp_control_reading(addr, since)
+            b = (base["undermining"] or 0) if base else 0
+            gained = (u - b if u >= b else u) if row["observed_at"] > since else 0
+        rows.append({"address": addr, "name": names.get(addr, str(addr)), "why": why,
+                     "state": row["pp_state"] if row else None, "reinforcement": r, "undermining": u,
+                     "gained": gained, "observed_at": row["observed_at"] if row else None,
+                     "source": row["source"] if row else None,
+                     "losing": bool(row) and u > r})
+    rows.sort(key=lambda x: (not x["losing"], -((x["undermining"] or 0) - (x["reinforcement"] or 0))
+                             if x["losing"] else 0, x["name"].lower()))
+    return rows
+
+
+def undermining_alerts(repo, since: str, watch: dict, now: Optional[datetime] = None) -> list:
     """[(system name, undermining gained since `since`, undermining,
     reinforcement, why watched)] where undermining grew since the BGS tick
     and is ahead of reinforcement."""
     out = []
     names = {}
     for addr in watch:
-        now_row = repo.get_pp_control_reading(addr)
+        now_row = _cycle_reading(repo, addr, now)
         if not now_row or now_row["observed_at"] <= since or now_row["undermining"] is None:
             continue
         base = repo.get_pp_control_reading(addr, since)
