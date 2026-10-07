@@ -81,6 +81,25 @@ def _is_expanding(latest_snapshot: Optional[Dict[str, Any]]) -> bool:
     return "expansion" in active
 
 
+def expansion_endings(history_asc: List[Dict[str, Any]]) -> List[tuple]:
+    """[(index, snapshot_date, influence change in points)] for each day an
+    expansion ended: the first day "Expansion" shows under recovering
+    states (faction_state can still read "Expansion" that day, and not every
+    source carries the state lists, so this is the reliable signal). A
+    finished expansion usually costs the home system its "expansion tax",
+    about 15% (SINC Complete BGS Guide 2024, p48/53): Ekono lost 14.8 on
+    2026-09-23 and 11.1 on 2026-10-07 -- but endings on 2026-08-09 and
+    09-11 showed no drop, so the change is reported, not assumed."""
+    out = []
+    for i in range(1, len(history_asc)):
+        prev, cur = history_asc[i - 1], history_asc[i]
+        if ("Expansion" in _parse_states(cur.get("recovering_states"))
+                and "Expansion" not in _parse_states(prev.get("recovering_states"))):
+            delta = ((cur.get("influence") or 0.0) - (prev.get("influence") or 0.0)) * 100.0
+            out.append((i, cur.get("snapshot_date"), delta))
+    return out
+
+
 class _ExpansionLookupWorker(QObject):
     """Live EDSM faction-influence lookup for the pinned target system --
     same fetch_system_factions() call the existing "Add System" flow on
@@ -103,11 +122,13 @@ class _InfluenceTrendWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._points: List[tuple] = []  # [(date_str, influence_pct), ...] oldest first
+        self._events: List[tuple] = []  # expansion_endings() for the same points
         self.setMinimumHeight(120)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
-    def set_points(self, points: List[tuple]) -> None:
+    def set_points(self, points: List[tuple], events: Optional[List[tuple]] = None) -> None:
         self._points = points
+        self._events = events or []
         self.update()
 
     def paintEvent(self, event) -> None:
@@ -163,6 +184,17 @@ class _InfluenceTrendWidget(QWidget):
         p.setBrush(QColor("#4D96FF"))
         for x, y in coords:
             p.drawEllipse(int(x) - 2, int(y) - 2, 4, 4)
+
+        # Expansion endings: the expected "expansion tax" drop, labelled
+        for i, _date, delta in self._events:
+            if 0 <= i < len(coords):
+                x = int(coords[i][0])
+                p.setPen(QPen(QColor("#FFB347"), 1, Qt.PenStyle.DotLine))
+                p.drawLine(x, pad_t, x, h - pad_b)
+                p.setPen(QColor("#FFB347"))
+                label = f"expansion tax {delta:+.1f}" if delta <= -5 else "expansion ended"
+                tw = p.fontMetrics().horizontalAdvance(label)
+                p.drawText(min(x + 3, w - pad_r - tw), h - pad_b + 14, label)
 
         p.end()
 
@@ -532,7 +564,8 @@ class FactionExpansionDialog(QDialog):
         pct = ((latest or {}).get("influence") or 0.0) * 100.0
         history_asc = list(reversed(history))  # get_faction_history is DESC; chart wants oldest-first
         points = [(h["snapshot_date"], (h.get("influence") or 0.0) * 100.0) for h in history_asc]
-        self._trend_widget.set_points(points)
+        endings = expansion_endings(history_asc)
+        self._trend_widget.set_points(points, endings)
 
         delta_txt = ""
         if len(points) >= 2:
@@ -552,6 +585,17 @@ class FactionExpansionDialog(QDialog):
                 "\"Expansion\". It lasts about a week; influence drifts down a little each day "
                 "until it completes, so keep running missions/trading/etc. for this faction here "
                 "or the push can fail before it finishes."
+            )
+            self._expansion_banner.setVisible(True)
+        elif endings and endings[-1][0] >= len(history_asc) - 3:
+            _i, date, delta = endings[-1]
+            tax = (f"influence here changed {delta:+.1f} pts — that's the expansion tax: a finished "
+                   "expansion costs the home system about 15% (SINC BGS Guide 2024), so this drop is expected. "
+                   if delta <= -5 else
+                   f"influence here changed {delta:+.1f} pts, so no expansion tax was taken this time. ")
+            self._expansion_banner.setText(
+                f"✅ EXPANSION ENDED ({date}) — {tax}"
+                "It can expand again once back above 75% after recovering."
             )
             self._expansion_banner.setVisible(True)
         else:
