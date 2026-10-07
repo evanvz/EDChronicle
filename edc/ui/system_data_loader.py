@@ -42,6 +42,11 @@ class SystemDataLoader:
 
         self.state.system_address = system_address
         self.state.system = row["system_name"]
+        # Coordinates normally arrive with Location/FSDJump; without the game
+        # running, distances (BGS Tasks etc.) need them from the DB.
+        xyz = self.repo.get_system_coords_for_names([row["system_name"]]).get(row["system_name"])
+        if xyz:
+            self.state.system_x, self.state.system_y, self.state.system_z = (float(v) for v in xyz)
         self.state.system_body_count = row["body_count"]
         self.state.fss_complete = bool(row["fss_complete"])
 

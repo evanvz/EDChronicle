@@ -43,3 +43,18 @@ def test_no_system_address_skips_both_followups():
     MainWindow.load_last_system_data(fake_self)
     assert "_maybe_start_canonn_refresh" not in fake_self._calls
     assert "_maybe_start_ring_hotspot_check" not in fake_self._calls
+
+
+def test_restored_system_gets_coordinates_for_distances():
+    """Game not running (seen 2026-10-07): the BGS Tasks window showed
+    "— ly" because the restored system had a name but no coordinates."""
+    from edc.ui.system_data_loader import SystemDataLoader
+    state = SimpleNamespace(system_x=None, system_y=None, system_z=None)
+    repo = SimpleNamespace(
+        get_most_recent_system=lambda: {"system_address": 3205949786483, "system_name": "Ekono",
+                                        "body_count": 10, "fss_complete": 1},
+        get_system_coords_for_names=lambda names: {"Ekono": (68.0, -196.0, 112.0)},
+    )
+    loader = SimpleNamespace(state=state, repo=repo, load_current_system_data=lambda: None)
+    SystemDataLoader.load_last_system_data(loader)
+    assert (state.system_x, state.system_y, state.system_z) == (68.0, -196.0, 112.0)
