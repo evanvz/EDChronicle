@@ -221,6 +221,15 @@ def in_my_pp_space(pledged: str, ctrl: str, system_powers: list, pp_state: str) 
     ))
 
 
+
+def _minus_minutes(iso: str, minutes: int) -> str:
+    from datetime import timedelta, timezone
+    try:
+        t = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    return (t - timedelta(minutes=minutes)).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
 class EventEngine:
     def __init__(
         self,
@@ -985,6 +994,19 @@ class EventEngine:
                 log.info("PowerPlay collect: %s t %s at %s (%s)%s", event.get("Count"), commodity,
                          self.state.station_name, self.state.system,
                          f", {since:.0f} min since your previous collect" if since is not None else "")
+
+        elif name == "PowerplayRank":
+            if isinstance(event.get("Rank"), int):
+                self.state.pp_rank = event["Rank"]
+            # A rank-up hands out a bonus load at once (seen in game
+            # 2026-10-03): back-date the shared timer so the card says ready.
+            # ponytail: only live -- a restart re-reads collects, not rank-ups.
+            ts = event.get("timestamp") or ""
+            back = _minus_minutes(ts, 30)
+            if back:
+                for k, when in list(self.state.pp_last_collect.items()):
+                    if when > back:
+                        self.state.pp_last_collect[k] = back
 
         elif name in ("PowerplayJoin", "PowerplayDefect", "PowerplayLeave"):
             # Pledge changes mid-session; the "Powerplay" summary event is only

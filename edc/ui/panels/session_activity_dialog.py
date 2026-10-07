@@ -27,6 +27,7 @@ from PyQt6.QtWidgets import (
 
 from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE
 from edc.ui import formatting as fmt
+from edc.core.bgs_tasks import CP_NOTE, cp_text, powerplay_week_start
 
 log = logging.getLogger("edc.session_activity")
 
@@ -72,6 +73,13 @@ class SessionActivityDialog(QDialog):
         self._tick_label = QLabel("")
         self._tick_label.setStyleSheet("background:transparent; border:none; color:#888888; font-size:11px;")
         layout.addWidget(self._tick_label)
+
+        # PowerPlay totals -- the PowerPlay week resets Thursday, not at the BGS tick.
+        self._pp_label = QLabel("")
+        self._pp_label.setTextFormat(Qt.TextFormat.RichText)
+        self._pp_label.setToolTip(CP_NOTE)
+        self._pp_label.setStyleSheet("background:transparent; border:none; font-size:12px;")
+        layout.addWidget(self._pp_label)
 
         # ── Scroll area of per-system cards -- same pattern combat_panel.py/
         # exploration_panel.py/etc already use, rather than a single plain-
@@ -125,6 +133,7 @@ class SessionActivityDialog(QDialog):
         except Exception:
             log.exception("Failed to load session activity report")
             report = {}
+        self._render_pp_totals()
         try:
             merits = self._panel._repo.get_session_merits(since)
         except Exception:
@@ -227,6 +236,25 @@ class SessionActivityDialog(QDialog):
             return f"Yesterday — {date_str}"
         return f"{d.strftime('%A')} — {date_str}"
 
+    def _render_pp_totals(self) -> None:
+        state = getattr(self._panel, "_last_state", None)
+        lifetime = getattr(state, "pp_merits", None)
+        try:
+            week = self._panel._repo.get_powerplay_merits_total_since(powerplay_week_start())
+        except Exception:
+            log.exception("Failed to load PowerPlay week merits")
+            week = 0
+        if lifetime is None and not week:
+            self._pp_label.setVisible(False)
+            return
+        parts = [f'<span style="color:{_CHIP_MERITS};">PowerPlay week</span> {week:,} merits ({cp_text(week)})',
+                 f"this session {getattr(state, 'pp_merits_session', 0) or 0:,}"]
+        if isinstance(lifetime, int):
+            rank = getattr(state, "pp_rank", None)
+            parts.append(f"total {lifetime:,}" + (f" · rank {rank}" if rank else ""))
+        self._pp_label.setText("  •  ".join(parts))
+        self._pp_label.setVisible(True)
+
     def _render_report(self, report: dict, merits: dict = None) -> None:
         self._clear_cards()
         merits = merits or {}
@@ -256,7 +284,9 @@ class SessionActivityDialog(QDialog):
                 card_l.addWidget(hdr)
 
                 for power, total in sorted(day_merits.get(system_name, {}).items()):
-                    row = QLabel(f'<span style="color:{_CHIP_MERITS};">Merits</span> {total:,} ({html.escape(power)})')
+                    row = QLabel(f'<span style="color:{_CHIP_MERITS};">Merits</span> {total:,} '
+                                 f'({cp_text(total)}, {html.escape(power)})')
+                    row.setToolTip(CP_NOTE)
                     row.setTextFormat(Qt.TextFormat.RichText)
                     row.setStyleSheet("background:transparent; border:none;")
                     card_l.addWidget(row)

@@ -2959,6 +2959,12 @@ class Repository:
         ).fetchone()
         return row[0]
 
+    def get_powerplay_merits_total_since(self, since: str) -> int:
+        row = self.db.conn.execute(
+            "SELECT COALESCE(SUM(merits), 0) FROM powerplay_merits WHERE earned_at >= ?", (since,)
+        ).fetchone()
+        return row[0]
+
     def get_session_merits(self, since: str) -> dict:
         """{date: {system_name: {power: merits}}} for every PowerplayMerits
         row earned_at >= since -- the per-system split BGS-Tally can't give

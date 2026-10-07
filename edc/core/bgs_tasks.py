@@ -219,6 +219,17 @@ def transport_text(mode: str, pledged: str) -> str:
 # rank-up adds a bonus load.
 ALLOCATION_REFRESH_MIN = 30
 
+# Control points (the system's tug-of-war score) are roughly merits / 4 for
+# most activities (SOTL reference card; exploration/exobiology data is ~/6,
+# and merit bonuses/penalties shift it). The journal only has merits.
+MERITS_PER_CP = 4
+CP_NOTE = ("≈ control points = merits ÷ 4 (community rule of thumb; data sales are nearer ÷6 "
+           "and merit bonuses shift it). The journal records merits only.")
+
+
+def cp_text(merits: int) -> str:
+    return f"≈{round(merits / MERITS_PER_CP):,} CP"
+
 
 # Frontier: Acquisition commodities must come from a supporting system --
 # your Fortified within 20 ly or Stronghold within 30 ly of the target.
@@ -1036,7 +1047,8 @@ def _add_powerplay_structure(view: dict, mode: str, pp_state: str, pledged: str,
         if info["warning"]:
             view["warnings"] = [info["warning"]] + list(view.get("warnings") or [])
     if pledged:
-        chips.append({"text": f"{merits:,} merits this week", "tooltip": "Earned in this system this PowerPlay week"})
+        chips.append({"text": f"{merits:,} merits this week ({cp_text(merits)})",
+                      "tooltip": "Earned in this system this PowerPlay week.\n" + CP_NOTE})
     view["bars"] = bars
     view["chips"] = chips
     view["detail_lines"] = []

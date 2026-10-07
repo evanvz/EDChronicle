@@ -333,7 +333,7 @@ def test_powerplay_card_has_progress_bar_and_short_guide():
                            merits=554, pp_activities=table)
     assert view["bars"][0]["label"] == "Acquired" and view["bars"][0]["text"].startswith("83.5% — 16.5% to go")
     assert view["guide_short"] == "Transport Aisling Media Materials · Holoscreen Hacking"
-    assert any(c["text"] == "554 merits this week" for c in view["chips"])
+    assert any(c["text"] == "554 merits this week (≈138 CP)" for c in view["chips"])
 
 
 def test_rgba_helper_keeps_the_colour():
