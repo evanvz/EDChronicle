@@ -101,7 +101,7 @@ Notable files:
 - `spansh_client.py`
 - `edsm_powerplay.py` — daily-cached EDSM PowerPlay dump cross-check
 - `edsm_faction_lookup.py` — per-system faction lookup (with retry on transient failures) for Player Faction add/import
-- `eddn_listener.py` / `eddn_powerplay.py` — live EDDN PowerPlay subscription
+- `eddn_listener.py` / `eddn_powerplay.py` — live EDDN PowerPlay subscription; also emits other commanders' acquisition progress (`conflict_progress_seen`) and a controlled system's reinforcement/undermining this cycle (`control_seen`), stored only for watched systems (`bgs_tasks.pp_watch()`)
 - `eddn_market.py` — buffered EDDN commodity price, station, Fleet Carrier material listing, carrier docking access, and squadron faction sighting ingestion
 - `eddn_publisher.py` — opt-in `journal/1` (jumps, docking, scans...), `commodity/3` (market visits, including your own carrier's docking access), and `fcmaterials_journal/1` (your own carrier's material listings) publishing back to EDDN
 - `canonn_client.py` — Canonn Codex/POI community intel
@@ -109,7 +109,7 @@ Notable files:
 - `fdev_powerplay.py` — Frontier's own official PowerPlay control-vote CSV feed (a daily-cached download, distinct from the live per-visit journal PowerplayState fields), used to cross-check the PowerPlay Target Finder and shown as a supplementary "control vote" line on the Faction Expansion Tracker
 - `inara_faction_csv.py` — parses Inara's faction-presence CSV export format
 - `bgs_conflicts.py` — squadron-aligned faction lookup, finds who it's at active war with in the current system, and backs BGS activity attribution (bounty/trade crediting)
-- `bgs_tasks.py` — Pure logic for the BGS Tasks tracker (Boost/Hinder/Vote/Fight/PowerPlay/Note) — per-task progress/status from the session activity tables, `net.system_bgs_status` (including elections), `faction_snapshots` and `systems.pp_*`. PowerPlay tasks use the stated `pp_mode` or `detect_powerplay_mode()` (journal reading, else the EDSM daily dump), with BGS-safe actions listed first from `settings/powerplay_activities.json`'s `bgs` tags. Also owns the PowerPlay allies helpers (`allied_powers()`, `is_rival_power()`; ZYADA by default) used by the event engine, callouts and trade filters. Boost limits are squadron guidance from Settings; squad-only advice is labelled as unconfirmed
+- `bgs_tasks.py` — Pure logic for the BGS Tasks tracker (Boost/Hinder/Vote/Fight/PowerPlay/Note) — per-task progress/status from the session activity tables, `net.system_bgs_status` (including elections), `faction_snapshots` and `systems.pp_*`. PowerPlay tasks use the stated `pp_mode` or `detect_powerplay_mode()` (journal reading, else the EDSM daily dump), with BGS-safe actions listed first from `settings/powerplay_activities.json`'s `bgs` tags. Also owns the PowerPlay allies helpers (`allied_powers()`, `is_rival_power()`; ZYADA by default) used by the event engine, callouts and trade filters. Boost limits are squadron guidance from Settings; squad-only advice is labelled as unconfirmed. PowerPlay helpers: `supporting_systems()` (Fortified ≤20 ly / Stronghold ≤30 ly of an Acquisition target), `commodity_info()` (job commodity, wrong-source warning, next load from the one shared allocation timer), `pp_watch()` (watched systems: PowerPlay tasks, Acquisition supporting systems, squad systems the pledged power holds — rebuilt dynamically), `watch_rows()` / `undermining_alerts()` (current-cycle readings only, via `_cycle_reading()`), and `cp_text()` (≈ control points = merits ÷ 4, an estimate)
 - `ship_loadout.py` — classifies current ship hardpoints as armed/unarmed from `Loadout` events
 - `faction_refresh_tracker.py` — persists the last full-EDSM-refresh timestamp for the Player Faction tab's 24h auto-refresh gate
 - `rank_names.py` — Rank/Progress category index → real rank name tables (Elite I-V aware), verified against the community Journal Manual
@@ -183,6 +183,7 @@ Notable files:
 - `combat_panel.py`
 - `powerplay_panel.py`
 - `powerplay_finder_panel.py`
+- `powerplay_watch_panel.py` — PowerPlay window's Watch List tab: reinforcement vs undermining this cycle per watched system, under-attack first, "Add as BGS task (Reinforcement)"
 - `mining_panel.py`
 - `market_panel.py`
 - `trade_route_panel.py` — Loop Planner, Point-to-Point Trade Finder and BGS Supply Run cards
@@ -190,7 +191,7 @@ Notable files:
 - `fleet_carrier_panel.py`
 - `player_faction_panel.py`
 - `faction_expansion_dialog.py` — Faction Expansion Tracker: one target system's push toward the 75% BGS expansion threshold (influence trend, live PowerPlay standing, mission tally)
-- `session_activity_dialog.py` — Session BGS Activity Report: whole-session, all-faction mission/combat/CZ/trade activity grouped by day, since the last detected BGS tick
+- `session_activity_dialog.py` — Session BGS Activity Report: whole-session, all-faction mission/combat/CZ/trade activity grouped by day, since the last detected BGS tick; a header row with PowerPlay merits since the tick and this week (≈CP), lifetime total and rank, plus a warning for any watched system whose undermining grew since the tick and leads reinforcement
 - `bgs_tasks_dialog.py` — BGS Tasks window (from the Player Faction panel) — add/remove/reorder tasks, live progress cards; the current system's task(s) also show as a line on the Overview HUD
 - `squadron_panel.py`
 - `intel_panel.py`
@@ -225,7 +226,9 @@ Notable files:
 | `faction_combat_bonds` | One row per combat bond cash-in (`RedeemVoucher`), for the Session BGS Activity Report — only for a faction present in the system where it's cashed in |
 | `faction_bounties` | One row per faction credited by a bounty voucher cash-in (`RedeemVoucher` `Factions` list), same present-in-system rule |
 | `bgs_tasks` | Squadron BGS objectives entered by hand for the BGS Tasks tracker (system, type, faction, opponent, note, priority order, and `pp_mode` — the PowerPlay job as stated in the objective, NULL = auto-detect); system name resolved to `system_address` when first seen |
-| `powerplay_merits` | One row per `PowerplayMerits` journal event, credited to the system the player was in — the BGS Tasks tracker's "merits here this PowerPlay week" (week starts Thursday ~07:00 UTC) |
+| `powerplay_merits` | One row per `PowerplayMerits` journal event, credited to the system the player was in — merits per system per BGS tick and per PowerPlay week (week starts Thursday ~07:00 UTC) |
+| `pp_progress_history` | Each change in a power's acquisition progress per system (journal jumps incl. a startup backfill of all journals, plus EDDN for PowerPlay task systems) — the card's trend chip and merits-between-readings data |
+| `pp_control_history` | Each change in a controlled system's reinforcement/undermining control points this cycle (journal + EDDN for watched systems) — the Watch List, the card chip and the session-report undermining warning |
 | `faction_cz_kills` | One row per confirmed conflict-zone kill (ground/space, size), for the Session BGS Activity Report |
 | `faction_trade_sold` | One row per commodity/exploration/exobiology sale, credited to the docked station's owning faction (fleet carriers skipped); commodity value is profit, for the Session BGS Activity Report |
 | `station_info` | Landing pad counts, station services, and (for Fleet Carriers) self-reported docking access — from `Docked` events, yours and every commander's via EDDN |
