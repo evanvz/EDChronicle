@@ -110,6 +110,9 @@ class EddnPowerPlayWorker(QObject):
     # id64, {power: 0-1 acquisition progress}, timestamp -- from other
     # commanders' jumps into Unoccupied/Expansion systems (PowerplayConflictProgress)
     conflict_progress_seen = pyqtSignal(object, dict, str)
+    # id64, {"state","reinforcement","undermining","control"}, timestamp --
+    # a controlled system's control points this cycle
+    control_seen = pyqtSignal(object, dict, str)
     system_coords_seen = pyqtSignal(str, float, float, float)  # StarSystem, x, y, z
     commodity_seen = pyqtSignal(dict)  # raw commodity/3 message body
     fcmaterials_seen = pyqtSignal(dict)  # raw fcmaterials_journal/1 message body
@@ -345,6 +348,11 @@ class EddnPowerPlayWorker(QObject):
             }
             if progress:
                 self.conflict_progress_seen.emit(id64, progress, timestamp)
+            if "PowerplayStateReinforcement" in msg or "PowerplayStateUndermining" in msg:
+                self.control_seen.emit(id64, {
+                    "state": power_state, "reinforcement": msg.get("PowerplayStateReinforcement"),
+                    "undermining": msg.get("PowerplayStateUndermining"),
+                    "control": msg.get("PowerplayStateControlProgress")}, timestamp)
 
             if self._watched_factions:
                 self._maybe_emit_faction_seen(msg, timestamp)

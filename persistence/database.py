@@ -416,6 +416,18 @@ class Database:
                 source         TEXT,
                 PRIMARY KEY (system_address, power, observed_at)
             )""",
+            # A controlled system's reinforcement/undermining control points
+            # this cycle (journal + EDDN), to spot systems under attack.
+            """CREATE TABLE IF NOT EXISTS pp_control_history (
+                system_address INTEGER NOT NULL,
+                observed_at    TEXT    NOT NULL,
+                pp_state       TEXT,
+                reinforcement  INTEGER,
+                undermining    INTEGER,
+                control        REAL,
+                source         TEXT,
+                PRIMARY KEY (system_address, observed_at)
+            )""",
         ]
         cache_migrations = [
             "ALTER TABLE net.spansh_bodies ADD COLUMN surface_gravity REAL",

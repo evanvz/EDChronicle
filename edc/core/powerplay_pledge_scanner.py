@@ -52,11 +52,14 @@ def scan_powerplay_pledge(journal_dir: Path) -> Optional[Dict[str, Any]]:
     return None
 
 
-def scan_conflict_progress(journal_dir: Path, history: Optional[list] = None) -> Dict[int, tuple]:
+def scan_conflict_progress(journal_dir: Path, history: Optional[list] = None,
+                           control_history: Optional[list] = None) -> Dict[int, tuple]:
     """{SystemAddress: (timestamp, {power: 0-1})} from the latest jump into
     each system that carried PowerplayConflictProgress -- recovers progress
     for visits saved before the app kept it. `history`, if given, gets every
-    reading as (SystemAddress, timestamp, {power: 0-1}), oldest first."""
+    reading as (SystemAddress, timestamp, {power: 0-1}), oldest first;
+    `control_history` gets every reinforcement/undermining reading as
+    (SystemAddress, timestamp, state, reinforcement, undermining, control)."""
     journal_dir = Path(journal_dir)
     found: Dict[int, tuple] = {}
     if not journal_dir.exists():
@@ -65,13 +68,20 @@ def scan_conflict_progress(journal_dir: Path, history: Optional[list] = None) ->
         try:
             with path.open("r", encoding="utf-8", errors="replace") as f:
                 for line in f:
-                    if '"PowerplayConflictProgress"' not in line:
+                    if '"PowerplayConflictProgress"' not in line and (
+                            control_history is None or '"PowerplayStateReinforcement"' not in line):
                         continue
                     try:
                         event = json.loads(line)
                     except Exception:
                         continue
                     addr = event.get("SystemAddress")
+                    if control_history is not None and isinstance(addr, int) and (
+                            "PowerplayStateReinforcement" in event or "PowerplayStateUndermining" in event):
+                        control_history.append((addr, event.get("timestamp") or "", event.get("PowerplayState"),
+                                                event.get("PowerplayStateReinforcement"),
+                                                event.get("PowerplayStateUndermining"),
+                                                event.get("PowerplayStateControlProgress")))
                     progress = {
                         p.get("Power"): float(p.get("ConflictProgress"))
                         for p in (event.get("PowerplayConflictProgress") or [])

@@ -27,7 +27,7 @@ from PyQt6.QtWidgets import (
 
 from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE
 from edc.ui import formatting as fmt
-from edc.core.bgs_tasks import CP_NOTE, cp_text, powerplay_week_start
+from edc.core.bgs_tasks import CP_NOTE, cp_text, powerplay_week_start, pp_watch, undermining_alerts
 
 log = logging.getLogger("edc.session_activity")
 
@@ -254,7 +254,19 @@ class SessionActivityDialog(QDialog):
         if isinstance(lifetime, int):
             rank = getattr(state, "pp_rank", None)
             parts.append(f"total {lifetime:,}" + (f" · rank {rank}" if rank else ""))
-        self._pp_label.setText("  •  ".join(parts))
+        try:
+            getter = getattr(self._panel, "pledged_power_getter", None)
+            watch = pp_watch(self._panel._repo, getter() if getter else "",
+                             getattr(self._panel, "edsm_powerplay", None))
+            alerts = undermining_alerts(self._panel._repo, since, watch)
+        except Exception:
+            log.exception("Failed to check undermining")
+            alerts = []
+        text = "  •  ".join(parts)
+        for name, gained, u, r, why in alerts[:5]:
+            text += (f'<br><span style="color:#FF6B6B;">⚠ {html.escape(name)} undermined +{gained:,} '
+                     f'since tick ({u:,} vs {r:,} reinforced) · {html.escape(why)}</span>')
+        self._pp_label.setText(text)
         self._pp_label.setVisible(True)
 
     def _render_report(self, report: dict, merits: dict = None) -> None:

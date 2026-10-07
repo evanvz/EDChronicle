@@ -85,7 +85,7 @@ from edc.core.megaship_scanner import scan_visited_megaships
 from edc.core.faction_refresh_tracker import FactionRefreshTracker
 from edc.core.bgs_tasks import (
     ZYADA_COALITION, allied_powers, bgs_limits, build_task_views, cargo_by_name, hud_line, is_rival_power,
-    powerplay_mode,
+    powerplay_mode, pp_watch,
 )
 from edc.core.bgs_tick import fetch_latest_tick
 from edc.ui.panels.engineering_panel import EngineeringPanel
@@ -437,7 +437,9 @@ class _StartupHistoryScanWorker(QObject):
             log.exception("Failed to scan journals for PowerPlay collections")
         try:
             result["conflict_history"] = []
-            result["conflict_progress"] = scan_conflict_progress(path, history=result["conflict_history"])
+            result["control_history"] = []
+            result["conflict_progress"] = scan_conflict_progress(path, history=result["conflict_history"],
+                                                                 control_history=result["control_history"])
         except Exception:
             log.exception("Failed to scan journal history for acquisition progress")
         try:
@@ -1081,21 +1083,38 @@ class MainWindow(QMainWindow):
             if getattr(self.state, "system_powerplay_conflict_progress", None):
                 self.repo.record_pp_progress(system_address, self.state.system_powerplay_conflict_progress,
                                              getattr(self.state, "factions_timestamp", "") or "", "journal")
+            self.repo.record_pp_control(
+                system_address, getattr(self.state, "factions_timestamp", "") or "", pp_state,
+                getattr(self.state, "system_powerplay_reinforcement", None),
+                getattr(self.state, "system_powerplay_undermining", None),
+                getattr(self.state, "system_powerplay_control_progress", None), "journal")
         except Exception:
             log.exception("Failed to save PowerPlay snapshot")
 
-    def _on_eddn_conflict_progress(self, id64, progress: dict, timestamp: str) -> None:
-        """History only for systems on the BGS task list -- EDDN reports
-        acquisitions galaxy-wide."""
+    def _pp_watched(self, id64) -> bool:
+        """See bgs_tasks.pp_watch (refreshed every
+        60 s) -- EDDN reports PowerPlay readings galaxy-wide."""
         now = time.monotonic()
         if now - getattr(self, "_pp_watch_at", -1e9) > 60:
             try:
-                self._pp_watch = {t["system_address"] for t in self.repo.list_bgs_tasks()
-                                  if t["task_type"] == "powerplay" and t["system_address"]}
+                self._pp_watch = pp_watch(self.repo, (getattr(self.state, "pp_power", None) or "").strip(),
+                                          self.edsm_powerplay)
             except Exception:
+                log.exception("Failed to load PowerPlay watch list")
                 self._pp_watch = set()
             self._pp_watch_at = now
-        if id64 in self._pp_watch:
+        return id64 in self._pp_watch
+
+    def _on_eddn_control(self, id64, reading: dict, timestamp: str) -> None:
+        if self._pp_watched(id64):
+            try:
+                self.repo.record_pp_control(id64, timestamp, reading.get("state"), reading.get("reinforcement"),
+                                            reading.get("undermining"), reading.get("control"), "eddn")
+            except Exception:
+                log.exception("Failed to record EDDN reinforcement/undermining")
+
+    def _on_eddn_conflict_progress(self, id64, progress: dict, timestamp: str) -> None:
+        if self._pp_watched(id64):
             try:
                 self.repo.record_pp_progress(id64, progress, timestamp, "eddn")
             except Exception:
@@ -3225,13 +3244,15 @@ class MainWindow(QMainWindow):
             if not current or rec["timestamp"] > current.get("timestamp", ""):
                 self.state.pp_deliveries[system] = rec
 
-        if result.get("conflict_history"):
+        if result.get("conflict_history") or result.get("control_history"):
             try:
                 with self.repo.db.deferred_commit():
                     added = sum(self.repo.record_pp_progress(addr, prog, ts, "journal")
                                 for addr, ts, prog in result["conflict_history"])
-                if added:
-                    log.info("Recorded %d acquisition progress change(s) from journal history", added)
+                    added_c = sum(self.repo.record_pp_control(addr, ts, st, r, u, c, "journal")
+                                  for addr, ts, st, r, u, c in result.get("control_history") or [])
+                if added or added_c:
+                    log.info("Recorded %d acquisition / %d control change(s) from journal history", added, added_c)
             except Exception:
                 log.exception("Failed to record acquisition progress history")
 
@@ -3298,6 +3319,7 @@ class MainWindow(QMainWindow):
         self._eddn_worker.system_seen.connect(self._on_eddn_system_seen)
         self._eddn_worker.conflict_progress_seen.connect(self.eddn_powerplay.ingest_conflict_progress)
         self._eddn_worker.conflict_progress_seen.connect(self._on_eddn_conflict_progress)
+        self._eddn_worker.control_seen.connect(self._on_eddn_control)
         self._eddn_worker.system_coords_seen.connect(self.eddn_market_cache.on_coords_seen)
         self._eddn_worker.commodity_seen.connect(self.eddn_market_cache.on_commodity_message)
         self._eddn_worker.faction_seen.connect(self.eddn_market_cache.on_faction_seen)

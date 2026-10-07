@@ -2936,6 +2936,60 @@ class Repository:
         ).fetchall()
         return [(r["observed_at"], r["progress"], r["source"]) for r in rows]
 
+    def record_pp_control(self, system_address: int, observed_at: str, pp_state, reinforcement,
+                          undermining, control, source: str) -> bool:
+        """Stores a reinforcement/undermining reading when it's newer than and
+        differs from the latest stored one."""
+        if not observed_at or not (isinstance(reinforcement, int) or isinstance(undermining, int)):
+            return False
+        last = self.db.conn.execute(
+            "SELECT observed_at, pp_state, reinforcement, undermining FROM pp_control_history "
+            "WHERE system_address = ? ORDER BY observed_at DESC LIMIT 1", (system_address,),
+        ).fetchone()
+        if last and (observed_at <= last["observed_at"] or (
+                last["pp_state"], last["reinforcement"], last["undermining"]) == (pp_state, reinforcement, undermining)):
+            return False
+        self.db.execute(
+            "INSERT OR IGNORE INTO pp_control_history "
+            "(system_address, observed_at, pp_state, reinforcement, undermining, control, source) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (system_address, observed_at, pp_state, reinforcement, undermining, control, source),
+        )
+        return True
+
+    def get_pp_control_reading(self, system_address: int, at_or_before: Optional[str] = None):
+        """Latest reading (row) for the system, or the latest one at/before a time."""
+        return self.db.conn.execute(
+            "SELECT observed_at, pp_state, reinforcement, undermining, control, source FROM pp_control_history "
+            "WHERE system_address = ? AND (? IS NULL OR observed_at <= ?) ORDER BY observed_at DESC LIMIT 1",
+            (system_address, at_or_before, at_or_before),
+        ).fetchone()
+
+    def get_system_names_for_addresses(self, addresses: list) -> dict:
+        if not addresses:
+            return {}
+        marks = ",".join("?" * len(addresses))
+        return {r[0]: r[1] for r in self.db.conn.execute(
+            f"SELECT system_address, system_name FROM systems WHERE system_address IN ({marks})", list(addresses))}
+
+    def get_system_addresses_for_names(self, names: list) -> dict:
+        if not names:
+            return {}
+        marks = ",".join("?" * len(names))
+        return {r[0]: r[1] for r in self.db.conn.execute(
+            f"SELECT system_name, system_address FROM systems WHERE system_name IN ({marks})", list(names))}
+
+    def get_squadron_faction_systems(self, days: int = 30) -> dict:
+        """{system name: address} where the squadron's faction was seen in the last `days`."""
+        faction = self.get_squadron_faction_name()
+        if not faction:
+            return {}
+        return {r[0]: r[1] for r in self.db.conn.execute(
+            "SELECT DISTINCT s.system_name, fs.system_address FROM faction_snapshots fs "
+            "JOIN systems s ON s.system_address = fs.system_address "
+            "WHERE fs.faction_name = ? AND fs.snapshot_date >= date('now', ?) AND s.system_name IS NOT NULL",
+            (faction, f"-{days} days"))}
+
     def get_powerplay_merits_between(self, system_address: int, start: str, end: str) -> int:
         row = self.db.conn.execute(
             "SELECT COALESCE(SUM(merits), 0) FROM powerplay_merits "

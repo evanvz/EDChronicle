@@ -1175,6 +1175,7 @@ def build_task_views(repo, since: str, limits: dict, system_address: Optional[in
                                      last_delivery=(deliveries or {}).get((t["system_name"] or "").lower())))
         if t["task_type"] == "powerplay" and pledged and addr is not None:
             _add_progress_trend(views[-1], repo, addr, pledged)
+            _add_control_chip(views[-1], repo, addr, merits)
             tick = repo.get_powerplay_merits_since(addr, since)
             for chip in views[-1].get("chips") or []:
                 if chip.get("key") == "merits":
@@ -1182,6 +1183,78 @@ def build_task_views(repo, since: str, limits: dict, system_address: Optional[in
                     chip["tooltip"] = ("This tick: since the last BGS tick (daily). This week: since the Thursday "
                                        "PowerPlay reset.\n" + CP_NOTE)
     return views
+
+
+def _add_control_chip(view: dict, repo, addr: int, merits_week: int) -> None:
+    """Chip: this cycle's real reinforcement vs undermining control points
+    (journal/EDDN) and your estimated share."""
+    getter = getattr(repo, "get_pp_control_reading", None)
+    row = getter(addr) if getter else None
+    if not row or "chips" not in view or (row["reinforcement"] is None and row["undermining"] is None):
+        return
+    r, u = row["reinforcement"] or 0, row["undermining"] or 0
+    losing = u > r
+    share = round(merits_week / MERITS_PER_CP)
+    text = f"Reinforced {r:,} vs undermined {u:,} CP" + (" \u00b7 losing" if losing else " \u00b7 holding")
+    if share:
+        text += f" \u00b7 your share \u2248{share:,}" + (f" ({share * 100 // r}%)" if r else "")
+    view["chips"].insert(0, {
+        "text": text, "color": "#FF6B6B" if losing else "#6BCB77",
+        "tooltip": (f"This cycle so far, from all commanders ({row['source']}, {_hours_ago(row['observed_at'])}). "
+                    "Both reset at the weekly cycle; if undermining stays ahead the system drops a state.\n"
+                    "Your share is your merits here this week \u00f7 4 (estimate).")})
+
+
+_HELD_STATES = ("Exploited", "Fortified", "Stronghold")
+
+
+def pp_watch(repo, pledged: str, edsm_powerplay=None) -> dict:
+    """{system address: why it's watched} for reinforcement/undermining
+    readings: PowerPlay task systems, the supporting systems of Acquisition
+    tasks (a Stronghold undermined to Fortified drops from 30 to 20 ly reach),
+    and squadron-faction systems your power controls. All dynamic."""
+    out = {}
+    tasks = [t for t in repo.list_bgs_tasks() if t["task_type"] == "powerplay" and t["system_address"]]
+    for t in tasks:
+        out[t["system_address"]] = "PowerPlay task"
+    if not pledged:
+        return out
+    for t in tasks:
+        snap = repo.get_system_powerplay_snapshot(t["system_address"]) or {}
+        mode = t.get("pp_mode") or ("" if snap.get("pp_state") in _HELD_STATES else "Acquisition")
+        if mode != "Acquisition":
+            continue
+        names = [n for n, _s, _d in supporting_systems(repo, pledged, t["system_name"], edsm_powerplay)]
+        for name, addr in repo.get_system_addresses_for_names(names).items():
+            out.setdefault(addr, f"supports {t['system_name']}")
+    held = set(edsm_powerplay.held_systems(pledged, _HELD_STATES)) if edsm_powerplay else set()
+    for name, (state, _ts) in repo.get_held_systems_from_journal(pledged).items():
+        (held.add if state in _HELD_STATES else held.discard)(name)
+    for name, addr in repo.get_squadron_faction_systems().items():
+        if name in held:
+            out.setdefault(addr, "squad system")
+    return out
+
+
+def undermining_alerts(repo, since: str, watch: dict) -> list:
+    """[(system name, undermining gained since `since`, undermining,
+    reinforcement, why watched)] where undermining grew since the BGS tick
+    and is ahead of reinforcement."""
+    out = []
+    names = {}
+    for addr in watch:
+        now_row = repo.get_pp_control_reading(addr)
+        if not now_row or now_row["observed_at"] <= since or now_row["undermining"] is None:
+            continue
+        base = repo.get_pp_control_reading(addr, since)
+        u, r = now_row["undermining"] or 0, now_row["reinforcement"] or 0
+        b = (base["undermining"] or 0) if base else 0
+        gained = u - b if u >= b else u   # dropped = weekly reset in between
+        if gained > 0 and u > r:
+            if not names:
+                names = repo.get_system_names_for_addresses(list(watch))
+            out.append((names.get(addr, str(addr)), gained, u, r, watch[addr]))
+    return sorted(out, key=lambda t: -t[1])
 
 
 def _add_progress_trend(view: dict, repo, addr: int, pledged: str) -> None:
