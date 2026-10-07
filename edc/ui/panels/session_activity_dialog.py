@@ -133,7 +133,7 @@ class SessionActivityDialog(QDialog):
         except Exception:
             log.exception("Failed to load session activity report")
             report = {}
-        self._render_pp_totals()
+        self._render_pp_totals(since)
         try:
             merits = self._panel._repo.get_session_merits(since)
         except Exception:
@@ -236,19 +236,21 @@ class SessionActivityDialog(QDialog):
             return f"Yesterday — {date_str}"
         return f"{d.strftime('%A')} — {date_str}"
 
-    def _render_pp_totals(self) -> None:
+    def _render_pp_totals(self, since: str) -> None:
         state = getattr(self._panel, "_last_state", None)
         lifetime = getattr(state, "pp_merits", None)
         try:
             week = self._panel._repo.get_powerplay_merits_total_since(powerplay_week_start())
+            tick = self._panel._repo.get_powerplay_merits_total_since(since)
         except Exception:
-            log.exception("Failed to load PowerPlay week merits")
-            week = 0
+            log.exception("Failed to load PowerPlay merit totals")
+            week = tick = 0
         if lifetime is None and not week:
             self._pp_label.setVisible(False)
             return
-        parts = [f'<span style="color:{_CHIP_MERITS};">PowerPlay week</span> {week:,} merits ({cp_text(week)})',
-                 f"this session {getattr(state, 'pp_merits_session', 0) or 0:,}"]
+        # session merits live on the Overview tab
+        parts = [f'<span style="color:{_CHIP_MERITS};">PowerPlay</span> {tick:,} since tick',
+                 f"{week:,} this week ({cp_text(week)})"]
         if isinstance(lifetime, int):
             rank = getattr(state, "pp_rank", None)
             parts.append(f"total {lifetime:,}" + (f" · rank {rank}" if rank else ""))

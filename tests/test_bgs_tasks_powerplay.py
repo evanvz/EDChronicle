@@ -121,8 +121,10 @@ def test_build_task_views_queries_merits_since_week_start():
     )
     now = datetime(2026, 9, 26, 18, 0, tzinfo=timezone.utc)
     views = build_task_views(repo, "t", LIMITS, pledged="Aisling Duval", now=now)
-    assert calls == [(12345, "2026-09-24T07:00:00Z")]
+    assert calls == [(12345, "2026-09-24T07:00:00Z"), (12345, "t")]   # week, then since the BGS tick
     assert "Your merits here this PowerPlay week: 55" in views[0]["lines"]
+    chip = next(c for c in views[0]["chips"] if c.get("key") == "merits")
+    assert chip["text"] == "55 merits this tick · 55 this week (≈14 CP)"
     assert "Population: 51.9 million (large)" in views[0]["lines"]
 
 

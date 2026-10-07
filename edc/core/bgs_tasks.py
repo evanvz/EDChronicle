@@ -1047,7 +1047,7 @@ def _add_powerplay_structure(view: dict, mode: str, pp_state: str, pledged: str,
         if info["warning"]:
             view["warnings"] = [info["warning"]] + list(view.get("warnings") or [])
     if pledged:
-        chips.append({"text": f"{merits:,} merits this week ({cp_text(merits)})",
+        chips.append({"key": "merits", "text": f"{merits:,} merits this week ({cp_text(merits)})",
                       "tooltip": "Earned in this system this PowerPlay week.\n" + CP_NOTE})
     view["bars"] = bars
     view["chips"] = chips
@@ -1175,6 +1175,12 @@ def build_task_views(repo, since: str, limits: dict, system_address: Optional[in
                                      last_delivery=(deliveries or {}).get((t["system_name"] or "").lower())))
         if t["task_type"] == "powerplay" and pledged and addr is not None:
             _add_progress_trend(views[-1], repo, addr, pledged)
+            tick = repo.get_powerplay_merits_since(addr, since)
+            for chip in views[-1].get("chips") or []:
+                if chip.get("key") == "merits":
+                    chip["text"] = f"{tick:,} merits this tick · " + chip["text"].replace(" merits this week", " this week")
+                    chip["tooltip"] = ("This tick: since the last BGS tick (daily). This week: since the Thursday "
+                                       "PowerPlay reset.\n" + CP_NOTE)
     return views
 
 
