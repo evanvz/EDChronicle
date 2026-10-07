@@ -2,7 +2,8 @@
 """PowerPlay Watch List: reinforcement vs undermining this cycle for every
 watched system (PowerPlay task systems, supporting systems of Acquisition
 tasks, squadron-faction systems your power holds -- see bgs_tasks.pp_watch),
-opened from the Player Faction tab next to BGS Tasks."""
+a tab in the PowerPlay window. Data comes from the Player Faction panel,
+which already holds the repo, BGS tick, pledge and live state."""
 from __future__ import annotations
 
 import logging
@@ -10,8 +11,8 @@ import logging
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
-    QApplication, QCheckBox, QDialog, QHBoxLayout, QHeaderView, QLabel, QPushButton, QTableWidget,
-    QTableWidgetItem, QVBoxLayout,
+    QApplication, QCheckBox, QHBoxLayout, QHeaderView, QLabel, QPushButton, QTableWidget,
+    QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from edc.core.bgs_tasks import _hours_ago, distance_text, pp_watch, watch_rows
@@ -34,16 +35,14 @@ class _NumItem(QTableWidgetItem):
         return self._value < getattr(other, "_value", float("-inf"))
 
 
-class PowerPlayWatchDialog(QDialog):
-    def __init__(self, panel):
-        super().__init__(None)
-        self.setStyleSheet("QDialog { background:#080f18; color:#c8c8c8; }")
+class PowerPlayWatchPanel(QWidget):
+    def __init__(self, panel, parent=None):
+        super().__init__(parent)
         self._panel = panel
         self._rows = []
-        self.setWindowTitle("PowerPlay Watch List")
-        self.resize(980, 560)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 6, 8, 8)
         hdr_row = QHBoxLayout()
         hdr = QLabel("POWERPLAY WATCH LIST — REINFORCEMENT VS UNDERMINING THIS CYCLE")
         hdr.setStyleSheet(HDR_STYLE)
@@ -181,3 +180,6 @@ class PowerPlayWatchDialog(QDialog):
         self._status.setText(f"Added {r['name']} to BGS Tasks (PowerPlay, Reinforcement)")
         self._panel.notify_bgs_activity()
         self.refresh()
+        bgs_changed = getattr(self._panel, "bgs_tasks_changed", None)
+        if bgs_changed is not None:
+            bgs_changed.emit()

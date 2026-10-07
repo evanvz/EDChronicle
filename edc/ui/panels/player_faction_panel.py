@@ -38,7 +38,6 @@ from edc.ui.panels.combat_bgs_status_panel import _conflicts_text, _faction_stat
 from edc.ui.panels.faction_expansion_dialog import FactionExpansionDialog
 from edc.ui.panels.session_activity_dialog import SessionActivityDialog
 from edc.ui.panels.bgs_tasks_dialog import BgsTasksDialog
-from edc.ui.panels.powerplay_watch_dialog import PowerPlayWatchDialog
 from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, TABLE_STYLE as _TABLE_STYLE
 
 log = logging.getLogger(__name__)
@@ -697,7 +696,7 @@ class PlayerFactionPanel(QWidget):
         self._faction_expansion_dialog = None
         self._session_activity_dialog = None
         self._bgs_tasks_dialog = None
-        self._pp_watch_dialog = None
+        self.pp_watch_view = None   # PowerPlay window's Watch List tab, set by main_window
         # Set by MainWindow: callable returning the Boost limits dict
         # (edc.core.bgs_tasks.bgs_limits(cfg)); None falls back to defaults.
         self.bgs_limits_getter = None
@@ -893,18 +892,6 @@ class PlayerFactionPanel(QWidget):
         )
         bgs_tasks_btn.clicked.connect(self._open_bgs_tasks_dialog)
         refresh_row.addWidget(bgs_tasks_btn)
-        pp_watch_btn = QPushButton("PowerPlay Watch List…")
-        pp_watch_btn.setStyleSheet(
-            "QPushButton { background:#2a0d1a; color:#FF8FB1; border:1px solid #5a1a3a;"
-            " border-radius:3px; padding:3px 12px; font-weight:bold; }"
-            "QPushButton:hover { background:#4a1a2a; }"
-        )
-        pp_watch_btn.setToolTip(
-            "Reinforcement vs undermining this cycle for your PowerPlay task systems, the supporting "
-            "systems of Acquisition tasks, and squad systems your power holds."
-        )
-        pp_watch_btn.clicked.connect(self._open_pp_watch_dialog)
-        refresh_row.addWidget(pp_watch_btn)
         root.addLayout(refresh_row)
 
         self._data_freshness_label = QLabel("")
@@ -2050,17 +2037,10 @@ class PlayerFactionPanel(QWidget):
         self._bgs_tasks_dialog.raise_()
         self._bgs_tasks_dialog.activateWindow()
 
-    def _open_pp_watch_dialog(self) -> None:
-        if self._pp_watch_dialog is None:
-            self._pp_watch_dialog = PowerPlayWatchDialog(self)
-        self._pp_watch_dialog.show()
-        self._pp_watch_dialog.raise_()
-        self._pp_watch_dialog.activateWindow()
-
     def notify_bgs_activity(self) -> None:
         """New BGS-relevant data landed (own action, jump, EDDN flush) --
-        repaint the BGS Tasks / PowerPlay Watch List windows if open."""
-        for dlg in (self._bgs_tasks_dialog, self._pp_watch_dialog):
+        repaint the BGS Tasks window / PowerPlay Watch List tab if showing."""
+        for dlg in (self._bgs_tasks_dialog, self.pp_watch_view):
             if dlg is not None and dlg.isVisible():
                 dlg.refresh()
 

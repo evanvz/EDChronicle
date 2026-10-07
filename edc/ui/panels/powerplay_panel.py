@@ -347,6 +347,9 @@ class PowerplayPanel(QWidget):
             '</tr></table></div>'
         )
 
+    def add_tab(self, widget, title: str) -> None:
+        self._tabs.addTab(widget, title)
+
     def refresh(self, state, pp_activities=None):
         pledged  = getattr(state, "pp_power", None)
         ctrl     = getattr(state, "system_controlling_power", None)

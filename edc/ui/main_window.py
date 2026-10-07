@@ -89,6 +89,7 @@ from edc.core.bgs_tasks import (
 )
 from edc.core.bgs_tick import fetch_latest_tick
 from edc.ui.panels.engineering_panel import EngineeringPanel
+from edc.ui.panels.powerplay_watch_panel import PowerPlayWatchPanel
 from edc.audio.handlers.engineering import EngineeringPhrases
 from edc.ui.panels.fleet_carrier_panel import FleetCarrierPanel
 from edc.core.eddn_powerplay import EddnPowerPlayCache
@@ -2739,6 +2740,9 @@ class MainWindow(QMainWindow):
         self.player_faction_panel.allies_getter = self._allies
         self.player_faction_panel.bgs_tasks_changed.connect(self._refresh_bgs_task_hint)
         self.player_faction_panel.tick_refresh_started.connect(self.overview_panel.show_tick_flash)
+        # PowerPlay window -> Watch List tab (reinforcement vs undermining)
+        self.player_faction_panel.pp_watch_view = PowerPlayWatchPanel(self.player_faction_panel)
+        self.powerplay_panel.add_tab(self.player_faction_panel.pp_watch_view, "Watch List")
 
         # Squadron tab
         self.squadron_panel = SquadronPanel(self.repo)
