@@ -20,8 +20,9 @@ from edc.ui.style import HDR_STYLE, TABLE_STYLE, bulk_table_fill
 
 log = logging.getLogger(__name__)
 
-_COLUMNS = ["System", "Why watched", "State", "Reinforced", "Undermined", "Since tick", "Data", "Distance"]
-_RED, _GREEN, _DIM = "#FF6B6B", "#6BCB77", "#777777"
+_COLUMNS = ["System", "Why watched", "State", "Reinforced", "Decay", "Attack", "Since tick", "Data", "Distance"]
+_RED, _AMBER, _GREEN, _DIM = "#FF6B6B", "#FFB347", "#6BCB77", "#777777"
+_STATUS_COLOR = {"attack": _RED, "unknown": _AMBER, "decay": _AMBER, "holding": _GREEN, None: _DIM}
 
 
 class _NumItem(QTableWidgetItem):
@@ -48,7 +49,7 @@ class PowerPlayWatchPanel(QWidget):
         hdr.setStyleSheet(HDR_STYLE)
         hdr_row.addWidget(hdr)
         hdr_row.addStretch(1)
-        self._only_attacked = QCheckBox("Show only under attack")
+        self._only_attacked = QCheckBox("Show only attacked / unclear")
         self._only_attacked.setChecked(True)
         self._only_attacked.toggled.connect(self._fill)
         hdr_row.addWidget(self._only_attacked)
@@ -79,8 +80,9 @@ class PowerPlayWatchPanel(QWidget):
         layout.addWidget(self._table, 1)
 
         foot = QHBoxLayout()
-        hint = QLabel("Click a row to copy the system name. Red = undermining ahead of reinforcement; "
-                      "if it stays ahead at the weekly reset the system drops a state.")
+        hint = QLabel("Click a row to copy the system name. Red = real undermining this cycle (grew after the "
+                      "reset). Amber = only the weekly decay (counted as undermining, set at the reset) is ahead; "
+                      "decay alone can't drop a state.")
         hint.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent;")
         foot.addWidget(hint, 1)
         self._add_btn = QPushButton("Add as BGS task (Reinforcement)")
@@ -104,11 +106,14 @@ class PowerPlayWatchPanel(QWidget):
         except Exception:
             log.exception("Failed to build PowerPlay watch list")
             self._rows = []
-        losing = sum(1 for r in self._rows if r["losing"])
+        losing = sum(1 for r in self._rows if r["status"] == "attack")
+        behind = sum(1 for r in self._rows if r["status"] == "decay")
+        unknown = sum(1 for r in self._rows if r["status"] == "unknown")
         no_data = sum(1 for r in self._rows if r["undermining"] is None)
         self._status.setText(
-            f"{len(self._rows)} systems watched · {losing} under attack · {no_data} with no reading since the "
-            "Thursday reset"
+            f"{len(self._rows)} systems watched · {losing} under attack · {behind} behind on weekly decay · "
+            f"{unknown} undermined, decay or attack unclear · "
+            f"{no_data} with no reading since the Thursday reset"
             + ("" if pledged else " · not pledged: only PowerPlay task systems are watched"))
         self._fill()
 
@@ -124,28 +129,33 @@ class PowerPlayWatchPanel(QWidget):
                 for r in self._rows}
 
     def _fill(self) -> None:
-        rows = [r for r in self._rows if r["losing"] or not self._only_attacked.isChecked()]
+        rows = [r for r in self._rows
+                if r["status"] in ("attack", "unknown") or not self._only_attacked.isChecked()]
         dist = self._distances() if rows else {}
         self._table.setSortingEnabled(False)
         self._table.setRowCount(len(rows))
         with bulk_table_fill(self._table):
             for i, r in enumerate(rows):
-                color = _RED if r["losing"] else (_DIM if r["undermining"] is None else _GREEN)
+                color = _STATUS_COLOR[r["status"]]
                 data = r["observed_at"] and f"{_hours_ago(r['observed_at'])} ({r['source']})"
                 cells = [
                     QTableWidgetItem(r["name"]),
                     QTableWidgetItem(r["why"]),
                     QTableWidgetItem(r["state"] or "—"),
                     _NumItem("—" if r["reinforcement"] is None else f"{r['reinforcement']:,}", r["reinforcement"]),
-                    _NumItem("—" if r["undermining"] is None else f"{r['undermining']:,}", r["undermining"]),
-                    _NumItem("—" if not r["gained"] else f"+{r['gained']:,}", r["gained"]),
+                    _NumItem("—" if r["decay"] is None else
+                             (f"{r['decay']:,}?" if r["status"] == "unknown" else f"{r['decay']:,}"), r["decay"]),
+                    _NumItem("?" if r["status"] == "unknown" else
+                             ("—" if not r["attack"] else f"+{r['attack']:,}"), r["attack"]),
+                    _NumItem("?" if r["gained"] is None and r["status"] else
+                             ("—" if not r["gained"] else f"+{r['gained']:,}"), r["gained"]),
                     QTableWidgetItem(data or "no data yet"),
                     QTableWidgetItem(dist.get(r["name"], "")),
                 ]
                 for c, item in enumerate(cells):
-                    if c in (3, 4, 5):
+                    if c in (3, 4, 5, 6):
                         item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-                    if c in (0, 4):
+                    if c in (0, 5) or (c == 4 and r["status"] in ("decay", "unknown")):
                         item.setForeground(QColor(color))
                     item.setData(Qt.ItemDataRole.UserRole, r)
                     self._table.setItem(i, c, item)

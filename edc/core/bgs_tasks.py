@@ -1194,26 +1194,76 @@ def _cycle_reading(repo, addr: int, now: Optional[datetime] = None):
     return row if row and row["observed_at"] >= powerplay_week_start(now) else None
 
 
-def _add_control_chip(view: dict, repo, addr: int, merits_week: int, now: Optional[datetime] = None) -> None:
-    """Chip: this cycle's real reinforcement vs undermining control points
-    (journal/EDDN) and your estimated share."""
+def control_status(repo, addr: int, now: Optional[datetime] = None) -> Optional[dict]:
+    """This cycle's reinforcement/undermining split into weekly decay and
+    real attack. Decay is counted as undermining and set at the weekly
+    reset (Update 3.4; Ekono's undermining stayed constant all week for 10
+    cycles running), so undermining at the first reading of the cycle is
+    taken as decay and only growth after it as attack. A first reading taken
+    days after the reset can hide an early attack inside "decay", so when
+    the first reading is more than BASELINE_LATE_H after the reset the split
+    is "unknown" rather than guessed."""
     row = _cycle_reading(repo, addr, now)
-    if not row or "chips" not in view or (row["reinforcement"] is None and row["undermining"] is None):
-        return
+    if not row or (row["reinforcement"] is None and row["undermining"] is None):
+        return None
+    first_getter = getattr(repo, "get_pp_control_first", None)
+    first = first_getter(addr, powerplay_week_start(now)) if first_getter else None
     r, u = row["reinforcement"] or 0, row["undermining"] or 0
-    losing = u > r
+    decay = min(u, (first["undermining"] or 0) if first else u)
+    attack = u - decay
+    week = datetime.fromisoformat(powerplay_week_start(now).replace("Z", "+00:00"))
+    late = (not first) or datetime.fromisoformat(
+        first["observed_at"].replace("Z", "+00:00")) > week + timedelta(hours=BASELINE_LATE_H)
+    if attack > 0:
+        status = "attack"
+    elif u > r:
+        status = "unknown" if late else "decay"
+    else:
+        status = "holding"
+    return {"row": row, "reinforcement": r, "undermining": u, "decay": decay, "attack": attack, "status": status,
+            "baseline_at": first["observed_at"] if first else None}
+
+
+def _gained_since_tick(repo, addr: int, since: str, undermining: int, now: Optional[datetime] = None):
+    """Undermining gained since the BGS tick, or None when there's no reading
+    between the weekly reset and the tick to compare with (then it can't be
+    told apart from the reset's decay)."""
+    base = repo.get_pp_control_reading(addr, since)
+    if not base or base["observed_at"] < powerplay_week_start(now) or base["undermining"] is None:
+        return None
+    return max(0, undermining - base["undermining"])
+
+
+def _add_control_chip(view: dict, repo, addr: int, merits_week: int, now: Optional[datetime] = None) -> None:
+    """Chip: this cycle's reinforcement vs undermining (decay vs real attack,
+    see control_status) and your estimated share."""
+    cs = control_status(repo, addr, now)
+    if not cs or "chips" not in view:
+        return
+    r, decay, attack = cs["reinforcement"], cs["decay"], cs["attack"]
+    if cs["status"] == "attack":
+        text, color = f"Undermined +{attack:,} this cycle (+{decay:,} decay) vs reinforced {r:,}", "#FF6B6B"
+    elif cs["status"] == "decay":
+        text, color = f"Reinforced {r:,} vs decay \u2248{decay:,} \u00b7 {decay - r:,} to break even", "#FFB347"
+    elif cs["status"] == "unknown":
+        text, color = (f"Reinforced {r:,} vs undermined {cs['undermining']:,} \u00b7 decay or attack? "
+                       "(first reading this cycle came late)"), "#FFB347"
+    else:
+        text, color = f"Reinforced {r:,} vs decay \u2248{decay:,} \u00b7 holding", "#6BCB77"
     share = round(merits_week / MERITS_PER_CP)
-    text = f"Reinforced {r:,} vs undermined {u:,} CP" + (" \u00b7 losing" if losing else " \u00b7 holding")
     if share:
         text += f" \u00b7 your share \u2248{share:,}" + (f" ({share * 100 // r}%)" if r else "")
+    row = cs["row"]
     view["chips"].insert(0, {
-        "text": text, "color": "#FF6B6B" if losing else "#6BCB77",
+        "text": text, "color": color,
         "tooltip": (f"This cycle so far, from all commanders ({row['source']}, {_hours_ago(row['observed_at'])}). "
-                    "Both reset at the weekly cycle; if undermining stays ahead the system drops a state.\n"
+                    "The weekly control decay is counted as undermining and set at the reset; only undermining "
+                    "that grows during the week is a real attack. Decay alone can't drop a state.\n"
                     "Your share is your merits here this week \u00f7 4 (estimate).")})
 
 
 _HELD_STATES = ("Exploited", "Fortified", "Stronghold")
+BASELINE_LATE_H = 48   # first reading of a cycle later than this after the reset: decay/attack split unknown
 
 
 def pp_watch(repo, pledged: str, edsm_powerplay=None) -> dict:
@@ -1252,20 +1302,22 @@ def watch_rows(repo, since: str, watch: dict, now: Optional[datetime] = None) ->
     names = repo.get_system_names_for_addresses(list(watch))
     rows = []
     for addr, why in watch.items():
-        row = _cycle_reading(repo, addr, now)
+        cs = control_status(repo, addr, now)
+        row = cs["row"] if cs else None
         r = u = gained = None
-        if row:
-            r, u = row["reinforcement"] or 0, row["undermining"] or 0
-            base = repo.get_pp_control_reading(addr, since)
-            b = (base["undermining"] or 0) if base else 0
-            gained = (u - b if u >= b else u) if row["observed_at"] > since else 0
+        if cs:
+            r, u = cs["reinforcement"], cs["undermining"]
+            gained = _gained_since_tick(repo, addr, since, u, now) if row["observed_at"] > since else 0
         rows.append({"address": addr, "name": names.get(addr, str(addr)), "why": why,
                      "state": row["pp_state"] if row else None, "reinforcement": r, "undermining": u,
+                     "decay": cs["decay"] if cs else None, "attack": cs["attack"] if cs else None,
+                     "status": cs["status"] if cs else None,
                      "gained": gained, "observed_at": row["observed_at"] if row else None,
                      "source": row["source"] if row else None,
-                     "losing": bool(row) and u > r})
-    rows.sort(key=lambda x: (not x["losing"], -((x["undermining"] or 0) - (x["reinforcement"] or 0))
-                             if x["losing"] else 0, x["name"].lower()))
+                     "losing": bool(cs) and cs["status"] == "attack"})
+    order = {"attack": 0, "unknown": 1, "decay": 2, "holding": 3, None: 4}
+    rows.sort(key=lambda x: (order[x["status"]], -(x["attack"] or 0) if x["status"] == "attack"
+                             else -((x["decay"] or 0) - (x["reinforcement"] or 0)), x["name"].lower()))
     return rows
 
 
@@ -1279,11 +1331,9 @@ def undermining_alerts(repo, since: str, watch: dict, now: Optional[datetime] = 
         now_row = _cycle_reading(repo, addr, now)
         if not now_row or now_row["observed_at"] <= since or now_row["undermining"] is None:
             continue
-        base = repo.get_pp_control_reading(addr, since)
         u, r = now_row["undermining"] or 0, now_row["reinforcement"] or 0
-        b = (base["undermining"] or 0) if base else 0
-        gained = u - b if u >= b else u   # dropped = weekly reset in between
-        if gained > 0 and u > r:
+        gained = _gained_since_tick(repo, addr, since, u, now)
+        if gained and u > r:
             if not names:
                 names = repo.get_system_names_for_addresses(list(watch))
             out.append((names.get(addr, str(addr)), gained, u, r, watch[addr]))

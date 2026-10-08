@@ -45,21 +45,28 @@ def test_alert_when_undermining_grew_since_tick_and_leads(tmp_path):
     assert bt.undermining_alerts(repo, "2026-10-06T00:00:00Z", W, NOW) == []
 
 
-def test_weekly_reset_counts_from_zero(tmp_path):
+def test_reading_right_after_the_reset_is_not_an_alert(tmp_path):
+    """The reset's decay shows up as undermining; with no reading from this
+    cycle before the tick there's nothing to compare with -> no alert."""
     repo = _repo(tmp_path)
     repo.record_pp_control(EKONO, "2026-10-07T20:00:00Z", "Stronghold", 900, 5000, 0.3, "eddn")
     repo.record_pp_control(EKONO, "2026-10-08T12:00:00Z", "Stronghold", 10, 400, 0.3, "eddn")  # after Thursday reset
-    assert bt.undermining_alerts(repo, "2026-10-08T00:00:00Z", W, NEXT) == [("Ekono", 400, 400, 10, "PowerPlay task")]
+    assert bt.undermining_alerts(repo, "2026-10-08T00:00:00Z", W, NEXT) == []
+    # a later rise within the cycle, compared with that first reading, is
+    repo.record_pp_control(EKONO, "2026-10-09T12:00:00Z", "Stronghold", 10, 900, 0.3, "eddn")
+    later = NEXT.replace(day=9, hour=13)
+    assert bt.undermining_alerts(repo, "2026-10-09T00:00:00Z", W, later) == [("Ekono", 500, 900, 10, "PowerPlay task")]
 
 
 def test_card_chip_shows_real_totals_and_your_share(tmp_path):
     repo = _repo(tmp_path)
+    repo.record_pp_control(EKONO, "2026-10-02T17:27:31Z", "Stronghold", 398, 5333, 0.27, "journal")
     repo.record_pp_control(EKONO, "2026-10-06T16:12:56Z", "Stronghold", 1910, 5333, 0.27, "journal")
     view = {"chips": []}
     bt._add_control_chip(view, repo, EKONO, 948, NOW)
     chip = view["chips"][0]
-    assert chip["text"] == "Reinforced 1,910 vs undermined 5,333 CP · losing · your share ≈237 (12%)"
-    assert chip["color"] == "#FF6B6B"
+    assert chip["text"] == "Reinforced 1,910 vs decay ≈5,333 · 3,423 to break even · your share ≈237 (12%)"
+    assert chip["color"] == "#FFB347"   # decay only: amber, not "under attack"
 
 
 def test_watch_list_tasks_supporting_and_squad_systems(tmp_path):
@@ -92,12 +99,14 @@ def test_watch_list_tasks_supporting_and_squad_systems(tmp_path):
 def test_watch_rows_losing_first_and_no_data_rows(tmp_path):
     repo = _repo(tmp_path)
     repo.db.execute("INSERT INTO systems (system_address, system_name) VALUES (5, 'Kauruku'), (6, 'Lagar')")
+    repo.record_pp_control(EKONO, "2026-10-02T17:27:31Z", "Stronghold", 398, 5333, 0.27, "journal")
+    repo.record_pp_control(5, "2026-10-02T10:00:00Z", "Stronghold", 0, 1200, 0.25, "eddn")
     repo.record_pp_control(EKONO, "2026-10-06T16:12:56Z", "Stronghold", 1910, 5333, 0.27, "journal")
     repo.record_pp_control(5, "2026-10-06T10:00:00Z", "Stronghold", 900, 1200, 0.25, "eddn")
     watch = {EKONO: "PowerPlay task", 5: "supports Tucanae", 6: "squad system"}
     rows = bt.watch_rows(repo, "2026-10-06T00:00:00Z", watch, NOW)
-    assert [r["name"] for r in rows] == ["Ekono", "Kauruku", "Lagar"]   # biggest gap first, no data last
-    assert rows[0]["losing"] and rows[0]["gained"] == 5333
+    assert [r["name"] for r in rows] == ["Ekono", "Kauruku", "Lagar"]   # behind on decay, biggest gap first; no data last
+    assert rows[0]["status"] == "decay" and not rows[0]["losing"] and rows[0]["gained"] == 0
     assert rows[2]["undermining"] is None and not rows[2]["losing"]
 
 
@@ -109,3 +118,34 @@ def test_reading_from_an_earlier_cycle_counts_as_no_data(tmp_path):
     view = {"chips": []}
     bt._add_control_chip(view, repo, EKONO, 0, NOW)
     assert view["chips"] == []
+
+
+def test_undermining_that_grows_during_the_cycle_is_an_attack(tmp_path):
+    """Ys, 2026-10-07: undermining rose after the reset -> attack; Ekono's
+    stayed at its reset value all week -> decay only."""
+    repo = _repo(tmp_path)
+    repo.record_pp_control(EKONO, "2026-10-02T17:27:31Z", "Stronghold", 398, 5333, 0.27, "journal")
+    repo.record_pp_control(EKONO, "2026-10-07T20:33:48Z", "Stronghold", 3953, 5333, 0.27, "eddn")
+    YS = 77
+    repo.db.execute("INSERT INTO systems (system_address, system_name) VALUES (77, 'Ys')")
+    repo.record_pp_control(YS, "2026-10-03T10:00:00Z", "Exploited", 0, 0, 0.3, "eddn")
+    repo.record_pp_control(YS, "2026-10-07T12:00:00Z", "Exploited", 33, 1302, 0.3, "eddn")
+    ek, ys = bt.control_status(repo, EKONO, NOW), bt.control_status(repo, YS, NOW)
+    assert (ek["status"], ek["decay"], ek["attack"]) == ("decay", 5333, 0)
+    assert (ys["status"], ys["decay"], ys["attack"]) == ("attack", 0, 1302)
+    rows = bt.watch_rows(repo, "2026-10-07T00:00:00Z", {EKONO: "PowerPlay task", YS: "squad system"}, NOW)
+    assert [r["name"] for r in rows] == ["Ys", "Ekono"]   # real attack first
+
+
+def test_late_first_reading_means_split_unknown(tmp_path):
+    """EDDN collection began 2026-10-07, six days into the cycle: Ys's 1,302
+    undermining can't be split into decay vs attack."""
+    repo = _repo(tmp_path)
+    repo.db.execute("INSERT INTO systems (system_address, system_name) VALUES (77, 'Ys')")
+    repo.record_pp_control(77, "2026-10-07T12:00:00Z", "Exploited", 33, 1302, 0.3, "eddn")
+    cs = bt.control_status(repo, 77, NOW)
+    assert cs["status"] == "unknown"
+    view = {"chips": []}
+    bt._add_control_chip(view, repo, 77, 0, NOW)
+    assert "decay or attack?" in view["chips"][0]["text"]
+    assert bt.undermining_alerts(repo, "2026-10-07T00:00:00Z", {77: "squad system"}, NOW) == []

@@ -2965,6 +2965,14 @@ class Repository:
             (system_address, at_or_before, at_or_before),
         ).fetchone()
 
+    def get_pp_control_first(self, system_address: int, since: str):
+        """Earliest reinforcement/undermining reading at or after `since` (the cycle start)."""
+        return self.db.conn.execute(
+            "SELECT observed_at, pp_state, reinforcement, undermining, control, source FROM pp_control_history "
+            "WHERE system_address = ? AND observed_at >= ? ORDER BY observed_at LIMIT 1",
+            (system_address, since),
+        ).fetchone()
+
     def get_system_names_for_addresses(self, addresses: list) -> dict:
         if not addresses:
             return {}
