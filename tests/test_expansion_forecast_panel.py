@@ -89,3 +89,15 @@ def test_worker_result_marks_failed_lookups_not_checked(tmp_path, monkeypatch):
     by = {r["system_name"]: r for r in res["rows"]}
     assert by["Near"]["faction_count"] == 2 and by["Near"]["faction_present"] is True
     assert by["Far"]["faction_count"] is None
+
+
+def test_lookup_finished_after_source_changed_still_saves(tmp_path):
+    QApplication.instance() or QApplication([])
+    from edc.ui.panels.expansion_forecast_panel import ExpansionForecastPanel
+    repo = _repo(tmp_path)
+    w = ExpansionForecastPanel(SimpleNamespace(_repo=repo, _faction_name=EUW))
+    w._source = None
+    w._lookup_source = (1, "Ekono")
+    rows = [{"system_name": "X", "system_address": 5, "distance_ly": 3.0, "faction_count": 4, "faction_present": False}]
+    w._on_lookup_finished({"rows": rows, "candidates": 1, "unknown_population": 0}, None)
+    assert [c["system_name"] for c in repo.get_expansion_candidates(1)] == ["X"]

@@ -139,10 +139,13 @@ def rank_candidates(cands: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 def new_systems(presence: List[Dict[str, Any]], endings: List[tuple], today: date,
-                days: int = NEW_SYSTEM_DAYS) -> List[Dict[str, Any]]:
+                days: int = NEW_SYSTEM_DAYS, coords: Optional[Dict[str, tuple]] = None) -> List[Dict[str, Any]]:
     """Systems the faction first appeared in within `days`, small (<= 20%),
     paired with an expansion ending within +-1 day: endings are
-    [(source system name, "YYYY-MM-DD"), ...]."""
+    [(source system name, "YYYY-MM-DD"), ...]. A source must also lie within
+    30 ly (the game's extended search cube) of the new system, per `coords`
+    {name: (x, y, z)}; the nearest qualifying source wins, none without coords."""
+    coords = coords or {}
     out = []
     for r in presence:
         first, inf = r.get("first_seen"), r.get("influence") or 0.0
@@ -151,9 +154,15 @@ def new_systems(presence: List[Dict[str, Any]], endings: List[tuple], today: dat
         seen = date.fromisoformat(str(first)[:10])
         if seen > today or (today - seen).days > days:
             continue
-        source = next((name for name, d in endings
-                       if name != r.get("system_name")
-                       and abs((date.fromisoformat(str(d)[:10]) - seen).days) <= 1), None)
+        new_xyz = coords.get(r.get("system_name"))
+        near = []
+        for name, d in endings:
+            src_xyz = coords.get(name)
+            if (name != r.get("system_name") and new_xyz and src_xyz
+                    and abs((date.fromisoformat(str(d)[:10]) - seen).days) <= 1
+                    and in_cube(src_xyz, new_xyz, half=30.0)):
+                near.append((sum((a - b) ** 2 for a, b in zip(src_xyz, new_xyz)), name))
+        source = min(near)[1] if near else None
         out.append({"system_name": r.get("system_name"), "influence": inf,
                     "first_seen": str(first)[:10], "source": source})
     return sorted(out, key=lambda x: x["first_seen"], reverse=True)
@@ -175,4 +184,5 @@ def detect_new_systems(repo, faction: str, today: Optional[date] = None) -> List
         if (r.get("influence") or 0.0) >= 0.5:
             hist = list(reversed(repo.get_faction_history(r["system_address"], faction)))
             endings += [(r["system_name"], d) for _i, d, _delta in expansion_endings(hist)]
-    return new_systems(presence, endings, today)
+    names = {r["system_name"] for r in presence} | {n for n, _d in endings}
+    return new_systems(presence, endings, today, coords=repo.get_system_coords_for_names(sorted(names)))

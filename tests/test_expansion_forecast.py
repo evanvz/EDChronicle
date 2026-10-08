@@ -72,10 +72,22 @@ def test_rank_candidates_tiers_and_order():
         ("Arimavante", 1), ("YF-W", 1), ("Left before", 2), ("Seven", 3), ("Not checked", None)]
 
 
+COORDS = {"Ekono": (59.125, -155.15625, 99.8125),
+          "Tucanae Sector YF-W b2-2": (39.46875, -163.9375, 117.96875),
+          "22 i Scorpii": (45.25, 108.40625, 396.3125)}
+
+
+def test_new_system_source_must_be_nearby_and_have_coords():
+    presence = [_p(2, "Tucanae Sector YF-W b2-2", 0.090992, "2026-10-07", "2026-10-07")]
+    endings = [("22 i Scorpii", "2026-10-07"), ("Ekono", "2026-10-07")]
+    assert ef.new_systems(presence, endings, TODAY, coords=COORDS)[0]["source"] == "Ekono"
+    assert ef.new_systems(presence, endings, TODAY)[0]["source"] is None
+
+
 def test_new_system_paired_with_expansion_ending():
     presence = [_p(2, "Tucanae Sector YF-W b2-2", 0.090992, "2026-10-07", "2026-10-07"),
                 _p(1, "Ekono", 0.6789, "2026-09-08", "2026-10-07")]
-    out = ef.new_systems(presence, [("Ekono", "2026-10-07")], TODAY)
+    out = ef.new_systems(presence, [("Ekono", "2026-10-07")], TODAY, coords=COORDS)
     assert out == [{"system_name": "Tucanae Sector YF-W b2-2", "influence": 0.090992,
                     "first_seen": "2026-10-07", "source": "Ekono"}]
     assert ef.alert_text("Elite United Worlds", out[0]) == (

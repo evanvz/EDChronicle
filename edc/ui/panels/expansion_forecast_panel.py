@@ -11,7 +11,7 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
-from PyQt6.QtCore import QObject, QThread, pyqtSignal
+from PyQt6.QtCore import QObject, Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QApplication, QHBoxLayout, QHeaderView, QLabel, QPushButton, QTableWidget, QTableWidgetItem,
     QVBoxLayout, QWidget,
@@ -110,12 +110,14 @@ class ExpansionForecastPanel(QWidget):
         self._thread: Optional[QThread] = None
         self._worker: Optional[_ForecastWorker] = None
         self._source: Optional[dict] = None
+        self._lookup_source: Optional[tuple] = None
         self._been: set = set()
         self._current: set = set()
 
         layout = QVBoxLayout(self)
         self._status = QLabel("")
         self._status.setStyleSheet(_DIM)
+        self._status.setTextFormat(Qt.TextFormat.PlainText)
         layout.addWidget(self._status)
 
         hdr = QLabel("NEXT TO EXPAND — faction systems at 70% or more")
@@ -137,6 +139,7 @@ class ExpansionForecastPanel(QWidget):
         layout.addLayout(row)
         self._target_status = QLabel("")
         self._target_status.setWordWrap(True)
+        self._target_status.setTextFormat(Qt.TextFormat.PlainText)
         self._target_status.setStyleSheet(_DIM)
         layout.addWidget(self._target_status)
         self._target_table = _table(["#", "Tier", "System", "Distance", "Factions", "Faction here before", "Data"])
@@ -152,6 +155,7 @@ class ExpansionForecastPanel(QWidget):
         layout.addWidget(hdr3)
         self._last_label = QLabel("—")
         self._last_label.setWordWrap(True)
+        self._last_label.setTextFormat(Qt.TextFormat.PlainText)
         layout.addWidget(self._last_label)
 
     def showEvent(self, event) -> None:
@@ -162,6 +166,13 @@ class ExpansionForecastPanel(QWidget):
         return self._panel._faction_name or self._panel._repo.get_squadron_faction_name()
 
     def refresh(self) -> None:
+        try:
+            self._refresh()
+        except Exception:
+            log.exception("Failed to build expansion forecast")
+            self._status.setText("Forecast failed — see log.")
+
+    def _refresh(self) -> None:
         faction = self._faction()
         if not faction:
             self._status.setText("No squadron faction known yet.")
@@ -218,7 +229,10 @@ class ExpansionForecastPanel(QWidget):
         cached = self._panel._repo.get_expansion_candidates(self._source["system_address"])
         if not cached:
             return False
-        fetched = datetime.fromisoformat(cached[0]["fetched_at"].replace("Z", "+00:00"))
+        try:
+            fetched = datetime.fromisoformat(cached[0]["fetched_at"].replace("Z", "+00:00"))
+        except (ValueError, TypeError, AttributeError):
+            return False
         return datetime.now(timezone.utc) - fetched < timedelta(hours=CACHE_MAX_AGE_H)
 
     def _start_lookup(self, force: bool) -> None:
@@ -234,22 +248,27 @@ class ExpansionForecastPanel(QWidget):
         self._target_status.setText("Looking up candidates on EDSM…")
         self._worker = _ForecastWorker(self._panel._repo.db.db_path, {"x": xyz[0], "y": xyz[1], "z": xyz[2]},
                                        set(self._current), self._faction())
-        self._thread = QThread()
+        self._lookup_source = (self._source["system_address"], self._source["system_name"])
+        self._thread = QThread(self)
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
         self._worker.finished.connect(self._on_lookup_finished)
         self._worker.finished.connect(self._thread.quit)
+        self._thread.finished.connect(self._worker.deleteLater)
         self._thread.start()
 
     def _on_lookup_finished(self, result, error) -> None:
+        address = self._lookup_source[0] if self._lookup_source else None
         if not result:
             self._target_status.setText(f"Lookup failed ({error}) — showing the last cached data.")
             return
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         try:
-            self._panel._repo.save_expansion_candidates(self._source["system_address"], result["rows"], now)
+            self._panel._repo.save_expansion_candidates(address, result["rows"], now)
         except Exception:
             log.exception("Failed to save expansion candidates")
+        if address is None or not self._source or self._source["system_address"] != address:
+            return
         skipped = result["unknown_population"]
         self._render_targets(f" Skipped {skipped} systems with unknown population." if skipped else "")
 
