@@ -163,12 +163,11 @@ def test_bootstrap_replay_does_not_double_apply_backpackchange_over_disk_snapsho
         state=engine.state,
         eddn_publisher=SimpleNamespace(observe=lambda evt: None),
         engineering_panel=SimpleNamespace(refresh=lambda state: None),
-        overview_panel=SimpleNamespace(set_new_system_alert=lambda text: None),
         _append=lambda text: None,
         _refresh_engineering=lambda: None,
         _schedule_hud_refresh=lambda: None,
         _refresh_bgs_task_hint=lambda: None,
-        _refresh_new_system_alert=lambda: None,
+        _refresh_new_system_alert=lambda force=False: None,
         _maybe_start_canonn_refresh=lambda: None,
     )
     fake_self._load_backpack_inventory = lambda: MainWindow._load_backpack_inventory(fake_self)

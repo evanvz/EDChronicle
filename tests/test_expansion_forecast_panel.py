@@ -125,8 +125,9 @@ def test_main_window_alert_uses_detection(tmp_path):
     MainWindow._refresh_new_system_alert(fake)
     assert shown == ["🆕 Elite United Worlds entered Tucanae Sector YF-W b2-2 (9.1%)"]
     fake.player_faction_panel._faction_name = None
+    # Within throttle window, should resend cached text
     MainWindow._refresh_new_system_alert(fake)
-    assert shown[-1] == ""
+    assert shown[-1] == "🆕 Elite United Worlds entered Tucanae Sector YF-W b2-2 (9.1%)"
 
 
 def test_session_report_shows_new_system_escaped(tmp_path):
@@ -139,3 +140,61 @@ def test_session_report_shows_new_system_escaped(tmp_path):
     dlg = SessionActivityDialog(SimpleNamespace(_repo=repo, _faction_name=EUW, _latest_known_tick=None))
     dlg.refresh()
     assert "A &lt;i&gt;b&lt;/i&gt;" in dlg._new_label.text() and not dlg._new_label.isHidden()
+
+
+def test_refresh_new_system_alert_throttles_detection(tmp_path, monkeypatch):
+    from edc.ui.main_window import MainWindow
+    import edc.ui.main_window
+    repo = _repo(tmp_path)
+    today = date.today().isoformat()
+    repo.db.execute("INSERT INTO systems (system_address, system_name) VALUES (2, 'Test System')")
+    repo.save_faction_snapshot(2, {"Name": EUW, "Influence": 0.091}, today, False, f"{today}T16:59:55Z", "eddn")
+
+    call_count = [0]
+    original_detect = edc.ui.main_window.detect_new_systems
+    def counting_detect(r, f):
+        call_count[0] += 1
+        return original_detect(r, f)
+    monkeypatch.setattr(edc.ui.main_window, "detect_new_systems", counting_detect)
+
+    shown = []
+    fake = SimpleNamespace(
+        repo=repo,
+        overview_panel=SimpleNamespace(set_new_system_alert=shown.append),
+        player_faction_panel=SimpleNamespace(_faction_name=EUW)
+    )
+
+    # First call should detect
+    MainWindow._refresh_new_system_alert(fake)
+    assert call_count[0] == 1
+    first_text = shown[-1]
+
+    # Second call within throttle should NOT detect again
+    MainWindow._refresh_new_system_alert(fake)
+    assert call_count[0] == 1  # Still 1, not incremented
+    assert shown[-1] == first_text  # Same text resent
+
+    # Call with force=True should detect again
+    MainWindow._refresh_new_system_alert(fake, force=True)
+    assert call_count[0] == 2  # Now incremented
+
+
+def test_refresh_new_system_alert_fallback_to_squadron_faction(tmp_path):
+    from edc.ui.main_window import MainWindow
+    repo = _repo(tmp_path)
+    today = date.today().isoformat()
+    repo.db.execute("INSERT INTO systems (system_address, system_name) VALUES (2, 'Fallback Test')")
+    # Save snapshot with SquadronFaction=True to mark EUW as the squadron faction
+    repo.save_faction_snapshot(2, {"Name": EUW, "Influence": 0.075, "SquadronFaction": True}, today, False, f"{today}T14:00:00Z", "eddn")
+
+    shown = []
+    fake = SimpleNamespace(
+        repo=repo,
+        overview_panel=SimpleNamespace(set_new_system_alert=shown.append),
+        player_faction_panel=SimpleNamespace(_faction_name=None)  # No explicit faction
+    )
+
+    MainWindow._refresh_new_system_alert(fake, force=True)
+    # Should have fallen back and found the squadron faction
+    assert shown[-1] != ""  # Should have found and displayed the new system
+    assert "Elite United Worlds" in shown[-1]  # EUW should be in the text

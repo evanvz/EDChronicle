@@ -143,6 +143,11 @@ class SessionActivityDialog(QDialog):
             report = {}
         self._render_pp_totals(since)
         faction = getattr(self._panel, "_faction_name", None)
+        if not faction:
+            try:
+                faction = self._panel._repo.get_squadron_faction_name()
+            except Exception:
+                faction = None
         try:
             new = detect_new_systems(self._panel._repo, faction) if faction else []
         except Exception:

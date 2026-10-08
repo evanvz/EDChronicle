@@ -948,6 +948,7 @@ def _allies_of(win) -> frozenset:
 
 
 class MainWindow(QMainWindow):
+    _NEW_SYSTEM_ALERT_INTERVAL_S = 600  # ~80-330 ms per check on a 780-system faction, so at most every 10 minutes
 
     def refresh_from_state(self):
         self._refresh_system_card()
@@ -3984,7 +3985,7 @@ class MainWindow(QMainWindow):
             self._load_backpack_inventory()
             self._refresh_engineering()
             self._refresh_bgs_task_hint()
-            self._refresh_new_system_alert()
+            self._refresh_new_system_alert(force=True)
             # The startup Canonn fetch ran before the replay set the
             # commander name (nearest-challenge needs it) -- fetch again now.
             self._maybe_start_canonn_refresh()
@@ -6388,17 +6389,39 @@ class MainWindow(QMainWindow):
                 log.exception("Failed to build BGS task hint")
         self.overview_panel.set_bgs_task_hint(text)
 
-    def _refresh_new_system_alert(self) -> None:
+    def _refresh_new_system_alert(self, force: bool = False) -> None:
         """Overview line when the squadron faction appeared in a new system
         in the last 3 days (Expansion Forecast spec, section 4)."""
+        # Check if we've cached this recently and should skip re-computing
+        if not force:
+            last_at = getattr(self, "_new_system_alert_at", None)
+            last_text = getattr(self, "_new_system_alert_text", None)
+            interval = getattr(self, "_NEW_SYSTEM_ALERT_INTERVAL_S", 600)
+            if last_at is not None and time.monotonic() - last_at < interval:
+                # Still within throttle window; re-send cached text without re-querying
+                if last_text is not None:
+                    self.overview_panel.set_new_system_alert(last_text)
+                return
+
+        # Need to compute: get faction with fallback to squadron
         text = ""
         faction = getattr(self.player_faction_panel, "_faction_name", None)
+        if not faction:
+            try:
+                faction = self.repo.get_squadron_faction_name()
+            except Exception:
+                faction = None
+
         if faction:
             try:
                 new = detect_new_systems(self.repo, faction)
                 text = alert_text(faction, new[0]) if new else ""
             except Exception:
                 log.exception("Failed to check for new faction systems")
+
+        # Cache for throttling
+        self._new_system_alert_at = time.monotonic()
+        self._new_system_alert_text = text
         self.overview_panel.set_new_system_alert(text)
 
     def _on_wal_checkpoint_tick(self) -> None:
