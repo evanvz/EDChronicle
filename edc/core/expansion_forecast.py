@@ -1,0 +1,178 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the PolyForm Noncommercial License 1.0.0.
+# See the LICENSE file in the project root for full terms.
+"""Expansion Forecast: where the squadron faction's next BGS expansion is
+likely to land, and where the last one landed. Rules are community-
+researched (squad bot's docs/expansion-logic.md, Complete BGS Guide 2025
+pp. 63-67; SINC 2024), not Frontier documentation.
+See docs/superpowers/specs/2026-10-08-expansion-forecast-design.md."""
+from __future__ import annotations
+
+import json
+from datetime import date, timedelta
+from typing import Any, Dict, List, Optional
+
+WATCH_THRESHOLD = 0.70
+EXPANSION_THRESHOLD = 0.75
+CUBE_LY = 20.0
+LOOKUP_COUNT = 10
+NEW_SYSTEM_DAYS = 3
+NEW_SYSTEM_MAX_INFLUENCE = 0.20   # heuristic: an expansion arrives small (YF-W 9.1%)
+CURRENT_DAYS = 14                 # a presence older than this is treated as "left"
+CACHE_MAX_AGE_H = 24
+
+
+def parse_states(raw) -> List[str]:
+    """faction_snapshots state-list JSON ([{"State": ...}, ...]) -> state names."""
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw) if isinstance(raw, str) else raw
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(data, list):
+        return []
+    return [str(s.get("State")) for s in data if isinstance(s, dict) and s.get("State")]
+
+
+def is_expanding(snap: Optional[Dict[str, Any]]) -> bool:
+    """Frontier's own "Expansion" state as the faction state or in active_states."""
+    if not snap:
+        return False
+    if (snap.get("faction_state") or "").strip().lower() == "expansion":
+        return True
+    return "expansion" in {s.lower() for s in parse_states(snap.get("active_states"))}
+
+
+def expansion_endings(history_asc: List[Dict[str, Any]]) -> List[tuple]:
+    """[(index, snapshot_date, influence change in points)] for each day an
+    expansion ended: the first day "Expansion" shows under recovering
+    states (faction_state can still read "Expansion" that day, and not every
+    source carries the state lists, so this is the reliable signal). A
+    finished expansion usually costs the home system its "expansion tax",
+    about 15% (SINC Complete BGS Guide 2024, p48/53): Ekono lost 14.8 on
+    2026-09-23 and 11.1 on 2026-10-07 -- but endings on 2026-08-09 and
+    09-11 showed no drop, so the change is reported, not assumed."""
+    out = []
+    for i in range(1, len(history_asc)):
+        prev, cur = history_asc[i - 1], history_asc[i]
+        if ("Expansion" in parse_states(cur.get("recovering_states"))
+                and "Expansion" not in parse_states(prev.get("recovering_states"))):
+            delta = ((cur.get("influence") or 0.0) - (prev.get("influence") or 0.0)) * 100.0
+            out.append((i, cur.get("snapshot_date"), delta))
+    return out
+
+
+def expansion_phase(snap: Dict[str, Any]) -> str:
+    if "Expansion" in parse_states(snap.get("recovering_states")):
+        return "recovering"
+    if is_expanding(snap):
+        return "active"
+    if "Expansion" in parse_states(snap.get("pending_states")):
+        return "pending"
+    return ""
+
+
+def days_at_or_above(history_asc: List[Dict[str, Any]], threshold: float = EXPANSION_THRESHOLD) -> int:
+    """Consecutive latest snapshots at or above `threshold`."""
+    n = 0
+    for snap in reversed(history_asc):
+        if (snap.get("influence") or 0.0) < threshold:
+            break
+        n += 1
+    return n
+
+
+def is_current(row: Dict[str, Any], today: date) -> bool:
+    """Still present: influence above 0 and seen within CURRENT_DAYS."""
+    last = row.get("last_seen")
+    if not last or (row.get("influence") or 0.0) <= 0:
+        return False
+    return (today - date.fromisoformat(str(last)[:10])).days <= CURRENT_DAYS
+
+
+def watched_systems(presence: List[Dict[str, Any]], histories: Dict[int, List[Dict[str, Any]]],
+                    today: date) -> List[Dict[str, Any]]:
+    out = []
+    for r in presence:
+        if not is_current(r, today) or (r.get("influence") or 0.0) < WATCH_THRESHOLD:
+            continue
+        hist = histories.get(r["system_address"]) or []
+        out.append({**r, "days_above": days_at_or_above(hist),
+                    "phase": expansion_phase(hist[-1] if hist else r)})
+    return sorted(out, key=lambda w: -(w.get("influence") or 0.0))
+
+
+def likely_source(watched: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Highest influence among systems at or above 75% for at least a day;
+    otherwise the highest watched system, marked not yet eligible."""
+    eligible = [w for w in watched if w["days_above"] >= 1]
+    if eligible:
+        return {**eligible[0], "eligible": True}
+    return {**watched[0], "eligible": False} if watched else None
+
+
+def in_cube(src: tuple, xyz: tuple, half: float = CUBE_LY) -> bool:
+    """Expansion searches a cube (each axis within `half`), not a sphere."""
+    return all(abs(a - b) <= half for a, b in zip(src, xyz))
+
+
+def rank_candidates(cands: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Tier 1: <7 factions, no known history; tier 2: <7, faction was there
+    before; tier 3: exactly 7 (invasion war). 8+ and systems where the
+    faction is present now are dropped; not-looked-up rows go last."""
+    ranked, unchecked = [], []
+    for c in cands:
+        if c.get("faction_present"):
+            continue
+        n = c.get("faction_count")
+        if n is None:
+            unchecked.append({**c, "tier": None})
+            continue
+        if n >= 8:
+            continue
+        tier = 3 if n == 7 else (2 if c.get("been_before") else 1)
+        ranked.append({**c, "tier": tier})
+    ranked.sort(key=lambda c: (c["tier"], c.get("distance_ly") or 0.0))
+    unchecked.sort(key=lambda c: c.get("distance_ly") or 0.0)
+    return ranked + unchecked
+
+
+def new_systems(presence: List[Dict[str, Any]], endings: List[tuple], today: date,
+                days: int = NEW_SYSTEM_DAYS) -> List[Dict[str, Any]]:
+    """Systems the faction first appeared in within `days`, small (<= 20%),
+    paired with an expansion ending within +-1 day: endings are
+    [(source system name, "YYYY-MM-DD"), ...]."""
+    out = []
+    for r in presence:
+        first, inf = r.get("first_seen"), r.get("influence") or 0.0
+        if not first or not 0 < inf <= NEW_SYSTEM_MAX_INFLUENCE:
+            continue
+        seen = date.fromisoformat(str(first)[:10])
+        if seen > today or (today - seen).days > days:
+            continue
+        source = next((name for name, d in endings
+                       if name != r.get("system_name")
+                       and abs((date.fromisoformat(str(d)[:10]) - seen).days) <= 1), None)
+        out.append({"system_name": r.get("system_name"), "influence": inf,
+                    "first_seen": str(first)[:10], "source": source})
+    return sorted(out, key=lambda x: x["first_seen"], reverse=True)
+
+
+def alert_text(faction: str, item: Dict[str, Any]) -> str:
+    src = f" — likely expansion from {item['source']}" if item.get("source") else ""
+    return f"🆕 {faction} entered {item['system_name']} ({item['influence'] * 100:.1f}%){src}"
+
+
+def detect_new_systems(repo, faction: str, today: Optional[date] = None) -> List[Dict[str, Any]]:
+    """new_systems() from the repository: expansion endings are only looked
+    for in faction systems at 50%+ (a source sits near 60-70% after paying
+    the expansion tax), to keep it to a few history queries."""
+    today = today or date.today()
+    presence = repo.get_squadron_presence(faction)
+    endings = []
+    for r in presence:
+        if (r.get("influence") or 0.0) >= 0.5:
+            hist = list(reversed(repo.get_faction_history(r["system_address"], faction)))
+            endings += [(r["system_name"], d) for _i, d, _delta in expansion_endings(hist)]
+    return new_systems(presence, endings, today)

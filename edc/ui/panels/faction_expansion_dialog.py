@@ -36,68 +36,14 @@ from PyQt6.QtWidgets import (
 from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, PRIMARY_BUTTON_STYLE as _BTN_STYLE
 from edc.ui import formatting as fmt
 from edc.core.edsm_faction_lookup import fetch_system_factions, ERROR_BLOCKED, ERROR_NOT_FOUND
+from edc.core.expansion_forecast import (
+    expansion_endings, is_expanding as _is_expanding, parse_states as _parse_states,
+)
 from edc.ui.panels.powerplay_system_status_panel import _is_decay_risk, _prediction_color
 
 log = logging.getLogger("edc.faction_expansion")
 
 _EXPANSION_THRESHOLD = 75.0
-
-
-def _parse_states(raw) -> List[str]:
-    """Parses a faction_snapshots active_states/pending_states JSON column
-    (a list of {"State": ..., "Trend": ...} dicts) into a flat list of
-    State strings. Duplicated from player_faction_panel.py's identical
-    helper rather than imported -- that module already imports FROM this
-    one (FactionExpansionDialog), so importing back would be circular."""
-    if not raw:
-        return []
-    try:
-        data = json.loads(raw) if isinstance(raw, str) else raw
-    except (TypeError, ValueError):
-        return []
-    if not isinstance(data, list):
-        return []
-    return [
-        str(s.get("State"))
-        for s in data
-        if isinstance(s, dict) and s.get("State")
-    ]
-
-
-def _is_expanding(latest_snapshot: Optional[Dict[str, Any]]) -> bool:
-    """True if the faction's most recent snapshot shows Frontier's own
-    "Expansion" BGS state -- either as the primary faction_state or
-    listed in active_states (both are real places EDSM's data puts it,
-    kept as two checks rather than assuming one). This is the actual
-    trigger signal: once expansion is active, influence decays a little
-    per day for about a week until it either completes or fails, so the
-    push needs to continue rather than stop the moment 75% is crossed."""
-    if not latest_snapshot:
-        return False
-    state = (latest_snapshot.get("faction_state") or "").strip().lower()
-    if state == "expansion":
-        return True
-    active = {s.lower() for s in _parse_states(latest_snapshot.get("active_states"))}
-    return "expansion" in active
-
-
-def expansion_endings(history_asc: List[Dict[str, Any]]) -> List[tuple]:
-    """[(index, snapshot_date, influence change in points)] for each day an
-    expansion ended: the first day "Expansion" shows under recovering
-    states (faction_state can still read "Expansion" that day, and not every
-    source carries the state lists, so this is the reliable signal). A
-    finished expansion usually costs the home system its "expansion tax",
-    about 15% (SINC Complete BGS Guide 2024, p48/53): Ekono lost 14.8 on
-    2026-09-23 and 11.1 on 2026-10-07 -- but endings on 2026-08-09 and
-    09-11 showed no drop, so the change is reported, not assumed."""
-    out = []
-    for i in range(1, len(history_asc)):
-        prev, cur = history_asc[i - 1], history_asc[i]
-        if ("Expansion" in _parse_states(cur.get("recovering_states"))
-                and "Expansion" not in _parse_states(prev.get("recovering_states"))):
-            delta = ((cur.get("influence") or 0.0) - (prev.get("influence") or 0.0)) * 100.0
-            out.append((i, cur.get("snapshot_date"), delta))
-    return out
 
 
 class _ExpansionLookupWorker(QObject):
