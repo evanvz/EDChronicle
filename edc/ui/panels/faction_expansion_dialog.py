@@ -30,7 +30,7 @@ from PyQt6.QtCore import Qt, QObject, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QPainter, QPen
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QDialog, QFrame, QSizePolicy,
+    QDialog, QFrame, QSizePolicy, QTabWidget,
 )
 
 from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, PRIMARY_BUTTON_STYLE as _BTN_STYLE
@@ -39,6 +39,7 @@ from edc.core.edsm_faction_lookup import fetch_system_factions, ERROR_BLOCKED, E
 from edc.core.expansion_forecast import (
     expansion_endings, is_expanding as _is_expanding, parse_states as _parse_states,
 )
+from edc.ui.panels.expansion_forecast_panel import ExpansionForecastPanel
 from edc.ui.panels.powerplay_system_status_panel import _is_decay_risk, _prediction_color
 
 log = logging.getLogger("edc.faction_expansion")
@@ -221,7 +222,11 @@ class FactionExpansionDialog(QDialog):
         self.setWindowTitle("Faction Expansion Tracker")
         self.resize(760, 640)
 
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        self._tabs = QTabWidget()
+        outer.addWidget(self._tabs)
+        target_page = QWidget()
+        layout = QVBoxLayout(target_page)
 
         pin_row = QHBoxLayout()
         self._system_edit = QLineEdit()
@@ -349,6 +354,10 @@ class FactionExpansionDialog(QDialog):
         ref.setWordWrap(True)
         ref.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none; padding-top:4px;")
         layout.addWidget(ref)
+
+        self._tabs.addTab(target_page, "Target system")
+        self._forecast = ExpansionForecastPanel(panel)
+        self._tabs.addTab(self._forecast, "Forecast")
 
         self._load_pinned()
 
