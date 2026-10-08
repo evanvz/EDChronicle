@@ -23,7 +23,7 @@ A backtest against EDSM showed the prediction limit: Arimavante (10.9 ly from Ek
 ## Constraints
 
 - No full minor-faction datastore: only a small cache of the shortlisted candidates.
-- "Has the faction been there before" uses only the app's own history. Squadron-faction rows in `faction_snapshots` are never pruned (`save_faction_snapshot` keeps `is_squadron_faction = 1` rows), so history goes back as far as the app has tracked; anything earlier is unknown.
+- "Has the faction been there before" uses only the app's own history. `save_faction_snapshot` prunes a system/faction's rows older than 30 days each time a new snapshot for that same system and faction is saved (journal rows flagged `is_squadron_faction = 1` are kept). So while the faction is present its rows roll over, but once it has left a system no new snapshots arrive and its last rows stay. History therefore goes back to when tracking began (2026-07-30 in this database); anything earlier is unknown.
 - Network lookups and the cube query (about 4 s on the real DB) run off the UI thread. SQLite connections are per thread, and QThreads stay referenced for their lifetime.
 - The faction is never hard-coded: it is the squadron faction from `Repository.get_squadron_faction_name()`.
 
@@ -96,7 +96,7 @@ Forecast tab, top to bottom:
 
 ### 4. New-system alert
 
-Detection, pure function in `expansion_forecast.py`: a system whose earliest squadron-faction snapshot is within the last 3 days and has no earlier snapshot = "new system". Paired with an expansion ending (the existing `faction_expansion_dialog.expansion_endings()` logic, moved to `expansion_forecast.py` and imported back so there is one copy) within ±1 day in another faction system → "likely expansion from X".
+Detection, pure function in `expansion_forecast.py`: a system whose earliest squadron-faction snapshot is within the last 3 days, with influence above 0 and at most 20% = "new system". The 20% cap keeps a long-held system that the app only just fetched for the first time (e.g. an import) from showing as new; a faction arriving by expansion starts small (9.1% in YF-W). It is a heuristic, not a game rule. Paired with an expansion ending (the existing `faction_expansion_dialog.expansion_endings()` logic, moved to `expansion_forecast.py` and imported back so there is one copy) within ±1 day in another faction system → "likely expansion from X".
 
 Shown for 3 days as:
 - a line on the Overview, e.g. `🆕 Elite United Worlds entered Tucanae Sector YF-W b2-2 (9.1%) — likely expansion from Ekono`;
