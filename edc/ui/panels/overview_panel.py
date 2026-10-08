@@ -396,6 +396,17 @@ class OverviewPanel(QWidget):
         )
         layout.addWidget(self.squadron_faction_badge)
 
+        # ── New faction system alert (Expansion Forecast) ───────────────────
+        self.new_system_badge = QLabel("")
+        self.new_system_badge.setTextFormat(Qt.TextFormat.PlainText)
+        self.new_system_badge.setWordWrap(True)
+        self.new_system_badge.setVisible(False)
+        self.new_system_badge.setStyleSheet(
+            "QLabel { background: #0d2a1a; border: 1px solid #1a5a3a;"
+            "border-radius: 6px; padding: 6px 10px; color: #6BCB77; }"
+        )
+        layout.addWidget(self.new_system_badge)
+
         # ── CMDR rank badge ──────────────────────────────────────────────────
         self.rank_badge = QLabel("")
         self.rank_badge.setTextFormat(Qt.TextFormat.RichText)
@@ -520,6 +531,11 @@ class OverviewPanel(QWidget):
         or "" to hide. Plain text -- faction names are never parsed as HTML."""
         self.bgs_task_badge.setText(text)
         self.bgs_task_badge.setVisible(bool(text))
+
+    def set_new_system_alert(self, text: str) -> None:
+        """Expansion Forecast's new-system line (plain text; empty hides it)."""
+        self.new_system_badge.setText(text)
+        self.new_system_badge.setVisible(bool(text))
 
     # ── Engineering wishlist alert ─────────────────────────────────────────────
     def set_engineering_alert(self, materials: list) -> None:

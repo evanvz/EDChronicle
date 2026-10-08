@@ -101,3 +101,41 @@ def test_lookup_finished_after_source_changed_still_saves(tmp_path):
     rows = [{"system_name": "X", "system_address": 5, "distance_ly": 3.0, "faction_count": 4, "faction_present": False}]
     w._on_lookup_finished({"rows": rows, "candidates": 1, "unknown_population": 0}, None)
     assert [c["system_name"] for c in repo.get_expansion_candidates(1)] == ["X"]
+
+
+def test_overview_alert_label():
+    QApplication.instance() or QApplication([])
+    from edc.ui.panels.overview_panel import OverviewPanel
+    ov = OverviewPanel()
+    ov.set_new_system_alert("🆕 EUW entered <b>X</b> (9.1%)")
+    assert ov.new_system_badge.text() == "🆕 EUW entered <b>X</b> (9.1%)" and not ov.new_system_badge.isHidden()
+    ov.set_new_system_alert("")
+    assert ov.new_system_badge.isHidden()
+
+
+def test_main_window_alert_uses_detection(tmp_path):
+    from edc.ui.main_window import MainWindow
+    repo = _repo(tmp_path)
+    today = date.today().isoformat()
+    repo.db.execute("INSERT INTO systems (system_address, system_name) VALUES (2, 'Tucanae Sector YF-W b2-2')")
+    repo.save_faction_snapshot(2, {"Name": EUW, "Influence": 0.091}, today, False, f"{today}T16:59:55Z", "eddn")
+    shown = []
+    fake = SimpleNamespace(repo=repo, overview_panel=SimpleNamespace(set_new_system_alert=shown.append),
+                           player_faction_panel=SimpleNamespace(_faction_name=EUW))
+    MainWindow._refresh_new_system_alert(fake)
+    assert shown == ["🆕 Elite United Worlds entered Tucanae Sector YF-W b2-2 (9.1%)"]
+    fake.player_faction_panel._faction_name = None
+    MainWindow._refresh_new_system_alert(fake)
+    assert shown[-1] == ""
+
+
+def test_session_report_shows_new_system_escaped(tmp_path):
+    QApplication.instance() or QApplication([])
+    from edc.ui.panels.session_activity_dialog import SessionActivityDialog
+    repo = _repo(tmp_path)
+    today = date.today().isoformat()
+    repo.db.execute("INSERT INTO systems (system_address, system_name) VALUES (2, 'A <i>b</i>')")
+    repo.save_faction_snapshot(2, {"Name": EUW, "Influence": 0.05}, today, False, f"{today}T10:00:00Z", "eddn")
+    dlg = SessionActivityDialog(SimpleNamespace(_repo=repo, _faction_name=EUW, _latest_known_tick=None))
+    dlg.refresh()
+    assert "A &lt;i&gt;b&lt;/i&gt;" in dlg._new_label.text() and not dlg._new_label.isHidden()

@@ -88,6 +88,7 @@ from edc.core.bgs_tasks import (
     powerplay_mode, pp_watch,
 )
 from edc.core.bgs_tick import fetch_latest_tick
+from edc.core.expansion_forecast import alert_text, detect_new_systems
 from edc.ui.panels.engineering_panel import EngineeringPanel
 from edc.ui.panels.powerplay_watch_panel import PowerPlayWatchPanel
 from edc.audio.handlers.engineering import EngineeringPhrases
@@ -3983,6 +3984,7 @@ class MainWindow(QMainWindow):
             self._load_backpack_inventory()
             self._refresh_engineering()
             self._refresh_bgs_task_hint()
+            self._refresh_new_system_alert()
             # The startup Canonn fetch ran before the replay set the
             # commander name (nearest-challenge needs it) -- fetch again now.
             self._maybe_start_canonn_refresh()
@@ -6352,6 +6354,7 @@ class MainWindow(QMainWindow):
         # Hint first: it links tasks to the system just arrived in, so the
         # BGS Tasks window's refresh below already sees the link.
         self._refresh_bgs_task_hint()
+        self._refresh_new_system_alert()
         try:
             self.player_faction_panel.notify_bgs_activity()
         except Exception:
@@ -6384,6 +6387,19 @@ class MainWindow(QMainWindow):
             except Exception:
                 log.exception("Failed to build BGS task hint")
         self.overview_panel.set_bgs_task_hint(text)
+
+    def _refresh_new_system_alert(self) -> None:
+        """Overview line when the squadron faction appeared in a new system
+        in the last 3 days (Expansion Forecast spec, section 4)."""
+        text = ""
+        faction = getattr(self.player_faction_panel, "_faction_name", None)
+        if faction:
+            try:
+                new = detect_new_systems(self.repo, faction)
+                text = alert_text(faction, new[0]) if new else ""
+            except Exception:
+                log.exception("Failed to check for new faction systems")
+        self.overview_panel.set_new_system_alert(text)
 
     def _on_wal_checkpoint_tick(self) -> None:
         """See _WalCheckpointWorker for why this is split off the 45s

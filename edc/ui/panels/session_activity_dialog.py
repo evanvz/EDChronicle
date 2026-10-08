@@ -28,6 +28,7 @@ from PyQt6.QtWidgets import (
 from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE
 from edc.ui import formatting as fmt
 from edc.core.bgs_tasks import CP_NOTE, cp_text, powerplay_week_start, pp_watch, undermining_alerts
+from edc.core.expansion_forecast import alert_text, detect_new_systems
 
 log = logging.getLogger("edc.session_activity")
 
@@ -80,6 +81,13 @@ class SessionActivityDialog(QDialog):
         self._pp_label.setToolTip(CP_NOTE)
         self._pp_label.setStyleSheet("background:transparent; border:none; font-size:12px;")
         layout.addWidget(self._pp_label)
+
+        self._new_label = QLabel("")
+        self._new_label.setTextFormat(Qt.TextFormat.RichText)
+        self._new_label.setWordWrap(True)
+        self._new_label.setStyleSheet("background:transparent; border:none; color:#6BCB77; font-size:12px;")
+        self._new_label.setVisible(False)
+        layout.addWidget(self._new_label)
 
         # ── Scroll area of per-system cards -- same pattern combat_panel.py/
         # exploration_panel.py/etc already use, rather than a single plain-
@@ -134,6 +142,14 @@ class SessionActivityDialog(QDialog):
             log.exception("Failed to load session activity report")
             report = {}
         self._render_pp_totals(since)
+        faction = getattr(self._panel, "_faction_name", None)
+        try:
+            new = detect_new_systems(self._panel._repo, faction) if faction else []
+        except Exception:
+            log.exception("Failed to check for new faction systems")
+            new = []
+        self._new_label.setText("<br>".join(html.escape(alert_text(faction, n)) for n in new))
+        self._new_label.setVisible(bool(new))
         try:
             merits = self._panel._repo.get_session_merits(since)
         except Exception:

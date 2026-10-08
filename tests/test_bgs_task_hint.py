@@ -80,11 +80,12 @@ def test_notify_pushes_panel_and_hint():
     fake_self = SimpleNamespace(
         player_faction_panel=SimpleNamespace(notify_bgs_activity=lambda: calls.append("panel")),
         _refresh_bgs_task_hint=lambda: calls.append("hint"),
+        _refresh_new_system_alert=lambda: calls.append("alert"),
     )
     MainWindow._notify_bgs_activity(fake_self)
     # Hint first: it links tasks to the system just arrived in, so the
     # window's refresh right after already sees the link.
-    assert calls == ["hint", "panel"]
+    assert calls == ["hint", "alert", "panel"]
 
 
 def _dispatch_fake_self(replaying):
