@@ -110,6 +110,7 @@ Notable files:
 - `inara_faction_csv.py` — parses Inara's faction-presence CSV export format
 - `bgs_conflicts.py` — squadron-aligned faction lookup, finds who it's at active war with in the current system, and backs BGS activity attribution (bounty/trade crediting)
 - `bgs_tasks.py` — Pure logic for the BGS Tasks tracker (Boost/Hinder/Vote/Fight/PowerPlay/Note) — per-task progress/status from the session activity tables, `net.system_bgs_status` (including elections), `faction_snapshots` and `systems.pp_*`. PowerPlay tasks use the stated `pp_mode` or `detect_powerplay_mode()` (journal reading, else the EDSM daily dump), with BGS-safe actions listed first from `settings/powerplay_activities.json`'s `bgs` tags. Also owns the PowerPlay allies helpers (`allied_powers()`, `is_rival_power()`; ZYADA by default) used by the event engine, callouts and trade filters. Boost limits are squadron guidance from Settings; squad-only advice is labelled as unconfirmed. PowerPlay helpers: `supporting_systems()` (Fortified ≤20 ly / Stronghold ≤30 ly of an Acquisition target), `commodity_info()` (job commodity, wrong-source warning, next load from the one shared allocation timer), `pp_watch()` (watched systems: PowerPlay tasks, Acquisition supporting systems, squad systems the pledged power holds — rebuilt dynamically), `watch_rows()` / `undermining_alerts()` (current-cycle readings only, via `_cycle_reading()`), and `cp_text()` (≈ control points = merits ÷ 4, an estimate)
+- `expansion_forecast.py` — Expansion Forecast rules: watched systems (≥70%), likely source (≥75% for a day), ±30 ly per axis, tier ranking (fewer than 7 factions / faction there before / 7 factions), new-system detection (first seen within 3 days, ≤20%), and the expansion-ending detection shared with the Faction Expansion Tracker; a source is the nearest expansion ending with a tax (≥5-point influence drop) within ±30 ly per axis and ±1 day. Overview alert refreshed at most every 10 minutes.
 - `ship_loadout.py` — classifies current ship hardpoints as armed/unarmed from `Loadout` events
 - `faction_refresh_tracker.py` — persists the last full-EDSM-refresh timestamp for the Player Faction tab's 24h auto-refresh gate
 - `rank_names.py` — Rank/Progress category index → real rank name tables (Elite I-V aware), verified against the community Journal Manual
@@ -191,6 +192,7 @@ Notable files:
 - `fleet_carrier_panel.py`
 - `player_faction_panel.py`
 - `faction_expansion_dialog.py` — Faction Expansion Tracker: one target system's push toward the 75% BGS expansion threshold (influence trend, live PowerPlay standing, mission tally)
+- `expansion_forecast_panel.py` — Faction Expansion Tracker's Forecast tab; `_ForecastWorker` runs the cube query and EDSM lookups on its own DB connection
 - `session_activity_dialog.py` — Session BGS Activity Report: whole-session, all-faction mission/combat/CZ/trade activity grouped by day, since the last detected BGS tick; a header row with PowerPlay merits since the tick and this week (≈CP), lifetime total and rank, plus a warning for any watched system whose undermining grew since the tick and leads reinforcement
 - `bgs_tasks_dialog.py` — BGS Tasks window (from the Player Faction panel) — add/remove/reorder tasks, live progress cards; the current system's task(s) also show as a line on the Overview HUD
 - `squadron_panel.py`
@@ -229,6 +231,7 @@ Notable files:
 | `powerplay_merits` | One row per `PowerplayMerits` journal event, credited to the system the player was in — merits per system per BGS tick and per PowerPlay week (week starts Thursday ~07:00 UTC) |
 | `pp_progress_history` | Each change in a power's acquisition progress per system (journal jumps incl. a startup backfill of all journals, plus EDDN for PowerPlay task systems) — the card's trend chip and merits-between-readings data |
 | `pp_control_history` | Each change in a controlled system's reinforcement/undermining control points this cycle (journal + EDDN for watched systems) — the Watch List, the card chip and the session-report undermining warning |
+| `expansion_candidates` | EDSM faction counts for the nearest 10 candidate systems of the likely expansion source, refreshed at most once a day |
 | `faction_cz_kills` | One row per confirmed conflict-zone kill (ground/space, size), for the Session BGS Activity Report |
 | `faction_trade_sold` | One row per commodity/exploration/exobiology sale, credited to the docked station's owning faction (fleet carriers skipped); commodity value is profit, for the Session BGS Activity Report |
 | `station_info` | Landing pad counts, station services, and (for Fleet Carriers) self-reported docking access — from `Docked` events, yours and every commander's via EDDN |
