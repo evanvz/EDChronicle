@@ -102,3 +102,24 @@ def test_new_system_rules_out_old_large_and_zero():
     lone = ef.new_systems([_p(4, "No source", 0.05, "2026-10-08", "2026-10-08")], [], TODAY)
     assert lone[0]["source"] is None
     assert ef.alert_text("EUW", lone[0]) == "🆕 EUW entered No source (5.0%)"
+
+
+def test_detect_new_systems_ignores_zero_drop_endings():
+    from types import SimpleNamespace
+
+    def hist(drop):                                   # newest first, as the repository returns it
+        return [{"snapshot_date": "2026-10-07", "influence": 0.68 - drop, "recovering_states": R},
+                {"snapshot_date": "2026-10-06", "influence": 0.68, "recovering_states": None}]
+    coords = {"Ekono": (59.125, -155.15625, 99.8125),
+              "Tucanae Sector YF-W b2-2": (39.46875, -163.9375, 117.96875),
+              "YF-W b2-3": (36.0, -160.0, 115.0)}
+    repo = SimpleNamespace(
+        get_squadron_presence=lambda f: [
+            _p(2, "Tucanae Sector YF-W b2-2", 0.09, "2026-10-07", "2026-10-07"),
+            _p(1, "Ekono", 0.57, "2026-09-08", "2026-10-07"),
+            _p(3, "YF-W b2-3", 0.576, "2026-09-08", "2026-10-07")],
+        get_faction_history=lambda addr, f: {1: hist(0.111), 3: hist(0.0)}.get(addr, []),
+        get_system_coords_for_names=lambda names: {n: coords[n] for n in names if n in coords})
+    out = ef.detect_new_systems(repo, "EUW", TODAY)
+    assert [(o["system_name"], o["source"]) for o in out] == [("Tucanae Sector YF-W b2-2", "Ekono")]
+

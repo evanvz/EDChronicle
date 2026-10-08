@@ -37,7 +37,7 @@ from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, PRI
 from edc.ui import formatting as fmt
 from edc.core.edsm_faction_lookup import fetch_system_factions, ERROR_BLOCKED, ERROR_NOT_FOUND
 from edc.core.expansion_forecast import (
-    expansion_endings, is_expanding as _is_expanding, parse_states as _parse_states,
+    EXPANSION_TAX_MIN, expansion_endings, is_expanding as _is_expanding, parse_states as _parse_states,
 )
 from edc.ui.panels.expansion_forecast_panel import ExpansionForecastPanel
 from edc.ui.panels.powerplay_system_status_panel import _is_decay_risk, _prediction_color
@@ -139,7 +139,7 @@ class _InfluenceTrendWidget(QWidget):
                 p.setPen(QPen(QColor("#FFB347"), 1, Qt.PenStyle.DotLine))
                 p.drawLine(x, pad_t, x, h - pad_b)
                 p.setPen(QColor("#FFB347"))
-                label = f"expansion tax {delta:+.1f}" if delta <= -5 else "expansion ended"
+                label = f"expansion tax {delta:+.1f}" if delta <= -EXPANSION_TAX_MIN else "expansion ended"
                 tw = p.fontMetrics().horizontalAdvance(label)
                 p.drawText(min(x + 3, w - pad_r - tw), h - pad_b + 14, label)
 
@@ -546,7 +546,7 @@ class FactionExpansionDialog(QDialog):
             _i, date, delta = endings[-1]
             tax = (f"influence here changed {delta:+.1f} pts — that's the expansion tax: a finished "
                    "expansion costs the home system about 15% (SINC BGS Guide 2024), so this drop is expected. "
-                   if delta <= -5 else
+                   if delta <= -EXPANSION_TAX_MIN else
                    f"influence here changed {delta:+.1f} pts, so no expansion tax was taken this time. ")
             self._expansion_banner.setText(
                 f"✅ EXPANSION ENDED ({date}) — {tax}"

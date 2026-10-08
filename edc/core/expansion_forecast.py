@@ -20,6 +20,9 @@ NEW_SYSTEM_DAYS = 3
 NEW_SYSTEM_MAX_INFLUENCE = 0.20   # heuristic: an expansion arrives small (YF-W 9.1%)
 CURRENT_DAYS = 14                 # a presence older than this is treated as "left"
 CACHE_MAX_AGE_H = 24
+# an ending only counts as a successful expansion source if influence dropped at least this many
+# points (same threshold the Faction Expansion Tracker chart uses for its "expansion tax" label)
+EXPANSION_TAX_MIN = 5.0
 
 
 def parse_states(raw) -> List[str]:
@@ -183,6 +186,7 @@ def detect_new_systems(repo, faction: str, today: Optional[date] = None) -> List
     for r in presence:
         if (r.get("influence") or 0.0) >= 0.5:
             hist = list(reversed(repo.get_faction_history(r["system_address"], faction)))
-            endings += [(r["system_name"], d) for _i, d, _delta in expansion_endings(hist)]
+            endings += [(r["system_name"], d) for _i, d, delta in expansion_endings(hist)
+                        if delta <= -EXPANSION_TAX_MIN]
     names = {r["system_name"] for r in presence} | {n for n, _d in endings}
     return new_systems(presence, endings, today, coords=repo.get_system_coords_for_names(sorted(names)))
