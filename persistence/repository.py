@@ -2764,6 +2764,63 @@ class Repository:
         self.db.conn.execute("DELETE FROM colonisation_depots WHERE id = ?", (depot_id,))
         self.db.conn.commit()
 
+    def get_squadron_presence(self, faction: str) -> list[dict]:
+        """One row per system the faction has a snapshot for: first and last
+        snapshot date plus the latest snapshot's influence and states. A
+        system it left keeps its last rows (pruning only runs on a new save
+        for that system/faction), so "been there before" survives."""
+        rows = self.db.conn.execute(
+            """
+            WITH g AS (
+                SELECT system_address, MIN(snapshot_date) AS first_seen, MAX(snapshot_date) AS last_seen
+                FROM faction_snapshots WHERE faction_name = ? GROUP BY system_address
+            )
+            SELECT g.system_address, s.system_name, g.first_seen, g.last_seen, fs.influence,
+                   fs.faction_state, fs.active_states, fs.pending_states, fs.recovering_states
+            FROM g
+            JOIN faction_snapshots fs ON fs.system_address = g.system_address
+                 AND fs.faction_name = ? AND fs.snapshot_date = g.last_seen
+            LEFT JOIN systems s ON s.system_address = g.system_address
+            """,
+            (faction, faction),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_cube_systems(self, x: float, y: float, z: float, half: float) -> list[dict]:
+        """Systems inside the cube (each axis within `half` ly), with EDDN
+        population where known. Slow on the real DB (~4 s): call from a
+        worker thread with its own connection."""
+        rows = self.db.conn.execute(
+            """
+            SELECT c.system_name, c.x, c.y, c.z, b.system_address, b.population
+            FROM system_coords c
+            LEFT JOIN net.system_bgs_status b ON b.system_name = c.system_name
+            WHERE c.x BETWEEN ? AND ? AND c.y BETWEEN ? AND ? AND c.z BETWEEN ? AND ?
+            """,
+            (x - half, x + half, y - half, y + half, z - half, z + half),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def save_expansion_candidates(self, source_address: int, rows: list[dict], fetched_at: str) -> None:
+        """Replaces the cached candidates for one source system."""
+        with self.db.deferred_commit():
+            self.db.execute("DELETE FROM expansion_candidates WHERE source_address = ?", (source_address,))
+            for r in rows:
+                self.db.execute(
+                    "INSERT OR REPLACE INTO expansion_candidates (source_address, system_address, system_name, "
+                    "distance_ly, faction_count, faction_present, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (source_address, r.get("system_address"), r["system_name"], r.get("distance_ly"),
+                     r.get("faction_count"), 1 if r.get("faction_present") else 0, fetched_at),
+                )
+
+    def get_expansion_candidates(self, source_address: int) -> list[dict]:
+        rows = self.db.conn.execute(
+            "SELECT system_name, system_address, distance_ly, faction_count, faction_present, fetched_at "
+            "FROM expansion_candidates WHERE source_address = ? ORDER BY distance_ly",
+            (source_address,),
+        ).fetchall()
+        return [dict(r, faction_present=bool(r["faction_present"])) for r in rows]
+
     def get_faction_history(self, system_address: int, faction_name: Optional[str] = None) -> list[dict]:
         query = """
             SELECT faction_name, snapshot_date, influence, government, allegiance,

@@ -428,6 +428,18 @@ class Database:
                 source         TEXT,
                 PRIMARY KEY (system_address, observed_at)
             )""",
+            # Expansion Forecast: EDSM faction counts for the nearest
+            # candidate systems of the likely expansion source (a few dozen rows).
+            """CREATE TABLE IF NOT EXISTS expansion_candidates (
+                source_address  INTEGER NOT NULL,
+                system_address  INTEGER,
+                system_name     TEXT    NOT NULL,
+                distance_ly     REAL,
+                faction_count   INTEGER,
+                faction_present INTEGER,
+                fetched_at      TEXT    NOT NULL,
+                PRIMARY KEY (source_address, system_name)
+            )""",
         ]
         cache_migrations = [
             "ALTER TABLE net.spansh_bodies ADD COLUMN surface_gravity REAL",
