@@ -20,6 +20,7 @@ import logging
 import queue
 import time
 import urllib.request
+import hashlib
 import zipfile
 from pathlib import Path
 
@@ -55,6 +56,9 @@ _DEFAULT_NAV_TRIGGER_WORD = "hud"
 # ── Vosk model ────────────────────────────────────────────────────────────────
 
 MODEL_URL      = "https://alphacephei.com/vosk/models/vosk-model-en-us-0.22-lgraph.zip"
+# SHA-256 of that zip (130,557,655 bytes, unchanged since 2021-11-23); checked 2026-10-08 against an
+# earlier independent download -- alphacephei publishes no checksum. A mismatch aborts the install.
+MODEL_SHA256   = "d9838b4aaa82a75c4a17f5aca300eaca129aaab2a7cbf951bafbb500eb9c4334"
 MODEL_DIR_NAME = "vosk"
 
 _POST_ACTION_BLACKOUT = 0.4  # command matching needs the trigger word, so TTS
@@ -122,6 +126,14 @@ def ensure_model(models_dir: Path) -> Path | None:
     try:
         models_dir.mkdir(parents=True, exist_ok=True)
         urllib.request.urlretrieve(MODEL_URL, zip_path)
+        digest = hashlib.sha256()
+        with open(zip_path, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                digest.update(chunk)
+        if digest.hexdigest() != MODEL_SHA256:
+            zip_path.unlink(missing_ok=True)
+            log.error("vosk model download failed its checksum -- not installed")
+            return None
         with zipfile.ZipFile(zip_path, "r") as zf:
             top_dirs = {Path(name).parts[0] for name in zf.namelist()}
             zf.extractall(models_dir)

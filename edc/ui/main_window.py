@@ -6499,8 +6499,10 @@ class MainWindow(QMainWindow):
 
     def _show_galnet_headline(self) -> None:
         title, url = self._galnet_headlines[self._galnet_headline_index]
-        if url:
-            self._galnet_label.setText(f'📰 <a href="{url}" style="color:#FFB347; text-decoration:none;">{title}</a>')
+        title = html.escape(title or "")
+        if url and url.startswith("https://"):   # only web links; the label opens them in the browser
+            self._galnet_label.setText(
+                f'📰 <a href="{html.escape(url)}" style="color:#FFB347; text-decoration:none;">{title}</a>')
         else:
             self._galnet_label.setText(f"📰 {title}")
         self._galnet_label.setToolTip(title)

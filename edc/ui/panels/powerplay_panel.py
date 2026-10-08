@@ -2,6 +2,7 @@
 # Licensed under the PolyForm Noncommercial License 1.0.0.
 # See the LICENSE file in the project root for full terms.
 
+import html
 import logging
 from PyQt6.QtWidgets import (
     QWidget,
@@ -527,7 +528,7 @@ class PowerplayPanel(QWidget):
                 }
                 bgs_action, bgs_color = derive_bgs_action(sys_rec)
                 self.bgs_summary.setText(
-                    f"<b>{controlling_faction_name}</b> (controlling)<br>"
+                    f"<b>{html.escape(controlling_faction_name)}</b> (controlling)<br>"
                     f'<span style="color:{bgs_color};">{bgs_action}</span>'
                 )
         except Exception:

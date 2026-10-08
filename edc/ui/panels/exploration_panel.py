@@ -266,7 +266,9 @@ class ExplorationPanel(QWidget):
         rating_txt = f", rating {rating:.1f}" if isinstance(rating, (int, float)) else ""
         dist = poi.get("distance_ly")
         dist_txt = f"{dist:.1f} ly" if isinstance(dist, (int, float)) else "?"
-        url = poi.get("galMapUrl") or poi.get("poiUrl") or ""
+        url = str(poi.get("galMapUrl") or poi.get("poiUrl") or "")
+        if not url.startswith("https://"):   # only web links; the label opens them in the browser
+            url = ""
         summary = escape(poi.get("summary") or "")
 
         name_html = f'<a href="{escape(url)}" style="color:#FFB347;">{name}</a>' if url else name

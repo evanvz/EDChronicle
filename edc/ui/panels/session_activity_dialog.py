@@ -310,7 +310,7 @@ class SessionActivityDialog(QDialog):
                     entry = factions[faction_name]
                     color = self._faction_color(faction_name)
                     row = QLabel(
-                        f'<span style="color:{color}; font-weight:700;">[{faction_name}]</span> '
+                        f'<span style="color:{color}; font-weight:700;">[{html.escape(faction_name)}]</span> '
                         f'{self._format_chips(entry)}'
                     )
                     row.setTextFormat(Qt.TextFormat.RichText)

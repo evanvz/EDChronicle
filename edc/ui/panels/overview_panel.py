@@ -551,8 +551,8 @@ class OverviewPanel(QWidget):
             except (TypeError, ValueError):
                 dist_txt = ""
             lines.append(
-                f'<b>Nearest unclaimed codex:</b> {challenge["english_name"]} '
-                f'in {challenge["system"]}' + (f' ({dist_txt})' if dist_txt else '')
+                f'<b>Nearest unclaimed codex:</b> {self._esc(challenge["english_name"])} '
+                f'in {self._esc(challenge["system"])}' + (f' ({dist_txt})' if dist_txt else '')
             )
 
         if poi is not None:
@@ -586,7 +586,7 @@ class OverviewPanel(QWidget):
                 names = ", ".join(parts)
                 if len(grouped) > len(shown):
                     names += f" +{len(grouped) - len(shown)} more types"
-                lines.append(f'<b>Unclaimed codex here:</b> {names}')
+                lines.append(f'<b>Unclaimed codex here:</b> {self._esc(names)}')
 
         if not lines:
             self.canonn_intel.setVisible(False)
@@ -831,7 +831,7 @@ class OverviewPanel(QWidget):
 
         status = "controls this system" if controlling else "present, not controlling"
         self.squadron_faction_badge.setText(
-            f"🎖 <b>{name}</b> (your squadron faction) {status} — influence {infl_txt}"
+            f"🎖 <b>{self._esc(name)}</b> (your squadron faction) {status} — influence {infl_txt}"
         )
         self.squadron_faction_badge.setVisible(True)
 

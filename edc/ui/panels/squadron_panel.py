@@ -11,6 +11,7 @@ moved to their own Colonisation tab.
 """
 from __future__ import annotations
 
+import html
 import logging
 import time
 
@@ -124,7 +125,7 @@ class SquadronPanel(QWidget):
 
         rank_txt = f"Rank {rank}" if rank is not None else "Rank unknown"
         trophy_word = "trophy" if trophies == 1 else "trophies"
-        lines = [f"<b>{name}</b> — {rank_txt} — {trophies} {trophy_word} won"]
+        lines = [f"<b>{html.escape(str(name))}</b> — {rank_txt} — {trophies} {trophy_word} won"]
         if status:
             lines.append(f"Last status: {status} ({status_ts or 'unknown date'})")
         self._status_label.setText("<br>".join(lines))
