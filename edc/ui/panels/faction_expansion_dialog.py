@@ -21,7 +21,6 @@ misrepresent when expansion actually triggers.
 """
 from __future__ import annotations
 
-import json
 import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -37,7 +36,7 @@ from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, PRI
 from edc.ui import formatting as fmt
 from edc.core.edsm_faction_lookup import fetch_system_factions, ERROR_BLOCKED, ERROR_NOT_FOUND
 from edc.core.expansion_forecast import (
-    EXPANSION_TAX_MIN, expansion_endings, is_expanding as _is_expanding, parse_states as _parse_states,
+    EXPANSION_TAX_MIN, expansion_endings, is_expanding as _is_expanding,
 )
 from edc.ui.panels.expansion_forecast_panel import ExpansionForecastPanel
 from edc.ui.panels.powerplay_system_status_panel import _is_decay_risk, _prediction_color

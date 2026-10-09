@@ -33,13 +33,17 @@ _DIM = "color:#888888; font-size:11px; background:transparent; border:none;"
 
 class _ForecastWorker(QObject):
     """Cube query (slow) + EDSM lookups for the nearest candidates, on its
-    own DB connection. Emits ({"rows", "candidates", "unknown_population"}, None)
-    or (None, error text)."""
+    own DB connection. Emits ({"rows", "candidates", "unknown_population",
+    "failed"}, None) or (None, error text); (None, "cancelled") after cancel()."""
     finished = pyqtSignal(object, object)
 
     def __init__(self, db_path, source: dict, exclude_names: set, faction: str):
         super().__init__()
         self._db_path, self._source, self._exclude, self._faction = db_path, source, exclude_names, faction
+        self._cancelled = False
+
+    def cancel(self) -> None:
+        self._cancelled = True
 
     def run(self):
         from persistence.database import Database
@@ -69,16 +73,23 @@ class _ForecastWorker(QObject):
                 populated.append({"system_name": s["system_name"], "system_address": s["system_address"],
                                   "distance_ly": dist})
         populated.sort(key=lambda c: c["distance_ly"])
-        rows = []
+        rows, failed = [], 0
         for c in populated[:LOOKUP_COUNT]:
+            if self._cancelled:
+                self.finished.emit(None, "cancelled")
+                return
             result, _err = fetch_system_factions(c["system_name"])
             if not result:
+                failed += 1
                 rows.append({**c, "faction_count": None, "faction_present": False})
                 continue
             names = [f.get("Name") for f in result.get("factions") or [] if (f.get("Influence") or 0) > 0]
             rows.append({**c, "system_address": result.get("system_address") or c["system_address"],
                          "faction_count": len(names), "faction_present": self._faction in names})
-        self.finished.emit({"rows": rows, "candidates": len(populated), "unknown_population": unknown}, None)
+        if failed:
+            log.warning("Expansion forecast: %d of %d EDSM lookups failed", failed, len(rows))
+        self.finished.emit({"rows": rows, "candidates": len(populated), "unknown_population": unknown,
+                            "failed": failed}, None)
 
 
 def _table(headers):
@@ -235,8 +246,14 @@ class ExpansionForecastPanel(QWidget):
             return False
         return datetime.now(timezone.utc) - fetched < timedelta(hours=CACHE_MAX_AGE_H)
 
+    def _lookup_running(self) -> bool:
+        try:
+            return self._thread.isRunning()
+        except RuntimeError:  # thread already deleteLater'd
+            return False
+
     def _start_lookup(self, force: bool) -> None:
-        if not self._source or (self._thread is not None and self._thread.isRunning()):
+        if not self._source or (self._thread is not None and self._lookup_running()):
             return
         if not force and self._cache_fresh():
             return
@@ -255,6 +272,7 @@ class ExpansionForecastPanel(QWidget):
         self._worker.finished.connect(self._on_lookup_finished)
         self._worker.finished.connect(self._thread.quit)
         self._thread.finished.connect(self._worker.deleteLater)
+        self._thread.finished.connect(self._thread.deleteLater)
         self._thread.start()
 
     def _on_lookup_finished(self, result, error) -> None:
@@ -262,15 +280,36 @@ class ExpansionForecastPanel(QWidget):
         if not result:
             self._target_status.setText(f"Lookup failed ({error}) — showing the last cached data.")
             return
-        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        try:
-            self._panel._repo.save_expansion_candidates(address, result["rows"], now)
-        except Exception:
-            log.exception("Failed to save expansion candidates")
+        rows = result["rows"]
+        repo = self._panel._repo
+        old = repo.get_expansion_candidates(address) if address is not None else []
+        if rows:
+            fresh = any(r["faction_count"] is not None for r in rows)
+            old_by_name = {c["system_name"]: c for c in old}
+            for r in rows:
+                prev = old_by_name.get(r["system_name"])
+                if r["faction_count"] is None and prev and prev["faction_count"] is not None:
+                    r["faction_count"], r["faction_present"] = prev["faction_count"], prev["faction_present"]
+            if not fresh:
+                when = old[0]["fetched_at"][:16].replace("T", " ") if old else None
+                self._target_status.setText(f"Lookup failed — showing data from {when} UTC" if when
+                                            else "Lookup failed — EDSM not reachable")
+                return
+            looked = sum(1 for r in rows if r["faction_count"] is not None)
+            now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            try:
+                repo.save_expansion_candidates(address, rows, now)
+            except Exception:
+                log.exception("Failed to save expansion candidates")
         if address is None or not self._source or self._source["system_address"] != address:
             return
+        if not rows:
+            self._target_status.setText("No populated system without the faction within ±20 ly — the game would "
+                                        "search ±30 ly next, or the expansion fails.")
+            return
         skipped = result["unknown_population"]
-        self._render_targets(f" Skipped {skipped} systems with unknown population." if skipped else "")
+        self._render_targets(f" Looked up {looked} of {result['candidates']}."
+                             + (f" Skipped {skipped} systems with unknown population." if skipped else ""))
 
     def _copy_name(self, row: int, _col: int) -> None:
         item = self._target_table.item(row, 2)

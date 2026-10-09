@@ -3891,7 +3891,13 @@ class MainWindow(QMainWindow):
         """
         threads: list = []
         workers: list = []
-        _collect_background_work(obj, depth, seen if seen is not None else set(), threads, workers)
+        seen = seen if seen is not None else set()
+        _collect_background_work(obj, depth, seen, threads, workers)
+        # The Faction Expansion dialog's Forecast tab sits one level below the sweep depth.
+        dlg = getattr(getattr(obj, "player_faction_panel", None), "_faction_expansion_dialog", None)
+        forecast = getattr(dlg, "_forecast", None)
+        if forecast is not None:
+            _collect_background_work(forecast, depth, seen, threads, workers)
         # quit() alone doesn't stop a worker mid-loop (e.g. the Player
         # Faction full EDSM refresh) -- cancel every cancellable worker
         # first, then wait for the threads on one shared deadline. Confirmed

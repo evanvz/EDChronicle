@@ -9,6 +9,8 @@ from persistence.database import Database
 from persistence.repository import Repository
 from persistence.schema import SCHEMA_SQL
 
+_app = QApplication.instance() or QApplication([])  # keep a reference: a dropped QApplication crashes pytest
+
 EUW = "Elite United Worlds"
 
 
@@ -198,3 +200,116 @@ def test_refresh_new_system_alert_fallback_to_squadron_faction(tmp_path):
     # Should have fallen back and found the squadron faction
     assert shown[-1] != ""  # Should have found and displayed the new system
     assert "Elite United Worlds" in shown[-1]  # EUW should be in the text
+
+
+def _cache_row(repo, count=6):
+    repo.save_expansion_candidates(1, [
+        {"system_name": "A", "system_address": 2, "distance_ly": 5.0, "faction_count": count, "faction_present": True},
+        {"system_name": "B", "system_address": 3, "distance_ly": 6.0, "faction_count": 4, "faction_present": False}],
+        "2026-10-01T10:00:00Z")
+
+
+def _panel_with_source(repo):
+    from edc.ui.panels.expansion_forecast_panel import ExpansionForecastPanel
+    QApplication.instance() or QApplication([])
+    w = ExpansionForecastPanel(SimpleNamespace(_repo=repo, _faction_name=EUW))
+    w._source = {"system_address": 1, "system_name": "Ekono", "eligible": True}
+    w._lookup_source = (1, "Ekono")
+    return w
+
+
+def _failed(name, addr, d):
+    return {"system_name": name, "system_address": addr, "distance_ly": d, "faction_count": None,
+            "faction_present": False}
+
+
+def test_all_lookups_failed_keeps_old_cache(tmp_path):
+    repo = _repo(tmp_path)
+    _cache_row(repo)
+    w = _panel_with_source(repo)
+    w._on_lookup_finished({"rows": [_failed("A", 2, 5.0), _failed("B", 3, 6.0)], "candidates": 2,
+                           "unknown_population": 0, "failed": 2}, None)
+    cached = repo.get_expansion_candidates(1)
+    assert [c["faction_count"] for c in cached] == [6, 4]
+    assert {c["fetched_at"] for c in cached} == {"2026-10-01T10:00:00Z"}
+    assert w._target_status.text().startswith("Lookup failed")
+    assert "2026-10-01 10:00" in w._target_status.text()
+
+
+def test_all_lookups_failed_without_cache(tmp_path):
+    repo = _repo(tmp_path)
+    w = _panel_with_source(repo)
+    w._on_lookup_finished({"rows": [_failed("A", 2, 5.0)], "candidates": 1, "unknown_population": 0, "failed": 1}, None)
+    assert repo.get_expansion_candidates(1) == []
+    assert w._target_status.text().startswith("Lookup failed")
+
+
+def test_partial_failure_keeps_old_count_and_saves(tmp_path):
+    repo = _repo(tmp_path)
+    _cache_row(repo)
+    w = _panel_with_source(repo)
+    ok = {"system_name": "A", "system_address": 2, "distance_ly": 5.0, "faction_count": 3, "faction_present": False}
+    w._on_lookup_finished({"rows": [ok, _failed("B", 3, 6.0)], "candidates": 5, "unknown_population": 0,
+                           "failed": 1}, None)
+    by = {c["system_name"]: c for c in repo.get_expansion_candidates(1)}
+    assert by["A"]["faction_count"] == 3
+    assert by["B"]["faction_count"] == 4 and by["B"]["faction_present"] is False
+    assert by["B"]["fetched_at"] != "2026-10-01T10:00:00Z"
+    assert "Looked up 2 of 5" in w._target_status.text()
+
+
+def test_empty_cube_message(tmp_path):
+    repo = _repo(tmp_path)
+    w = _panel_with_source(repo)
+    w._on_lookup_finished({"rows": [], "candidates": 0, "unknown_population": 0, "failed": 0}, None)
+    assert "No populated system without the faction within" in w._target_status.text()
+
+
+def test_worker_cancel_stops_before_lookups(tmp_path, monkeypatch):
+    from edc.ui.panels import expansion_forecast_panel as fp
+    repo = _repo(tmp_path)
+    repo.db.execute("INSERT INTO system_coords (system_name, x, y, z) VALUES ('Near', 1.0, 0.0, 0.0)")
+    repo.db.execute("INSERT INTO net.system_bgs_status (system_address, system_name, population) "
+                    "VALUES (7, 'Near', 100)")
+    calls = []
+    monkeypatch.setattr(fp, "fetch_system_factions", lambda n: calls.append(n) or (None, "x"))
+    out = []
+    worker = fp._ForecastWorker(repo.db.db_path, {"x": 0.0, "y": 0.0, "z": 0.0}, set(), EUW)
+    worker.finished.connect(lambda res, err: out.append((res, err)))
+    worker.cancel()
+    worker.run()
+    assert calls == [] and out == [(None, "cancelled")]
+
+
+def test_worker_counts_failed(tmp_path, monkeypatch):
+    from edc.ui.panels import expansion_forecast_panel as fp
+    repo = _repo(tmp_path)
+    repo.db.execute("INSERT INTO system_coords (system_name, x, y, z) VALUES ('Near', 1.0, 0.0, 0.0)")
+    repo.db.execute("INSERT INTO net.system_bgs_status (system_address, system_name, population) "
+                    "VALUES (7, 'Near', 100)")
+    monkeypatch.setattr(fp, "fetch_system_factions", lambda n: (None, "blocked"))
+    out = []
+    worker = fp._ForecastWorker(repo.db.db_path, {"x": 0.0, "y": 0.0, "z": 0.0}, set(), EUW)
+    worker.finished.connect(lambda res, err: out.append(res))
+    worker.run()
+    assert out[0]["failed"] == 1
+
+
+def test_shutdown_sweep_reaches_forecast_panel():
+    from PyQt6.QtCore import QObject, QThread
+    from edc.ui.main_window import MainWindow
+    QApplication.instance() or QApplication([])
+
+    class W(QObject):
+        cancelled = False
+
+        def cancel(self):
+            self.cancelled = True
+
+    t, wk = QThread(), W()
+    t.start()
+    forecast = SimpleNamespace(_thread=t, _worker=wk)
+    fake = SimpleNamespace(player_faction_panel=SimpleNamespace(
+        _faction_expansion_dialog=SimpleNamespace(_forecast=forecast)))
+    MainWindow._stop_background_threads(fake, fake)
+    assert wk.cancelled and not t.isRunning()

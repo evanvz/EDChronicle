@@ -9,7 +9,7 @@ See docs/superpowers/specs/2026-10-08-expansion-forecast-design.md."""
 from __future__ import annotations
 
 import json
-from datetime import date, timedelta
+from datetime import date
 from typing import Any, Dict, List, Optional
 
 WATCH_THRESHOLD = 0.70
