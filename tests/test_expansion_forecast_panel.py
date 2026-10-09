@@ -313,3 +313,25 @@ def test_shutdown_sweep_reaches_forecast_panel():
         _faction_expansion_dialog=SimpleNamespace(_forecast=forecast)))
     MainWindow._stop_background_threads(fake, fake)
     assert wk.cancelled and not t.isRunning()
+
+
+def test_close_sweep_skips_deleted_thread_and_still_quits_live_one():
+    # A finished lookup leaves a Python wrapper of a deleteLater'd QThread.
+    from PyQt6.QtCore import QCoreApplication, QEvent, QThread
+    from PyQt6.QtWidgets import QWidget
+    from edc.ui.main_window import MainWindow
+    parent = QWidget()
+    dead = QThread(parent)
+    dead.finished.connect(dead.deleteLater)
+    dead.start()
+    dead.quit()
+    dead.wait(2000)
+    QCoreApplication.processEvents()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+    live = QThread()
+    live.start()
+    forecast = SimpleNamespace(_thread=dead, _other_thread=live, _worker=None)
+    fake = SimpleNamespace(player_faction_panel=SimpleNamespace(
+        _faction_expansion_dialog=SimpleNamespace(_forecast=forecast)))
+    MainWindow._stop_background_threads(fake, fake)
+    assert not live.isRunning()

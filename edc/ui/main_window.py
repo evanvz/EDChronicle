@@ -3910,9 +3910,12 @@ class MainWindow(QMainWindow):
                 pass  # C++ object already gone
         deadline = time.monotonic() + _CLOSE_WAIT_SECONDS
         for t in threads:
-            if t.isRunning():
-                t.quit()
-                t.wait(max(0, int((deadline - time.monotonic()) * 1000)))
+            try:
+                if t.isRunning():
+                    t.quit()
+                    t.wait(max(0, int((deadline - time.monotonic()) * 1000)))
+            except RuntimeError:
+                continue  # C++ QThread already deleted (finished -> deleteLater)
 
     def closeEvent(self, event):
         import traceback
