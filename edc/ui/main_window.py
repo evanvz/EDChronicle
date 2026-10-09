@@ -88,7 +88,7 @@ from edc.core.bgs_tasks import (
     powerplay_mode, pp_watch,
 )
 from edc.core.bgs_tick import fetch_latest_tick
-from edc.core.expansion_forecast import alert_text, detect_new_systems
+from edc.core.expansion_forecast import alert_text, detect_new_systems, first_expansion
 from edc.ui.panels.engineering_panel import EngineeringPanel
 from edc.ui.panels.powerplay_watch_panel import PowerPlayWatchPanel
 from edc.audio.handlers.engineering import EngineeringPhrases
@@ -6423,8 +6423,8 @@ class MainWindow(QMainWindow):
 
         if faction:
             try:
-                new = detect_new_systems(self.repo, faction)
-                text = alert_text(faction, new[0]) if new else ""
+                exp = first_expansion(detect_new_systems(self.repo, faction))
+                text = alert_text(faction, exp) if exp else ""   # colonisations stay off the Overview
             except Exception:
                 log.exception("Failed to check for new faction systems")
 

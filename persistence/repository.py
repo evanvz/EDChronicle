@@ -2772,7 +2772,11 @@ class Repository:
         rows = self.db.conn.execute(
             """
             WITH g AS (
-                SELECT system_address, MIN(snapshot_date) AS first_seen, MAX(snapshot_date) AS last_seen
+                -- first_seen is when the DATA is from (data_timestamp), not the day the app
+                -- stored it: an EDSM refresh can first fetch a system days after the fact
+                SELECT system_address,
+                       MIN(COALESCE(NULLIF(substr(data_timestamp, 1, 10), ''), snapshot_date)) AS first_seen,
+                       MAX(snapshot_date) AS last_seen
                 FROM faction_snapshots WHERE faction_name = ? GROUP BY system_address
             )
             SELECT g.system_address, s.system_name, g.first_seen, g.last_seen, fs.influence,

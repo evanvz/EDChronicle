@@ -124,12 +124,23 @@ def test_main_window_alert_uses_detection(tmp_path):
     shown = []
     fake = SimpleNamespace(repo=repo, overview_panel=SimpleNamespace(set_new_system_alert=shown.append),
                            player_faction_panel=SimpleNamespace(_faction_name=EUW))
+    # no expansion source in range -> colonisation, kept off the Overview
     MainWindow._refresh_new_system_alert(fake)
-    assert shown == ["🆕 Elite United Worlds entered Tucanae Sector YF-W b2-2 (9.1%)"]
-    fake.player_faction_panel._faction_name = None
-    # Within throttle window, should resend cached text
-    MainWindow._refresh_new_system_alert(fake)
-    assert shown[-1] == "🆕 Elite United Worlds entered Tucanae Sector YF-W b2-2 (9.1%)"
+    assert shown == [""]
+
+
+def test_main_window_alert_shows_expansion_not_colonisation(monkeypatch):
+    from edc.ui import main_window as mw
+    items = [{"system_name": "Traikaae HL-P d5-105", "influence": 0.13, "first_seen": "2026-10-08",
+              "source": None, "kind": "colonisation"},
+             {"system_name": "Tucanae Sector YF-W b2-2", "influence": 0.091, "first_seen": "2026-10-07",
+              "source": "Ekono", "kind": "expansion"}]
+    monkeypatch.setattr(mw, "detect_new_systems", lambda repo, faction: items)
+    shown = []
+    fake = SimpleNamespace(repo=None, overview_panel=SimpleNamespace(set_new_system_alert=shown.append),
+                           player_faction_panel=SimpleNamespace(_faction_name=EUW))
+    mw.MainWindow._refresh_new_system_alert(fake, force=True)
+    assert shown == ["🆕 Elite United Worlds entered Tucanae Sector YF-W b2-2 (9.1%) — likely expansion from Ekono"]
 
 
 def test_session_report_shows_new_system_escaped(tmp_path):
@@ -196,10 +207,15 @@ def test_refresh_new_system_alert_fallback_to_squadron_faction(tmp_path):
         player_faction_panel=SimpleNamespace(_faction_name=None)  # No explicit faction
     )
 
-    MainWindow._refresh_new_system_alert(fake, force=True)
-    # Should have fallen back and found the squadron faction
-    assert shown[-1] != ""  # Should have found and displayed the new system
-    assert "Elite United Worlds" in shown[-1]  # EUW should be in the text
+    from edc.ui import main_window as mw
+    seen = []
+    real = mw.detect_new_systems
+    mw.detect_new_systems = lambda r, faction: seen.append(faction) or real(r, faction)
+    try:
+        MainWindow._refresh_new_system_alert(fake, force=True)
+    finally:
+        mw.detect_new_systems = real
+    assert seen == [EUW]   # fell back to the squadron faction from the database
 
 
 def _cache_row(repo, count=6):

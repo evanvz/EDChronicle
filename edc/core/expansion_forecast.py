@@ -166,14 +166,25 @@ def new_systems(presence: List[Dict[str, Any]], endings: List[tuple], today: dat
                     and in_cube(src_xyz, new_xyz, half=30.0)):
                 near.append((sum((a - b) ** 2 for a, b in zip(src_xyz, new_xyz)), name))
         source = min(near)[1] if near else None
+        # no taxed expansion within range -> not an expansion: most likely the
+        # faction's own colonisation (or a system first reported late)
         out.append({"system_name": r.get("system_name"), "influence": inf,
-                    "first_seen": str(first)[:10], "source": source})
+                    "first_seen": str(first)[:10], "source": source,
+                    "kind": "expansion" if source else "colonisation"})
     return sorted(out, key=lambda x: x["first_seen"], reverse=True)
 
 
 def alert_text(faction: str, item: Dict[str, Any]) -> str:
-    src = f" — likely expansion from {item['source']}" if item.get("source") else ""
-    return f"🆕 {faction} entered {item['system_name']} ({item['influence'] * 100:.1f}%){src}"
+    pct = f"{item['influence'] * 100:.1f}%"
+    if item.get("source"):
+        return f"🆕 {faction} entered {item['system_name']} ({pct}) — likely expansion from {item['source']}"
+    return (f"🆕 {faction} appeared in {item['system_name']} ({pct}) — no expansion source in range, "
+            "likely colonisation")
+
+
+def first_expansion(items: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """The newest item that is an expansion (has a source), if any."""
+    return next((n for n in items if n.get("source")), None)
 
 
 def detect_new_systems(repo, faction: str, today: Optional[date] = None) -> List[Dict[str, Any]]:

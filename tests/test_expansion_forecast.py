@@ -89,7 +89,7 @@ def test_new_system_paired_with_expansion_ending():
                 _p(1, "Ekono", 0.6789, "2026-09-08", "2026-10-07")]
     out = ef.new_systems(presence, [("Ekono", "2026-10-07")], TODAY, coords=COORDS)
     assert out == [{"system_name": "Tucanae Sector YF-W b2-2", "influence": 0.090992,
-                    "first_seen": "2026-10-07", "source": "Ekono"}]
+                    "first_seen": "2026-10-07", "source": "Ekono", "kind": "expansion"}]
     assert ef.alert_text("Elite United Worlds", out[0]) == (
         "🆕 Elite United Worlds entered Tucanae Sector YF-W b2-2 (9.1%) — likely expansion from Ekono")
 
@@ -101,7 +101,15 @@ def test_new_system_rules_out_old_large_and_zero():
     assert ef.new_systems(presence, [], TODAY) == []
     lone = ef.new_systems([_p(4, "No source", 0.05, "2026-10-08", "2026-10-08")], [], TODAY)
     assert lone[0]["source"] is None
-    assert ef.alert_text("EUW", lone[0]) == "🆕 EUW entered No source (5.0%)"
+    assert lone[0]["kind"] == "colonisation"
+    assert ef.alert_text("EUW", lone[0]) == (
+        "🆕 EUW appeared in No source (5.0%) — no expansion source in range, likely colonisation")
+
+
+def test_first_expansion_skips_colonisations():
+    items = [{"system_name": "Colony", "source": None}, {"system_name": "YF-W", "source": "Ekono"}]
+    assert ef.first_expansion(items)["system_name"] == "YF-W"
+    assert ef.first_expansion([{"system_name": "Colony", "source": None}]) is None
 
 
 def test_detect_new_systems_ignores_zero_drop_endings():

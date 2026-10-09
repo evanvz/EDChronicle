@@ -58,3 +58,14 @@ def test_candidate_cache_replaces_per_source(tmp_path):
     assert len(got) == 1 and got[0]["faction_count"] == 7 and got[0]["fetched_at"] == "2026-10-09T10:00:00Z"
     assert got[0]["faction_present"] is False
     assert len(repo.get_expansion_candidates(2)) == 1
+
+
+def test_first_seen_uses_the_data_date_not_the_store_date(tmp_path):
+    """Traikaae HL-P d5-105: first fetched by the EDSM refresh on 2026-10-08,
+    but EDSM's data dates from 2026-10-03 -- not a new arrival this week."""
+    repo = _repo(tmp_path)
+    repo.db.execute("INSERT INTO systems (system_address, system_name) VALUES (5, 'Traikaae HL-P d5-105')")
+    repo.save_faction_snapshot(5, {"Name": EUW, "Influence": 0.13}, "2026-10-08", False,
+                               "2026-10-03T21:55:09Z", "edsm")
+    row = repo.get_squadron_presence(EUW)[0]
+    assert row["first_seen"] == "2026-10-03" and row["last_seen"] == "2026-10-08"

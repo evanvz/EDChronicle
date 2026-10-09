@@ -19,9 +19,11 @@ from PyQt6.QtWidgets import (
 
 from edc.core.edsm_faction_lookup import fetch_system_factions
 from edc.core.expansion_forecast import (
-    CACHE_MAX_AGE_H, CUBE_LY, LOOKUP_COUNT, WATCH_THRESHOLD, alert_text, detect_new_systems, is_current,
-    likely_source, rank_candidates, watched_systems,
+    CACHE_MAX_AGE_H, CUBE_LY, LOOKUP_COUNT, WATCH_THRESHOLD, alert_text, detect_new_systems, first_expansion,
+    is_current, likely_source, rank_candidates, watched_systems,
 )
+
+NEXT_ROWS = 10   # "next to expand" shows the top 10 by influence
 from edc.ui.style import HDR_STYLE, PRIMARY_BUTTON_STYLE, TABLE_STYLE, bulk_table_fill
 
 log = logging.getLogger(__name__)
@@ -131,11 +133,14 @@ class ExpansionForecastPanel(QWidget):
         self._status.setTextFormat(Qt.TextFormat.PlainText)
         layout.addWidget(self._status)
 
-        hdr = QLabel("NEXT TO EXPAND — faction systems at 70% or more")
+        hdr = QLabel(f"NEXT TO EXPAND — top {NEXT_ROWS} faction systems at 70% or more")
         hdr.setStyleSheet(HDR_STYLE)
         layout.addWidget(hdr)
         self._next_table = _table(["System", "Influence", "Days ≥75%", "State", "Likely source"])
-        self._next_table.setMaximumHeight(140)
+        # tall enough for all NEXT_ROWS rows without scrolling
+        rh = self._next_table.verticalHeader().defaultSectionSize()
+        self._next_table.setFixedHeight(self._next_table.horizontalHeader().sizeHint().height()
+                                        + rh * NEXT_ROWS + 4)
         layout.addWidget(self._next_table)
 
         row = QHBoxLayout()
@@ -205,7 +210,7 @@ class ExpansionForecastPanel(QWidget):
              str(w["days_above"]), w["phase"] or "—",
              ("yes" if w["system_name"] == src_name and self._source["eligible"]
               else "not yet (needs a day at 75%)" if w["system_name"] == src_name else "")]
-            for w in watched])
+            for w in watched[:NEXT_ROWS]])
         self._render_last_result(repo, faction, today)
         if not self._source:
             self._target_status.setText("No faction system at 70% or more.")
@@ -233,7 +238,8 @@ class ExpansionForecastPanel(QWidget):
 
     def _render_last_result(self, repo, faction, today) -> None:
         new = detect_new_systems(repo, faction, today)
-        self._last_label.setText(alert_text(faction, new[0]) if new else
+        item = first_expansion(new) or (new[0] if new else None)
+        self._last_label.setText(alert_text(faction, item) if item else
                                  "No new faction system in the last 3 days.")
 
     def _cache_fresh(self) -> bool:
