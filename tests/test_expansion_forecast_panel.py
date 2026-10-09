@@ -51,7 +51,7 @@ def test_forecast_tab_renders_from_fresh_cache(tmp_path):
     rows = _table_texts(w._target_table)
     # Arimavante: EUW was there before (left) -> tier 2, so YF-W ranks first
     assert [r[2] for r in rows] == ["Tucanae Sector YF-W b2-2", "Arimavante", "Unlooked"]
-    assert rows[1][1] == "2" and rows[1][5] == "yes" and rows[2][1] == "not checked"
+    assert rows[1][1] == "2" and rows[1][5] == "yes (history)" and rows[2][1] == "not checked"
 
 
 def test_no_faction_and_no_watched_system(tmp_path):
@@ -351,3 +351,32 @@ def test_close_sweep_skips_deleted_thread_and_still_quits_live_one():
         _faction_expansion_dialog=SimpleNamespace(_forecast=forecast)))
     MainWindow._stop_background_threads(fake, fake)
     assert not live.isRunning()
+
+
+def test_worker_marks_faction_listed_at_zero_as_former(tmp_path, monkeypatch):
+    """EDSM's Arimavante list (2026-10-09) keeps Elite United Worlds at 0%:
+    EUW was there before, so Arimavante is tier 2, not tier 1."""
+    from edc.ui.panels import expansion_forecast_panel as fp
+    from edc.core.expansion_forecast import rank_candidates
+    repo = _repo(tmp_path)
+    repo.db.execute("INSERT INTO system_coords (system_name, x, y, z) VALUES ('Arimavante', 1.0, 0.0, 0.0)")
+    repo.db.execute("INSERT INTO net.system_bgs_status (system_address, system_name, population) "
+                    "VALUES (4756911035114, 'Arimavante', 6407804)")
+    factions = [{"Name": n, "Influence": i} for n, i in (
+        ("Aces Wild Aerospace Corporation", 0.552448), ("Cameron's Combat Services", 0.198801),
+        ("Arimavante Dominion", 0.084915), ("Arimavante Constitution Party", 0.082917),
+        ("Arimavante Inc", 0.070929), ("Family of Arimavante", 0.00999),
+        (EUW, 0), ("Pictavul Gold Legal Co", 0))]
+    monkeypatch.setattr(fp, "fetch_system_factions",
+                        lambda n: ({"system_address": 4756911035114, "factions": factions}, None))
+    out = []
+    worker = fp._ForecastWorker(repo.db.db_path, {"x": 0.0, "y": 0.0, "z": 0.0}, set(), EUW)
+    worker.finished.connect(lambda res, err: out.append(res))
+    worker.run()
+    row = out[0]["rows"][0]
+    assert row["faction_count"] == 6 and row["faction_present"] is False and row["faction_former"] is True
+    repo.save_expansion_candidates(1, out[0]["rows"], "2026-10-09T10:00:00Z")
+    cached = repo.get_expansion_candidates(1)
+    assert cached[0]["faction_former"] is True
+    ranked = rank_candidates([dict(c, been_before=c["faction_former"]) for c in cached])
+    assert ranked[0]["tier"] == 2

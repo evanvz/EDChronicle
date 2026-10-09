@@ -15,7 +15,8 @@ from typing import Any, Dict, List, Optional
 WATCH_THRESHOLD = 0.70
 EXPANSION_THRESHOLD = 0.75
 CUBE_LY = 20.0
-LOOKUP_COUNT = 10
+LOOKUP_COUNT = 10        # likely targets shown
+LOOKUP_MAX = 40          # EDSM lookups per refresh: every candidate in the cube, capped (~5.5 s each)
 NEW_SYSTEM_DAYS = 3
 NEW_SYSTEM_MAX_INFLUENCE = 0.20   # heuristic: an expansion arrives small (YF-W 9.1%)
 CURRENT_DAYS = 14                 # a presence older than this is treated as "left"

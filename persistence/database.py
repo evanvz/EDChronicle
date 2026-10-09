@@ -440,6 +440,9 @@ class Database:
                 fetched_at      TEXT    NOT NULL,
                 PRIMARY KEY (source_address, system_name)
             )""",
+            # EDSM lists factions that left a system at 0% influence: the squad
+            # faction listed there means it was in that system before (tier 2).
+            "ALTER TABLE expansion_candidates ADD COLUMN faction_former INTEGER",
         ]
         cache_migrations = [
             "ALTER TABLE net.spansh_bodies ADD COLUMN surface_gravity REAL",

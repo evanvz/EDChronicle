@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
 
 from edc.core.edsm_faction_lookup import fetch_system_factions
 from edc.core.expansion_forecast import (
-    CACHE_MAX_AGE_H, CUBE_LY, LOOKUP_COUNT, WATCH_THRESHOLD, alert_text, detect_new_systems, first_expansion,
+    CACHE_MAX_AGE_H, CUBE_LY, LOOKUP_COUNT, LOOKUP_MAX, WATCH_THRESHOLD, alert_text, detect_new_systems, first_expansion,
     is_current, likely_source, rank_candidates, watched_systems,
 )
 
@@ -76,18 +76,24 @@ class _ForecastWorker(QObject):
                                   "distance_ly": dist})
         populated.sort(key=lambda c: c["distance_ly"])
         rows, failed = [], 0
-        for c in populated[:LOOKUP_COUNT]:
+        # every candidate in the cube: a tier-1 system ranked past the nearest
+        # 10 would still beat a nearer tier-2 one
+        for c in populated[:LOOKUP_MAX]:
             if self._cancelled:
                 self.finished.emit(None, "cancelled")
                 return
             result, _err = fetch_system_factions(c["system_name"])
             if not result:
                 failed += 1
-                rows.append({**c, "faction_count": None, "faction_present": False})
+                rows.append({**c, "faction_count": None, "faction_present": False, "faction_former": False})
                 continue
-            names = [f.get("Name") for f in result.get("factions") or [] if (f.get("Influence") or 0) > 0]
+            factions = result.get("factions") or []
+            names = [f.get("Name") for f in factions if (f.get("Influence") or 0) > 0]
+            # EDSM keeps factions that left the system, at 0% influence
+            former = any(f.get("Name") == self._faction and not (f.get("Influence") or 0) for f in factions)
             rows.append({**c, "system_address": result.get("system_address") or c["system_address"],
-                         "faction_count": len(names), "faction_present": self._faction in names})
+                         "faction_count": len(names), "faction_present": self._faction in names,
+                         "faction_former": former})
         if failed:
             log.warning("Expansion forecast: %d of %d EDSM lookups failed", failed, len(rows))
         self.finished.emit({"rows": rows, "candidates": len(populated), "unknown_population": unknown,
@@ -221,17 +227,23 @@ class ExpansionForecastPanel(QWidget):
 
     def _render_targets(self, extra: str = "") -> None:
         cached = self._panel._repo.get_expansion_candidates(self._source["system_address"])
-        ranked = rank_candidates([dict(c, been_before=c["system_name"] in self._been) for c in cached])
+        ranked = rank_candidates([dict(c, been_before=c.get("faction_former") or c["system_name"] in self._been)
+                                  for c in cached])
         fetched = cached[0]["fetched_at"][:16].replace("T", " ") if cached else "never"
+
+        def before(c):
+            if c.get("faction_former"):
+                return "yes (EDSM)"
+            return "yes (history)" if c["system_name"] in self._been else "unknown"
         _fill(self._target_table, [
             [str(i + 1) if c["tier"] else "", str(c["tier"]) if c["tier"] else "not checked", c["system_name"],
              f"{c['distance_ly']:.1f} ly" if c.get("distance_ly") is not None else "",
-             "" if c["faction_count"] is None else str(c["faction_count"]),
-             "yes" if c["been_before"] else "unknown", fetched]
-            for i, c in enumerate(ranked)])
+             "" if c["faction_count"] is None else str(c["faction_count"]), before(c), fetched]
+            for i, c in enumerate(ranked[:LOOKUP_COUNT])])
         self._target_status.setText(
-            f"From {self._source['system_name']}: nearest {len(cached)} candidates in the ±20 ly cube "
-            f"(EDSM, {fetched} UTC). Tier 1 = fewer than 7 factions, never there; tier 2 = fewer than 7, "
+            f"From {self._source['system_name']}: top {min(LOOKUP_COUNT, len(ranked))} of {len(cached)} candidates "
+            "in the ±20 ly cube (EDSM, faction here before = our history + EDSM's former-faction list, "
+            f"{fetched} UTC). Tier 1 = fewer than 7 factions, never there; tier 2 = fewer than 7, "
             f"faction was there before; tier 3 = 7 factions (invasion war).{extra}"
             + ("" if any(c["tier"] for c in ranked) or not cached else
                " No eligible system within ±20 ly — the game would search ±30 ly next, or the expansion fails."))
@@ -296,6 +308,7 @@ class ExpansionForecastPanel(QWidget):
                 prev = old_by_name.get(r["system_name"])
                 if r["faction_count"] is None and prev and prev["faction_count"] is not None:
                     r["faction_count"], r["faction_present"] = prev["faction_count"], prev["faction_present"]
+                    r["faction_former"] = prev.get("faction_former", False)
             if not fresh:
                 when = old[0]["fetched_at"][:16].replace("T", " ") if old else None
                 self._target_status.setText(f"Lookup failed — showing data from {when} UTC" if when
