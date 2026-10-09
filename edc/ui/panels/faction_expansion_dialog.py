@@ -138,7 +138,9 @@ class _InfluenceTrendWidget(QWidget):
                 p.setPen(QPen(QColor("#FFB347"), 1, Qt.PenStyle.DotLine))
                 p.drawLine(x, pad_t, x, h - pad_b)
                 p.setPen(QColor("#FFB347"))
-                label = f"expansion tax {delta:+.1f}" if delta <= -EXPANSION_TAX_MIN else "expansion ended"
+                # no drop here = another system's expansion (the state shows in every system)
+                label = (f"expansion tax {delta:+.1f}" if delta <= -EXPANSION_TAX_MIN
+                         else "expansion ended (from another system)")
                 tw = p.fontMetrics().horizontalAdvance(label)
                 p.drawText(min(x + 3, w - pad_r - tw), h - pad_b + 14, label)
 
@@ -544,9 +546,11 @@ class FactionExpansionDialog(QDialog):
         elif endings and endings[-1][0] >= len(history_asc) - 3:
             _i, date, delta = endings[-1]
             tax = (f"influence here changed {delta:+.1f} pts — that's the expansion tax: a finished "
-                   "expansion costs the home system about 15% (SINC BGS Guide 2024), so this drop is expected. "
+                   "expansion costs the home system 15% (less net if activity pushed it up the same tick), "
+                   "so this drop is expected. "
                    if delta <= -EXPANSION_TAX_MIN else
-                   f"influence here changed {delta:+.1f} pts, so no expansion tax was taken this time. ")
+                   f"influence here changed {delta:+.1f} pts, so this system wasn't the source — the "
+                   "expansion came from another of the faction's systems (the state shows in every one). ")
             self._expansion_banner.setText(
                 f"✅ EXPANSION ENDED ({date}) — {tax}"
                 "It can expand again once back above 75% after recovering."

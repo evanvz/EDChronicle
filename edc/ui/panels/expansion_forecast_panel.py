@@ -185,6 +185,11 @@ class ExpansionForecastPanel(QWidget):
         hdr = QLabel(f"NEXT TO EXPAND — top {NEXT_ROWS} faction systems at 70% or more")
         hdr.setStyleSheet(HDR_STYLE)
         layout.addWidget(hdr)
+        tip = QLabel("Squad experience: aim for 76%+ (the game rounds), and keep systems you don't want to "
+                     "expand from below 73% — the highest system doesn't always win.")
+        tip.setWordWrap(True)
+        tip.setStyleSheet(_DIM)
+        layout.addWidget(tip)
         # Expansion is faction-wide, so its state is one line, not a per-system column
         self._expansion_line = QLabel("")
         self._expansion_line.setTextFormat(Qt.TextFormat.PlainText)

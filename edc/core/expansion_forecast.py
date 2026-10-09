@@ -23,6 +23,8 @@ CURRENT_DAYS = 14                 # a presence older than this is treated as "le
 CACHE_MAX_AGE_H = 24
 # an ending only counts as a successful expansion source if influence dropped at least this many
 # points (same threshold the Faction Expansion Tracker chart uses for its "expansion tax" label)
+# The squad reports the tax is exactly 15%; the net drop the source shows can
+# be smaller when activity pushed it up in the same tick (Ekono: -14.8, -11.1).
 EXPANSION_TAX_MIN = 5.0
 
 
@@ -55,8 +57,10 @@ def expansion_endings(history_asc: List[Dict[str, Any]]) -> List[tuple]:
     source carries the state lists, so this is the reliable signal). A
     finished expansion usually costs the home system its "expansion tax",
     about 15% (SINC Complete BGS Guide 2024, p48/53): Ekono lost 14.8 on
-    2026-09-23 and 11.1 on 2026-10-07 -- but endings on 2026-08-09 and
-    09-11 showed no drop, so the change is reported, not assumed."""
+    2026-09-23 and 11.1 on 2026-10-07. Expansion state is faction-wide, so
+    an ending also shows in every system that WASN'T the source, with no
+    drop there (Ekono on 2026-08-09 and 09-11: other systems' expansions,
+    confirmed by the squad) -- so the change is reported, not assumed."""
     out = []
     for i in range(1, len(history_asc)):
         prev, cur = history_asc[i - 1], history_asc[i]
