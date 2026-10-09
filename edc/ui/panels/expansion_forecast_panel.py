@@ -17,10 +17,10 @@ from PyQt6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
-from edc.core.edsm_faction_lookup import fetch_system_factions
+from edc.core.edsm_faction_lookup import fetch_populated_cube, fetch_system_factions
 from edc.core.expansion_forecast import (
-    CACHE_MAX_AGE_H, CUBE_LY, LOOKUP_COUNT, LOOKUP_MAX, WATCH_THRESHOLD, alert_text, detect_new_systems, first_expansion,
-    is_current, likely_source, rank_candidates, watched_systems,
+    CACHE_MAX_AGE_H, CUBE_LY, LOOKUP_COUNT, LOOKUP_MAX, OUTER_CUBE_LY, WATCH_THRESHOLD, alert_text,
+    detect_new_systems, first_expansion, in_cube, is_current, likely_source, rank_candidates, watched_systems,
 )
 
 NEXT_ROWS = 10   # "next to expand" shows the top 10 by influence
@@ -47,41 +47,44 @@ class _ForecastWorker(QObject):
     def cancel(self) -> None:
         self._cancelled = True
 
-    def run(self):
-        from persistence.database import Database
-        from persistence.repository import Repository
-
-        db = Database(self._db_path)
-        try:
-            cube = Repository(db).get_cube_systems(self._source["x"], self._source["y"], self._source["z"], CUBE_LY)
-        except Exception as exc:
-            log.exception("Expansion forecast cube query failed")
-            self.finished.emit(None, str(exc))
-            return
-        finally:
-            db.close()
-        sx, sy, sz = self._source["x"], self._source["y"], self._source["z"]
-        populated, unknown = [], 0
+    def _candidates(self, half: float, inner: Optional[float]):
+        """Populated candidates in the +-half cube (skipping the +-inner cube
+        already searched), nearest first: EDSM's cube search in one request,
+        or the app's own coordinates if EDSM can't be reached. Returns
+        (candidates, source label, systems skipped for unknown population)."""
+        src = (self._source["x"], self._source["y"], self._source["z"])
+        cube, label, unknown = fetch_populated_cube(*src, half), "EDSM", 0
+        if cube is None:
+            from persistence.database import Database
+            from persistence.repository import Repository
+            db = Database(self._db_path)
+            try:
+                cube, label = Repository(db).get_cube_systems(*src, half), "local data (EDSM unreachable)"
+            finally:
+                db.close()
+        out = []
         for s in cube:
-            if s["system_name"] in self._exclude:
+            xyz = (s["x"], s["y"], s["z"])
+            if (s["system_name"] in self._exclude or None in xyz or not in_cube(src, xyz, half)
+                    or (inner and in_cube(src, xyz, inner))):   # inner ring already searched
                 continue
             if s["population"] is None:
                 unknown += 1
                 continue
             if s["population"] <= 0:
                 continue
-            dist = ((s["x"] - sx) ** 2 + (s["y"] - sy) ** 2 + (s["z"] - sz) ** 2) ** 0.5
+            dist = sum((a - b) ** 2 for a, b in zip(xyz, src)) ** 0.5
             if dist > 0:
-                populated.append({"system_name": s["system_name"], "system_address": s["system_address"],
-                                  "distance_ly": dist})
-        populated.sort(key=lambda c: c["distance_ly"])
+                out.append({"system_name": s["system_name"], "system_address": s["system_address"],
+                            "distance_ly": dist, "ring": half})
+        return sorted(out, key=lambda c: c["distance_ly"]), label, unknown
+
+    def _lookup(self, cands: list) -> Optional[tuple]:
+        """EDSM faction lists for the candidates (capped); None if cancelled."""
         rows, failed = [], 0
-        # every candidate in the cube: a tier-1 system ranked past the nearest
-        # 10 would still beat a nearer tier-2 one
-        for c in populated[:LOOKUP_MAX]:
+        for c in cands[:LOOKUP_MAX]:
             if self._cancelled:
-                self.finished.emit(None, "cancelled")
-                return
+                return None
             result, _err = fetch_system_factions(c["system_name"])
             if not result:
                 failed += 1
@@ -94,10 +97,40 @@ class _ForecastWorker(QObject):
             rows.append({**c, "system_address": result.get("system_address") or c["system_address"],
                          "faction_count": len(names), "faction_present": self._faction in names,
                          "faction_former": former})
+        return rows, failed
+
+    def run(self):
+        try:
+            cands, label, unknown = self._candidates(CUBE_LY, None)
+        except Exception as exc:
+            log.exception("Expansion forecast candidate search failed")
+            self.finished.emit(None, str(exc))
+            return
+        looked = self._lookup(cands)
+        if looked is None:
+            self.finished.emit(None, "cancelled")
+            return
+        rows, failed = looked
+        total, outer = len(cands), False
+        eligible = any(r["faction_count"] is not None and r["faction_count"] < 8 and not r["faction_present"]
+                       for r in rows)
+        # the game only searches +-30 ly when +-20 ly has no eligible system
+        if not eligible and len(rows) > failed:
+            try:
+                more, _label, more_unknown = self._candidates(OUTER_CUBE_LY, CUBE_LY)
+            except Exception:
+                log.exception("Expansion forecast outer-ring search failed")
+                more, more_unknown = [], 0
+            looked = self._lookup(more)
+            if looked is None:
+                self.finished.emit(None, "cancelled")
+                return
+            rows, failed = rows + looked[0], failed + looked[1]
+            total, unknown, outer = total + len(more), unknown + more_unknown, True
         if failed:
             log.warning("Expansion forecast: %d of %d EDSM lookups failed", failed, len(rows))
-        self.finished.emit({"rows": rows, "candidates": len(populated), "unknown_population": unknown,
-                            "failed": failed}, None)
+        self.finished.emit({"rows": rows, "candidates": total, "unknown_population": unknown,
+                            "failed": failed, "source": label, "outer_ring": outer}, None)
 
 
 def _table(headers):
@@ -237,15 +270,20 @@ class ExpansionForecastPanel(QWidget):
             return "yes (history)" if c["system_name"] in self._been else "unknown"
         _fill(self._target_table, [
             [str(i + 1) if c["tier"] else "", str(c["tier"]) if c["tier"] else "not checked", c["system_name"],
-             f"{c['distance_ly']:.1f} ly" if c.get("distance_ly") is not None else "",
+             (f"{c['distance_ly']:.1f} ly" + (" (±30 ring)" if (c.get("ring") or CUBE_LY) > CUBE_LY else ""))
+             if c.get("distance_ly") is not None else "",
              "" if c["faction_count"] is None else str(c["faction_count"]), before(c), fetched]
             for i, c in enumerate(ranked[:LOOKUP_COUNT])])
+        outer = any((c.get("ring") or CUBE_LY) > CUBE_LY for c in cached)
+        area = ("the ±20 ly cube and the ±30 ly ring (nothing eligible within ±20 ly)" if outer
+                else "the ±20 ly cube")
         self._target_status.setText(
             f"From {self._source['system_name']}: top {min(LOOKUP_COUNT, len(ranked))} of {len(cached)} candidates "
-            "in the ±20 ly cube (EDSM, faction here before = our history + EDSM's former-faction list, "
+            f"in {area} (EDSM; faction here before = our history + EDSM's former-faction list; "
             f"{fetched} UTC). Tier 1 = fewer than 7 factions, never there; tier 2 = fewer than 7, "
             f"faction was there before; tier 3 = 7 factions (invasion war).{extra}"
             + ("" if any(c["tier"] for c in ranked) or not cached else
+               " No eligible system within ±30 ly — the expansion would fail." if outer else
                " No eligible system within ±20 ly — the game would search ±30 ly next, or the expansion fails."))
 
     def _render_last_result(self, repo, faction, today) -> None:
@@ -323,11 +361,12 @@ class ExpansionForecastPanel(QWidget):
         if address is None or not self._source or self._source["system_address"] != address:
             return
         if not rows:
-            self._target_status.setText("No populated system without the faction within ±20 ly — the game would "
-                                        "search ±30 ly next, or the expansion fails.")
+            self._target_status.setText("No populated system without the faction within ±30 ly — "
+                                        "the expansion would fail.")
             return
         skipped = result["unknown_population"]
-        self._render_targets(f" Looked up {looked} of {result['candidates']}."
+        self._render_targets(f" Looked up {looked} of {result['candidates']} (candidate list: "
+                             f"{result.get('source', 'local data')})."
                              + (f" Skipped {skipped} systems with unknown population." if skipped else ""))
 
     def _copy_name(self, row: int, _col: int) -> None:

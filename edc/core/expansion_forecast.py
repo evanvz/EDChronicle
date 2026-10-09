@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 WATCH_THRESHOLD = 0.70
 EXPANSION_THRESHOLD = 0.75
 CUBE_LY = 20.0
+OUTER_CUBE_LY = 30.0     # searched only when +-20 ly has no eligible system
 LOOKUP_COUNT = 10        # likely targets shown
 LOOKUP_MAX = 40          # EDSM lookups per refresh: every candidate in the cube, capped (~5.5 s each)
 NEW_SYSTEM_DAYS = 3
@@ -137,7 +138,8 @@ def rank_candidates(cands: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             continue
         tier = 3 if n == 7 else (2 if c.get("been_before") else 1)
         ranked.append({**c, "tier": tier})
-    ranked.sort(key=lambda c: (c["tier"], c.get("distance_ly") or 0.0))
+    # the +-20 ly ring (all tiers) comes before the +-30 ly ring
+    ranked.sort(key=lambda c: (c.get("ring") or CUBE_LY, c["tier"], c.get("distance_ly") or 0.0))
     unchecked.sort(key=lambda c: c.get("distance_ly") or 0.0)
     return ranked + unchecked
 

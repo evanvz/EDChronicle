@@ -443,6 +443,7 @@ class Database:
             # EDSM lists factions that left a system at 0% influence: the squad
             # faction listed there means it was in that system before (tier 2).
             "ALTER TABLE expansion_candidates ADD COLUMN faction_former INTEGER",
+            "ALTER TABLE expansion_candidates ADD COLUMN ring REAL",
         ]
         cache_migrations = [
             "ALTER TABLE net.spansh_bodies ADD COLUMN surface_gravity REAL",

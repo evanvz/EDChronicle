@@ -81,6 +81,7 @@ def test_worker_result_marks_failed_lookups_not_checked(tmp_path, monkeypatch):
     answers = {"Near": ({"system_address": 9, "factions": [{"Name": "A", "Influence": 0.5},
                                                             {"Name": EUW, "Influence": 0.1}]}, None),
                "Far": (None, "blocked")}
+    monkeypatch.setattr(fp, "fetch_populated_cube", lambda *a: None)
     monkeypatch.setattr(fp, "fetch_system_factions", lambda n: answers[n])
     out = []
     worker = fp._ForecastWorker(repo.db.db_path, {"x": 0.0, "y": 0.0, "z": 0.0}, set(), EUW)
@@ -288,6 +289,7 @@ def test_worker_cancel_stops_before_lookups(tmp_path, monkeypatch):
     repo.db.execute("INSERT INTO net.system_bgs_status (system_address, system_name, population) "
                     "VALUES (7, 'Near', 100)")
     calls = []
+    monkeypatch.setattr(fp, "fetch_populated_cube", lambda *a: None)
     monkeypatch.setattr(fp, "fetch_system_factions", lambda n: calls.append(n) or (None, "x"))
     out = []
     worker = fp._ForecastWorker(repo.db.db_path, {"x": 0.0, "y": 0.0, "z": 0.0}, set(), EUW)
@@ -303,6 +305,7 @@ def test_worker_counts_failed(tmp_path, monkeypatch):
     repo.db.execute("INSERT INTO system_coords (system_name, x, y, z) VALUES ('Near', 1.0, 0.0, 0.0)")
     repo.db.execute("INSERT INTO net.system_bgs_status (system_address, system_name, population) "
                     "VALUES (7, 'Near', 100)")
+    monkeypatch.setattr(fp, "fetch_populated_cube", lambda *a: None)
     monkeypatch.setattr(fp, "fetch_system_factions", lambda n: (None, "blocked"))
     out = []
     worker = fp._ForecastWorker(repo.db.db_path, {"x": 0.0, "y": 0.0, "z": 0.0}, set(), EUW)
@@ -367,6 +370,7 @@ def test_worker_marks_faction_listed_at_zero_as_former(tmp_path, monkeypatch):
         ("Arimavante Dominion", 0.084915), ("Arimavante Constitution Party", 0.082917),
         ("Arimavante Inc", 0.070929), ("Family of Arimavante", 0.00999),
         (EUW, 0), ("Pictavul Gold Legal Co", 0))]
+    monkeypatch.setattr(fp, "fetch_populated_cube", lambda *a: None)
     monkeypatch.setattr(fp, "fetch_system_factions",
                         lambda n: ({"system_address": 4756911035114, "factions": factions}, None))
     out = []
@@ -380,3 +384,58 @@ def test_worker_marks_faction_listed_at_zero_as_former(tmp_path, monkeypatch):
     assert cached[0]["faction_former"] is True
     ranked = rank_candidates([dict(c, been_before=c["faction_former"]) for c in cached])
     assert ranked[0]["tier"] == 2
+
+
+def test_worker_uses_edsm_cube_list_including_systems_missing_locally(tmp_path, monkeypatch):
+    """EDSM's cube search returned Chachapoyas (20.7 ly from Ekono, 7 factions)
+    that the app's own coordinate data didn't have (checked 2026-10-09)."""
+    from edc.ui.panels import expansion_forecast_panel as fp
+    repo = _repo(tmp_path)
+    monkeypatch.setattr(fp, "fetch_populated_cube", lambda x, y, z, half: [
+        {"system_name": "Chachapoyas", "system_address": 1, "x": 6.9, "y": 19.1, "z": 4.4, "population": 4214339},
+        {"system_name": "Arimavante", "system_address": 2, "x": 1.0, "y": 0.0, "z": 0.0, "population": 6407804}])
+    faction_lists = {
+        "Chachapoyas": [{"Name": f"F{i}", "Influence": 0.1} for i in range(7)],
+        "Arimavante": [{"Name": f"F{i}", "Influence": 0.1} for i in range(6)] + [{"Name": EUW, "Influence": 0}]}
+    monkeypatch.setattr(fp, "fetch_system_factions", lambda n: ({"factions": faction_lists[n]}, None))
+    out = []
+    worker = fp._ForecastWorker(repo.db.db_path, {"x": 0.0, "y": 0.0, "z": 0.0}, set(), EUW)
+    worker.finished.connect(lambda res, err: out.append(res))
+    worker.run()
+    res = out[0]
+    assert res["source"] == "EDSM" and res["outer_ring"] is False
+    by = {r["system_name"]: r for r in res["rows"]}
+    assert by["Chachapoyas"]["faction_count"] == 7 and by["Arimavante"]["faction_former"] is True
+
+
+def test_worker_searches_outer_ring_only_when_inner_has_nothing_eligible(tmp_path, monkeypatch):
+    from edc.ui.panels import expansion_forecast_panel as fp
+    from edc.core.expansion_forecast import rank_candidates
+    repo = _repo(tmp_path)
+    systems = [{"system_name": "Full", "system_address": 1, "x": 5.0, "y": 0.0, "z": 0.0, "population": 10},
+               {"system_name": "Outer", "system_address": 2, "x": 25.0, "y": 0.0, "z": 0.0, "population": 10}]
+    monkeypatch.setattr(fp, "fetch_populated_cube",
+                        lambda x, y, z, half: [s for s in systems if abs(s["x"]) <= half])
+    lists = {"Full": [{"Name": f"F{i}", "Influence": 0.1} for i in range(8)],     # 8 factions: never a target
+             "Outer": [{"Name": "A", "Influence": 0.5}]}
+    monkeypatch.setattr(fp, "fetch_system_factions", lambda n: ({"factions": lists[n]}, None))
+    out = []
+    worker = fp._ForecastWorker(repo.db.db_path, {"x": 0.0, "y": 0.0, "z": 0.0}, set(), EUW)
+    worker.finished.connect(lambda res, err: out.append(res))
+    worker.run()
+    res = out[0]
+    assert res["outer_ring"] is True
+    by = {r["system_name"]: r for r in res["rows"]}
+    assert by["Outer"]["ring"] == 30.0 and by["Full"]["ring"] == 20.0
+    ranked = rank_candidates([dict(r, been_before=False) for r in res["rows"]])
+    assert [r["system_name"] for r in ranked] == ["Outer"]
+
+
+def test_inner_ring_beats_outer_ring_regardless_of_tier():
+    from edc.core.expansion_forecast import rank_candidates
+    out = rank_candidates([
+        {"system_name": "Outer tier 1", "distance_ly": 25.0, "ring": 30.0, "faction_count": 3,
+         "faction_present": False, "been_before": False},
+        {"system_name": "Inner tier 3", "distance_ly": 15.0, "ring": 20.0, "faction_count": 7,
+         "faction_present": False, "been_before": False}])
+    assert [c["system_name"] for c in out] == ["Inner tier 3", "Outer tier 1"]

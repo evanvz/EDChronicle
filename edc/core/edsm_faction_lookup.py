@@ -27,6 +27,7 @@ log = logging.getLogger(__name__)
 _FACTIONS_URL = "https://www.edsm.net/api-system-v1/factions"
 _SYSTEM_URL = "https://www.edsm.net/api-v1/system"
 _STATIONS_URL = "https://www.edsm.net/api-system-v1/stations"
+_CUBE_URL = "https://www.edsm.net/api-v1/cube-systems"
 _TIMEOUT = 20
 
 # EDSM's Cloudflare front-end 403s the default python-requests/urllib
@@ -184,6 +185,47 @@ def fetch_system_coords(system_name: str) -> Optional[Tuple[float, float, float]
             return result
         time.sleep(_RETRY_DELAYS_S[attempt])
         attempt += 1
+
+
+def fetch_populated_cube(x: float, y: float, z: float, half: float) -> Optional[List[Dict[str, Any]]]:
+    """Every populated system in the cube (each axis within `half` ly of
+    x/y/z), in ONE request: [{"system_name", "system_address", "x", "y",
+    "z", "population"}]. None if EDSM can't be reached. Checked 2026-10-09:
+    Ekono's +-20 ly cube = 91 populated systems in ~2 s, including one
+    (Chachapoyas) missing from the app's own coordinate data."""
+    attempt = 0
+    while True:
+        result, error = _fetch_cube_once(x, y, z, half)
+        if result is not None or error != ERROR_BLOCKED or attempt >= len(_RETRY_DELAYS_S):
+            return result
+        time.sleep(_RETRY_DELAYS_S[attempt])
+        attempt += 1
+
+
+def _fetch_cube_once(x: float, y: float, z: float, half: float) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
+    try:
+        _throttle()
+        resp = requests.get(
+            _CUBE_URL, params={"x": x, "y": y, "z": z, "size": half * 2, "showInformation": 1,
+                               "showCoordinates": 1, "showId": 1},
+            headers={"User-Agent": _USER_AGENT}, timeout=_TIMEOUT,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as exc:
+        log.error("EDSM cube-systems lookup failed: %s", exc)
+        return None, ERROR_BLOCKED
+    if not isinstance(data, list):
+        return None, ERROR_NOT_FOUND
+    out = []
+    for s in data:
+        info, c = s.get("information") or {}, s.get("coords") or {}
+        pop = info.get("population") if isinstance(info, dict) else None
+        if not s.get("name") or not isinstance(pop, int) or pop <= 0 or not isinstance(c, dict):
+            continue
+        out.append({"system_name": s["name"], "system_address": s.get("id64"),
+                    "x": c.get("x"), "y": c.get("y"), "z": c.get("z"), "population": pop})
+    return out, None
 
 
 def _fetch_system_coords_once(system_name: str) -> Tuple[Optional[Tuple[float, float, float]], Optional[str]]:
