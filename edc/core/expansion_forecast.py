@@ -107,6 +107,35 @@ def watched_systems(presence: List[Dict[str, Any]], histories: Dict[int, List[Di
     return sorted(out, key=lambda w: -(w.get("influence") or 0.0))
 
 
+_PHASE_TEXT = {"active": "active", "pending": "pending",
+               "recovering": "recovering (cooldown after an expansion)", "": "none running"}
+
+
+def faction_expansion_line(presence: List[Dict[str, Any]], histories: Dict[int, List[Dict[str, Any]]],
+                           today: date) -> str:
+    """The faction's expansion state in one line. Expansion is faction-wide
+    (one at a time, from one source, and shown in every one of its systems
+    -- seen 2026-10-09: 329 EUW systems "active", some at 1.9% influence),
+    so a system's own state only says which phase its last data caught.
+    The freshest snapshot gives the current phase; the last ending that
+    paid the expansion tax gives where it last came from."""
+    current = [r for r in presence if is_current(r, today)]
+    if not current:
+        return ""
+    newest = max(current, key=lambda r: r.get("last_seen") or "")
+    names = {r["system_address"]: r.get("system_name") for r in presence}
+    ends = [(d, names.get(addr) or str(addr), delta)
+            for addr, hist in histories.items()
+            for _i, d, delta in expansion_endings(hist) if delta <= -EXPANSION_TAX_MIN]
+    text = (f"Faction expansion (one at a time, shown in every system): "
+            f"{_PHASE_TEXT[expansion_phase(newest)]} — newest data {newest.get('last_seen')} "
+            f"({newest.get('system_name')}).")
+    if ends:
+        d, src, delta = max(ends)
+        text += f" Last expansion ended {d} from {src} ({delta:+.1f} expansion tax)."
+    return text
+
+
 def likely_source(watched: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     """Highest influence among systems at or above 75% for at least a day;
     otherwise the highest watched system, marked not yet eligible."""

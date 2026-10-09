@@ -13,14 +13,14 @@ from typing import Optional
 
 from PyQt6.QtCore import QObject, Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
-    QApplication, QHBoxLayout, QHeaderView, QLabel, QPushButton, QTableWidget, QTableWidgetItem,
-    QVBoxLayout, QWidget,
+    QApplication, QFrame, QHBoxLayout, QHeaderView, QLabel, QPushButton, QScrollArea, QTableWidget,
+    QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from edc.core.edsm_faction_lookup import fetch_populated_cube, fetch_system_factions
 from edc.core.expansion_forecast import (
     CACHE_MAX_AGE_H, CUBE_LY, LOOKUP_MAX, OUTER_CUBE_LY, WATCH_THRESHOLD, alert_text,
-    detect_new_systems, first_expansion, in_cube, is_current, likely_source, rank_candidates, watched_systems,
+    detect_new_systems, faction_expansion_line, first_expansion, in_cube, is_current, likely_source, rank_candidates, watched_systems,
 )
 
 NEXT_ROWS = 10   # "next to expand" shows the top 10 by influence
@@ -166,7 +166,17 @@ class ExpansionForecastPanel(QWidget):
         self._been: set = set()
         self._current: set = set()
 
-        layout = QVBoxLayout(self)
+        # the tab scrolls as a whole: the 10-row "next to expand" table plus
+        # the targets table don't fit the tracker's default window height
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        outer.addWidget(scroll)
+        content = QWidget()
+        scroll.setWidget(content)
+        layout = QVBoxLayout(content)
         self._status = QLabel("")
         self._status.setStyleSheet(_DIM)
         self._status.setTextFormat(Qt.TextFormat.PlainText)
@@ -175,7 +185,13 @@ class ExpansionForecastPanel(QWidget):
         hdr = QLabel(f"NEXT TO EXPAND — top {NEXT_ROWS} faction systems at 70% or more")
         hdr.setStyleSheet(HDR_STYLE)
         layout.addWidget(hdr)
-        self._next_table = _table(["System", "Influence", "Days ≥75%", "State", "Likely source"])
+        # Expansion is faction-wide, so its state is one line, not a per-system column
+        self._expansion_line = QLabel("")
+        self._expansion_line.setTextFormat(Qt.TextFormat.PlainText)
+        self._expansion_line.setWordWrap(True)
+        self._expansion_line.setStyleSheet("background:transparent; border:none; color:#FFB347;")
+        layout.addWidget(self._expansion_line)
+        self._next_table = _table(["System", "Influence", "Days ≥75%", "Likely source"])
         # tall enough for all NEXT_ROWS rows without scrolling
         rh = self._next_table.verticalHeader().defaultSectionSize()
         self._next_table.setFixedHeight(self._next_table.horizontalHeader().sizeHint().height()
@@ -199,6 +215,7 @@ class ExpansionForecastPanel(QWidget):
         layout.addWidget(self._target_status)
         self._target_table = _table(["#", "Tier", "System", "Distance", "Factions", "Faction here before", "Data"])
         self._target_table.cellClicked.connect(self._copy_name)
+        self._target_table.setMinimumHeight(self._target_table.verticalHeader().defaultSectionSize() * 9)
         layout.addWidget(self._target_table, 1)
         note = QLabel(_NOTE)
         note.setWordWrap(True)
@@ -243,10 +260,11 @@ class ExpansionForecastPanel(QWidget):
         self._been = {r["system_name"] for r in presence if not is_current(r, today)}
         self._current = {r["system_name"] for r in presence if is_current(r, today)}
         self._status.setText(f"{faction} — {len(self._current)} current systems")
+        self._expansion_line.setText(faction_expansion_line(presence, histories, today))
         src_name = self._source["system_name"] if self._source else None
         _fill(self._next_table, [
             [w["system_name"] or str(w["system_address"]), f"{(w['influence'] or 0) * 100:.1f}%",
-             str(w["days_above"]), w["phase"] or "—",
+             str(w["days_above"]),
              ("yes" if w["system_name"] == src_name and self._source["eligible"]
               else "not yet (needs a day at 75%)" if w["system_name"] == src_name else "")]
             for w in watched[:NEXT_ROWS]])

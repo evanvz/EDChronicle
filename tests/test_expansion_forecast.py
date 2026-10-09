@@ -131,3 +131,19 @@ def test_detect_new_systems_ignores_zero_drop_endings():
     out = ef.detect_new_systems(repo, "EUW", TODAY)
     assert [(o["system_name"], o["source"]) for o in out] == [("Tucanae Sector YF-W b2-2", "Ekono")]
 
+
+
+def test_faction_expansion_line_uses_freshest_data_and_taxed_ending():
+    """Expansion is faction-wide: an old snapshot still saying "active" is
+    outranked by the freshest one; the source is the ending that paid tax."""
+    presence = [_p(1, "Ekono", 0.6789, "2026-09-08", "2026-10-07", rec=R),
+                _p(2, "Stale", 0.05, "2026-09-08", "2026-10-02", state="Expansion",
+                   active='[{"State": "Expansion"}]')]
+    hist = {1: [{"snapshot_date": "2026-10-06", "influence": 0.7895, "faction_state": "Expansion",
+                 "active_states": '[{"State": "Expansion"}]'},
+                {"snapshot_date": "2026-10-07", "influence": 0.6789, "recovering_states": R}]}
+    line = ef.faction_expansion_line(presence, hist, TODAY)
+    assert line == ("Faction expansion (one at a time, shown in every system): recovering (cooldown after an "
+                    "expansion) — newest data 2026-10-07 (Ekono). Last expansion ended 2026-10-07 from Ekono "
+                    "(-11.1 expansion tax).")
+    assert ef.faction_expansion_line([], {}, TODAY) == ""
