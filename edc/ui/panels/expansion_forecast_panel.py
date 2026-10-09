@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
 
 from edc.core.edsm_faction_lookup import fetch_populated_cube, fetch_system_factions
 from edc.core.expansion_forecast import (
-    CACHE_MAX_AGE_H, CUBE_LY, LOOKUP_COUNT, LOOKUP_MAX, OUTER_CUBE_LY, WATCH_THRESHOLD, alert_text,
+    CACHE_MAX_AGE_H, CUBE_LY, LOOKUP_MAX, OUTER_CUBE_LY, WATCH_THRESHOLD, alert_text,
     detect_new_systems, first_expansion, in_cube, is_current, likely_source, rank_candidates, watched_systems,
 )
 
@@ -273,12 +273,12 @@ class ExpansionForecastPanel(QWidget):
              (f"{c['distance_ly']:.1f} ly" + (" (±30 ring)" if (c.get("ring") or CUBE_LY) > CUBE_LY else ""))
              if c.get("distance_ly") is not None else "",
              "" if c["faction_count"] is None else str(c["faction_count"]), before(c), fetched]
-            for i, c in enumerate(ranked[:LOOKUP_COUNT])])
+            for i, c in enumerate(ranked)])
         outer = any((c.get("ring") or CUBE_LY) > CUBE_LY for c in cached)
         area = ("the ±20 ly cube and the ±30 ly ring (nothing eligible within ±20 ly)" if outer
                 else "the ±20 ly cube")
         self._target_status.setText(
-            f"From {self._source['system_name']}: top {min(LOOKUP_COUNT, len(ranked))} of {len(cached)} candidates "
+            f"From {self._source['system_name']}: all {len(cached)} candidates "
             f"in {area} (EDSM; faction here before = our history + EDSM's former-faction list; "
             f"{fetched} UTC). Tier 1 = fewer than 7 factions, never there; tier 2 = fewer than 7, "
             f"faction was there before; tier 3 = 7 factions (invasion war).{extra}"

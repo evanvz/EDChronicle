@@ -231,7 +231,7 @@ Notable files:
 | `powerplay_merits` | One row per `PowerplayMerits` journal event, credited to the system the player was in — merits per system per BGS tick and per PowerPlay week (week starts Thursday ~07:00 UTC) |
 | `pp_progress_history` | Each change in a power's acquisition progress per system (journal jumps incl. a startup backfill of all journals, plus EDDN for PowerPlay task systems) — the card's trend chip and merits-between-readings data |
 | `pp_control_history` | Each change in a controlled system's reinforcement/undermining control points this cycle (journal + EDDN for watched systems) — the Watch List, the card chip and the session-report undermining warning |
-| `expansion_candidates` | EDSM faction counts for the nearest 10 candidate systems of the likely expansion source, refreshed at most once a day |
+| `expansion_candidates` | EDSM faction counts (and whether the faction was there before) for every candidate system of the likely expansion source — the ±20 ly cube, plus the ±30 ly ring when nothing inside is eligible — refreshed at most once a day |
 | `faction_cz_kills` | One row per confirmed conflict-zone kill (ground/space, size), for the Session BGS Activity Report |
 | `faction_trade_sold` | One row per commodity/exploration/exobiology sale, credited to the docked station's owning faction (fleet carriers skipped); commodity value is profit, for the Session BGS Activity Report |
 | `station_info` | Landing pad counts, station services, and (for Fleet Carriers) self-reported docking access — from `Docked` events, yours and every commander's via EDDN |

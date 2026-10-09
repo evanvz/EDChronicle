@@ -16,7 +16,6 @@ WATCH_THRESHOLD = 0.70
 EXPANSION_THRESHOLD = 0.75
 CUBE_LY = 20.0
 OUTER_CUBE_LY = 30.0     # searched only when +-20 ly has no eligible system
-LOOKUP_COUNT = 10        # likely targets shown
 LOOKUP_MAX = 40          # EDSM lookups per refresh: every candidate in the cube, capped (~5.5 s each)
 NEW_SYSTEM_DAYS = 3
 NEW_SYSTEM_MAX_INFLUENCE = 0.20   # heuristic: an expansion arrives small (YF-W 9.1%)
