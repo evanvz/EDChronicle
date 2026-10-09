@@ -147,3 +147,18 @@ def test_faction_expansion_line_uses_freshest_data_and_taxed_ending():
                     "expansion) — newest data 2026-10-07 (Ekono). Last expansion ended 2026-10-07 from Ekono "
                     "(-11.1 expansion tax).")
     assert ef.faction_expansion_line([], {}, TODAY) == ""
+
+
+def test_predicted_targets_under_both_disputed_orders():
+    """Ekono, 2026-10-09: no tier 1; Arimavante retreated-from (tier 2),
+    TaexaliTemu 7 factions (tier 3)."""
+    ranked = ef.rank_candidates([
+        {"system_name": "Arimavante", "distance_ly": 10.9, "faction_count": 6, "faction_present": False,
+         "been_before": True},
+        {"system_name": "TaexaliTemu", "distance_ly": 13.2, "faction_count": 7, "faction_present": False,
+         "been_before": False}])
+    assert ef.predicted_targets(ranked) == {"retreat_first": "Arimavante", "invasion_first": "TaexaliTemu"}
+    with_tier1 = ef.rank_candidates([{"system_name": "Fresh", "distance_ly": 19.0, "faction_count": 4,
+                                      "faction_present": False, "been_before": False}]) + ranked
+    assert ef.predicted_targets(with_tier1) == {"retreat_first": "Fresh", "invasion_first": "Fresh"}
+    assert ef.predicted_targets([]) == {"retreat_first": None, "invasion_first": None}

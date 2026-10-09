@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (
 from edc.core.edsm_faction_lookup import fetch_populated_cube, fetch_system_factions
 from edc.core.expansion_forecast import (
     CACHE_MAX_AGE_H, CUBE_LY, LOOKUP_MAX, OUTER_CUBE_LY, WATCH_THRESHOLD, alert_text,
-    detect_new_systems, faction_expansion_line, first_expansion, in_cube, is_current, likely_source, rank_candidates, watched_systems,
+    detect_new_systems, faction_expansion_line, first_expansion, in_cube, predicted_targets, is_current, likely_source, rank_candidates, watched_systems,
 )
 
 NEXT_ROWS = 10   # "next to expand" shows the top 10 by influence
@@ -213,6 +213,11 @@ class ExpansionForecastPanel(QWidget):
         self._target_status.setTextFormat(Qt.TextFormat.PlainText)
         self._target_status.setStyleSheet(_DIM)
         layout.addWidget(self._target_status)
+        self._outcome_label = QLabel("")
+        self._outcome_label.setTextFormat(Qt.TextFormat.PlainText)
+        self._outcome_label.setWordWrap(True)
+        self._outcome_label.setStyleSheet("background:transparent; border:none; color:#FFB347; font-weight:600;")
+        layout.addWidget(self._outcome_label)
         self._target_table = _table(["#", "Tier", "System", "Distance", "Factions", "Faction here before", "Data"])
         self._target_table.cellClicked.connect(self._copy_name)
         self._target_table.setMinimumHeight(self._target_table.verticalHeader().defaultSectionSize() * 9)
@@ -292,6 +297,14 @@ class ExpansionForecastPanel(QWidget):
              if c.get("distance_ly") is not None else "",
              "" if c["faction_count"] is None else str(c["faction_count"]), before(c), fetched]
             for i, c in enumerate(ranked)])
+        pt = predicted_targets(ranked)
+        if pt["retreat_first"] == pt["invasion_first"]:
+            self._outcome_label.setText(f"Likely target: {pt['retreat_first']}" if pt["retreat_first"]
+                                        else "Likely target: none eligible")
+        else:
+            self._outcome_label.setText(
+                f"Likely target: {pt['retreat_first']} if a retreated-from system comes first · "
+                f"{pt['invasion_first']} if a 7-faction invasion comes first (the order of these two is disputed)")
         outer = any((c.get("ring") or CUBE_LY) > CUBE_LY for c in cached)
         area = ("the ±20 ly cube and the ±30 ly ring (nothing eligible within ±20 ly)" if outer
                 else "the ±20 ly cube")
@@ -299,7 +312,8 @@ class ExpansionForecastPanel(QWidget):
             f"From {self._source['system_name']}: all {len(cached)} candidates "
             f"in {area} (EDSM; faction here before = our history + EDSM's former-faction list; "
             f"{fetched} UTC). Tier 1 = fewer than 7 factions, never there; tier 2 = fewer than 7, "
-            f"faction was there before; tier 3 = 7 factions (invasion war).{extra}"
+            f"faction was there before; tier 3 = 7 factions (invasion war) — which of tiers 2 and 3 the game "
+            f"prefers is disputed.{extra}"
             + ("" if any(c["tier"] for c in ranked) or not cached else
                " No eligible system within ±30 ly — the expansion would fail." if outer else
                " No eligible system within ±20 ly — the game would search ±30 ly next, or the expansion fails."))

@@ -172,6 +172,22 @@ def rank_candidates(cands: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return ranked + unchecked
 
 
+def predicted_targets(ranked: List[Dict[str, Any]]) -> Dict[str, Optional[str]]:
+    """The likely target under each order of the disputed tiers: tier 2
+    (retreated from before) vs tier 3 (7 factions, invasion war). The squad
+    bot's notes put retreated first ("EUW's own assessment"); per those
+    notes the Complete BGS Guide puts the invasion first, and the squad
+    reports retreated-first has been proven wrong in practice (2026-10-09).
+    Tier 1 and the +-20 ly ring always come first either way."""
+    eligible = [c for c in ranked if c.get("tier")]
+
+    def pick(order):
+        best = min(eligible, key=lambda c: (c.get("ring") or CUBE_LY, order[c["tier"]],
+                                            c.get("distance_ly") or 0.0), default=None)
+        return best["system_name"] if best else None
+    return {"retreat_first": pick({1: 1, 2: 2, 3: 3}), "invasion_first": pick({1: 1, 3: 2, 2: 3})}
+
+
 def new_systems(presence: List[Dict[str, Any]], endings: List[tuple], today: date,
                 days: int = NEW_SYSTEM_DAYS, coords: Optional[Dict[str, tuple]] = None) -> List[Dict[str, Any]]:
     """Systems the faction first appeared in within `days`, small (<= 20%),
