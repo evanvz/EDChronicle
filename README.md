@@ -128,7 +128,9 @@ This project is built and maintained by a solo developer in personal time. If yo
 
 ## License
 
-[PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0) — free to use, study, modify, and share for any noncommercial purpose (personal use, hobby projects, research, education, and similar). Commercial use — selling it, selling derivatives, or using it in a paid product or service — is not permitted without the copyright holder's permission.
+[GNU General Public License v3.0 or later](https://www.gnu.org/licenses/gpl-3.0.html) (GPL-3.0-or-later). You may use, study, modify, and share it, including in modified form, provided anything you distribute that is based on it is also released under the GPL with its source code.
+
+Frontier Developments' game data used by the app (blueprints, materials, commodities) is not covered by this license; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 Copyright © 2026 CMDR B0B R0GERS
 

@@ -1,5 +1,5 @@
 # EDChronicle — Copyright © 2026 CMDR B0B R0GERS
-# Licensed under the PolyForm Noncommercial License 1.0.0.
+# Licensed under the GNU General Public License v3.0 or later (GPL-3.0-or-later).
 # See the LICENSE file in the project root for full terms.
 
 """Trade Route Loop Planner — finds A<->B round trips (buy X at A, sell at

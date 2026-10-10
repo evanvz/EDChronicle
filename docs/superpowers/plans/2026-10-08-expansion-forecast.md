@@ -184,7 +184,7 @@ Create `edc/core/expansion_forecast.py`:
 
 ```python
 # EDChronicle — Copyright © 2026 CMDR B0B R0GERS
-# Licensed under the PolyForm Noncommercial License 1.0.0.
+# Licensed under the GNU General Public License v3.0 or later (GPL-3.0-or-later).
 # See the LICENSE file in the project root for full terms.
 """Expansion Forecast: where the squadron faction's next BGS expansion is
 likely to land, and where the last one landed. Rules are community-
@@ -696,7 +696,7 @@ Create `edc/ui/panels/expansion_forecast_panel.py`:
 
 ```python
 # EDChronicle — Copyright © 2026 CMDR B0B R0GERS
-# Licensed under the PolyForm Noncommercial License 1.0.0.
+# Licensed under the GNU General Public License v3.0 or later (GPL-3.0-or-later).
 # See the LICENSE file in the project root for full terms.
 """Faction Expansion Tracker -> Forecast tab: the squadron faction's systems
 near expansion, a ranked shortlist of likely targets for the likely source,
