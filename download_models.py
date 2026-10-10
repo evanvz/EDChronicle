@@ -70,6 +70,41 @@ def ensure_vosk_model() -> bool:
     return True
 
 
+KOKORO_BASE_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/"
+KOKORO_DIR_NAME = "kokoro"
+KOKORO_FILES = {
+    "kokoro-v1.0.int8.onnx": "6e742170d309016e5891a994e1ce1559c702a2ccd0075e67ef7157974f6406cb",
+    "voices-v1.0.bin": "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d",
+}
+
+
+def ensure_kokoro_model() -> bool:
+    """Offline neural TTS voice, used when edge-tts is unavailable."""
+    import hashlib
+    model_dir = MODELS_DIR / KOKORO_DIR_NAME
+    model_dir.mkdir(parents=True, exist_ok=True)
+    for name, sha256 in KOKORO_FILES.items():
+        dest = model_dir / name
+        if dest.exists():
+            continue
+        print(f"[tts] Downloading Kokoro {name}...")
+        tmp = dest.with_suffix(dest.suffix + ".part")
+        try:
+            _download_with_progress(KOKORO_BASE_URL + name, tmp)
+            if hashlib.sha256(tmp.read_bytes()).hexdigest() != sha256:
+                print(f"[tts] ERROR: {name} failed its checksum -- not installed")
+                tmp.unlink(missing_ok=True)
+                return False
+            tmp.rename(dest)
+        except Exception as exc:
+            print(f"[tts] ERROR: Kokoro download failed: {exc}")
+            tmp.unlink(missing_ok=True)
+            return False
+    print(f"[tts] Kokoro model ready at {model_dir}")
+    return True
+
+
 if __name__ == "__main__":
     ok = ensure_vosk_model()
+    ok = ensure_kokoro_model() and ok
     sys.exit(0 if ok else 1)

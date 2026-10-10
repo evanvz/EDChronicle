@@ -13,6 +13,12 @@ this engine. Windows classifies SAPI5 ISpVoice COM objects as "Communications" a
 sessions, which triggers Windows' automatic audio ducking (reducing other app audio,
 etc. to ~20% volume). Even calling pyttsx3.init() in the main process registers the
 Python process as a Communications app for the entire session.
+
+Fallback (kept permanently): while edge-tts fails (e.g. Microsoft changing its
+endpoint), lines are synthesised offline with Kokoro (neural, models/kokoro), and if
+that's unavailable, with the Windows OneCore voice via WinRT SpeechSynthesizer. Both
+only render WAV bytes in memory (no audio device, no SAPI5), and we play them ourselves.
+edge-tts is retried every _EDGE_RETRY_SECS, so the fallback stops once it works again.
 """
 
 import logging
@@ -20,6 +26,7 @@ import queue
 import random
 import threading
 import time
+from pathlib import Path
 
 from PyQt6.QtCore import QThread, QObject, pyqtSlot
 
@@ -31,6 +38,113 @@ log = logging.getLogger(__name__)
 _AUDIO_LOCK = threading.Lock()
 
 _ducking_opted_out = False  # only need to do this once per process
+
+_EDGE_RETRY_SECS = 600
+_edge_down_until = 0.0  # monotonic time; shared by alert + comms channels
+
+
+async def _edge_mp3(text: str, voice: str, rate_pct: str) -> bytes:
+    import edge_tts
+    communicate = edge_tts.Communicate(text, voice, rate=rate_pct)
+    chunks = []
+    async for chunk in communicate.stream():
+        if chunk["type"] == "audio":
+            chunks.append(chunk["data"])
+    return b"".join(chunks)
+
+
+async def _windows_wav(text: str, speed: float) -> bytes:
+    from winrt.windows.media.speechsynthesis import SpeechSynthesizer
+    from winrt.windows.storage.streams import DataReader
+    synth = SpeechSynthesizer()
+    synth.options.speaking_rate = min(6.0, max(0.5, speed))
+    stream = await synth.synthesize_text_to_stream_async(text)
+    reader = DataReader(stream.get_input_stream_at(0))
+    n = await reader.load_async(stream.size)
+    buf = bytearray(n)
+    reader.read_bytes(buf)
+    return bytes(buf)
+
+
+# Nearest Kokoro voice for each edge-tts voice we use (alert pool, comms pool, squadron).
+_KOKORO_VOICE = {
+    "en-US-AriaNeural": "af_heart",
+    "en-US-JennyNeural": "af_bella",
+    "en-US-GuyNeural": "am_michael",
+    "en-US-ChristopherNeural": "am_onyx",
+    "en-GB-SoniaNeural": "bf_emma",
+    "en-GB-RyanNeural": "bm_george",
+    "en-AU-NatashaNeural": "af_sarah",
+    "en-AU-WilliamNeural": "am_eric",
+    "en-CA-ClaraNeural": "af_nicole",
+    "en-IE-EmilyNeural": "bf_isabella",
+    "en-CA-LiamNeural": "am_liam",
+    "en-IE-ConnorNeural": "bm_lewis",
+    "en-IN-PrabhatNeural": "bm_daniel",
+    "en-US-EricNeural": "am_echo",
+    "en-US-RogerNeural": "am_puck",
+    "en-GB-ThomasNeural": "bm_fable",
+    "en-US-SteffanNeural": "am_fenrir",
+}
+_KOKORO_DIR = Path(__file__).resolve().parents[2] / "models" / "kokoro"
+# ponytail: one lock for load + synth — espeak phonemizer isn't thread-safe; both channels share it
+_kokoro_lock = threading.Lock()
+_kokoro = None          # kokoro_onnx.Kokoro, loaded on first fallback use (~1.5s)
+_kokoro_failed = False  # model/package missing or broken: go straight to the Windows voice
+
+
+def _kokoro_wav(text: str, voice: str, speed: float) -> tuple[bytes, int] | None:
+    """Offline neural voice. Returns None if Kokoro isn't available."""
+    global _kokoro, _kokoro_failed
+    import io
+    import wave
+    import numpy as np
+    with _kokoro_lock:
+        if _kokoro_failed:
+            return None
+        try:
+            if _kokoro is None:
+                from kokoro_onnx import Kokoro
+                _kokoro = Kokoro(str(_KOKORO_DIR / "kokoro-v1.0.int8.onnx"),
+                                 str(_KOKORO_DIR / "voices-v1.0.bin"))
+                log.info("Kokoro TTS loaded from %s", _KOKORO_DIR)
+            kvoice = _KOKORO_VOICE.get(voice, "am_michael")
+            samples, sr = _kokoro.create(text, voice=kvoice, speed=min(2.0, max(0.5, speed)),
+                                         lang="en-gb" if kvoice.startswith("b") else "en-us")
+        except Exception as e:
+            _kokoro_failed = True
+            log.warning("Kokoro TTS unavailable (%s) — using Windows voice", e)
+            return None
+    pcm = (np.clip(samples, -1.0, 1.0) * 32767).astype("int16").tobytes()
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sr)
+        wf.writeframes(pcm)
+    return buf.getvalue(), sr
+
+
+def _synth_wav(loop, text: str, voice: str, rate_pct: str, speed: float = 1.0) -> tuple[bytes, int]:
+    """Return (wav_bytes, sample_rate): edge-tts, else Kokoro (offline neural), else the Windows voice."""
+    global _edge_down_until
+    import io
+    import wave
+    from edc.audio._alert_edge_proc import _mp3_to_wav_bytes
+    if time.monotonic() >= _edge_down_until:
+        try:
+            mp3_bytes = loop.run_until_complete(_edge_mp3(text, voice, rate_pct))
+            return _mp3_to_wav_bytes(mp3_bytes) if mp3_bytes else (b"", 0)
+        except Exception as e:
+            _edge_down_until = time.monotonic() + _EDGE_RETRY_SECS
+            log.warning("edge-tts failed (%s) — using offline voice, retrying edge-tts in %ds",
+                        e, _EDGE_RETRY_SECS)
+    result = _kokoro_wav(text, voice, speed)
+    if result:
+        return result
+    wav_bytes = loop.run_until_complete(_windows_wav(text, speed))
+    with wave.open(io.BytesIO(wav_bytes)) as wf:
+        return wav_bytes, wf.getframerate()
 
 
 def _opt_out_of_ducking():
@@ -124,7 +238,6 @@ class TTSWorker(QObject):
         import numpy as np
         import miniaudio
         from scipy.io import wavfile
-        from edc.audio._alert_edge_proc import _mp3_to_wav_bytes
 
         rate_pct = f"+{max(0, self._rate - 175)}%" if self._rate >= 175 else f"-{175 - self._rate}%"
         voice = voice or self._voice_name
@@ -132,25 +245,13 @@ class TTSWorker(QObject):
         if self._interrupt.is_set():
             return
 
-        async def _synth():
-            import edge_tts
-            communicate = edge_tts.Communicate(text, voice, rate=rate_pct)
-            chunks = []
-            async for chunk in communicate.stream():
-                if chunk["type"] == "audio":
-                    chunks.append(chunk["data"])
-            return b"".join(chunks)
-
         try:
             log.info("TTS _speak_edge: synthesising %r", text[:50])
-            mp3_bytes = self._loop.run_until_complete(_synth())
-            log.info("TTS _speak_edge: synth done — %d bytes", len(mp3_bytes) if mp3_bytes else 0)
-            if not mp3_bytes or self._interrupt.is_set():
+            wav_bytes, sr = _synth_wav(self._loop, text, voice, rate_pct, self._rate / 175)
+            log.info("TTS _speak_edge: synth done — %d bytes", len(wav_bytes))
+            if not wav_bytes or self._interrupt.is_set():
                 log.info("TTS _speak_edge: skipped (empty or interrupted)")
                 return
-            if self._interrupt.is_set():
-                return
-            wav_bytes, sr = _mp3_to_wav_bytes(mp3_bytes)
             buf = io.BytesIO(wav_bytes)
             _, data = wavfile.read(buf)
             if data.dtype == "int16":
@@ -271,20 +372,11 @@ class CommsWorker(QObject):
 
     def _speak_one(self, text: str, voice_id: str | None):
         import random as _random
-        from edc.audio._comms_edge_proc import _mp3_to_wav_bytes, _dsp_and_play
+        from edc.audio._comms_edge_proc import _dsp_and_play
         from edc.audio.audio_devices import resolve_playback_device_id
 
         pan = _random.uniform(-0.7, 0.7)
         voice = voice_id or "en-US-GuyNeural"
-
-        async def _synth():
-            import edge_tts
-            communicate = edge_tts.Communicate(text, voice, rate="+0%")
-            chunks = []
-            async for chunk in communicate.stream():
-                if chunk["type"] == "audio":
-                    chunks.append(chunk["data"])
-            return b"".join(chunks)
 
         # Cleared before synthesis, not after -- edge_tts's network round
         # trip is long enough for interrupt() to fire mid-synthesis (e.g.
@@ -296,11 +388,10 @@ class CommsWorker(QObject):
         # of blindly clearing means an interrupt requested during the
         # network call correctly skips playback.
         self._interrupt.clear()
-        mp3_bytes = self._loop.run_until_complete(_synth())
-        if mp3_bytes and not self._interrupt.is_set():
-            wav_bytes = _mp3_to_wav_bytes(mp3_bytes)
+        wav_bytes, sr = _synth_wav(self._loop, text, voice, "+0%")
+        if wav_bytes and not self._interrupt.is_set():
             device_id = resolve_playback_device_id(self._output_device_name)
-            _dsp_and_play(wav_bytes, 22050, self._volume, pan, self._interrupt, device_id)
+            _dsp_and_play(wav_bytes, sr, self._volume, pan, self._interrupt, device_id)
 
     @pyqtSlot()
     def run(self):

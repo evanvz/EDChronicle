@@ -31,7 +31,7 @@ def test_interrupt_during_synthesis_skips_playback():
             yield {"type": "audio", "data": b"fake-mp3-bytes"}
 
     with patch("edge_tts.Communicate", _FakeCommunicate), \
-         patch("edc.audio._comms_edge_proc._mp3_to_wav_bytes", return_value=b"wav"), \
+         patch("edc.audio._alert_edge_proc._mp3_to_wav_bytes", return_value=(b"wav", 22050)), \
          patch("edc.audio._comms_edge_proc._dsp_and_play") as mock_play, \
          patch("edc.audio.audio_devices.resolve_playback_device_id", return_value=None):
         worker._speak_one("Test message.", "en-US-GuyNeural")
@@ -50,7 +50,7 @@ def test_no_interrupt_plays_normally():
             yield {"type": "audio", "data": b"fake-mp3-bytes"}
 
     with patch("edge_tts.Communicate", _FakeCommunicate), \
-         patch("edc.audio._comms_edge_proc._mp3_to_wav_bytes", return_value=b"wav"), \
+         patch("edc.audio._alert_edge_proc._mp3_to_wav_bytes", return_value=(b"wav", 22050)), \
          patch("edc.audio._comms_edge_proc._dsp_and_play") as mock_play, \
          patch("edc.audio.audio_devices.resolve_playback_device_id", return_value=None):
         worker._speak_one("Test message.", "en-US-GuyNeural")
