@@ -38,11 +38,12 @@ echo Installing / updating dependencies...
 .venv\Scripts\python.exe -m pip install --upgrade -r requirements.txt
 
 echo.
-echo Downloading voice command model...
+echo Downloading voice models (speech voices and voice commands)...
 .venv\Scripts\python.exe download_models.py
 if errorlevel 1 (
-    echo WARNING: Voice command model download failed. Voice commands will be
-    echo unavailable until you re-run install.bat successfully.
+    echo WARNING: A voice model download failed. Without the Kokoro voices, callouts
+    echo use the Windows voice; without the Vosk model, voice commands are unavailable.
+    echo Re-run install.bat to retry.
 )
 
 echo.
