@@ -35,10 +35,23 @@ if exist .venv\Scripts\python.exe (
 )
 
 echo Installing / updating dependencies...
+.venv\Scripts\python.exe -m pip install --upgrade -r requirements.txt
+if errorlevel 1 (
+    echo ERROR: Installing the required packages failed. See the messages above.
+    echo EDChronicle can't run without them. Check your internet connection and re-run install.bat.
+    pause
+    exit /b 1
+)
+
+echo Installing voice packages...
 rem Our own copy of the voice packages (github.com/evanvz/EDChronicle-models), used if PyPI no
 rem longer has them. Relies on GitHub's expanded_assets page; if that ever breaks, pip only warns.
 set EDC_PACKAGES=https://github.com/evanvz/EDChronicle-models/releases/expanded_assets/packages-2026-10
-.venv\Scripts\python.exe -m pip install --upgrade -r requirements.txt --find-links %EDC_PACKAGES%
+.venv\Scripts\python.exe -m pip install --upgrade -r requirements-voice.txt --find-links %EDC_PACKAGES%
+if errorlevel 1 (
+    echo WARNING: Installing the voice packages failed. EDChronicle still runs, but spoken
+    echo callouts and/or voice commands may be unavailable. Re-run install.bat to retry.
+)
 
 echo.
 echo Downloading voice models (speech voices and voice commands)...

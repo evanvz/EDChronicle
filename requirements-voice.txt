@@ -1,0 +1,10 @@
+# Optional voice packages, installed separately by install.bat so a failure here can't
+# break the core install. Without them: callouts are skipped (Kokoro/Windows voice missing)
+# and voice commands are off (Vosk missing); the rest of the app works.
+winrt-runtime==3.2.1
+winrt-Windows.Foundation==3.2.1
+winrt-Windows.Foundation.Collections==3.2.1
+winrt-Windows.Media.SpeechSynthesis==3.2.1
+winrt-Windows.Storage.Streams==3.2.1
+kokoro-onnx==0.6.1
+vosk==0.3.45
