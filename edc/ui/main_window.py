@@ -535,27 +535,52 @@ class _UiStallWatchdog:
         self._timer.setInterval(250)
         self._timer.timeout.connect(self._heartbeat)
         self._timer.start()
+        import gc
+        gc.callbacks.append(self._gc_timer)
+        self._gc_start = 0.0
         threading.Thread(target=self._watch, name="ui-stall-watchdog", daemon=True).start()
 
     def _heartbeat(self):
         self._beat = time.monotonic()
 
+    def _gc_timer(self, phase, info):
+        # A full collection pauses every Python thread, the UI included.
+        if phase == "start":
+            self._gc_start = time.perf_counter()
+        elif (took := time.perf_counter() - self._gc_start) >= 0.2:
+            log.warning("Python garbage collection (generation %d) took %.0fms, collected %d",
+                        info.get("generation", -1), took * 1000, info.get("collected", 0))
+
     def _watch(self):
         import traceback
         reported_for = None
+        cpu_at_beat = time.process_time()
         while True:
             time.sleep(0.5)
             beat = self._beat
             stalled = time.monotonic() - beat
             if stalled >= self.STALL_S and reported_for != beat:
                 reported_for = beat
-                frame = self._sys._current_frames().get(self._main_ident)
+                frames = self._sys._current_frames()
+                names = {t.ident: t.name for t in threading.enumerate()}
+                frame = frames.get(self._main_ident)
                 stack = "".join(traceback.format_stack(frame)) if frame else "(no frame)"
-                log.warning("UI thread unresponsive for %.1fs%s — currently at:\n%s",
-                            stalled, self._describe(), stack)
+                # The UI stack alone often just shows app.exec() (stuck in Qt or waiting for
+                # the GIL), so also dump what every other thread is doing at that moment.
+                others = "".join(
+                    f"--- thread {names.get(ident, ident)}:\n" + "".join(traceback.format_stack(f)[-6:])
+                    for ident, f in frames.items()
+                    if ident not in (self._main_ident, threading.get_ident()))
+                # Process CPU seconds used while stalled: ~0 means starved (by the game/Windows),
+                # >= stall length means some thread here was busy.
+                log.warning("UI thread unresponsive for %.1fs%s, process CPU %.1fs since last beat — currently at:\n%s"
+                            "Other threads:\n%s",
+                            stalled, self._describe(), time.process_time() - cpu_at_beat, stack, others)
             elif reported_for is not None and reported_for != beat:
                 log.warning("UI thread recovered after a %.1fs stall", beat - reported_for)
                 reported_for = None
+            if reported_for is None:
+                cpu_at_beat = time.process_time()
 
 
 class _EddnFlushWorker(QObject):
