@@ -59,3 +59,13 @@ def test_every_edge_voice_maps_to_a_kokoro_voice():
     used |= set(engine._comms_voice_pool)
     assert used <= set(tts._KOKORO_VOICE)
 
+
+def test_ship_computer_fx_keeps_peak_and_length():
+    import numpy as np
+    sr = 24000
+    x = (0.5 * np.sin(2 * np.pi * 220 * np.arange(sr) / sr)).astype("float32")
+    y = tts._ship_computer_fx(x, sr)
+    assert len(y) == len(x) and y.dtype == np.float32
+    assert abs(np.abs(y).max() - 0.5) < 1e-4
+    assert not np.allclose(x, y)
+    assert len(tts._ship_computer_fx(np.zeros(0, dtype="float32"), sr)) == 0

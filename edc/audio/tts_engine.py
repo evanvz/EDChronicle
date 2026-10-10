@@ -125,6 +125,23 @@ def _kokoro_wav(text: str, voice: str, speed: float) -> tuple[bytes, int] | None
     return buf.getvalue(), sr
 
 
+def _ship_computer_fx(data, sr: int):
+    """Commander channel only: subtle 'ship computer' timbre — a 6 ms metallic comb
+    plus 20% ring modulation at 45 Hz. Peak-matched so the volume setting is unchanged."""
+    import numpy as np
+    from scipy.signal import lfilter
+    if not len(data):
+        return data
+    delay = int(sr * 0.006)
+    a = np.zeros(delay + 1, dtype="float32")
+    a[0], a[delay] = 1.0, -0.35
+    out = lfilter([1.0], a, data).astype("float32")
+    t = np.arange(len(out), dtype="float32") / sr
+    out = 0.8 * out + 0.2 * out * np.sin(2 * np.pi * 45 * t, dtype="float32")
+    peak_in, peak_out = float(np.abs(data).max()), float(np.abs(out).max())
+    return out * (peak_in / peak_out) if peak_out > 0 else out
+
+
 def _synth_wav(loop, text: str, voice: str, rate_pct: str, speed: float = 1.0) -> tuple[bytes, int]:
     """Return (wav_bytes, sample_rate): edge-tts, else Kokoro (offline neural), else the Windows voice."""
     global _edge_down_until
@@ -262,6 +279,7 @@ class TTSWorker(QObject):
                 data = data.astype("float32")
             if data.ndim > 1:
                 data = data[:, 0]
+            data = _ship_computer_fx(data, sr)
             pcm = (np.clip(data * float(self._volume) * float(vol_scale), -1.0, 1.0) * 32767).astype("int16").tobytes()
 
             interrupt = self._interrupt
