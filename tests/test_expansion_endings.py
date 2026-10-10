@@ -1,5 +1,5 @@
 """expansion_endings(): days an expansion finished, with the influence
-change (the expected "expansion tax"). Ekono / Elite United Worlds,
+change. Ekono / Elite United Worlds,
 from the app's own snapshots 2026-09-22..10-07."""
 from edc.ui.panels.faction_expansion_dialog import expansion_endings
 

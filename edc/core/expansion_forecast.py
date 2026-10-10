@@ -22,10 +22,8 @@ NEW_SYSTEM_MAX_INFLUENCE = 0.20   # heuristic: an expansion arrives small (YF-W 
 CURRENT_DAYS = 14                 # a presence older than this is treated as "left"
 CACHE_MAX_AGE_H = 24
 # an ending only counts as a successful expansion source if influence dropped at least this many
-# points (same threshold the Faction Expansion Tracker chart uses for its "expansion tax" label)
-# The squad reports the tax is exactly 15%; the net drop the source shows can
-# be smaller when activity pushed it up in the same tick (Ekono: -14.8, -11.1).
-EXPANSION_TAX_MIN = 5.0
+# points. The net drop the source shows varies with activity in the same tick (Ekono: -14.8, -11.1).
+SOURCE_DROP_MIN = 5.0
 
 
 def parse_states(raw) -> List[str]:
@@ -54,9 +52,8 @@ def expansion_endings(history_asc: List[Dict[str, Any]]) -> List[tuple]:
     """[(index, snapshot_date, influence change in points)] for each day an
     expansion ended: the first day "Expansion" shows under recovering
     states (faction_state can still read "Expansion" that day, and not every
-    source carries the state lists, so this is the reliable signal). A
-    finished expansion usually costs the home system its "expansion tax",
-    about 15% (SINC Complete BGS Guide 2024, p48/53): Ekono lost 14.8 on
+    source carries the state lists, so this is the reliable signal). The
+    source system drops when its expansion finishes: Ekono lost 14.8 on
     2026-09-23 and 11.1 on 2026-10-07. Expansion state is faction-wide, so
     an ending also shows in every system that WASN'T the source, with no
     drop there (Ekono on 2026-08-09 and 09-11: other systems' expansions,
@@ -121,8 +118,8 @@ def faction_expansion_line(presence: List[Dict[str, Any]], histories: Dict[int, 
     (one at a time, from one source, and shown in every one of its systems
     -- seen 2026-10-09: 329 EUW systems "active", some at 1.9% influence),
     so a system's own state only says which phase its last data caught.
-    The freshest snapshot gives the current phase; the last ending that
-    paid the expansion tax gives where it last came from."""
+    The freshest snapshot gives the current phase; the last ending with a
+    source-size drop gives where it last came from."""
     current = [r for r in presence if is_current(r, today)]
     if not current:
         return ""
@@ -130,13 +127,13 @@ def faction_expansion_line(presence: List[Dict[str, Any]], histories: Dict[int, 
     names = {r["system_address"]: r.get("system_name") for r in presence}
     ends = [(d, names.get(addr) or str(addr), delta)
             for addr, hist in histories.items()
-            for _i, d, delta in expansion_endings(hist) if delta <= -EXPANSION_TAX_MIN]
+            for _i, d, delta in expansion_endings(hist) if delta <= -SOURCE_DROP_MIN]
     text = (f"Faction expansion (one at a time, shown in every system): "
             f"{_PHASE_TEXT[expansion_phase(newest)]} — newest data {newest.get('last_seen')} "
             f"({newest.get('system_name')}).")
     if ends:
-        d, src, delta = max(ends)
-        text += f" Last expansion ended {d} from {src} ({delta:+.1f} expansion tax)."
+        d, src, _delta = max(ends)
+        text += f" Last expansion ended {d} from {src}."
     return text
 
 
@@ -217,7 +214,7 @@ def new_systems(presence: List[Dict[str, Any]], endings: List[tuple], today: dat
                     and in_cube(src_xyz, new_xyz, half=30.0)):
                 near.append((sum((a - b) ** 2 for a, b in zip(src_xyz, new_xyz)), name))
         source = min(near)[1] if near else None
-        # no taxed expansion within range -> not an expansion: most likely the
+        # no source-size drop within range -> not an expansion: most likely the
         # faction's own colonisation (or a system first reported late)
         out.append({"system_name": r.get("system_name"), "influence": inf,
                     "first_seen": str(first)[:10], "source": source,
@@ -240,8 +237,8 @@ def first_expansion(items: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
 
 def detect_new_systems(repo, faction: str, today: Optional[date] = None) -> List[Dict[str, Any]]:
     """new_systems() from the repository: expansion endings are only looked
-    for in faction systems at 50%+ (a source sits near 60-70% after paying
-    the expansion tax), to keep it to a few history queries."""
+    for in faction systems at 50%+ (a source sits near 60-70% after its
+    expansion ends), to keep it to a few history queries."""
     today = today or date.today()
     presence = repo.get_squadron_presence(faction)
     endings = []
@@ -249,6 +246,6 @@ def detect_new_systems(repo, faction: str, today: Optional[date] = None) -> List
         if (r.get("influence") or 0.0) >= 0.5:
             hist = list(reversed(repo.get_faction_history(r["system_address"], faction)))
             endings += [(r["system_name"], d) for _i, d, delta in expansion_endings(hist)
-                        if delta <= -EXPANSION_TAX_MIN]
+                        if delta <= -SOURCE_DROP_MIN]
     names = {r["system_name"] for r in presence} | {n for n, _d in endings}
     return new_systems(presence, endings, today, coords=repo.get_system_coords_for_names(sorted(names)))

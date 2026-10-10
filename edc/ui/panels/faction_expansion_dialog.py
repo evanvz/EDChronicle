@@ -36,7 +36,7 @@ from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, PRI
 from edc.ui import formatting as fmt
 from edc.core.edsm_faction_lookup import fetch_system_factions, ERROR_BLOCKED, ERROR_NOT_FOUND
 from edc.core.expansion_forecast import (
-    EXPANSION_TAX_MIN, expansion_endings, is_expanding as _is_expanding,
+    expansion_endings, is_expanding as _is_expanding,
 )
 from edc.ui.panels.expansion_forecast_panel import ExpansionForecastPanel
 from edc.ui.panels.powerplay_system_status_panel import _is_decay_risk, _prediction_color
@@ -131,16 +131,14 @@ class _InfluenceTrendWidget(QWidget):
         for x, y in coords:
             p.drawEllipse(int(x) - 2, int(y) - 2, 4, 4)
 
-        # Expansion endings: the expected "expansion tax" drop, labelled
-        for i, _date, delta in self._events:
+        # Expansion endings, marked
+        for i, _date, _delta in self._events:
             if 0 <= i < len(coords):
                 x = int(coords[i][0])
                 p.setPen(QPen(QColor("#FFB347"), 1, Qt.PenStyle.DotLine))
                 p.drawLine(x, pad_t, x, h - pad_b)
                 p.setPen(QColor("#FFB347"))
-                # no drop here = another system's expansion (the state shows in every system)
-                label = (f"expansion tax {delta:+.1f}" if delta <= -EXPANSION_TAX_MIN
-                         else "expansion ended (from another system)")
+                label = "expansion"
                 tw = p.fontMetrics().horizontalAdvance(label)
                 p.drawText(min(x + 3, w - pad_r - tw), h - pad_b + 14, label)
 
@@ -544,15 +542,9 @@ class FactionExpansionDialog(QDialog):
             )
             self._expansion_banner.setVisible(True)
         elif endings and endings[-1][0] >= len(history_asc) - 3:
-            _i, date, delta = endings[-1]
-            tax = (f"influence here changed {delta:+.1f} pts — that's the expansion tax: a finished "
-                   "expansion costs the home system 15% (less net if activity pushed it up the same tick), "
-                   "so this drop is expected. "
-                   if delta <= -EXPANSION_TAX_MIN else
-                   f"influence here changed {delta:+.1f} pts, so this system wasn't the source — the "
-                   "expansion came from another of the faction's systems (the state shows in every one). ")
+            _i, date, _delta = endings[-1]
             self._expansion_banner.setText(
-                f"✅ EXPANSION ENDED ({date}) — {tax}"
+                f"✅ EXPANSION ENDED ({date}) — "
                 "It can expand again once back above 75% after recovering."
             )
             self._expansion_banner.setVisible(True)
