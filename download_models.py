@@ -79,7 +79,7 @@ KOKORO_FILES = {
 
 
 def ensure_kokoro_model() -> bool:
-    """Offline neural TTS voice, used when edge-tts is unavailable."""
+    """Offline neural TTS voices (Kokoro), the app's speech engine."""
     import hashlib
     model_dir = MODELS_DIR / KOKORO_DIR_NAME
     model_dir.mkdir(parents=True, exist_ok=True)

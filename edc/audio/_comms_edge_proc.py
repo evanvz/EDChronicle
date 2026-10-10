@@ -3,21 +3,12 @@
 # See the LICENSE file in the project root for full terms.
 
 """
-Comms radio subprocess — edge-tts variant.
-Synthesises speech with Microsoft Edge neural TTS, applies handheld-radio DSP,
-plays with stereo panning. No SAPI5 fallback — SAPI5 triggers Windows audio ducking.
-
-Usage: python _comms_edge_proc.py <rate_pct> <volume> <voice_name> <pan> <text>
-  rate_pct:   integer percentage offset e.g. "+10" or "-5" (edge-tts format)
-  volume:     float 0.0-1.0 (applied in DSP chain)
-  voice_name: edge-tts voice name e.g. "en-US-GuyNeural"
-  pan:        float -1.0 to 1.0
-  text:       speech text
+Comms radio DSP: handheld-radio filtering, dropouts, clicks and stereo panning,
+used by tts_engine.CommsWorker (and the push-to-talk cue tones). No SAPI5 — it
+triggers Windows audio ducking.
 """
-import asyncio
 import io
 import os
-import sys
 
 
 def _make_radio_click(sr: int, volume: float) -> "np.ndarray":
@@ -247,51 +238,3 @@ def _dsp_and_play(pcm_bytes: bytes, sample_rate: int, volume: float, pan: float,
     finally:
         device.stop()
 
-
-async def _synthesise(voice: str, rate_pct: str, text: str) -> bytes:
-    """Return WAV bytes from edge-tts."""
-    import edge_tts
-    communicate = edge_tts.Communicate(text, voice, rate=rate_pct)
-    chunks = []
-    async for chunk in communicate.stream():
-        if chunk["type"] == "audio":
-            chunks.append(chunk["data"])
-    return b"".join(chunks)
-
-
-def _mp3_to_wav_bytes(mp3_bytes: bytes) -> bytes:
-    """Decode MP3 → WAV bytes using miniaudio."""
-    import miniaudio
-    decoded = miniaudio.decode(mp3_bytes, output_format=miniaudio.SampleFormat.SIGNED16,
-                               nchannels=1, sample_rate=22050)
-    import wave
-    buf = io.BytesIO()
-    with wave.open(buf, "wb") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(decoded.sample_rate)
-        wf.writeframes(decoded.samples.tobytes())
-    return buf.getvalue()
-
-
-def _run(rate_pct: str, volume: float, voice: str, pan: float, text: str):
-    # SAPI5 fallback removed — it registers as a Windows Communications stream
-    # and triggers audio ducking on other apps.
-    try:
-        mp3_bytes = asyncio.run(_synthesise(voice, rate_pct, text))
-        if mp3_bytes:
-            wav_bytes = _mp3_to_wav_bytes(mp3_bytes)
-            _dsp_and_play(wav_bytes, 22050, volume, pan)
-    except Exception:
-        pass  # Silent skip — a missed comms line is better than ducking all other audio.
-
-
-if __name__ == "__main__":
-    if len(sys.argv) < 6:
-        sys.exit(1)
-    _rate_pct = sys.argv[1]
-    _volume   = float(sys.argv[2])
-    _voice    = sys.argv[3]
-    _pan      = float(sys.argv[4])
-    _text     = sys.argv[5]
-    _run(_rate_pct, _volume, _voice, _pan, _text)

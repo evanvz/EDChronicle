@@ -149,7 +149,7 @@ Notable files:
 TTS engine, audio playback, voice command recognition, and per-feature phrase banks.
 
 Notable files:
-- `tts_engine.py` — Edge TTS synthesis, priority queue, miniaudio playback, separate main/comms channels
+- `tts_engine.py` — Kokoro offline TTS (Windows OneCore voice if unavailable), priority queue, miniaudio playback, separate main/comms channels
 - `_alert_edge_proc.py` — alert audio playback subprocess
 - `_comms_edge_proc.py` — comms channel audio subprocess (also source of the PTT radio-click DSP used for voice-command cue tones)
 - `voice_commands.py` — Vosk offline voice recognition (ship commands + tab-navigation phrases)

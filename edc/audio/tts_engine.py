@@ -4,9 +4,12 @@
 
 """
 TTS Engine for EDHelper.
-Main alerts use edge-tts (Microsoft Edge neural voices) synthesised directly
-in-thread and played via sounddevice — no subprocess per utterance.
-Comms channel uses edge-tts with radio DSP effect.
+Speech is synthesised offline with Kokoro (neural voices, models/kokoro) directly
+in-thread and played via miniaudio — no subprocess, no network. If Kokoro is
+unavailable, the Windows OneCore voice (WinRT SpeechSynthesizer) is used instead.
+Main alerts get a subtle "ship computer" effect; the comms channel gets radio DSP.
+edge-tts was dropped on 2026-10-10: Microsoft's endpoint change broke it, and Kokoro
+sounded better. Voice ids are still the old Edge names so saved settings stay valid.
 
 IMPORTANT: pyttsx3 / SAPI5 is intentionally NOT used for audio playback anywhere in
 this engine. Windows classifies SAPI5 ISpVoice COM objects as "Communications" audio
@@ -14,11 +17,8 @@ sessions, which triggers Windows' automatic audio ducking (reducing other app au
 etc. to ~20% volume). Even calling pyttsx3.init() in the main process registers the
 Python process as a Communications app for the entire session.
 
-Fallback (kept permanently): while edge-tts fails (e.g. Microsoft changing its
-endpoint), lines are synthesised offline with Kokoro (neural, models/kokoro), and if
-that's unavailable, with the Windows OneCore voice via WinRT SpeechSynthesizer. Both
-only render WAV bytes in memory (no audio device, no SAPI5), and we play them ourselves.
-edge-tts is retried every _EDGE_RETRY_SECS, so the fallback stops once it works again.
+Kokoro and WinRT only render WAV bytes in memory (no audio device, no SAPI5); we play
+them ourselves.
 """
 
 import logging
@@ -34,23 +34,10 @@ log = logging.getLogger(__name__)
 
 # Covers both miniaudio decode and sounddevice playback — neither is safe for
 # concurrent use across threads (miniaudio releases GIL, PortAudio has a single
-# global stream). Synthesis (edge-tts network call) still runs outside this lock.
+# global stream). Synthesis still runs outside this lock.
 _AUDIO_LOCK = threading.Lock()
 
 _ducking_opted_out = False  # only need to do this once per process
-
-_EDGE_RETRY_SECS = 600
-_edge_down_until = 0.0  # monotonic time; shared by alert + comms channels
-
-
-async def _edge_mp3(text: str, voice: str, rate_pct: str) -> bytes:
-    import edge_tts
-    communicate = edge_tts.Communicate(text, voice, rate=rate_pct)
-    chunks = []
-    async for chunk in communicate.stream():
-        if chunk["type"] == "audio":
-            chunks.append(chunk["data"])
-    return b"".join(chunks)
 
 
 async def _windows_wav(text: str, speed: float) -> bytes:
@@ -66,7 +53,8 @@ async def _windows_wav(text: str, speed: float) -> bytes:
     return bytes(buf)
 
 
-# Nearest Kokoro voice for each edge-tts voice we use (alert pool, comms pool, squadron).
+# Kokoro voice for each voice id we use (alert pool, comms pool, squadron). The ids are the
+# old edge-tts names, kept so saved voice settings stay valid.
 _KOKORO_VOICE = {
     "en-US-AriaNeural": "af_heart",
     "en-US-JennyNeural": "af_bella",
@@ -89,13 +77,33 @@ _KOKORO_VOICE = {
 _KOKORO_DIR = Path(__file__).resolve().parents[2] / "models" / "kokoro"
 # ponytail: one lock for load + synth — espeak phonemizer isn't thread-safe; both channels share it
 _kokoro_lock = threading.Lock()
-_kokoro = None          # kokoro_onnx.Kokoro, loaded on first fallback use (~1.5s)
+_kokoro = None          # kokoro_onnx.Kokoro, preloaded in the background by TTSEngine.start()
 _kokoro_failed = False  # model/package missing or broken: go straight to the Windows voice
+
+
+def _load_kokoro():
+    """Load the model once (~1.5s idle, ~6s while the game loads). Caller holds _kokoro_lock."""
+    global _kokoro
+    if _kokoro is None:
+        from kokoro_onnx import Kokoro
+        _kokoro = Kokoro(str(_KOKORO_DIR / "kokoro-v1.0.int8.onnx"),
+                         str(_KOKORO_DIR / "voices-v1.0.bin"))
+        log.info("Kokoro TTS loaded from %s", _KOKORO_DIR)
+
+
+def _preload_kokoro():
+    global _kokoro_failed
+    with _kokoro_lock:
+        try:
+            _load_kokoro()
+        except Exception as e:
+            _kokoro_failed = True
+            log.warning("Kokoro TTS unavailable (%s) — using Windows voice", e)
 
 
 def _kokoro_wav(text: str, voice: str, speed: float) -> tuple[bytes, int] | None:
     """Offline neural voice. Returns None if Kokoro isn't available."""
-    global _kokoro, _kokoro_failed
+    global _kokoro_failed
     import io
     import wave
     import numpy as np
@@ -103,11 +111,7 @@ def _kokoro_wav(text: str, voice: str, speed: float) -> tuple[bytes, int] | None
         if _kokoro_failed:
             return None
         try:
-            if _kokoro is None:
-                from kokoro_onnx import Kokoro
-                _kokoro = Kokoro(str(_KOKORO_DIR / "kokoro-v1.0.int8.onnx"),
-                                 str(_KOKORO_DIR / "voices-v1.0.bin"))
-                log.info("Kokoro TTS loaded from %s", _KOKORO_DIR)
+            _load_kokoro()
             kvoice = _KOKORO_VOICE.get(voice, "am_michael")
             samples, sr = _kokoro.create(text, voice=kvoice, speed=min(2.0, max(0.5, speed)),
                                          lang="en-gb" if kvoice.startswith("b") else "en-us")
@@ -142,20 +146,10 @@ def _ship_computer_fx(data, sr: int):
     return out * (peak_in / peak_out) if peak_out > 0 else out
 
 
-def _synth_wav(loop, text: str, voice: str, rate_pct: str, speed: float = 1.0) -> tuple[bytes, int]:
-    """Return (wav_bytes, sample_rate): edge-tts, else Kokoro (offline neural), else the Windows voice."""
-    global _edge_down_until
+def _synth_wav(loop, text: str, voice: str, speed: float = 1.0) -> tuple[bytes, int]:
+    """Return (wav_bytes, sample_rate): Kokoro, else the Windows voice."""
     import io
     import wave
-    from edc.audio._alert_edge_proc import _mp3_to_wav_bytes
-    if time.monotonic() >= _edge_down_until:
-        try:
-            mp3_bytes = loop.run_until_complete(_edge_mp3(text, voice, rate_pct))
-            return _mp3_to_wav_bytes(mp3_bytes) if mp3_bytes else (b"", 0)
-        except Exception as e:
-            _edge_down_until = time.monotonic() + _EDGE_RETRY_SECS
-            log.warning("edge-tts failed (%s) — using offline voice, retrying edge-tts in %ds",
-                        e, _EDGE_RETRY_SECS)
     result = _kokoro_wav(text, voice, speed)
     if result:
         return result
@@ -203,23 +197,23 @@ _ALERT_VOICE_POOL = [
 ]
 
 _ALERT_VOICE_DISPLAY = [
-    "Aria — US Female",
-    "Jenny — US Female",
-    "Guy — US Male",
-    "Christopher — US Male",
-    "Sonia — GB Female",
-    "Ryan — GB Male",
-    "Natasha — AU Female",
-    "William — AU Male",
-    "Clara — CA Female",
-    "Emily — IE Female",
+    "Heart — US Female",
+    "Bella — US Female",
+    "Michael — US Male",
+    "Onyx — US Male",
+    "Emma — GB Female",
+    "George — GB Male",
+    "Sarah — US Female",
+    "Eric — US Male",
+    "Nicole — US Female",
+    "Isabella — GB Female",
 ]
 
 
 class TTSWorker(QObject):
     """
     Runs inside a QThread.
-    Synthesises speech via edge-tts directly in-thread (no subprocess) and
+    Synthesises speech via _synth_wav directly in-thread (no subprocess) and
     plays through sounddevice.  Eliminates per-utterance Python startup cost.
     """
 
@@ -250,24 +244,23 @@ class TTSWorker(QObject):
             except Exception:
                 pass
 
-    def _speak_edge(self, text: str, voice: str | None = None, vol_scale: float = 1.0):
+    def _speak(self, text: str, voice: str | None = None, vol_scale: float = 1.0):
         import io
         import numpy as np
         import miniaudio
         from scipy.io import wavfile
 
-        rate_pct = f"+{max(0, self._rate - 175)}%" if self._rate >= 175 else f"-{175 - self._rate}%"
         voice = voice or self._voice_name
 
         if self._interrupt.is_set():
             return
 
         try:
-            log.info("TTS _speak_edge: synthesising %r", text[:50])
-            wav_bytes, sr = _synth_wav(self._loop, text, voice, rate_pct, self._rate / 175)
-            log.info("TTS _speak_edge: synth done — %d bytes", len(wav_bytes))
+            log.info("TTS _speak: synthesising %r", text[:50])
+            wav_bytes, sr = _synth_wav(self._loop, text, voice, self._rate / 175)
+            log.info("TTS _speak: synth done — %d bytes", len(wav_bytes))
             if not wav_bytes or self._interrupt.is_set():
-                log.info("TTS _speak_edge: skipped (empty or interrupted)")
+                log.info("TTS _speak: skipped (empty or interrupted)")
                 return
             buf = io.BytesIO(wav_bytes)
             _, data = wavfile.read(buf)
@@ -313,19 +306,19 @@ class TTSWorker(QObject):
             gen = _gen()
             next(gen)
             device.start(gen)
-            log.info("TTS _speak_edge: device started sr=%d pcm=%d bytes", sr, len(pcm))
+            log.info("TTS _speak: device started sr=%d pcm=%d bytes", sr, len(pcm))
             try:
                 while not done.is_set() and not interrupt.is_set():
                     done.wait(timeout=0.1)
             finally:
                 device.stop()
                 self._playback_device = None
-            log.info("TTS _speak_edge: device stopped")
+            log.info("TTS _speak: device stopped")
         except Exception as e:
             log.error("TTS alert speak error: %s", e, exc_info=True)
 
     def _speak_one(self, text: str, voice: str | None = None, vol_scale: float = 1.0):
-        self._speak_edge(text, voice, vol_scale)
+        self._speak(text, voice, vol_scale)
 
     @pyqtSlot()
     def run(self):
@@ -396,17 +389,17 @@ class CommsWorker(QObject):
         pan = _random.uniform(-0.7, 0.7)
         voice = voice_id or "en-US-GuyNeural"
 
-        # Cleared before synthesis, not after -- edge_tts's network round
-        # trip is long enough for interrupt() to fire mid-synthesis (e.g.
+        # Cleared before synthesis, not after -- synthesis
+        # takes long enough for interrupt() to fire mid-synthesis (e.g.
         # a StartJump cutting the departed system's chatter), and clearing
         # the flag afterward wiped that pending interrupt right before
         # playback, letting the old system's phrase play through anyway
         # (confirmed live: last system's system-wide announcement still
         # heard after jumping). Checking is_set() post-synthesis instead
-        # of blindly clearing means an interrupt requested during the
-        # network call correctly skips playback.
+        # of blindly clearing means an interrupt requested during
+        # synthesis correctly skips playback.
         self._interrupt.clear()
-        wav_bytes, sr = _synth_wav(self._loop, text, voice, "+0%")
+        wav_bytes, sr = _synth_wav(self._loop, text, voice)
         if wav_bytes and not self._interrupt.is_set():
             device_id = resolve_playback_device_id(self._output_device_name)
             _dsp_and_play(wav_bytes, sr, self._volume, pan, self._interrupt, device_id)
@@ -495,6 +488,7 @@ class TTSEngine:
         """Start the TTS worker thread."""
         if self._thread and self._thread.isRunning():
             return
+        threading.Thread(target=_preload_kokoro, name="kokoro-preload", daemon=True).start()
         voice_name = _ALERT_VOICE_POOL[self._voice_index] if self._voice_index < len(_ALERT_VOICE_POOL) else _ALERT_VOICE_POOL[0]
         self._worker = TTSWorker(
             self._queue, self._rate, self._volume,
@@ -519,7 +513,7 @@ class TTSEngine:
             "en-US-RogerNeural",
             "en-GB-ThomasNeural",
         ]
-        log.info(f"TTS comms voice pool: {len(self._comms_voice_pool)} edge-tts voices")
+        log.info(f"TTS comms voice pool: {len(self._comms_voice_pool)} voices")
 
         self._comms_worker = CommsWorker(
             self._comms_queue, self._comms_rate, self._comms_volume
@@ -711,7 +705,7 @@ class TTSEngine:
             asyncio.set_event_loop(loop)
             worker._loop = loop
             try:
-                worker._speak_edge(text, voice_name)
+                worker._speak(text, voice_name)
             finally:
                 loop.close()
                 worker._loop = None
@@ -719,6 +713,6 @@ class TTSEngine:
         threading.Thread(target=_run_test, daemon=True).start()
 
     def get_available_voices(self) -> list:
-        """Returns list of (index, display_name) for settings dialog — edge-tts voices."""
+        """Returns list of (index, display_name) for settings dialog — Kokoro voices."""
         return list(enumerate(_ALERT_VOICE_DISPLAY))
 
