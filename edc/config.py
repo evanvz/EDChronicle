@@ -44,7 +44,7 @@ class AppConfig:
     comms_voice_index: int = 1
     comms_volume: float = 0.35
     comms_rate: int = 210
-    voice_commands_enabled: bool = False
+    voice_commands_enabled: bool = True
     push_to_talk_enabled: bool = False
     push_to_talk_key: str = "f9"
     always_on_top: bool = False
@@ -197,7 +197,7 @@ class ConfigStore:
                 comms_voice_index=int(data.get("comms_voice_index", 1) or 1),
                 comms_volume=float(data.get("comms_volume", 0.35) or 0.35),
                 comms_rate=int(data.get("comms_rate", 210) or 210),
-                voice_commands_enabled=bool(data.get("voice_commands_enabled", False)),
+                voice_commands_enabled=bool(data.get("voice_commands_enabled", True)),
                 push_to_talk_enabled=bool(data.get("push_to_talk_enabled", False)),
                 push_to_talk_key=str(data.get("push_to_talk_key", "f9") or "f9"),
                 always_on_top=bool(data.get("always_on_top", False)),
@@ -241,7 +241,7 @@ class ConfigStore:
                         "comms_voice_index": int(getattr(cfg, "comms_voice_index", 1) or 1),
                         "comms_volume": float(getattr(cfg, "comms_volume", 0.35) or 0.35),
                         "comms_rate": int(getattr(cfg, "comms_rate", 210) or 210),
-                        "voice_commands_enabled": bool(getattr(cfg, "voice_commands_enabled", False)),
+                        "voice_commands_enabled": bool(getattr(cfg, "voice_commands_enabled", True)),
                         "push_to_talk_enabled": bool(getattr(cfg, "push_to_talk_enabled", False)),
                         "push_to_talk_key": str(getattr(cfg, "push_to_talk_key", "f9") or "f9"),
                         "always_on_top": bool(getattr(cfg, "always_on_top", False)),
