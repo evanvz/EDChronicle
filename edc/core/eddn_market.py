@@ -129,6 +129,10 @@ class EddnMarketCache:
         # shape/destination as Spansh's own body cache (net.spansh_bodies),
         # just from EDDN directly instead of Spansh's periodic crawl of it.
         self._body_scan_buffer: Dict[Tuple[int, str], tuple] = {}
+        # Keyed by system_address -- faction names in an Expansion Forecast
+        # candidate system, from any commander's journal/1 message (rare: the
+        # listener only emits these for the few dozen candidates).
+        self._faction_names_buffer: Dict[int, Tuple[str, list, str]] = {}
 
     def on_coords_seen(self, system_name: str, x: float, y: float, z: float) -> None:
         if not system_name:
@@ -193,6 +197,11 @@ class EddnMarketCache:
             return
         timestamp = _normalize_ts(timestamp)
         self._bgs_status_buffer[system_address] = (system_name, conflicts, factions, timestamp)
+
+    def on_faction_names_seen(self, system_address: int, system_name: str, names: list, timestamp: str) -> None:
+        if not (isinstance(system_address, int) and system_name):
+            return
+        self._faction_names_buffer[system_address] = (system_name, list(names), _normalize_ts(timestamp))
 
     def on_res_signal_seen(self, system_address: int, system_name: str, tiers: list, timestamp: str) -> None:
         if not (isinstance(system_address, int) and system_name):
@@ -285,6 +294,7 @@ class EddnMarketCache:
         body_signals = list(self._body_signals_buffer.items())
         system_profiles = list(self._system_profile_buffer.items())
         body_scans = list(self._body_scan_buffer.items())
+        faction_names = list(self._faction_names_buffer.items())
         self._coord_buffer.clear()
         self._market_buffer.clear()
         self._faction_buffer.clear()
@@ -297,8 +307,9 @@ class EddnMarketCache:
         self._body_signals_buffer.clear()
         self._system_profile_buffer.clear()
         self._body_scan_buffer.clear()
+        self._faction_names_buffer.clear()
         return (coords, market, factions, stations, codex, fcmaterials, carrier_access,
-                bgs_status, res_sites, body_signals, system_profiles, body_scans)
+                bgs_status, res_sites, body_signals, system_profiles, body_scans, faction_names)
 
     def flush(self) -> None:
         """Synchronous flush on the caller's own thread/connection — only
@@ -310,11 +321,10 @@ class EddnMarketCache:
         the main thread every 45s, which froze the UI for however long a
         big buffered batch took to write (confirmed live, worse right
         after docking at a busy station's market)."""
-        coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals, system_profiles, body_scans = self.pop_buffers()
-        write_buffers(self._repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals, system_profiles, body_scans)
+        write_buffers(self._repo, *self.pop_buffers())
 
 
-def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals=(), system_profiles=(), body_scans=()) -> None:
+def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals=(), system_profiles=(), body_scans=(), faction_names=()) -> None:
     """The actual writes — factored out so both the main-thread flush()
     (shutdown) and a background worker (periodic, see main_window.py) can
     use the identical logic against whichever Repository they're given.
@@ -330,10 +340,17 @@ def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, 
         _write_buffers_inner(
             repo, coords, market, factions, stations, codex, fcmaterials,
             carrier_access, bgs_status, res_sites, body_signals, system_profiles, body_scans,
+            faction_names,
         )
 
 
-def _write_buffers_inner(repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals, system_profiles, body_scans) -> None:
+def _write_buffers_inner(repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals, system_profiles, body_scans, faction_names=()) -> None:
+    for system_address, (system_name, names, timestamp) in faction_names:
+        try:
+            repo.save_candidate_faction_count(system_address, system_name, names, timestamp)
+        except Exception:
+            log.exception("Failed to flush candidate faction list for system_address=%s", system_address)
+
     if coords:
         try:
             repo.save_system_coords_batch(coords)

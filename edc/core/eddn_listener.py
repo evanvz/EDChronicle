@@ -133,6 +133,9 @@ class EddnPowerPlayWorker(QObject):
     # timestamp -- unconditional (any system), unlike faction_seen which is
     # gated to watched_factions. Feeds system_bgs_status.
     bgs_status_seen = pyqtSignal(object, str, list, list, str)
+    # id64, StarSystem, names of the factions present (influence > 0), timestamp --
+    # only for systems in watched_systems (the Expansion Forecast's candidates).
+    faction_names_seen = pyqtSignal(object, str, list, str)
     # id64, StarSystem, RES tiers present (list), timestamp. Feeds
     # system_res_sites.
     res_signal_seen = pyqtSignal(object, str, list, str)
@@ -163,6 +166,9 @@ class EddnPowerPlayWorker(QObject):
         # we can build presence data for systems the player never personally
         # visits, the same way Inara/EDSM's own BGS tools do.
         self._watched_factions = set(watched_factions or [])
+        # Expansion Forecast candidate systems; swapped whole from the UI thread
+        # by set_watched_systems() (a single reference assignment).
+        self._watched_systems: frozenset = frozenset()
         # Diagnostics: per-schema message counts since listener start.
         # Mutated only on the listener thread; read from the UI thread via
         # get_stats() (dict read of ints — GIL makes this safe).
@@ -185,6 +191,9 @@ class EddnPowerPlayWorker(QObject):
         elapsed = max(time.monotonic() - self._stats_start, 1.0)
         stats["msgs_per_sec"] = round(stats["total"] / elapsed, 1)
         return stats
+
+    def set_watched_systems(self, addresses) -> None:
+        self._watched_systems = frozenset(addresses)
 
     def stop(self):
         self._stop = True
@@ -312,6 +321,7 @@ class EddnPowerPlayWorker(QObject):
 
             self._maybe_emit_bgs_status(msg, msg.get("timestamp") or "")
             self._maybe_emit_system_profile(msg, msg.get("timestamp") or "")
+            self._maybe_emit_faction_names(msg, msg.get("timestamp") or "")
 
             power = msg.get("ControllingPower")
             power_state = msg.get("PowerplayState")
@@ -387,6 +397,18 @@ class EddnPowerPlayWorker(QObject):
         # message is used as an is_controlling heuristic instead.
         is_controlling = bool(best_name and target.get("Name") == best_name)
         self.faction_seen.emit(system_address, star_system, dict(target), is_controlling, timestamp)
+
+    def _maybe_emit_faction_names(self, msg: dict, timestamp: str) -> None:
+        system_address = msg.get("SystemAddress")
+        if system_address not in self._watched_systems:
+            return
+        factions, star_system = msg.get("Factions"), msg.get("StarSystem")
+        if not (isinstance(factions, list) and factions and isinstance(star_system, str) and star_system):
+            return
+        names = [f["Name"] for f in factions
+                 if isinstance(f, dict) and isinstance(f.get("Name"), str)
+                 and isinstance(f.get("Influence"), (int, float)) and f["Influence"] > 0]
+        self.faction_names_seen.emit(system_address, star_system, names, timestamp)
 
     def _maybe_emit_bgs_status(self, msg: dict, timestamp: str) -> None:
         system_address = msg.get("SystemAddress")

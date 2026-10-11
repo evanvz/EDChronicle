@@ -2819,6 +2819,42 @@ class Repository:
                      1 if r.get("faction_former") else 0, r.get("ring") or 20.0, fetched_at),
                 )
 
+    def get_expansion_candidate_addresses(self) -> set[int]:
+        """Every cached Expansion Forecast candidate system, for the EDDN watch."""
+        return {r[0] for r in self.db.conn.execute(
+            "SELECT DISTINCT system_address FROM expansion_candidates WHERE system_address IS NOT NULL")}
+
+    def save_candidate_faction_count(self, system_address: int, system_name: str,
+                                     factions: list[str], data_timestamp: str) -> None:
+        """Live faction list of a candidate system from EDDN. A different count than
+        the last known one (our last EDDN reading, else the EDSM-cached count) is
+        recorded as prev_count/changed_at; older readings than the stored one are ignored."""
+        row = self.db.conn.execute(
+            "SELECT faction_count, data_timestamp, prev_count, changed_at FROM candidate_faction_counts "
+            "WHERE system_address = ?", (system_address,)).fetchone()
+        if row and data_timestamp < row["data_timestamp"]:
+            return
+        known = row["faction_count"] if row else None
+        if known is None:
+            edsm = self.db.conn.execute(
+                "SELECT faction_count FROM expansion_candidates WHERE system_address = ? "
+                "AND faction_count IS NOT NULL ORDER BY fetched_at DESC LIMIT 1", (system_address,)).fetchone()
+            known = edsm["faction_count"] if edsm else None
+        count = len(factions)
+        prev, changed = (row["prev_count"], row["changed_at"]) if row else (None, None)
+        if known is not None and known != count:
+            prev, changed = known, data_timestamp
+        self.db.execute(
+            "INSERT OR REPLACE INTO candidate_faction_counts (system_address, system_name, faction_count, "
+            "factions, data_timestamp, prev_count, changed_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (system_address, system_name, count, json.dumps(sorted(factions)), data_timestamp, prev, changed),
+        )
+
+    def get_candidate_faction_counts(self) -> dict[int, dict]:
+        return {r["system_address"]: dict(r, factions=json.loads(r["factions"] or "[]")) for r in self.db.conn.execute(
+            "SELECT system_address, system_name, faction_count, factions, data_timestamp, prev_count, changed_at "
+            "FROM candidate_faction_counts")}
+
     def get_expansion_candidates(self, source_address: int) -> list[dict]:
         rows = self.db.conn.execute(
             "SELECT system_name, system_address, distance_ly, faction_count, faction_present, faction_former, "

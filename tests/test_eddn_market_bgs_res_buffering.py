@@ -31,8 +31,8 @@ def test_pop_buffers_returns_bgs_status_and_res_sites_in_12_tuple_and_clears_the
     cache.on_res_signal_seen(1, "Sol", ["Hazardous", "High"], "2026-08-23T10:00:00Z")
 
     result = cache.pop_buffers()
-    assert len(result) == 12
-    coords, market, ftns, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals, system_profiles, body_scans = result
+    assert len(result) == 13
+    coords, market, ftns, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals, system_profiles, body_scans, faction_names = result
 
     assert bgs_status == [(1, ("Sol", conflicts, factions, "2026-08-23T10:00:00Z"))]
     assert res_sites == [(1, ("Sol", ["Hazardous", "High"], "2026-08-23T10:00:00Z"))]
@@ -47,7 +47,7 @@ def test_on_body_signals_seen_buffers_and_merges():
     cache.on_body_signals_seen(1281804437875, "HR 8769 A 1", {"mining": 3})
     cache.on_body_signals_seen(1281804437875, "HR 8769 A 1", {"mining": 6, "geo": 3})  # merges, mining overwritten
 
-    _, _, _, _, _, _, _, _, _, body_signals, _, _ = cache.pop_buffers()
+    _, _, _, _, _, _, _, _, _, body_signals, _, _, _ = cache.pop_buffers()
     assert body_signals == [((1281804437875, "HR 8769 A 1"), {"mining": 6, "geo": 3})]
     assert cache._body_signals_buffer == {}
 
@@ -58,7 +58,7 @@ def test_on_body_signals_seen_ignores_malformed_input():
     cache.on_body_signals_seen(1, "", {"mining": 6})
     cache.on_body_signals_seen(1, "HR 8769 A 1", {})
 
-    _, _, _, _, _, _, _, _, _, body_signals, _, _ = cache.pop_buffers()
+    _, _, _, _, _, _, _, _, _, body_signals, _, _, _ = cache.pop_buffers()
     assert body_signals == []
 
 
@@ -80,7 +80,7 @@ def test_on_system_profile_seen_buffers_and_dedupes():
     cache.on_system_profile_seen(1, "Sol", profile1, "2026-09-01T00:00:00Z")
     cache.on_system_profile_seen(1, "Sol", profile2, "2026-09-02T00:00:00Z")  # later sighting wins
 
-    *_, system_profiles, _ = cache.pop_buffers()
+    *_, system_profiles, _, _ = cache.pop_buffers()
     assert system_profiles == [(1, ("Sol", profile2, "2026-09-02T00:00:00Z"))]
     assert cache._system_profile_buffer == {}
 
@@ -90,7 +90,7 @@ def test_on_system_profile_seen_ignores_malformed_input():
     cache.on_system_profile_seen(None, "Sol", {"economy": "x"}, "2026-09-01T00:00:00Z")
     cache.on_system_profile_seen(1, "", {"economy": "x"}, "2026-09-01T00:00:00Z")
 
-    *_, system_profiles, _ = cache.pop_buffers()
+    *_, system_profiles, _, _ = cache.pop_buffers()
     assert system_profiles == []
 
 
@@ -122,7 +122,7 @@ def test_on_body_scan_seen_buffers_real_message(repo):
     }
     cache.on_body_scan_seen(msg)
 
-    *_, body_scans = cache.pop_buffers()
+    *_, body_scans, _ = cache.pop_buffers()
     assert len(body_scans) == 1
     (system_address, body_name), fields = body_scans[0]
     assert system_address == 1281804437875
@@ -137,7 +137,7 @@ def test_on_body_scan_seen_ignores_non_planet_body():
         "SystemAddress": 1, "BodyName": "Some Star", "StarType": "K",
     })
 
-    *_, body_scans = cache.pop_buffers()
+    *_, body_scans, _ = cache.pop_buffers()
     assert body_scans == []
 
 
@@ -173,7 +173,7 @@ def test_on_bgs_status_seen_ignores_malformed_input():
     cache.on_bgs_status_seen(None, "Sol", [], [], "2026-08-23T10:00:00Z")
     cache.on_bgs_status_seen(1, "", [], [], "2026-08-23T10:00:00Z")
 
-    _, _, _, _, _, _, _, bgs_status, _, _, _, _ = cache.pop_buffers()
+    _, _, _, _, _, _, _, bgs_status, _, _, _, _, _ = cache.pop_buffers()
     assert bgs_status == []
 
 
@@ -182,7 +182,7 @@ def test_on_res_signal_seen_ignores_malformed_input():
     cache.on_res_signal_seen(None, "Sol", ["High"], "2026-08-23T10:00:00Z")
     cache.on_res_signal_seen(1, "", ["High"], "2026-08-23T10:00:00Z")
 
-    _, _, _, _, _, _, _, _, res_sites, _, _, _ = cache.pop_buffers()
+    _, _, _, _, _, _, _, _, res_sites, _, _, _, _ = cache.pop_buffers()
     assert res_sites == []
 
 
@@ -217,7 +217,7 @@ def test_cache_pop_buffers_then_write_buffers_end_to_end(repo):
     cache.on_bgs_status_seen(42, "Deciat", conflicts, [], "2026-08-23T12:00:00Z")
     cache.on_res_signal_seen(42, "Deciat", ["Nominal"], "2026-08-23T12:00:00Z")
 
-    coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals, system_profiles, body_scans = cache.pop_buffers()
+    coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals, system_profiles, body_scans, _faction_names = cache.pop_buffers()
     write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals, system_profiles, body_scans)
 
     bgs_row = repo.db.conn.execute(

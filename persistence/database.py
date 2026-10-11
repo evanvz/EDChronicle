@@ -444,6 +444,19 @@ class Database:
             # faction listed there means it was in that system before (tier 2).
             "ALTER TABLE expansion_candidates ADD COLUMN faction_former INTEGER",
             "ALTER TABLE expansion_candidates ADD COLUMN ring REAL",
+            # Expansion Forecast: live faction lists of the candidate systems from
+            # EDDN (any commander's FSDJump/Location), so a slot filling (6 -> 7) or
+            # a retreat opening one shows up without waiting for an EDSM lookup.
+            # prev_count/changed_at record the last change in faction count.
+            """CREATE TABLE IF NOT EXISTS candidate_faction_counts (
+                system_address INTEGER PRIMARY KEY,
+                system_name    TEXT    NOT NULL,
+                faction_count  INTEGER NOT NULL,
+                factions       TEXT,
+                data_timestamp TEXT    NOT NULL,
+                prev_count     INTEGER,
+                changed_at     TEXT
+            )""",
         ]
         cache_migrations = [
             "ALTER TABLE net.spansh_bodies ADD COLUMN surface_gravity REAL",

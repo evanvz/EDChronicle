@@ -21,6 +21,7 @@ from edc.core.edsm_faction_lookup import fetch_populated_cube, fetch_system_fact
 from edc.core.expansion_forecast import (
     CACHE_MAX_AGE_H, CUBE_LY, LOOKUP_MAX, OUTER_CUBE_LY, WATCH_THRESHOLD, alert_text,
     detect_new_systems, faction_expansion_line, first_expansion, in_cube, predicted_targets, is_current, likely_source, rank_candidates, watched_systems,
+    SLOT_CHANGE_DAYS, merge_live_counts, slot_change_text, slot_changes,
 )
 
 NEXT_ROWS = 10   # "next to expand" shows the top 10 by influence
@@ -287,10 +288,25 @@ class ExpansionForecastPanel(QWidget):
         self._start_lookup(force=False)
 
     def _render_targets(self, extra: str = "") -> None:
-        cached = self._panel._repo.get_expansion_candidates(self._source["system_address"])
+        repo = self._panel._repo
+        cached = repo.get_expansion_candidates(self._source["system_address"])
+        fetched = cached[0]["fetched_at"][:16].replace("T", " ") if cached else "never"
+        # live EDDN faction lists of these candidates, where newer than the EDSM lookup
+        live = repo.get_candidate_faction_counts()
+        cached = merge_live_counts(cached, live, self._faction() or "")
         ranked = rank_candidates([dict(c, been_before=c.get("faction_former") or c["system_name"] in self._been)
                                   for c in cached])
-        fetched = cached[0]["fetched_at"][:16].replace("T", " ") if cached else "never"
+        today = date.today()
+
+        def count_cell(c):
+            if c["faction_count"] is None:
+                return ""
+            text = str(c["faction_count"])
+            changed, prev = c.get("changed_at"), c.get("prev_count")
+            if (changed and prev is not None and prev != c["faction_count"]
+                    and (today - date.fromisoformat(changed[:10])).days <= SLOT_CHANGE_DAYS):
+                text += f" (was {prev} on {changed[5:10]})"
+            return text
 
         def before(c):
             if c.get("faction_former"):
@@ -300,23 +316,27 @@ class ExpansionForecastPanel(QWidget):
             [str(i + 1) if c["tier"] else "", str(c["tier"]) if c["tier"] else "not checked", c["system_name"],
              (f"{c['distance_ly']:.1f} ly" + (" (±30 ring)" if (c.get("ring") or CUBE_LY) > CUBE_LY else ""))
              if c.get("distance_ly") is not None else "",
-             "" if c["faction_count"] is None else str(c["faction_count"]), before(c), fetched]
+             count_cell(c), before(c),
+             f"EDDN {c['count_at'][:16].replace('T', ' ')}" if c.get("count_source") else fetched]
             for i, c in enumerate(ranked)])
         pt = predicted_targets(ranked)
         if pt["retreat_first"] == pt["invasion_first"]:
-            self._outcome_label.setText(f"Likely target: {pt['retreat_first']}" if pt["retreat_first"]
-                                        else "Likely target: none eligible")
+            target = pt["retreat_first"]
+            outcome = f"Likely target: {target}" if target else "Likely target: none eligible"
         else:
-            self._outcome_label.setText(
-                f"Likely target: {pt['retreat_first']} if a retreated-from system comes first · "
-                f"{pt['invasion_first']} if a 7-faction invasion comes first (the order of these two is disputed)")
+            target = f"{pt['retreat_first']} / {pt['invasion_first']}"
+            outcome = (f"Likely target: {pt['retreat_first']} if a retreated-from system comes first · "
+                       f"{pt['invasion_first']} if a 7-faction invasion comes first (the order of these two is disputed)")
+        mine = {c.get("system_address") for c in cached}
+        changes = slot_changes({a: lv for a, lv in live.items() if a in mine}, today)
+        self._outcome_label.setText("\n".join([slot_change_text(c, target) for c in changes] + [outcome]))
         outer = any((c.get("ring") or CUBE_LY) > CUBE_LY for c in cached)
         area = ("the ±20 ly cube and the ±30 ly ring (nothing eligible within ±20 ly)" if outer
                 else "the ±20 ly cube")
         self._target_status.setText(
             f"From {self._source['system_name']}: all {len(cached)} candidates "
-            f"in {area} (EDSM; faction here before = our history + EDSM's former-faction list; "
-            f"{fetched} UTC). Tier 1 = fewer than 7 factions, never there; tier 2 = fewer than 7, "
+            f"in {area} (EDSM, {fetched} UTC; faction counts from live EDDN sightings where we have one; "
+            f"faction here before = our history + EDSM's former-faction list). Tier 1 = fewer than 7 factions, never there; tier 2 = fewer than 7, "
             f"faction was there before; tier 3 = 7 factions (invasion war) — which of tiers 2 and 3 the game "
             f"prefers is disputed.{extra}"
             + ("" if any(c["tier"] for c in ranked) or not cached else

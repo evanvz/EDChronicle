@@ -189,6 +189,67 @@ def predicted_targets(ranked: List[Dict[str, Any]]) -> Dict[str, Optional[str]]:
     return {"retreat_first": pick({1: 1, 2: 2, 3: 3}), "invasion_first": pick({1: 1, 3: 2, 2: 3})}
 
 
+SLOT_CHANGE_DAYS = 3
+
+
+def slot_kind(n: Optional[int]) -> Optional[str]:
+    """A candidate's role by faction count: a free slot (<7), an invasion target
+    (exactly 7), or full (8+, not a target)."""
+    if n is None:
+        return None
+    return "slot" if n < 7 else ("invasion" if n == 7 else "full")
+
+
+def merge_live_counts(cached: List[Dict[str, Any]], live: Dict[int, Dict[str, Any]],
+                      faction: str) -> List[Dict[str, Any]]:
+    """The cached EDSM candidates, with the faction count/presence and last
+    count change from EDDN wherever we have a live reading. EDDN carries when
+    the system was actually observed; an EDSM lookup only tells when we
+    fetched it, not how old EDSM's data was, so a live reading always wins."""
+    # ponytail: a very old EDDN reading still beats a newer EDSM-only update;
+    # compare with EDSM's per-faction lastUpdate if that ever matters.
+    out = []
+    for c in cached:
+        lv = live.get(c.get("system_address"))
+        if lv:
+            c = {**c, "faction_count": lv["faction_count"], "faction_present": faction in lv["factions"],
+                 "count_source": "EDDN", "count_at": lv["data_timestamp"],
+                 "prev_count": lv.get("prev_count"), "changed_at": lv.get("changed_at")}
+        out.append(c)
+    return out
+
+
+def slot_changes(live: Dict[int, Dict[str, Any]], today: date,
+                 days: int = SLOT_CHANGE_DAYS) -> List[Dict[str, Any]]:
+    """Candidates whose faction count crossed the 7-faction line within `days`
+    (a slot filled or opened, an invasion target appeared or went), newest first."""
+    out = []
+    for lv in live.values():
+        changed, prev = lv.get("changed_at"), lv.get("prev_count")
+        if not changed or prev is None or slot_kind(prev) == slot_kind(lv["faction_count"]):
+            continue
+        if (today - date.fromisoformat(changed[:10])).days <= days:
+            out.append(lv)
+    return sorted(out, key=lambda lv: lv["changed_at"], reverse=True)
+
+
+_SLOT_CHANGE_MEANING = {
+    ("slot", "invasion"): "its free slot is gone; now an invasion target",
+    ("slot", "full"): "its free slot is gone; no longer a target",
+    ("invasion", "slot"): "a faction left; free slot open",
+    ("full", "slot"): "factions left; free slot open",
+    ("invasion", "full"): "now full; no longer a target",
+    ("full", "invasion"): "a faction left; now an invasion target",
+}
+
+
+def slot_change_text(item: Dict[str, Any], likely_target: Optional[str] = None) -> str:
+    old, new = item["prev_count"], item["faction_count"]
+    meaning = _SLOT_CHANGE_MEANING.get((slot_kind(old), slot_kind(new)), "")
+    text = f"⚠ {item['system_name']}: {old} → {new} factions ({item['changed_at'][5:10]}) — {meaning}"
+    return text + (f" · likely target now {likely_target}" if likely_target else "")
+
+
 def new_systems(presence: List[Dict[str, Any]], endings: List[tuple], today: date,
                 days: int = NEW_SYSTEM_DAYS, coords: Optional[Dict[str, tuple]] = None) -> List[Dict[str, Any]]:
     """Systems the faction first appeared in within `days`, small (<= 20%),

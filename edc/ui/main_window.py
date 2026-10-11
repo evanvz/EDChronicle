@@ -88,7 +88,7 @@ from edc.core.bgs_tasks import (
     powerplay_mode, pp_watch,
 )
 from edc.core.bgs_tick import fetch_latest_tick
-from edc.core.expansion_forecast import alert_text, detect_new_systems, first_expansion
+from edc.core.expansion_forecast import alert_text, detect_new_systems, first_expansion, slot_change_text, slot_changes
 from edc.ui.panels.engineering_panel import EngineeringPanel
 from edc.ui.panels.powerplay_watch_panel import PowerPlayWatchPanel
 from edc.audio.handlers.engineering import EngineeringPhrases
@@ -610,7 +610,7 @@ class _EddnFlushWorker(QObject):
     """
     finished = pyqtSignal()
 
-    def __init__(self, db_path, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals=(), system_profiles=(), body_scans=()):
+    def __init__(self, db_path, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals=(), system_profiles=(), body_scans=(), faction_names=()):
         super().__init__()
         self._db_path = db_path
         self._coords, self._market, self._factions = coords, market, factions
@@ -620,6 +620,7 @@ class _EddnFlushWorker(QObject):
         self._body_signals = body_signals
         self._system_profiles = system_profiles
         self._body_scans = body_scans
+        self._faction_names = faction_names
 
     def run(self):
         from persistence.database import Database
@@ -633,7 +634,7 @@ class _EddnFlushWorker(QObject):
                 repo, self._coords, self._market, self._factions, self._stations,
                 self._codex, self._fcmaterials, self._carrier_access,
                 self._bgs_status, self._res_sites, self._body_signals, self._system_profiles,
-                self._body_scans,
+                self._body_scans, self._faction_names,
             )
             _elapsed_ms = (time.perf_counter() - _t0) * 1000
             # Diagnostic for the 2026-09-06 investigation: two ~30s WAL
@@ -3377,6 +3378,8 @@ class MainWindow(QMainWindow):
         self._eddn_worker.body_signals_seen.connect(self.eddn_market_cache.on_body_signals_seen)
         self._eddn_worker.system_profile_seen.connect(self.eddn_market_cache.on_system_profile_seen)
         self._eddn_worker.body_scan_seen.connect(self.eddn_market_cache.on_body_scan_seen)
+        self._eddn_worker.faction_names_seen.connect(self.eddn_market_cache.on_faction_names_seen)
+        self._refresh_expansion_watch()
         self._eddn_thread.start()
         self._eddn_save_timer.start()
         self._market_flush_timer.start()
@@ -6353,14 +6356,11 @@ class MainWindow(QMainWindow):
             return  # previous flush still running — next tick will catch up
         if self._wal_checkpoint_thread and self._wal_checkpoint_thread.isRunning():
             return  # checkpoint in progress — avoid colliding on the same file
-        coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals, system_profiles, body_scans = self.eddn_market_cache.pop_buffers()
-        if not (coords or market or factions or stations or codex or fcmaterials or carrier_access or bgs_status or res_sites or body_signals or system_profiles or body_scans):
+        buffers = self.eddn_market_cache.pop_buffers()
+        if not any(buffers):
             return
 
-        self._flush_worker = _EddnFlushWorker(
-            self.repo.db.db_path, coords, market, factions, stations, codex, fcmaterials, carrier_access,
-            bgs_status, res_sites, body_signals, system_profiles, body_scans,
-        )
+        self._flush_worker = _EddnFlushWorker(self.repo.db.db_path, *buffers)
         if self._flush_thread is not None:
             self._flush_thread.wait()  # old-thread teardown race -- see _start_spansh_enrich's docstring
         self._flush_thread = QThread()
@@ -6405,6 +6405,7 @@ class MainWindow(QMainWindow):
         # BGS Tasks window's refresh below already sees the link.
         self._refresh_bgs_task_hint()
         self._refresh_new_system_alert()
+        self._refresh_expansion_watch()
         try:
             self.player_faction_panel.notify_bgs_activity()
         except Exception:
@@ -6467,11 +6468,28 @@ class MainWindow(QMainWindow):
                 text = alert_text(faction, exp) if exp else ""   # colonisations stay off the Overview
             except Exception:
                 log.exception("Failed to check for new faction systems")
+            try:
+                # an expansion candidate gaining or losing a free slot (live EDDN counts)
+                changes = [slot_change_text(c) for c in slot_changes(self.repo.get_candidate_faction_counts(), date.today())]
+                text = "\n".join([t for t in [text] if t] + changes)
+            except Exception:
+                log.exception("Failed to check expansion candidate faction counts")
 
         # Cache for throttling
         self._new_system_alert_at = time.monotonic()
         self._new_system_alert_text = text
         self.overview_panel.set_new_system_alert(text)
+
+    def _refresh_expansion_watch(self) -> None:
+        """Point the EDDN listener at the Expansion Forecast's candidate systems, so
+        their faction lists are recorded live (re-read with the new-system check)."""
+        worker = getattr(self, "_eddn_worker", None)
+        if worker is None:
+            return
+        try:
+            worker.set_watched_systems(self.repo.get_expansion_candidate_addresses())
+        except Exception:
+            log.exception("Failed to update the EDDN expansion-candidate watch")
 
     def _on_wal_checkpoint_tick(self) -> None:
         """See _WalCheckpointWorker for why this is split off the 45s
