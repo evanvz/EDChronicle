@@ -2829,6 +2829,10 @@ class Repository:
         """Live faction list of a candidate system from EDDN. A different count than
         the last known one (our last EDDN reading, else the EDSM-cached count) is
         recorded as prev_count/changed_at; older readings than the stored one are ignored."""
+        # EDDN is unauthenticated: a future-dated reading would block every genuine
+        # later one and keep its change alert up forever (5 min allows clock skew).
+        if data_timestamp > (datetime.now(timezone.utc) + timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ"):
+            return
         row = self.db.conn.execute(
             "SELECT faction_count, data_timestamp, prev_count, changed_at FROM candidate_faction_counts "
             "WHERE system_address = ?", (system_address,)).fetchone()

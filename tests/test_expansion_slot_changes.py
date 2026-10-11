@@ -131,3 +131,15 @@ def test_overview_shows_slot_change_line(tmp_path):
     with patch("edc.ui.main_window.detect_new_systems", return_value=[]):
         MainWindow._refresh_new_system_alert(fake, force=True)
     assert shown[-1].startswith("⚠ Arimavante: 6 → 7 factions")
+
+
+def test_future_timestamped_reading_is_rejected(tmp_path):
+    """EDDN is unauthenticated: a reading dated in the future would otherwise block
+    every genuine later reading and keep its change alert up forever."""
+    repo = _repo(tmp_path)
+    repo.save_expansion_candidates(99, [{"system_name": "Arimavante", "system_address": 1, "faction_count": 6}],
+                                   "2026-10-10T12:00:00Z")
+    repo.save_candidate_faction_count(1, "Arimavante", list("ABCDEFG"), "2099-01-01T00:00:00Z")
+    assert 1 not in repo.get_candidate_faction_counts()
+    repo.save_candidate_faction_count(1, "Arimavante", list("ABCDEF"), "2026-10-11T07:00:00Z")
+    assert repo.get_candidate_faction_counts()[1]["faction_count"] == 6
