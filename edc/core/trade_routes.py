@@ -43,6 +43,37 @@ def _normalize_commodity_name(name: str) -> str:
     return re.sub(r"[^a-z0-9]", "", (name or "").lower())
 
 
+def commodity_key(name: str) -> str:
+    """One key per commodity across the formats the market cache holds for it:
+    'gold' (most EDDN rows), 'Gold', 'Sothis Crystalline Gold',
+    'SothisCrystallineGold' and our own Market.json's '$gold_name;'
+    (2026-10-11: ~2.4% of rows weren't plain lowercase and were never matched)."""
+    s = (name or "").strip()
+    if s.startswith("$"):
+        s = s[1:]
+    if s.lower().endswith("_name;"):
+        s = s[:-len("_name;")]
+    return _normalize_commodity_name(s)
+
+
+def station_from_market_items(items: List[Dict[str, Any]], timestamp: str) -> dict:
+    """The docked station's live market (state.current_market_items, from
+    Market.json) in the destination shape find_supply_for_destination takes:
+    only what the station is buying (a sell price and some demand), plus each
+    commodity's demand bracket and in-game name. Demand bracket 0 means the
+    station only accepts the item (Market.json lists it with Demand 1 -- 15 of
+    38 at Lundmark Terminal, 2026-10-11), so it isn't counted as demand."""
+    sells, brackets, names = {}, {}, {}
+    for it in items:
+        key = commodity_key(it.get("symbol") or it.get("name") or "")
+        if (key and (it.get("sell_price") or 0) > 0 and (it.get("demand") or 0) > 0
+                and it.get("demand_bracket") != 0):
+            sells[key] = (it["sell_price"], it["demand"], timestamp)
+            brackets[key] = it.get("demand_bracket")
+            names[key] = it.get("name") or key
+    return {"sells": sells, "brackets": brackets, "names": names}
+
+
 def find_point_to_point_trades(
     origin_items: List[Dict[str, Any]],
     destination_stations: Dict[int, dict],
@@ -318,15 +349,18 @@ def find_supply_for_destination(
     """
     dx, dy, dz = dest_xyz
     results: List[Dict[str, Any]] = []
+    # names are matched by commodity_key: the cache stores one commodity under several spellings
+    supply_buys = {mid: {commodity_key(k): v for k, v in s["buys"].items()}
+                   for mid, s in supply_stations.items() if mid != dest_market_id}
 
     for commodity, (sell_price, demand, sell_updated) in dest_station["sells"].items():
         if isinstance(demand, int) and demand <= 0:
             continue
+        key = commodity_key(commodity)
         best: Optional[Dict[str, Any]] = None
-        for market_id, s in supply_stations.items():
-            if market_id == dest_market_id:
-                continue
-            buy_info = s["buys"].get(commodity)
+        for market_id, buys in supply_buys.items():
+            s = supply_stations[market_id]
+            buy_info = buys.get(key)
             if buy_info is None:
                 continue
             buy_price, stock, buy_updated = buy_info

@@ -9,6 +9,7 @@ docs/superpowers/specs/2026-08-09-trade-route-loop-planner-design.md.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Optional
 
 from PyQt6.QtCore import Qt, QObject, QThread, pyqtSignal
@@ -21,6 +22,7 @@ from PyQt6.QtWidgets import (
 from edc.core.bgs_tasks import is_rival_power
 from edc.core.trade_routes import (
     destination_pp_status, find_point_to_point_trades, find_supply_for_destination, find_trade_loops,
+    station_from_market_items,
 )
 from edc.ui.busy_spinner import BusySpinner
 from edc.ui.panels.market_panel import _NumericTableWidgetItem
@@ -262,6 +264,50 @@ class _PointToPointWorker(QObject):
         self.finished.emit(results, "")
 
 
+class _SellHereWorker(QObject):
+    """Destination-first supply search for the station you're docked at, its
+    live market (Market.json) as the destination -- own SQLite connection per
+    the project's cross-thread rule."""
+    finished = pyqtSignal(list, str)  # (results, error)
+
+    def __init__(self, db_path, dest_station, dest_xyz, center_xyz, radius_ly, cargo_capacity,
+                 required_pad, market_id):
+        super().__init__()
+        self._db_path = db_path
+        self._dest_station = dest_station
+        self._dest_xyz = dest_xyz
+        self._center = center_xyz
+        self._radius_ly = radius_ly
+        self._cargo_capacity = cargo_capacity
+        self._required_pad = required_pad
+        self._market_id = market_id
+
+    def run(self):
+        from persistence.database import Database
+        from persistence.repository import Repository
+
+        db = Database(self._db_path)
+        try:
+            repo = Repository(db)
+            supply = _filter_pad(repo.get_market_snapshot_in_radius(*self._center, self._radius_ly),
+                                 self._required_pad)
+            results = find_supply_for_destination(
+                self._dest_station, self._dest_xyz, supply, self._cargo_capacity,
+                dest_market_id=self._market_id,
+            )
+            names, brackets = self._dest_station["names"], self._dest_station["brackets"]
+            for r in results:
+                r["commodity_display"] = names.get(r["commodity"], r["commodity"].title())
+                r["demand_level"] = _DEMAND_LEVELS.get(brackets.get(r["commodity"]), "")
+        except Exception as exc:
+            log.exception("Sell-here supply search failed")
+            self.finished.emit([], str(exc))
+            return
+        finally:
+            db.close()
+        self.finished.emit(results, "")
+
+
 class TradeRoutePanel(QWidget):
     """Owns all widgets and refresh logic for the Trade Routes tab.
     Receives state via refresh(state); manual search only (no
@@ -292,6 +338,11 @@ class TradeRoutePanel(QWidget):
         self._bgs_destinations: list = []  # every squadron-faction station, eligible or not
         self._bgs_loaded_for_power: Optional[str] = None
         self._bgs_user_picked: bool = False
+        # Sell here: the station you're docked at (its live market) as the destination
+        self._sell_thread: Optional[QThread] = None
+        self._sell_worker: Optional[_SellHereWorker] = None
+        self._sell_market: Optional[dict] = None   # last docked market: id, names, station, system, xyz
+        self._sell_signature = None                 # market contents last searched
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 8)
@@ -500,6 +551,7 @@ class TradeRoutePanel(QWidget):
 
         root.addWidget(p2p_frame, 1)
         root.addWidget(self._build_bgs_card(), 1)
+        root.insertWidget(0, self._build_sell_here_card(), 1)
 
     def refresh(self, state) -> None:
         """Cheap, safe to call on every general refresh — just updates the
@@ -538,6 +590,8 @@ class TradeRoutePanel(QWidget):
             and isinstance(self._cargo_capacity, int) and self._cargo_capacity > 0
         )
 
+        self._update_sell_market(state)
+
         # Reload when the pledge first becomes known (or changes) -- the
         # PowerPlay eligibility of every destination depends on it.
         if self._bgs_loaded_for_power != (self._my_power or ""):
@@ -546,6 +600,167 @@ class TradeRoutePanel(QWidget):
             idx = self._bgs_dest_combo.findText(f"{route_target} — ", Qt.MatchFlag.MatchStartsWith)
             if idx >= 0:
                 self._bgs_dest_combo.setCurrentIndex(idx)
+
+    # --- Sell here: what the docked station buys and where to buy it nearby ---
+
+    def _build_sell_here_card(self) -> QFrame:
+        frame = QFrame()
+        frame.setStyleSheet(_CARD_STYLE)
+        lay = QVBoxLayout(frame)
+        lay.setContentsMargins(8, 6, 8, 8)
+        lay.setSpacing(6)
+
+        hdr = QLabel("SELL HERE")
+        hdr.setStyleSheet("color:#4da3ff; font-size:12px; font-weight:bold; letter-spacing:1px; background:transparent; border:none;")
+        lay.addWidget(hdr)
+        self._sell_station_label = QLabel("Dock and open the Commodities screen — the station's live demand shows here.")
+        self._sell_station_label.setWordWrap(True)
+        self._sell_station_label.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
+        lay.addWidget(self._sell_station_label)
+
+        field_style = "background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;"
+        opt_row = QHBoxLayout()
+        opt_row.setSpacing(8)
+        near_label = QLabel("Buy near:")
+        near_label.setStyleSheet(_LABEL_STYLE)
+        self._sell_near_combo = QComboBox()
+        self._sell_near_combo.addItem("This station", "dest")
+        self._sell_near_combo.addItem("Me", "me")
+        self._sell_near_combo.setStyleSheet(field_style)
+        self._sell_range_spin = QSpinBox()
+        self._sell_range_spin.setRange(5, 200)
+        self._sell_range_spin.setSingleStep(5)
+        self._sell_range_spin.setValue(20)
+        self._sell_range_spin.setSuffix(" ly")
+        self._sell_range_spin.setStyleSheet(field_style)
+        pad_label = QLabel("Min pad:")
+        pad_label.setStyleSheet(_LABEL_STYLE)
+        self._sell_pad_combo = QComboBox()
+        self._sell_pad_combo.addItem("Any", None)
+        self._sell_pad_combo.addItem("Medium+", "M")
+        self._sell_pad_combo.addItem("Large only", "L")
+        self._sell_pad_combo.setStyleSheet(field_style)
+        self._sell_search_btn = QPushButton("Search")
+        self._sell_search_btn.setStyleSheet(
+            "QPushButton { background:#1a3a5a; color:#FFB347; border:1px solid #2a5a8a;"
+            " border-radius:3px; padding:3px 12px; font-weight:bold; }"
+            "QPushButton:hover { background:#2a5a8a; }"
+            "QPushButton:disabled { background:#111; color:#555; border-color:#333; }")
+        self._sell_search_btn.setEnabled(False)
+        self._sell_search_btn.clicked.connect(self._start_sell_search)
+        for w in (near_label, self._sell_near_combo, self._sell_range_spin, pad_label,
+                  self._sell_pad_combo, self._sell_search_btn):
+            opt_row.addWidget(w)
+        opt_row.addStretch(1)
+        lay.addLayout(opt_row)
+
+        self._sell_status_label = QLabel("")
+        self._sell_status_label.setWordWrap(True)
+        self._sell_status_label.setStyleSheet("color:#888888; font-size:12px; background:transparent;")
+        lay.addWidget(self._sell_status_label)
+
+        self._sell_table = QTableWidget()
+        self._sell_table.setColumnCount(12)
+        self._sell_table.setHorizontalHeaderLabels(
+            ["Commodity", "Buy Station", "Buy System", "Dist to Here (ly)", "Buy", "Sell here",
+             "Profit/u", "Demand here", "Qty", "Total Profit", "PP Merits", "Data Age"]
+        )
+        self._sell_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._sell_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._sell_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self._sell_table.verticalHeader().setVisible(False)
+        self._sell_table.setAlternatingRowColors(True)
+        self._sell_table.setStyleSheet(self._p2p_table.styleSheet())
+        h = self._sell_table.horizontalHeader()
+        for c in (0, 1, 2):
+            h.setSectionResizeMode(c, QHeaderView.ResizeMode.Stretch)
+        for c in range(3, 12):
+            h.setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
+        self._sell_table.setToolTip(
+            "What this station buys (live, from your Commodities screen) and the best station within range "
+            "to buy it from (market data from EDDN — see Data Age). Qty is capped by your cargo, the stock "
+            "and this station's demand: selling past demand drops the price. Click a Buy Station or Buy "
+            "System cell to copy its name. PP Merits ✓ = 40%+ margin."
+        )
+        self._sell_table.cellClicked.connect(lambda r, c: _copy_supply_cell(self._sell_table, r, c))
+        lay.addWidget(self._sell_table, 1)
+
+        self._sell_loading_spinner = BusySpinner(self)
+        return frame
+
+    def _update_sell_market(self, state) -> None:
+        """Called from refresh(): picks up a newly read docked market and
+        searches it once; keeps showing it as "last docked" after undocking."""
+        items = list(getattr(state, "current_market_items", None) or [])
+        market_id = getattr(state, "current_market_id", None)
+        system = (getattr(state, "current_market_system", None) or "").strip()
+        station = (getattr(state, "current_market_station", None) or "").strip()
+        if items and isinstance(market_id, int) and system and system == self._system:
+            signature = (market_id, tuple((i.get("symbol"), i.get("sell_price"), i.get("demand")) for i in items))
+            if signature != self._sell_signature:
+                self._sell_signature = signature
+                ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                self._sell_market = {"market_id": market_id, "station": station, "system": system,
+                                     "xyz": (self._ref_x, self._ref_y, self._ref_z),
+                                     "dest": station_from_market_items(items, ts)}
+                self._start_sell_search()
+        if self._sell_market:
+            docked = (getattr(state, "station_name", None) or "").strip() == self._sell_market["station"]
+            n = len(self._sell_market["dest"]["sells"])
+            self._sell_station_label.setText(
+                f"{'Docked at' if docked else 'Last docked at'} {self._sell_market['station']} "
+                f"({self._sell_market['system']}) — buying {n} commodit{'y' if n == 1 else 'ies'} with demand.")
+        self._sell_search_btn.setEnabled(bool(self._sell_market) and isinstance(self._cargo_capacity, int)
+                                         and self._cargo_capacity > 0)
+
+    def _start_sell_search(self) -> None:
+        m = self._sell_market
+        if not m:
+            return
+        if not isinstance(self._cargo_capacity, int) or self._cargo_capacity <= 0:
+            self._sell_status_label.setText("Cargo capacity unknown yet — undock or check the outfitting screen once.")
+            return
+        if not m["dest"]["sells"]:
+            self._sell_status_label.setText(f"{m['station']} has no demand for any commodity right now.")
+            self._sell_table.setRowCount(0)
+            return
+        if self._sell_thread and self._sell_thread.isRunning():
+            return
+        near_me = self._sell_near_combo.currentData() == "me"
+        center = (self._ref_x, self._ref_y, self._ref_z) if near_me else m["xyz"]
+        radius = self._sell_range_spin.value()
+        self._sell_search_btn.setEnabled(False)
+        self._sell_status_label.setText(
+            f"Searching within {radius} ly of {'you' if near_me else m['station']} for the best place to buy…")
+        self._sell_table.setRowCount(0)
+        self._sell_loading_spinner.start_over(self)
+        self._sell_worker = _SellHereWorker(
+            self._repo.db.db_path, m["dest"], m["xyz"], center, radius, self._cargo_capacity,
+            self._sell_pad_combo.currentData(), m["market_id"],
+        )
+        if self._sell_thread is not None:
+            self._sell_thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
+        self._sell_thread = QThread()
+        self._sell_worker.moveToThread(self._sell_thread)
+        self._sell_thread.started.connect(self._sell_worker.run)
+        self._sell_worker.finished.connect(self._on_sell_results)
+        self._sell_worker.finished.connect(self._sell_thread.quit)
+        self._sell_thread.start()
+
+    def _on_sell_results(self, results: list, error: str) -> None:
+        self._sell_search_btn.setEnabled(True)
+        self._sell_loading_spinner.stop()
+        if error:
+            self._sell_status_label.setText(f"Search failed: {error}")
+            return
+        if not results:
+            self._sell_status_label.setText(
+                'No profitable place to buy found in range — try a bigger range or "Buy near: Me".')
+            return
+        self._sell_status_label.setText(
+            f"Found {len(results)} commodit{'y' if len(results) == 1 else 'ies'} you can buy nearby and sell "
+            f"here at a profit.")
+        _fill_supply_table(self._sell_table, results)
 
     def _get_allies(self) -> frozenset:
         return self.allied_powers_getter() if self.allied_powers_getter else frozenset()
@@ -983,42 +1198,54 @@ class TradeRoutePanel(QWidget):
         self._bgs_status_label.setText(
             f"Found {len(results)} profitable commodit{'y' if len(results) == 1 else 'ies'}." + note
         )
-        self._bgs_table.setSortingEnabled(False)
-        self._bgs_table.setRowCount(len(results))
-        for row, r in enumerate(results):
-            demand = r["demand"] if isinstance(r["demand"], int) else None
-            age_hours = r.get("data_age_hours")
-            age_text = "—" if age_hours is None else (
-                f"{age_hours:.0f}h" if age_hours < 24 else f"{age_hours / 24:.0f}d"
-            )
-            total_item = _NumericTableWidgetItem(f"{r['total_profit']:,}", float(r["total_profit"]))
-            total_item.setForeground(QColor("#6BCB77"))
-            numeric = [
-                _NumericTableWidgetItem(f"{r['dist_to_dest']:.1f}", r["dist_to_dest"]),
-                _NumericTableWidgetItem(f"{r['buy_price']:,}", float(r["buy_price"])),
-                _NumericTableWidgetItem(f"{r['sell_price']:,}", float(r["sell_price"])),
-                _NumericTableWidgetItem(f"{r['profit_per_unit']:,}", float(r["profit_per_unit"])),
-                _NumericTableWidgetItem(
-                    " ".join(x for x in (r.get("demand_level", ""), "" if demand is None else f"{demand:,}") if x) or "—",
-                    float(demand or 0),
-                ),
-                _NumericTableWidgetItem(f"{r['quantity']:,}", float(r["quantity"])),
-                total_item,
-                QTableWidgetItem("✓" if r["pp_large_profit"] else ""),
-                _NumericTableWidgetItem(age_text, age_hours if age_hours is not None else -1.0),
-            ]
-            self._bgs_table.setItem(row, 0, QTableWidgetItem(r["commodity_display"]))
-            self._bgs_table.setItem(row, 1, QTableWidgetItem(r["buy_station_name"]))
-            self._bgs_table.setItem(row, 2, QTableWidgetItem(r["buy_system_name"]))
-            for col, it in enumerate(numeric, start=3):
-                it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                self._bgs_table.setItem(row, col, it)
-        self._bgs_table.setSortingEnabled(True)
-        self._bgs_table.sortItems(9, Qt.SortOrder.DescendingOrder)
+        _fill_supply_table(self._bgs_table, results)
 
     def _on_bgs_cell_clicked(self, row: int, column: int) -> None:
-        if column not in (1, 2):
-            return
-        item = self._bgs_table.item(row, column)
-        if item and item.text():
-            QApplication.clipboard().setText(item.text())
+        _copy_supply_cell(self._bgs_table, row, column)
+
+
+def _fill_supply_table(table: QTableWidget, results: list) -> None:
+    """Supply-search results (find_supply_for_destination rows plus
+    commodity_display/demand_level) into a 12-column supply table; shared by
+    the BGS Supply Run and Sell Here cards."""
+    table.setSortingEnabled(False)
+    table.setRowCount(len(results))
+    for row, r in enumerate(results):
+        demand = r["demand"] if isinstance(r["demand"], int) else None
+        age_hours = r.get("data_age_hours")
+        age_text = "—" if age_hours is None else (
+            f"{age_hours:.0f}h" if age_hours < 24 else f"{age_hours / 24:.0f}d"
+        )
+        total_item = _NumericTableWidgetItem(f"{r['total_profit']:,}", float(r["total_profit"]))
+        total_item.setForeground(QColor("#6BCB77"))
+        numeric = [
+            _NumericTableWidgetItem(f"{r['dist_to_dest']:.1f}", r["dist_to_dest"]),
+            _NumericTableWidgetItem(f"{r['buy_price']:,}", float(r["buy_price"])),
+            _NumericTableWidgetItem(f"{r['sell_price']:,}", float(r["sell_price"])),
+            _NumericTableWidgetItem(f"{r['profit_per_unit']:,}", float(r["profit_per_unit"])),
+            _NumericTableWidgetItem(
+                " ".join(x for x in (r.get("demand_level", ""), "" if demand is None else f"{demand:,}") if x) or "—",
+                float(demand or 0),
+            ),
+            _NumericTableWidgetItem(f"{r['quantity']:,}", float(r["quantity"])),
+            total_item,
+            QTableWidgetItem("✓" if r["pp_large_profit"] else ""),
+            _NumericTableWidgetItem(age_text, age_hours if age_hours is not None else -1.0),
+        ]
+        table.setItem(row, 0, QTableWidgetItem(r["commodity_display"]))
+        table.setItem(row, 1, QTableWidgetItem(r["buy_station_name"]))
+        table.setItem(row, 2, QTableWidgetItem(r["buy_system_name"]))
+        for col, it in enumerate(numeric, start=3):
+            it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            table.setItem(row, col, it)
+    table.setSortingEnabled(True)
+    table.sortItems(9, Qt.SortOrder.DescendingOrder)
+
+
+def _copy_supply_cell(table: QTableWidget, row: int, column: int) -> None:
+    """Clicking a Buy Station / Buy System cell copies its name."""
+    if column not in (1, 2):
+        return
+    item = table.item(row, column)
+    if item and item.text():
+        QApplication.clipboard().setText(item.text())

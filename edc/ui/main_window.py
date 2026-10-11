@@ -1928,6 +1928,7 @@ class MainWindow(QMainWindow):
                 "buy_price": it.get("BuyPrice") or 0,
                 "sell_price": it.get("SellPrice") or 0,
                 "demand": it.get("Demand") or 0,
+                "demand_bracket": it.get("DemandBracket"),
                 "stock": it.get("Stock") or 0,
             })
             name_pairs.append((normalize_commodity_name(name), name))
