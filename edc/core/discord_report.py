@@ -14,10 +14,6 @@ green value. INF here is our own signed total (primary and secondary effects),
 matching the Session BGS Activity Report.
 """
 
-import re
-
-DISCORD_LIMIT = 2000  # characters per message (non-Nitro)
-
 _FG = {"red": 31, "green": 32, "yellow": 33, "blue": 34, "cyan": 36, "white": 37}
 
 
@@ -74,24 +70,14 @@ def _faction_line(name: str, t: dict) -> str:
     return f"{_c(name, 'yellow', bold=True)} {items}\n" if items else ""
 
 
-def bgs_tally_text(report: dict) -> str:
-    """Repository.get_session_activity_report() output as Discord text."""
+def bgs_tally_text(report: dict, system: str = None) -> str:
+    """Repository.get_session_activity_report() output as Discord text, for one
+    system (all days of the tick window summed) or, without `system`, all of them."""
     text = ""
-    for system, factions in sorted(_merge_days(report).items()):
-        lines = "".join(_faction_line(name, t) for name, t in sorted(factions.items()))
+    for name, factions in sorted(_merge_days(report).items()):
+        if system is not None and name != system:
+            continue
+        lines = "".join(_faction_line(f, t) for f, t in sorted(factions.items()))
         if lines:
-            text += f"```ansi\n{_c(system, 'white', bold=True)}\n{lines}```"
+            text += f"```ansi\n{_c(name, 'white', bold=True)}\n{lines}```"
     return text.replace("'", "")  # as BGS-Tally does
-
-
-def split_for_discord(text: str, limit: int = DISCORD_LIMIT) -> list:
-    """Messages of at most `limit` characters, split between system blocks."""
-    # ponytail: a single system block over the limit is kept whole; add line
-    # splitting if a system ever has that many factions with activity.
-    parts, cur = [], ""
-    for block in re.findall(r"```ansi\n.*?```", text, re.S):
-        if cur and len(cur) + len(block) > limit:
-            parts.append(cur)
-            cur = ""
-        cur += block
-    return parts + ([cur] if cur else [])

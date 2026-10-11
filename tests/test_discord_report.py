@@ -1,7 +1,7 @@
 """Session BGS activity as BGS-Tally-style Discord text (default formatter layout:
 one ```ansi block per system, one line per faction, non-zero items only), for the
 user to paste. Nothing is posted anywhere."""
-from edc.core.discord_report import DISCORD_LIMIT, bgs_tally_text, human_format, split_for_discord
+from edc.core.discord_report import bgs_tally_text, human_format
 
 E = "\x1b["
 
@@ -70,19 +70,20 @@ def test_negative_inf_and_empty_report():
     assert bgs_tally_text({}) == ""
 
 
-def test_split_for_discord_keeps_system_blocks_whole():
-    blocks = "".join(f"```ansi\nSystem{i}\n{'x' * 600}\n```" for i in range(5))
-    parts = split_for_discord(blocks)
-    assert len(parts) > 1 and all(len(p) <= DISCORD_LIMIT for p in parts)
-    assert "".join(parts) == blocks
-    assert all(p.startswith("```ansi") and p.endswith("```") for p in parts)
-    assert split_for_discord("") == []
+def test_one_system_only_with_all_its_days():
+    report = {
+        "2026-10-10": {"Ekono": {"EUW": _entry(inf=2)}, "Sol": {"Fed": _entry(inf=9)}},
+        "2026-10-11": {"Ekono": {"EUW": _entry(inf=3)}},
+    }
+    text = bgs_tally_text(report, "Ekono")
+    assert "Ekono" in text and "Sol" not in text and f"{E}32m+5{E}0m" in text
+    assert bgs_tally_text(report, "Nowhere") == ""
 
 
-def test_dialog_copy_button_cycles_parts(tmp_path):
+def test_each_system_card_copies_its_own_system(tmp_path):
     from types import SimpleNamespace
     from unittest.mock import patch
-    from PyQt6.QtWidgets import QApplication
+    from PyQt6.QtWidgets import QApplication, QPushButton
     from edc.ui.panels.session_activity_dialog import SessionActivityDialog
     from persistence.database import Database
     from persistence.repository import Repository
@@ -90,19 +91,12 @@ def test_dialog_copy_button_cycles_parts(tmp_path):
     app = QApplication.instance() or QApplication([])
     db = Database(tmp_path / "t.db"); db.executescript(SCHEMA_SQL); db.run_migrations()
     repo = Repository(db)
-    # enough systems with long faction names to need more than one Discord message
-    big = {"2026-10-11": {f"System {i:02d}": {f"Faction {i} {'X' * 120} {j}": _entry(inf=j + 1, bounties_total=1000)
-                                             for j in range(4)} for i in range(8)}}
+    report = {"2026-10-11": {"Ekono": {"EUW": _entry(inf=4)}, "Sol": {"Fed": _entry(bounties_total=2000)}}}
     dlg = SessionActivityDialog(SimpleNamespace(_repo=repo, _faction_name="EUW", _latest_known_tick=None))
-    with patch.object(repo, "get_session_activity_report", return_value=big):
+    with patch.object(repo, "get_session_activity_report", return_value=report):
         dlg.refresh()
-    n = len(dlg._discord_parts)
-    assert n > 1 and dlg._discord_btn.text() == f"📋 Copy for Discord (1/{n})"
-    dlg._copy_for_discord()
-    first = QApplication.clipboard().text()
-    assert first == dlg._discord_parts[0] and len(first) <= DISCORD_LIMIT
-    assert dlg._discord_btn.text() == f"📋 Copy for Discord (2/{n})"
-
-    with patch.object(repo, "get_session_activity_report", return_value={}):
-        dlg.refresh()
-    assert not dlg._discord_btn.isEnabled()
+    buttons = [b for card in dlg._cards for b in card.findChildren(QPushButton)]
+    assert [b.text() for b in buttons] == ["📋 Copy for Discord"] * 2
+    buttons[1].click()                          # second card = Sol (cards are sorted by system)
+    copied = QApplication.clipboard().text()
+    assert copied == bgs_tally_text(report, "Sol") and "Ekono" not in copied
