@@ -29,6 +29,7 @@ from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE
 from edc.ui import formatting as fmt
 from edc.core.bgs_tasks import CP_NOTE, cp_text, powerplay_week_start, pp_watch, undermining_alerts
 from edc.core.expansion_forecast import alert_text, detect_new_systems
+from edc.core.discord_report import bgs_tally_text, split_for_discord
 
 log = logging.getLogger("edc.session_activity")
 
@@ -66,6 +67,14 @@ class SessionActivityDialog(QDialog):
         hdr.setStyleSheet(_HDR_STYLE)
         hdr_row.addWidget(hdr)
         hdr_row.addStretch(1)
+        # BGS-Tally-style text for the user to paste into Discord (nothing is posted)
+        self._discord_parts: list = []
+        self._discord_next = 0
+        self._discord_btn = QPushButton("📋 Copy for Discord")
+        self._discord_btn.setToolTip("Copies this tick's activity in BGS-Tally's Discord format. "
+                                     "Over 2,000 characters it copies one part per click.")
+        self._discord_btn.clicked.connect(self._copy_for_discord)
+        hdr_row.addWidget(self._discord_btn)
         refresh_btn = QPushButton("Refresh")
         refresh_btn.clicked.connect(self.refresh)
         hdr_row.addWidget(refresh_btn)
@@ -161,6 +170,22 @@ class SessionActivityDialog(QDialog):
             log.exception("Failed to load session merits")
             merits = {}
         self._render_report(report, merits)
+        self._discord_parts = split_for_discord(bgs_tally_text(report))
+        self._discord_next = 0
+        self._update_discord_button()
+
+    def _update_discord_button(self) -> None:
+        n = len(self._discord_parts)
+        self._discord_btn.setEnabled(bool(n))
+        self._discord_btn.setText("📋 Copy for Discord" + (f" ({self._discord_next + 1}/{n})" if n > 1 else ""))
+
+    def _copy_for_discord(self) -> None:
+        from PyQt6.QtWidgets import QApplication
+        if not self._discord_parts:
+            return
+        QApplication.clipboard().setText(self._discord_parts[self._discord_next])
+        self._discord_next = (self._discord_next + 1) % len(self._discord_parts)
+        self._update_discord_button()
 
     @staticmethod
     def _faction_color(faction_name: str) -> str:
