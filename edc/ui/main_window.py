@@ -555,11 +555,26 @@ class _UiStallWatchdog:
         import traceback
         reported_for = None
         cpu_at_beat = time.process_time()
+        # Windows Modern Standby (screen off) suspends the whole process in bursts; the UI
+        # heartbeat then looks stalled though nothing here is stuck (2026-10-10/11: 1,353 of
+        # 1,368 "stalls" fell inside standby). This thread is suspended too, so its own sleep
+        # overrunning means "paused by Windows": skip that beat and summarise the pauses once.
+        paused_beat = None
+        paused_n, paused_s, last_pause = 0, 0.0, 0.0
         while True:
+            slept_from = time.monotonic()
             time.sleep(0.5)
+            overrun = time.monotonic() - slept_from - 0.5
+            if overrun > 1.0:
+                paused_beat = self._beat
+                paused_n, paused_s, last_pause = paused_n + 1, paused_s + overrun, time.monotonic()
+            elif paused_n and time.monotonic() - last_pause > 30:
+                log.info("Windows paused the app %d times (%.0fs in total) -- Modern Standby / "
+                         "screen off; not a UI freeze", paused_n, paused_s)
+                paused_n, paused_s = 0, 0.0
             beat = self._beat
             stalled = time.monotonic() - beat
-            if stalled >= self.STALL_S and reported_for != beat:
+            if stalled >= self.STALL_S and reported_for != beat and beat != paused_beat:
                 reported_for = beat
                 frames = self._sys._current_frames()
                 names = {t.ident: t.name for t in threading.enumerate()}
