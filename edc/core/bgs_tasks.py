@@ -13,6 +13,8 @@ import math
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
+from edc.core.bgs_points import bucket_hints, bucket_points, ceiling, total_points
+
 TASK_TYPES = ("boost", "hinder", "vote", "fight", "powerplay", "note")
 TASK_LABELS = {"boost": "Boost", "hinder": "Hinder", "vote": "Vote", "fight": "Fight", "powerplay": "PowerPlay",
                "note": "Note"}
@@ -551,6 +553,35 @@ def _hinder_view(task: dict, report: dict, history: list, today: Optional[date] 
             "hud": f"Hinder {faction} — {influence_txt}", "updated_at": rows[0].get("snapshot_date") if rows else None}
 
 
+def bgs_point_chips(act: dict, influence: Optional[float]) -> list:
+    """SINC bucket points for this tick's activity (which bucket still pays) and
+    the likely best gain today -- see edc.core.bgs_points. Shared by the Boost
+    card and the Session report."""
+    chips = []
+    args = (act["tier_score"], act["bounties"], act["trade_profit"], act["exploration"])
+    points, hints = bucket_points(*args), bucket_hints(*args)
+    if any(args):
+        total = total_points(points)
+        empty = hints["empty"]
+        chips.append({
+            "text": f"SINC {total:.1f} pts" + (f" · empty: {', '.join(empty)}" if empty and total else ""),
+            "tooltip": "SINC bucket points this tick (Complete BGS Guide 2024; community-measured, relative "
+                       "effort, not influence %). Every doubling of a bucket adds the same, so a little in an "
+                       "empty bucket beats more in a full one:\n"
+                       + "\n".join(f"{name.capitalize()}: {points[name]:.2f} — next: {hints['next'][name]}"
+                                   for name in points),
+        })
+    likely = ceiling(influence)
+    if likely:
+        chips.append({
+            "text": f"Likely max today +{likely[0]:.1f}–{likely[1]:.1f}",
+            "tooltip": "Best daily gain usually seen at this influence: 6–8% of the headroom (100% − influence), "
+                       "from 121 EUW days (record 13% of headroom). Past it, more effort mostly doesn't move "
+                       "influence today — another faction or system may need it more.",
+        })
+    return chips
+
+
 def _boost_view(task: dict, report: dict, history: list, limits: dict, today: Optional[date] = None) -> dict:
     faction = task.get("faction_name") or ""
     act = faction_activity(report, task["system_name"], faction)
@@ -624,6 +655,7 @@ def _boost_view(task: dict, report: dict, history: list, limits: dict, today: Op
         chips.append({"text": f"Trade buys {_cr(act['trade_bought'])}"})
     if act["combat_bonds"]:
         chips.append({"text": f"Combat bonds {_cr(act['combat_bonds'])}"})
+    chips += bgs_point_chips(act, latest)
     structure = {"bars": view_bars, "chips": chips,
                  "detail_lines": [retreat_line] if retreat_line else [],
                  "guide_short": f"Missions · bounties · exploration data · profitable high-demand trade for {faction}"}

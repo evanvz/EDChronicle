@@ -27,7 +27,9 @@ from PyQt6.QtWidgets import (
 
 from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE
 from edc.ui import formatting as fmt
-from edc.core.bgs_tasks import CP_NOTE, cp_text, powerplay_week_start, pp_watch, undermining_alerts
+from edc.core.bgs_tasks import (
+    CP_NOTE, bgs_point_chips, cp_text, faction_activity, powerplay_week_start, pp_watch, undermining_alerts,
+)
 from edc.core.expansion_forecast import alert_text, detect_new_systems
 from edc.core.discord_report import bgs_tally_text
 
@@ -150,6 +152,7 @@ class SessionActivityDialog(QDialog):
                 faction = self._panel._repo.get_squadron_faction_name()
             except Exception:
                 faction = None
+        self._squad_faction = faction
         try:
             new = detect_new_systems(self._panel._repo, faction) if faction else []
         except Exception:
@@ -164,6 +167,26 @@ class SessionActivityDialog(QDialog):
             merits = {}
         self._report = report
         self._render_report(report, merits)
+
+    def _bgs_points_row(self, system_name: str, faction_name: str):
+        """Squad faction only: SINC bucket points for the whole tick in this system
+        and the likely best gain today (see edc.core.bgs_points)."""
+        influence = None
+        try:
+            repo = self._panel._repo
+            addr = repo.get_system_addresses_for_names([system_name]).get(system_name)
+            hist = repo.get_faction_history(addr, faction_name) if addr else []
+            influence = hist[0]["influence"] if hist else None
+        except Exception:
+            log.exception("Failed to read influence for BGS points")
+        chips = bgs_point_chips(faction_activity(self._report, system_name, faction_name), influence)
+        if not chips:
+            return None
+        row = QLabel("    " + "  ·  ".join(c["text"] for c in chips))
+        row.setToolTip("\n\n".join(c["tooltip"] for c in chips))
+        row.setWordWrap(True)
+        row.setStyleSheet("background:transparent; border:none; color:#4da3ff; font-size:11px;")
+        return row
 
     def _copy_for_discord(self, system_name: str) -> None:
         """One system's activity this tick in BGS-Tally's Discord format, for the
@@ -362,6 +385,11 @@ class SessionActivityDialog(QDialog):
                         types_row.setWordWrap(True)
                         types_row.setStyleSheet("background:transparent; border:none; color:#666666; font-size:11px;")
                         card_l.addWidget(types_row)
+
+                    if faction_name.lower() == (getattr(self, "_squad_faction", None) or "").lower():
+                        points_row = self._bgs_points_row(system_name, faction_name)
+                        if points_row is not None:
+                            card_l.addWidget(points_row)
 
                 self._content_layout.addWidget(card)
                 self._cards.append(card)
