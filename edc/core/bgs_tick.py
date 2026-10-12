@@ -39,3 +39,21 @@ def fetch_latest_tick() -> Optional[str]:
     if not isinstance(data, str) or not data:
         return None
     return data
+
+
+def fetch_tick_history(start: str, end: str) -> list[str]:
+    """Every tick between two dates (YYYY-MM-DD) from tick.edcd.io/api/ticks,
+    e.g. [{"TIME": "2026-10-11T15:00:09+00:00"}, ...] -> ["2026-10-11T15:00:09+00:00", ...];
+    [] on any failure. Fills the BGS Experiment Log's tick history for days the
+    app wasn't running. Worker thread only."""
+    try:
+        resp = requests.get(f"{_TICK_URL}s", params={"start": start, "end": end},
+                            headers={"User-Agent": _USER_AGENT}, timeout=_TIMEOUT)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as exc:
+        log.warning("Failed to fetch BGS tick history: %s", exc)
+        return []
+    if not isinstance(data, list):
+        return []
+    return [t["TIME"] for t in data if isinstance(t, dict) and isinstance(t.get("TIME"), str)]

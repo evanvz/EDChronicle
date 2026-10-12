@@ -37,6 +37,7 @@ from edc.ui import formatting as fmt
 from edc.ui.panels.combat_bgs_status_panel import _conflicts_text, _faction_states_text
 from edc.ui.panels.faction_expansion_dialog import FactionExpansionDialog
 from edc.ui.panels.session_activity_dialog import SessionActivityDialog
+from edc.ui.panels.bgs_experiment_dialog import BgsExperimentDialog
 from edc.ui.panels.bgs_tasks_dialog import BgsTasksDialog
 from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, TABLE_STYLE as _TABLE_STYLE
 
@@ -695,6 +696,7 @@ class PlayerFactionPanel(QWidget):
         self._faction_expansion_pin_store = faction_expansion_pin_store
         self._faction_expansion_dialog = None
         self._session_activity_dialog = None
+        self._bgs_experiment_dialog = None
         self._bgs_tasks_dialog = None
         self.pp_watch_view = None   # PowerPlay window's Watch List tab, set by main_window
         # Set by MainWindow: callable returning the Boost limits dict
@@ -880,6 +882,13 @@ class PlayerFactionPanel(QWidget):
         )
         session_activity_btn.clicked.connect(self._open_session_activity_dialog)
         refresh_row.addWidget(session_activity_btn)
+        experiment_btn = QPushButton("BGS Experiment…")
+        experiment_btn.setStyleSheet(session_activity_btn.styleSheet())
+        experiment_btn.setToolTip(
+            "Per-tick results in the squad's BGS test systems: your effort per bucket, SINC points and "
+            "the influence change after each tick.")
+        experiment_btn.clicked.connect(self._open_bgs_experiment_dialog)
+        refresh_row.addWidget(experiment_btn)
         bgs_tasks_btn = QPushButton("BGS Tasks…")
         bgs_tasks_btn.setStyleSheet(
             "QPushButton { background:#2a1a0d; color:#FFB347; border:1px solid #5a3a1a;"
@@ -2029,6 +2038,13 @@ class PlayerFactionPanel(QWidget):
         self._session_activity_dialog.show()
         self._session_activity_dialog.raise_()
         self._session_activity_dialog.activateWindow()
+
+    def _open_bgs_experiment_dialog(self) -> None:
+        if self._bgs_experiment_dialog is None:
+            self._bgs_experiment_dialog = BgsExperimentDialog(self)
+        self._bgs_experiment_dialog.show()
+        self._bgs_experiment_dialog.raise_()
+        self._bgs_experiment_dialog.activateWindow()
 
     def _open_bgs_tasks_dialog(self) -> None:
         if self._bgs_tasks_dialog is None:

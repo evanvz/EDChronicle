@@ -444,6 +444,16 @@ class Database:
             # faction listed there means it was in that system before (tier 2).
             "ALTER TABLE expansion_candidates ADD COLUMN faction_former INTEGER",
             "ALTER TABLE expansion_candidates ADD COLUMN ring REAL",
+            # Every BGS tick seen (tick.edcd.io, normalised to ...Z) -- the
+            # boundaries of the BGS Experiment Log's per-tick rows.
+            """CREATE TABLE IF NOT EXISTS bgs_ticks (
+                tick_at TEXT PRIMARY KEY
+            )""",
+            # Systems the squad uses for controlled BGS tests (Experiment Log).
+            """CREATE TABLE IF NOT EXISTS bgs_experiment_systems (
+                system_name TEXT PRIMARY KEY,
+                added_at    TEXT NOT NULL
+            )""",
             # Expansion Forecast: live faction lists of the candidate systems from
             # EDDN (any commander's FSDJump/Location), so a slot filling (6 -> 7) or
             # a retreat opening one shows up without waiting for an EDSM lookup.

@@ -87,7 +87,7 @@ from edc.core.bgs_tasks import (
     ZYADA_COALITION, allied_powers, bgs_limits, build_task_views, cargo_by_name, hud_line, is_rival_power,
     powerplay_mode, pp_watch,
 )
-from edc.core.bgs_tick import fetch_latest_tick
+from edc.core.bgs_tick import fetch_latest_tick, fetch_tick_history
 from edc.core.expansion_forecast import alert_text, detect_new_systems, first_expansion, slot_change_text, slot_changes
 from edc.ui.panels.engineering_panel import EngineeringPanel
 from edc.ui.panels.powerplay_watch_panel import PowerPlayWatchPanel
@@ -878,8 +878,32 @@ class _BgsTickCheckWorker(QObject):
     pattern as _EddnFlushWorker / _on_market_flush_tick."""
     finished = pyqtSignal(object)  # Optional[str]
 
+    def __init__(self, db_path=None):
+        super().__init__()
+        self._db_path = db_path
+
     def run(self):
         result = fetch_latest_tick()
+        if result and self._db_path:
+            # tick history for the BGS Experiment Log -- own connection (cross-thread rule)
+            from datetime import datetime, timedelta, timezone
+            from persistence.database import Database
+            from persistence.repository import Repository
+            db = Database(self._db_path)
+            try:
+                repo = Repository(db)
+                if not repo.get_bgs_ticks(since=result[:19]):
+                    # a tick we haven't stored: backfill the last 14 days, so ticks
+                    # missed while the app was closed don't merge two windows
+                    today = datetime.now(timezone.utc).date()
+                    for t in fetch_tick_history((today - timedelta(days=14)).isoformat(),
+                                                (today + timedelta(days=1)).isoformat()):
+                        repo.record_bgs_tick(t)
+                repo.record_bgs_tick(result)
+            except Exception:
+                log.exception("Failed to record BGS tick")
+            finally:
+                db.close()
         self.finished.emit(result)
 
 
@@ -6618,7 +6642,7 @@ class MainWindow(QMainWindow):
     def _on_bgs_tick_check_tick(self) -> None:
         if self._bgs_tick_thread and self._bgs_tick_thread.isRunning():
             return  # previous check still running -- next timer firing will catch up
-        self._bgs_tick_worker = _BgsTickCheckWorker()
+        self._bgs_tick_worker = _BgsTickCheckWorker(self.repo.db.db_path)
         if self._bgs_tick_thread is not None:
             self._bgs_tick_thread.wait()  # old-thread teardown race -- see _start_spansh_enrich's docstring
         self._bgs_tick_thread = QThread()

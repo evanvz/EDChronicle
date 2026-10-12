@@ -2828,6 +2828,60 @@ class Repository:
                      1 if r.get("faction_former") else 0, r.get("ring") or 20.0, fetched_at),
                 )
 
+    # ── BGS Experiment Log ────────────────────────────────────────────────────
+
+    def record_bgs_tick(self, tick_iso: str) -> None:
+        """Stores a detected tick, normalised to %Y-%m-%dT%H:%M:%SZ (tick.edcd.io
+        sends +00:00; activity timestamps use Z, and these are compared as strings)."""
+        dt = datetime.fromisoformat(tick_iso.replace("Z", "+00:00")).astimezone(timezone.utc)
+        self.db.execute("INSERT OR IGNORE INTO bgs_ticks (tick_at) VALUES (?)", (dt.strftime("%Y-%m-%dT%H:%M:%SZ"),))
+
+    def get_bgs_ticks(self, since: str = "") -> list[str]:
+        return [r[0] for r in self.db.conn.execute(
+            "SELECT tick_at FROM bgs_ticks WHERE tick_at >= ? ORDER BY tick_at", (since,))]
+
+    def get_experiment_systems(self) -> list[str]:
+        return [r[0] for r in self.db.conn.execute("SELECT system_name FROM bgs_experiment_systems ORDER BY system_name")]
+
+    def add_experiment_system(self, system_name: str) -> None:
+        self.db.execute("INSERT OR IGNORE INTO bgs_experiment_systems (system_name, added_at) VALUES (?, ?)",
+                        (system_name.strip(), datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")))
+
+    def remove_experiment_system(self, system_name: str) -> None:
+        self.db.execute("DELETE FROM bgs_experiment_systems WHERE system_name = ?", (system_name,))
+
+    def get_faction_activity_between(self, system_address: int, faction_name: str, start: str, end: str) -> dict:
+        """Our own BGS effort for one faction in one system with start <= time < end:
+        INF (signed tiers, as the Session report), bounties, combat bonds, trade
+        profit and exploration -- the per-tick effort of the BGS Experiment Log."""
+        conn = self.db.conn
+        args = (system_address, faction_name, start, end)
+        inf = sum(_signed_tier_value(r[0], r[1]) for r in conn.execute(
+            "SELECT influence_tier, trend FROM faction_mission_completions "
+            "WHERE system_address = ? AND faction_name = ? AND completed_at >= ? AND completed_at < ?", args))
+        def total(sql):
+            return conn.execute(sql, args).fetchone()[0] or 0
+        trade = {r[0]: r[1] for r in conn.execute(
+            "SELECT kind, SUM(value) FROM faction_trade_sold "
+            "WHERE system_address = ? AND faction_name = ? AND sold_at >= ? AND sold_at < ? GROUP BY kind", args)}
+        return {
+            "tier_score": inf,
+            "bounties": total("SELECT SUM(amount) FROM faction_bounties WHERE system_address = ? AND faction_name = ? "
+                              "AND redeemed_at >= ? AND redeemed_at < ?"),
+            "combat_bonds": total("SELECT SUM(reward) FROM faction_combat_bonds WHERE system_address = ? "
+                                  "AND faction_name = ? AND earned_at >= ? AND earned_at < ?"),
+            "trade_profit": trade.get("commodity", 0),
+            "exploration": trade.get("exploration", 0),
+        }
+
+    def get_influence_readings(self, system_address: int, faction_name: str) -> list[tuple]:
+        """[(observed_at, influence, active_states, pending_states)] oldest first,
+        one per day (the day's latest reading)."""
+        return [tuple(r) for r in self.db.conn.execute(
+            "SELECT data_timestamp, influence, active_states, pending_states FROM faction_snapshots "
+            "WHERE system_address = ? AND faction_name = ? AND data_timestamp IS NOT NULL ORDER BY data_timestamp",
+            (system_address, faction_name))]
+
     def get_expansion_candidate_addresses(self) -> set[int]:
         """Every cached Expansion Forecast candidate system, for the EDDN watch."""
         return {r[0] for r in self.db.conn.execute(
