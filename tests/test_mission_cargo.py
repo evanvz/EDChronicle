@@ -178,3 +178,16 @@ def test_fleet_carriers_with_blank_station_type_are_excluded(tmp_path):
     assert [r["station_name"] for r in repo.search_market_buy_prices("gold", 0, 0, 0, 10)] == ["Real Port"]
     assert [s["station_name"] for s in repo.get_market_snapshot_in_radius(0, 0, 0, 10).values()] == ["Real Port"]
     assert [s["station_name"] for s in repo.get_market_snapshot_for_systems(["Near"]).values()] == ["Real Port"]
+
+
+def test_startup_scan_drops_missions_that_expired_offline(tmp_path):
+    """A mission that runs out while the game is closed never gets a MissionFailed;
+    the startup history scan must not bring it back as active (Player Faction card,
+    Combat panel and Mission Cargo all read active_missions)."""
+    import json
+    from edc.core.mission_scanner import scan_active_missions
+    lines = [_accept(1, name="Mission_OnFoot_Salvage_MB", expiry="2024-04-10T21:00:00Z"),
+             _accept(2, expiry="2099-01-01T00:00:00Z")]
+    (tmp_path / "Journal.2026-10-12T000000.01.log").write_text(
+        "\n".join(json.dumps({**e, "timestamp": "2024-04-01T00:00:00Z"}) for e in lines), encoding="utf-8")
+    assert list(scan_active_missions(tmp_path)) == [2]

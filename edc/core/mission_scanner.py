@@ -10,6 +10,7 @@ tail-replay window of the current journal.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
 
@@ -49,4 +50,8 @@ def scan_active_missions(journal_dir: Path) -> Dict[int, Dict[str, Any]]:
         except OSError:
             continue
 
-    return active
+    # A mission that runs out while the game is closed never gets a
+    # MissionFailed, so the replay would keep it active forever (found
+    # 2026-10-12: on-foot missions from 2024 still "active").
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return {mid: rec for mid, rec in active.items() if (rec.get("expiry") or "9999") >= now}
