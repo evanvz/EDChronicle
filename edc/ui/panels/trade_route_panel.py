@@ -16,7 +16,7 @@ from PyQt6.QtCore import Qt, QObject, QThread, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit,
-    QSpinBox, QComboBox, QCheckBox, QTableWidget, QTableWidgetItem, QHeaderView, QFrame,
+    QSpinBox, QComboBox, QCheckBox, QTableWidget, QTableWidgetItem, QHeaderView, QFrame, QTabWidget,
 )
 
 from edc.core.bgs_tasks import is_rival_power
@@ -26,7 +26,7 @@ from edc.core.trade_routes import (
 )
 from edc.ui.busy_spinner import BusySpinner
 from edc.ui.panels.market_panel import _NumericTableWidgetItem
-from edc.ui.style import CARD_STYLE as _CARD_STYLE, LABEL_STYLE as _LABEL_STYLE
+from edc.ui.style import CARD_STYLE as _CARD_STYLE, LABEL_STYLE as _LABEL_STYLE, TAB_STYLE
 
 log = logging.getLogger(__name__)
 
@@ -472,7 +472,7 @@ class TradeRoutePanel(QWidget):
 
         self._loading_spinner = BusySpinner(self)
 
-        root.addWidget(frame, 1)
+        loop_frame = frame
 
         p2p_frame = QFrame()
         p2p_frame.setStyleSheet(_CARD_STYLE)
@@ -549,9 +549,14 @@ class TradeRoutePanel(QWidget):
 
         self._p2p_loading_spinner = BusySpinner(self)
 
-        root.addWidget(p2p_frame, 1)
-        root.addWidget(self._build_bgs_card(), 1)
-        root.insertWidget(0, self._build_sell_here_card(), 1)
+        # One tab per section (same tab style as the PowerPlay and Engineering windows)
+        self._tabs = QTabWidget()
+        self._tabs.setStyleSheet(TAB_STYLE)
+        self._tabs.addTab(self._build_sell_here_card(), "Sell Here")
+        self._tabs.addTab(loop_frame, "Loop Planner")
+        self._tabs.addTab(p2p_frame, "Point-to-Point")
+        self._tabs.addTab(self._build_bgs_card(), "BGS Supply Run")
+        root.addWidget(self._tabs, 1)
 
     def refresh(self, state) -> None:
         """Cheap, safe to call on every general refresh — just updates the

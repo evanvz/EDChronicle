@@ -84,6 +84,15 @@ DANGER_BUTTON_STYLE = (
 # ── Empty-state placeholder text inside an otherwise-empty table/card ──────
 EMPTY_STATE_STYLE = "color:#4a4a4a; font-style:italic; background:transparent; border:none;"
 
+# ── Tabs: the one tab look used across the app (boxed tabs, orange selected) ──
+TAB_STYLE = (
+    "QTabWidget::pane { border:1px solid #1e3a5a; background:#080f18; }"
+    "QTabBar::tab { background:#0d1a2a; color:#888888; padding:5px 14px;"
+    " border:1px solid #1e3a5a; border-bottom:none; margin-right:2px; }"
+    "QTabBar::tab:selected { background:#080f18; color:#FFB347; border-bottom:1px solid #080f18; }"
+    "QTabBar::tab:hover { color:#c8c8c8; }"
+)
+
 # ── Semantic card palette ───────────────────────────────────────────────────
 # (card_bg, card_border, header_fg) per meaning. Pulled together from the
 # colors already in use ad-hoc across combat_panel/intel_panel/exploration_

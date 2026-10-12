@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 
 from edc.ui import formatting as fmt
-from edc.ui.style import CARD_STYLE, HDR_STYLE
+from edc.ui.style import CARD_STYLE, HDR_STYLE, TAB_STYLE
 from edc.ui.panels.powerplay_finder_panel import PowerplayFinderPanel
 from edc.ui.panels.powerplay_system_status_panel import PowerplaySystemStatusPanel
 from edc.ui.panels.player_faction_panel import derive_bgs_action
@@ -41,13 +41,7 @@ class PowerplayPanel(QWidget):
         root.setSpacing(0)
 
         self._tabs = QTabWidget()
-        self._tabs.setStyleSheet(
-            "QTabWidget::pane { border:1px solid #1e3a5a; background:#080f18; }"
-            "QTabBar::tab { background:#0d1a2a; color:#888888; padding:5px 14px;"
-            " border:1px solid #1e3a5a; border-bottom:none; margin-right:2px; }"
-            "QTabBar::tab:selected { background:#080f18; color:#FFB347; border-bottom:1px solid #080f18; }"
-            "QTabBar::tab:hover { color:#c8c8c8; }"
-        )
+        self._tabs.setStyleSheet(TAB_STYLE)
         root.addWidget(self._tabs)
 
         # ── Tab 1: Status (existing content) ──────────────────────────────

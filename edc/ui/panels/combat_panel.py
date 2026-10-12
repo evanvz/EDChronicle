@@ -20,7 +20,7 @@ from PyQt6.QtGui import QColor
 
 from edc.core.bgs_conflicts import find_squadron_war_enemy, squadron_faction_name
 from edc.ui import formatting as fmt
-from edc.ui.style import CARD_STYLE, HDR_STYLE, card_style, hdr_style
+from edc.ui.style import CARD_STYLE, HDR_STYLE, TAB_STYLE, card_style, hdr_style
 from edc.ui.panels.combat_bgs_status_panel import CombatBgsStatusPanel
 
 log = logging.getLogger(__name__)
@@ -66,6 +66,7 @@ class CombatPanel(QWidget):
         outer.setSpacing(0)
 
         inner_tabs = QTabWidget()
+        inner_tabs.setStyleSheet(TAB_STYLE)
         outer.addWidget(inner_tabs, 1)
 
         overview_page = QWidget()

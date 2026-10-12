@@ -32,7 +32,7 @@ from PyQt6.QtWidgets import (
     QDialog, QFrame, QSizePolicy, QTabWidget,
 )
 
-from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, PRIMARY_BUTTON_STYLE as _BTN_STYLE
+from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, PRIMARY_BUTTON_STYLE as _BTN_STYLE, TAB_STYLE
 from edc.ui import formatting as fmt
 from edc.core.edsm_faction_lookup import fetch_system_factions, ERROR_BLOCKED, ERROR_NOT_FOUND
 from edc.core.expansion_forecast import (
@@ -223,6 +223,7 @@ class FactionExpansionDialog(QDialog):
 
         outer = QVBoxLayout(self)
         self._tabs = QTabWidget()
+        self._tabs.setStyleSheet(TAB_STYLE)
         outer.addWidget(self._tabs)
         target_page = QWidget()
         layout = QVBoxLayout(target_page)

@@ -34,6 +34,7 @@ from edc.ui.style import (
     LABEL_STYLE as _LABEL_STYLE,
     COMBO_STYLE as _COMBO_STYLE,
     TABLE_STYLE as _TABLE_STYLE,
+    TAB_STYLE,
     PRIMARY_BUTTON_STYLE as _PRIMARY_BUTTON_STYLE,
     DANGER_BUTTON_STYLE as _DANGER_BUTTON_STYLE,
     make_card,
@@ -130,13 +131,7 @@ class EngineeringPanel(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
 
         self._tabs = QTabWidget()
-        self._tabs.setStyleSheet(
-            "QTabWidget::pane { border:1px solid #1e3a5a; background:#080f18; }"
-            "QTabBar::tab { background:#0d1a2a; color:#888888; padding:5px 14px;"
-            " border:1px solid #1e3a5a; border-bottom:none; margin-right:2px; }"
-            "QTabBar::tab:selected { background:#080f18; color:#FFB347; border-bottom:1px solid #080f18; }"
-            "QTabBar::tab:hover { color:#c8c8c8; }"
-        )
+        self._tabs.setStyleSheet(TAB_STYLE)
         root.addWidget(self._tabs)
 
         self._ship_tab = _ShipEngineeringTab(blueprint_table, wishlist_store, experimental_effects, repo, cfg)
