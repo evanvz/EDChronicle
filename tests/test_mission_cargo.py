@@ -160,3 +160,21 @@ def test_on_foot_and_expired_missions_are_left_out():
     now = datetime(2026, 10, 12, 12, 0, tzinfo=timezone.utc)
     assert [g["commodity"] for g in cargo_needs(active, [], now=now)] == ["Domestic Appliances"]
 
+
+def test_fleet_carriers_with_blank_station_type_are_excluded(tmp_path):
+    """Real data 2026-10-12: 2,637 carrier markets have station_type '' (not NULL, not
+    'FleetCarrier') and slipped past the carrier filter; their callsign names give them away."""
+    from persistence.database import Database
+    from persistence.repository import Repository
+    from persistence.schema import SCHEMA_SQL
+    db = Database(tmp_path / "t.db"); db.executescript(SCHEMA_SQL); db.run_migrations()
+    repo = Repository(db)
+    repo.save_system_coords_batch([("Near", 1.0, 0.0, 0.0, "2026-10-12T00:00:00Z")])
+    now = "2099-01-01T00:00:00Z"
+    repo.save_market_snapshot_batch([
+        (1, "gold", "Real Port", "Coriolis", "Near", 0, 500, 0, 0, 0, 900, 3, now),
+        (2, "gold", "GFG-B6N", "", "Near", 0, 400, 0, 0, 0, 900, 3, now),
+    ])
+    assert [r["station_name"] for r in repo.search_market_buy_prices("gold", 0, 0, 0, 10)] == ["Real Port"]
+    assert [s["station_name"] for s in repo.get_market_snapshot_in_radius(0, 0, 0, 10).values()] == ["Real Port"]
+    assert [s["station_name"] for s in repo.get_market_snapshot_for_systems(["Near"]).values()] == ["Real Port"]
