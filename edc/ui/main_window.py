@@ -1992,7 +1992,7 @@ class MainWindow(QMainWindow):
         self._market_save_thread = QThread()
         self._market_save_worker.moveToThread(self._market_save_thread)
         self._market_save_thread.started.connect(self._market_save_worker.run)
-        self._market_save_worker.finished.connect(self._market_save_thread.quit)
+        self._market_save_worker.finished.connect(self._market_save_thread.quit, Qt.ConnectionType.DirectConnection)
         self._market_save_thread.start()
 
     def _load_current_fcmaterials(self):
@@ -3234,7 +3234,7 @@ class MainWindow(QMainWindow):
         self._startup_history_worker.moveToThread(self._startup_history_thread)
         self._startup_history_thread.started.connect(self._startup_history_worker.run)
         self._startup_history_worker.finished.connect(self._on_startup_history_scan_finished)
-        self._startup_history_worker.finished.connect(self._startup_history_thread.quit)
+        self._startup_history_worker.finished.connect(self._startup_history_thread.quit, Qt.ConnectionType.DirectConnection)
         self._startup_history_thread.start()
 
     def _on_startup_history_scan_finished(self, result: dict) -> None:
@@ -3439,7 +3439,7 @@ class MainWindow(QMainWindow):
         self._edsm_powerplay_worker.moveToThread(self._edsm_powerplay_thread)
         self._edsm_powerplay_thread.started.connect(self._edsm_powerplay_worker.run)
         self._edsm_powerplay_worker.finished.connect(self._on_edsm_powerplay_refreshed)
-        self._edsm_powerplay_worker.finished.connect(self._edsm_powerplay_thread.quit)
+        self._edsm_powerplay_worker.finished.connect(self._edsm_powerplay_thread.quit, Qt.ConnectionType.DirectConnection)
         self._edsm_powerplay_thread.start()
 
     def _on_edsm_powerplay_refreshed(self, ok: bool):
@@ -3463,7 +3463,7 @@ class MainWindow(QMainWindow):
         self._fdev_powerplay_worker.moveToThread(self._fdev_powerplay_thread)
         self._fdev_powerplay_thread.started.connect(self._fdev_powerplay_worker.run)
         self._fdev_powerplay_worker.finished.connect(self._on_fdev_powerplay_refreshed)
-        self._fdev_powerplay_worker.finished.connect(self._fdev_powerplay_thread.quit)
+        self._fdev_powerplay_worker.finished.connect(self._fdev_powerplay_thread.quit, Qt.ConnectionType.DirectConnection)
         self._fdev_powerplay_thread.start()
 
     def _on_fdev_powerplay_refreshed(self, ok: bool):
@@ -3484,7 +3484,7 @@ class MainWindow(QMainWindow):
         self._guardian_ruins_worker.moveToThread(self._guardian_ruins_thread)
         self._guardian_ruins_thread.started.connect(self._guardian_ruins_worker.run)
         self._guardian_ruins_worker.finished.connect(self._on_guardian_ruins_refreshed)
-        self._guardian_ruins_worker.finished.connect(self._guardian_ruins_thread.quit)
+        self._guardian_ruins_worker.finished.connect(self._guardian_ruins_thread.quit, Qt.ConnectionType.DirectConnection)
         self._guardian_ruins_thread.start()
 
     def _on_guardian_ruins_refreshed(self, ok: bool):
@@ -3505,7 +3505,7 @@ class MainWindow(QMainWindow):
         self._edastro_poi_worker.moveToThread(self._edastro_poi_thread)
         self._edastro_poi_thread.started.connect(self._edastro_poi_worker.run)
         self._edastro_poi_worker.finished.connect(self._on_edastro_poi_refreshed)
-        self._edastro_poi_worker.finished.connect(self._edastro_poi_thread.quit)
+        self._edastro_poi_worker.finished.connect(self._edastro_poi_thread.quit, Qt.ConnectionType.DirectConnection)
         self._edastro_poi_thread.start()
 
     def _on_edastro_poi_refreshed(self, ok: bool):
@@ -3531,7 +3531,7 @@ class MainWindow(QMainWindow):
         self._market_prune_worker.moveToThread(self._market_prune_thread)
         self._market_prune_thread.started.connect(self._market_prune_worker.run)
         self._market_prune_worker.finished.connect(self._on_market_prune_finished)
-        self._market_prune_worker.finished.connect(self._market_prune_thread.quit)
+        self._market_prune_worker.finished.connect(self._market_prune_thread.quit, Qt.ConnectionType.DirectConnection)
         self._market_prune_thread.start()
 
     def _on_market_prune_finished(self, deleted: int) -> None:
@@ -3556,7 +3556,7 @@ class MainWindow(QMainWindow):
         self._search_index_worker.moveToThread(self._search_index_thread)
         self._search_index_thread.started.connect(self._search_index_worker.run)
         self._search_index_worker.finished.connect(self._on_search_index_build_finished)
-        self._search_index_worker.finished.connect(self._search_index_thread.quit)
+        self._search_index_worker.finished.connect(self._search_index_thread.quit, Qt.ConnectionType.DirectConnection)
         self._search_index_thread.start()
 
     def _on_search_index_build_finished(self) -> None:
@@ -3579,7 +3579,7 @@ class MainWindow(QMainWindow):
         self._market_vacuum_worker.moveToThread(self._market_vacuum_thread)
         self._market_vacuum_thread.started.connect(self._market_vacuum_worker.run)
         self._market_vacuum_worker.finished.connect(self._on_compact_db_finished)
-        self._market_vacuum_worker.finished.connect(self._market_vacuum_thread.quit)
+        self._market_vacuum_worker.finished.connect(self._market_vacuum_thread.quit, Qt.ConnectionType.DirectConnection)
         self._market_vacuum_thread.start()
 
     def _on_compact_db_finished(self, ok: bool, message: str) -> None:
@@ -3637,7 +3637,7 @@ class MainWindow(QMainWindow):
         self._canonn_worker.moveToThread(self._canonn_thread)
         self._canonn_thread.started.connect(self._canonn_worker.run)
         self._canonn_worker.finished.connect(self._on_canonn_refreshed)
-        self._canonn_worker.finished.connect(self._canonn_thread.quit)
+        self._canonn_worker.finished.connect(self._canonn_thread.quit, Qt.ConnectionType.DirectConnection)
         self._canonn_thread.start()
 
     def _on_canonn_refreshed(self, poi, poi_error: str, challenge: dict, challenge_error: str):
@@ -3716,7 +3716,7 @@ class MainWindow(QMainWindow):
         self._enrich_worker.moveToThread(self._enrich_thread)
         self._enrich_thread.started.connect(self._enrich_worker.run)
         self._enrich_worker.finished.connect(self._on_spansh_enrichment)
-        self._enrich_worker.finished.connect(self._enrich_thread.quit)
+        self._enrich_worker.finished.connect(self._enrich_thread.quit, Qt.ConnectionType.DirectConnection)
         self._enrich_thread.start()
 
     def _start_spansh_save(self, system_address: int, bodies: list) -> None:
@@ -3730,7 +3730,7 @@ class MainWindow(QMainWindow):
         self._spansh_save_worker.moveToThread(self._spansh_save_thread)
         self._spansh_save_thread.started.connect(self._spansh_save_worker.run)
         self._spansh_save_worker.finished.connect(self._on_spansh_saved)
-        self._spansh_save_worker.finished.connect(self._spansh_save_thread.quit)
+        self._spansh_save_worker.finished.connect(self._spansh_save_thread.quit, Qt.ConnectionType.DirectConnection)
         self._spansh_save_thread.start()
 
     def _on_spansh_enrichment(self, bodies: list, error: str, system_address: int):
@@ -3828,7 +3828,7 @@ class MainWindow(QMainWindow):
         self._ring_gap_worker.moveToThread(self._ring_gap_thread)
         self._ring_gap_thread.started.connect(self._ring_gap_worker.run)
         self._ring_gap_worker.finished.connect(self._on_ring_hotspot_gap_result)
-        self._ring_gap_worker.finished.connect(self._ring_gap_thread.quit)
+        self._ring_gap_worker.finished.connect(self._ring_gap_thread.quit, Qt.ConnectionType.DirectConnection)
         self._ring_gap_thread.start()
 
     def _on_ring_hotspot_gap_result(self, rings: list, error: str, system_address: int):
@@ -6228,7 +6228,7 @@ class MainWindow(QMainWindow):
             self._intel_worker.moveToThread(self._intel_thread)
             self._intel_thread.started.connect(self._intel_worker.run)
             self._intel_worker.finished.connect(self._on_intel_data)
-            self._intel_worker.finished.connect(self._intel_thread.quit)
+            self._intel_worker.finished.connect(self._intel_thread.quit, Qt.ConnectionType.DirectConnection)
             self._intel_thread.start()
         self.intel_panel.refresh(
             self.state, self.farming_locations, self._odyssey_candidates_cache
@@ -6256,7 +6256,7 @@ class MainWindow(QMainWindow):
         self._if_worker.moveToThread(self._if_thread)
         self._if_thread.started.connect(self._if_worker.run)
         self._if_worker.finished.connect(self._on_facilitator_candidates)
-        self._if_worker.finished.connect(self._if_thread.quit)
+        self._if_worker.finished.connect(self._if_thread.quit, Qt.ConnectionType.DirectConnection)
         self._if_thread.start()
 
     def _on_facilitator_candidates(self, key, candidates) -> None:
@@ -6368,7 +6368,7 @@ class MainWindow(QMainWindow):
         self._flush_worker.moveToThread(self._flush_thread)
         self._flush_thread.started.connect(self._flush_worker.run)
         self._flush_worker.finished.connect(self._on_eddn_flush_finished)
-        self._flush_worker.finished.connect(self._flush_thread.quit)
+        self._flush_worker.finished.connect(self._flush_thread.quit, Qt.ConnectionType.DirectConnection)
         self._flush_thread.start()
 
     def _on_eddn_flush_finished(self) -> None:
@@ -6513,7 +6513,7 @@ class MainWindow(QMainWindow):
         self._wal_checkpoint_thread = QThread()
         self._wal_checkpoint_worker.moveToThread(self._wal_checkpoint_thread)
         self._wal_checkpoint_thread.started.connect(self._wal_checkpoint_worker.run)
-        self._wal_checkpoint_worker.finished.connect(self._wal_checkpoint_thread.quit)
+        self._wal_checkpoint_worker.finished.connect(self._wal_checkpoint_thread.quit, Qt.ConnectionType.DirectConnection)
         self._wal_checkpoint_thread.start()
 
     def _on_coords_backfill_tick(self) -> None:
@@ -6535,7 +6535,7 @@ class MainWindow(QMainWindow):
         self._coords_backfill_worker.moveToThread(self._coords_backfill_thread)
         self._coords_backfill_thread.started.connect(self._coords_backfill_worker.run)
         self._coords_backfill_worker.finished.connect(self._on_coords_backfill_finished)
-        self._coords_backfill_worker.finished.connect(self._coords_backfill_thread.quit)
+        self._coords_backfill_worker.finished.connect(self._coords_backfill_thread.quit, Qt.ConnectionType.DirectConnection)
         self._coords_backfill_thread.start()
 
     def _on_coords_backfill_finished(self, backfilled: int) -> None:
@@ -6561,7 +6561,7 @@ class MainWindow(QMainWindow):
         self._server_status_worker.moveToThread(self._server_status_thread)
         self._server_status_thread.started.connect(self._server_status_worker.run)
         self._server_status_worker.finished.connect(self._on_server_status_checked)
-        self._server_status_worker.finished.connect(self._server_status_thread.quit)
+        self._server_status_worker.finished.connect(self._server_status_thread.quit, Qt.ConnectionType.DirectConnection)
         self._server_status_thread.start()
 
     def _on_server_status_checked(self, status: str | None, message: str | None) -> None:
@@ -6588,7 +6588,7 @@ class MainWindow(QMainWindow):
         self._galnet_worker.moveToThread(self._galnet_thread)
         self._galnet_thread.started.connect(self._galnet_worker.run)
         self._galnet_worker.finished.connect(self._on_galnet_refreshed)
-        self._galnet_worker.finished.connect(self._galnet_thread.quit)
+        self._galnet_worker.finished.connect(self._galnet_thread.quit, Qt.ConnectionType.DirectConnection)
         self._galnet_thread.start()
 
     def _on_galnet_refreshed(self, headlines: list[tuple[str, str | None]]) -> None:
@@ -6624,7 +6624,7 @@ class MainWindow(QMainWindow):
         self._bgs_tick_worker.moveToThread(self._bgs_tick_thread)
         self._bgs_tick_thread.started.connect(self._bgs_tick_worker.run)
         self._bgs_tick_worker.finished.connect(self._on_bgs_tick_check_finished)
-        self._bgs_tick_worker.finished.connect(self._bgs_tick_thread.quit)
+        self._bgs_tick_worker.finished.connect(self._bgs_tick_thread.quit, Qt.ConnectionType.DirectConnection)
         self._bgs_tick_thread.start()
 
     def _on_bgs_tick_check_finished(self, tick_iso) -> None:
@@ -6646,7 +6646,7 @@ class MainWindow(QMainWindow):
         self._colonisation_candidates_worker.moveToThread(self._colonisation_candidates_thread)
         self._colonisation_candidates_thread.started.connect(self._colonisation_candidates_worker.run)
         self._colonisation_candidates_worker.finished.connect(self._on_colonisation_candidates_finished)
-        self._colonisation_candidates_worker.finished.connect(self._colonisation_candidates_thread.quit)
+        self._colonisation_candidates_worker.finished.connect(self._colonisation_candidates_thread.quit, Qt.ConnectionType.DirectConnection)
         self._colonisation_candidates_thread.start()
 
     def _on_sidebar_row_changed(self, row: int) -> None:
@@ -6677,7 +6677,7 @@ class MainWindow(QMainWindow):
         self._colonisation_check_worker.moveToThread(self._colonisation_check_thread)
         self._colonisation_check_thread.started.connect(self._colonisation_check_worker.run)
         self._colonisation_check_worker.finished.connect(self.colonisation_panel.set_eligibility_check_result)
-        self._colonisation_check_worker.finished.connect(self._colonisation_check_thread.quit)
+        self._colonisation_check_worker.finished.connect(self._colonisation_check_thread.quit, Qt.ConnectionType.DirectConnection)
         self._colonisation_check_thread.start()
 
     def _refresh_squadron_station(self):

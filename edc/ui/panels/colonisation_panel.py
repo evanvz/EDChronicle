@@ -477,7 +477,7 @@ class _RavenColonialDialog(QDialog):
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
         self._worker.finished.connect(self._on_fetched)
-        self._worker.finished.connect(self._thread.quit)
+        self._worker.finished.connect(self._thread.quit, Qt.ConnectionType.DirectConnection)
         self._thread.start()
 
     def _current_ship_pad(self) -> Optional[str]:
@@ -577,7 +577,7 @@ class _RavenColonialDialog(QDialog):
         self._sources_worker.moveToThread(self._sources_thread)
         self._sources_thread.started.connect(self._sources_worker.run)
         self._sources_worker.finished.connect(self._on_sources_fetched)
-        self._sources_worker.finished.connect(self._sources_thread.quit)
+        self._sources_worker.finished.connect(self._sources_thread.quit, Qt.ConnectionType.DirectConnection)
         self._sources_thread.start()
 
     def _on_sources_fetched(self, sources: dict) -> None:
@@ -947,7 +947,7 @@ class _SystemDetailDialog(QDialog):
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
         self._worker.finished.connect(self._on_loaded)
-        self._worker.finished.connect(self._thread.quit)
+        self._worker.finished.connect(self._thread.quit, Qt.ConnectionType.DirectConnection)
         self._thread.start()
 
     def _on_loaded(self, bodies: list, error: str, rings: list, mining_signals: dict, system_info: dict) -> None:

@@ -1162,7 +1162,7 @@ class PlayerFactionPanel(QWidget):
         self._overview_worker.moveToThread(self._overview_thread)
         self._overview_thread.started.connect(self._overview_worker.run)
         self._overview_worker.finished.connect(self._on_overview_loaded)
-        self._overview_worker.finished.connect(self._overview_thread.quit)
+        self._overview_worker.finished.connect(self._overview_thread.quit, Qt.ConnectionType.DirectConnection)
         # The coalesced reload starts only once the thread has really
         # stopped -- waiting on it from _on_overview_loaded would deadlock
         # (its queued quit() hasn't run yet at that point).
@@ -1602,7 +1602,7 @@ class PlayerFactionPanel(QWidget):
         self._station_worker.moveToThread(self._station_thread)
         self._station_thread.started.connect(self._station_worker.run)
         self._station_worker.finished.connect(self._on_station_lookup_finished)
-        self._station_worker.finished.connect(self._station_thread.quit)
+        self._station_worker.finished.connect(self._station_thread.quit, Qt.ConnectionType.DirectConnection)
         self._station_thread.start()
 
     def _on_stations_refresh_clicked(self) -> None:
@@ -1688,7 +1688,7 @@ class PlayerFactionPanel(QWidget):
         self._lookup_worker.moveToThread(self._lookup_thread)
         self._lookup_thread.started.connect(self._lookup_worker.run)
         self._lookup_worker.finished.connect(self._on_lookup_finished)
-        self._lookup_worker.finished.connect(self._lookup_thread.quit)
+        self._lookup_worker.finished.connect(self._lookup_thread.quit, Qt.ConnectionType.DirectConnection)
         self._lookup_thread.start()
 
     def _on_lookup_finished(self, result: Optional[Dict[str, Any]], error: Optional[str], queried_name: str):
@@ -1820,7 +1820,7 @@ class PlayerFactionPanel(QWidget):
         self._csv_thread.started.connect(self._csv_worker.run)
         self._csv_worker.progress.connect(self._on_csv_import_progress)
         self._csv_worker.finished.connect(self._on_csv_import_finished)
-        self._csv_worker.finished.connect(self._csv_thread.quit)
+        self._csv_worker.finished.connect(self._csv_thread.quit, Qt.ConnectionType.DirectConnection)
         self._csv_thread.start()
 
     def _on_cancel_import_clicked(self):
@@ -2112,7 +2112,7 @@ class PlayerFactionPanel(QWidget):
         self._refresh_all_thread.started.connect(self._refresh_all_worker.run)
         self._refresh_all_worker.progress.connect(self._on_refresh_all_progress)
         self._refresh_all_worker.finished.connect(self._on_refresh_all_finished)
-        self._refresh_all_worker.finished.connect(self._refresh_all_thread.quit)
+        self._refresh_all_worker.finished.connect(self._refresh_all_thread.quit, Qt.ConnectionType.DirectConnection)
         self._refresh_all_thread.start()
         return True
 
@@ -2657,7 +2657,7 @@ class _FactionBucketDialog(QDialog):
             lambda cur, total, name: self._recheck_status.setText(f"Rechecking {cur} / {total}: {name}")
         )
         self._recheck_worker.finished.connect(self._on_recheck_finished)
-        self._recheck_worker.finished.connect(self._recheck_thread.quit)
+        self._recheck_worker.finished.connect(self._recheck_thread.quit, Qt.ConnectionType.DirectConnection)
         self._recheck_thread.start()
 
     def _on_recheck_finished(self, refreshed: int, failed: int, retreated: int = 0) -> None:

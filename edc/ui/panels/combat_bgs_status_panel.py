@@ -266,7 +266,7 @@ class CombatBgsStatusPanel(QWidget):
         self._search_worker.moveToThread(self._search_thread)
         self._search_thread.started.connect(self._search_worker.run)
         self._search_worker.finished.connect(self._on_search_finished)
-        self._search_worker.finished.connect(self._search_thread.quit)
+        self._search_worker.finished.connect(self._search_thread.quit, Qt.ConnectionType.DirectConnection)
         self._search_thread.start()
 
     def _on_search_finished(self, bgs_results: list, res_results: list) -> None:

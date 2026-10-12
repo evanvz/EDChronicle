@@ -470,7 +470,7 @@ class MiningPanel(QWidget):
         self._cargo_worker.moveToThread(self._cargo_thread)
         self._cargo_thread.started.connect(self._cargo_worker.run)
         self._cargo_worker.finished.connect(self._on_cargo_search_finished)
-        self._cargo_worker.finished.connect(self._cargo_thread.quit)
+        self._cargo_worker.finished.connect(self._cargo_thread.quit, Qt.ConnectionType.DirectConnection)
         self._cargo_thread.start()
 
     def _on_cargo_search_finished(self, rows: list, commodity_count: int) -> None:
@@ -582,7 +582,7 @@ class MiningPanel(QWidget):
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
         self._worker.finished.connect(self._on_results)
-        self._worker.finished.connect(self._thread.quit)
+        self._worker.finished.connect(self._thread.quit, Qt.ConnectionType.DirectConnection)
         self._thread.start()
 
     def _on_results(self, results: List[MiningRingResult], error: str):

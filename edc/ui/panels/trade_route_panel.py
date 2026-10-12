@@ -744,7 +744,7 @@ class TradeRoutePanel(QWidget):
         self._sell_worker.moveToThread(self._sell_thread)
         self._sell_thread.started.connect(self._sell_worker.run)
         self._sell_worker.finished.connect(self._on_sell_results)
-        self._sell_worker.finished.connect(self._sell_thread.quit)
+        self._sell_worker.finished.connect(self._sell_thread.quit, Qt.ConnectionType.DirectConnection)
         self._sell_thread.start()
 
     def _on_sell_results(self, results: list, error: str) -> None:
@@ -806,7 +806,7 @@ class TradeRoutePanel(QWidget):
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
         self._worker.finished.connect(self._on_results)
-        self._worker.finished.connect(self._thread.quit)
+        self._worker.finished.connect(self._thread.quit, Qt.ConnectionType.DirectConnection)
         self._thread.start()
 
     def _on_results(self, loops: list, error: str) -> None:
@@ -909,7 +909,7 @@ class TradeRoutePanel(QWidget):
         self._p2p_worker.moveToThread(self._p2p_thread)
         self._p2p_thread.started.connect(self._p2p_worker.run)
         self._p2p_worker.finished.connect(self._on_p2p_results)
-        self._p2p_worker.finished.connect(self._p2p_thread.quit)
+        self._p2p_worker.finished.connect(self._p2p_thread.quit, Qt.ConnectionType.DirectConnection)
         self._p2p_thread.start()
 
     def _on_p2p_results(self, results: list, error: str) -> None:
@@ -1099,7 +1099,7 @@ class TradeRoutePanel(QWidget):
         self._bgs_load_worker.moveToThread(self._bgs_load_thread)
         self._bgs_load_thread.started.connect(self._bgs_load_worker.run)
         self._bgs_load_worker.finished.connect(self._on_bgs_destinations)
-        self._bgs_load_worker.finished.connect(self._bgs_load_thread.quit)
+        self._bgs_load_worker.finished.connect(self._bgs_load_thread.quit, Qt.ConnectionType.DirectConnection)
         self._bgs_load_thread.start()
 
     def _on_bgs_destinations(self, faction: str, destinations: list) -> None:
@@ -1180,7 +1180,7 @@ class TradeRoutePanel(QWidget):
         self._bgs_worker.moveToThread(self._bgs_thread)
         self._bgs_thread.started.connect(self._bgs_worker.run)
         self._bgs_worker.finished.connect(self._on_bgs_results)
-        self._bgs_worker.finished.connect(self._bgs_thread.quit)
+        self._bgs_worker.finished.connect(self._bgs_thread.quit, Qt.ConnectionType.DirectConnection)
         self._bgs_thread.start()
 
     def _on_bgs_results(self, results: list, error: str, note: str = "") -> None:

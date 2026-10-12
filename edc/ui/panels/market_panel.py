@@ -829,7 +829,7 @@ class MarketPanel(QWidget):
         self._trade_worker.moveToThread(self._trade_thread)
         self._trade_thread.started.connect(self._trade_worker.run)
         self._trade_worker.finished.connect(self._on_trade_opportunities_result)
-        self._trade_worker.finished.connect(self._trade_thread.quit)
+        self._trade_worker.finished.connect(self._trade_thread.quit, Qt.ConnectionType.DirectConnection)
         self._trade_thread.start()
 
     def _on_refresh_trade_clicked(self) -> None:
@@ -1022,7 +1022,7 @@ class MarketPanel(QWidget):
         self._coords_worker.moveToThread(self._coords_thread)
         self._coords_thread.started.connect(self._coords_worker.run)
         self._coords_worker.finished.connect(lambda c, n: self._on_near_coords_resolved(c, n, raw))
-        self._coords_worker.finished.connect(self._coords_thread.quit)
+        self._coords_worker.finished.connect(self._coords_thread.quit, Qt.ConnectionType.DirectConnection)
         self._coords_thread.start()
 
     def _on_near_coords_resolved(self, coords, system_name: str, raw: str) -> None:
@@ -1056,7 +1056,7 @@ class MarketPanel(QWidget):
         self._search_worker.moveToThread(self._search_thread)
         self._search_thread.started.connect(self._search_worker.run)
         self._search_worker.finished.connect(self._on_search_finished)
-        self._search_worker.finished.connect(self._search_thread.quit)
+        self._search_worker.finished.connect(self._search_thread.quit, Qt.ConnectionType.DirectConnection)
         self._search_thread.start()
 
     def _on_search_finished(self, results: list, raw: str, radius: int, buy_mode: bool) -> None:
@@ -1169,7 +1169,7 @@ class MarketPanel(QWidget):
         self._power_lookup_worker.moveToThread(self._power_lookup_thread)
         self._power_lookup_thread.started.connect(self._power_lookup_worker.run)
         self._power_lookup_worker.finished.connect(self._on_power_lookup_finished)
-        self._power_lookup_worker.finished.connect(self._power_lookup_thread.quit)
+        self._power_lookup_worker.finished.connect(self._power_lookup_thread.quit, Qt.ConnectionType.DirectConnection)
         self._power_lookup_thread.start()
 
     def _on_power_lookup_finished(self, resolved: dict) -> None:

@@ -417,7 +417,7 @@ class FactionExpansionDialog(QDialog):
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
         self._worker.finished.connect(self._on_lookup_finished)
-        self._worker.finished.connect(self._thread.quit)
+        self._worker.finished.connect(self._thread.quit, Qt.ConnectionType.DirectConnection)
         self._thread.start()
 
     def _on_lookup_finished(self, result: Optional[dict], error: Optional[str], queried_name: str) -> None:
