@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
 )
 
 from edc.core.bgs_tasks import is_rival_power
+from edc.core.mission_cargo import cargo_needs, pick_sources
 from edc.core.trade_routes import (
     destination_pp_status, find_point_to_point_trades, find_supply_for_destination, find_trade_loops,
     station_from_market_items,
@@ -308,15 +309,62 @@ class _SellHereWorker(QObject):
         self.finished.emit(results, "")
 
 
+class _MissionCargoWorker(QObject):
+    """Market sources for each mission-cargo group (search_market_buy_prices
+    with every spelling of the commodity) -- own SQLite connection per the
+    project's cross-thread rule."""
+    finished = pyqtSignal(list, str)  # (per-group search rows, error)
+
+    def __init__(self, db_path, groups, my_xyz, near_dropoff, radius_ly):
+        super().__init__()
+        self._db_path = db_path
+        self._groups = groups
+        self._my_xyz = my_xyz
+        self._near_dropoff = near_dropoff
+        self._radius_ly = radius_ly
+
+    def run(self):
+        from persistence.database import Database
+        from persistence.repository import Repository
+
+        db = Database(self._db_path)
+        try:
+            repo = Repository(db)
+            coords = (repo.get_system_coords_for_names(sorted({g["system"] for g in self._groups if g["system"]}))
+                      if self._near_dropoff else {})
+            out = []
+            for g in self._groups:
+                if not g["buyable"] or g["to_buy"] <= 0:
+                    out.append([])
+                    continue
+                center = coords.get(g["system"], self._my_xyz) if self._near_dropoff else self._my_xyz
+                out.append(repo.search_market_buy_prices(g["key"], *center, self._radius_ly, aliases=g["aliases"]))
+        except Exception as exc:
+            log.exception("Mission cargo source search failed")
+            self.finished.emit([], str(exc))
+            return
+        finally:
+            db.close()
+        self.finished.emit(out, "")
+
+
 class TradeRoutePanel(QWidget):
     """Owns all widgets and refresh logic for the Trade Routes tab.
     Receives state via refresh(state); manual search only (no
     auto-refresh — the heaviest computation of any search in this app)."""
 
-    def __init__(self, repo, edsm_powerplay=None, parent=None):
+    def __init__(self, repo, edsm_powerplay=None, parent=None, ship_pad_table=None):
         super().__init__(parent)
         self._repo = repo
         self._edsm_powerplay = edsm_powerplay
+        self._ship_pad_table = ship_pad_table   # ship -> landing pad size, for Mission Cargo
+        # Mission Cargo: what active cargo missions still need and where to buy it
+        self._cargo_thread: Optional[QThread] = None
+        self._cargo_worker = None
+        self._cargo_groups: list = []
+        self._cargo_sources: list = []          # per group: search rows (pad not yet applied)
+        self._cargo_signature = None
+        self._cargo_ship: Optional[str] = None
         self._system: str = ""
         self._ref_x = self._ref_y = self._ref_z = 0.0
         self._cargo_capacity: Optional[int] = None
@@ -556,6 +604,7 @@ class TradeRoutePanel(QWidget):
         self._tabs.addTab(loop_frame, "Loop Planner")
         self._tabs.addTab(p2p_frame, "Point-to-Point")
         self._tabs.addTab(self._build_bgs_card(), "BGS Supply Run")
+        self._tabs.addTab(self._build_mission_cargo_card(), "Mission Cargo")
         root.addWidget(self._tabs, 1)
 
     def refresh(self, state) -> None:
@@ -596,6 +645,7 @@ class TradeRoutePanel(QWidget):
         )
 
         self._update_sell_market(state)
+        self._update_mission_cargo(state)
 
         # Reload when the pledge first becomes known (or changes) -- the
         # PowerPlay eligibility of every destination depends on it.
@@ -766,6 +816,226 @@ class TradeRoutePanel(QWidget):
             f"Found {len(results)} commodit{'y' if len(results) == 1 else 'ies'} you can buy nearby and sell "
             f"here at a profit.")
         _fill_supply_table(self._sell_table, results)
+
+    # --- Mission Cargo: what active cargo missions still need, and where to buy it ---
+
+    def _build_mission_cargo_card(self) -> QFrame:
+        frame = QFrame()
+        frame.setStyleSheet(_CARD_STYLE)
+        lay = QVBoxLayout(frame)
+        lay.setContentsMargins(8, 6, 8, 8)
+        lay.setSpacing(6)
+
+        note = QLabel(
+            "Your active cargo missions (from the journal), combined per commodity and drop-off station. "
+            "Collect and mining missions show the nearest and cheapest place to buy what's still needed; "
+            "delivery missions only show progress. Click a row for every source in range."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
+        lay.addWidget(note)
+
+        field_style = "background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;"
+        opt_row = QHBoxLayout()
+        opt_row.setSpacing(8)
+        near_label = QLabel("Buy near:")
+        near_label.setStyleSheet(_LABEL_STYLE)
+        self._cargo_near_combo = QComboBox()
+        self._cargo_near_combo.addItem("Me", "me")
+        self._cargo_near_combo.addItem("Drop-off station", "dropoff")
+        self._cargo_near_combo.setStyleSheet(field_style)
+        self._cargo_range_spin = QSpinBox()
+        self._cargo_range_spin.setRange(5, 200)
+        self._cargo_range_spin.setSingleStep(5)
+        self._cargo_range_spin.setValue(30)
+        self._cargo_range_spin.setSuffix(" ly")
+        self._cargo_range_spin.setStyleSheet(field_style)
+        pad_label = QLabel("Pad:")
+        pad_label.setStyleSheet(_LABEL_STYLE)
+        self._cargo_pad_combo = QComboBox()
+        self._cargo_pad_combo.addItem("My ship", "ship")
+        self._cargo_pad_combo.addItem("Any", None)
+        self._cargo_pad_combo.addItem("Medium+", "M")
+        self._cargo_pad_combo.addItem("Large only", "L")
+        self._cargo_pad_combo.setStyleSheet(field_style)
+        self._cargo_pad_combo.currentIndexChanged.connect(lambda _i: self._render_mission_cargo())
+        refresh_btn = QPushButton("Refresh")
+        refresh_btn.setStyleSheet(
+            "QPushButton { background:#1a3a5a; color:#FFB347; border:1px solid #2a5a8a;"
+            " border-radius:3px; padding:3px 12px; font-weight:bold; }"
+            "QPushButton:hover { background:#2a5a8a; }")
+        refresh_btn.clicked.connect(lambda: self._start_cargo_search(force=True))
+        for w in (near_label, self._cargo_near_combo, self._cargo_range_spin, pad_label,
+                  self._cargo_pad_combo, refresh_btn):
+            opt_row.addWidget(w)
+        opt_row.addStretch(1)
+        lay.addLayout(opt_row)
+        self._cargo_near_combo.currentIndexChanged.connect(lambda _i: self._start_cargo_search(force=True))
+        self._cargo_range_spin.editingFinished.connect(lambda: self._start_cargo_search(force=True))
+
+        self._cargo_status_label = QLabel("No active cargo missions.")
+        self._cargo_status_label.setWordWrap(True)
+        self._cargo_status_label.setStyleSheet("color:#888888; font-size:12px; background:transparent;")
+        lay.addWidget(self._cargo_status_label)
+
+        def table(headers, stretch):
+            t = QTableWidget()
+            t.setColumnCount(len(headers))
+            t.setHorizontalHeaderLabels(headers)
+            t.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+            t.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+            t.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+            t.verticalHeader().setVisible(False)
+            t.setAlternatingRowColors(True)
+            t.setStyleSheet(self._p2p_table.styleSheet())
+            h = t.horizontalHeader()
+            for c in range(len(headers)):
+                h.setSectionResizeMode(c, QHeaderView.ResizeMode.Stretch if c in stretch
+                                       else QHeaderView.ResizeMode.ResizeToContents)
+            return t
+
+        self._cargo_table = table(["Commodity", "Deliver to", "Missions", "Needed", "In hold", "To buy",
+                                   "Expires", "Nearest source", "Cheapest source"], (0, 1, 7, 8))
+        self._cargo_table.itemSelectionChanged.connect(self._render_cargo_detail)
+        lay.addWidget(self._cargo_table, 2)
+
+        self._cargo_detail_label = QLabel("")
+        self._cargo_detail_label.setStyleSheet(_LABEL_STYLE)
+        lay.addWidget(self._cargo_detail_label)
+        self._cargo_detail = table(["Station", "System", "Dist (ly)", "Price", "Stock", "Pad", "Data Age"], (0, 1))
+        self._cargo_detail.setToolTip("Click a Station or System cell to copy its name.")
+        self._cargo_detail.cellClicked.connect(self._on_cargo_detail_clicked)
+        lay.addWidget(self._cargo_detail, 2)
+
+        self._cargo_spinner = BusySpinner(self)
+        return frame
+
+    def _cargo_pad(self) -> Optional[str]:
+        choice = self._cargo_pad_combo.currentData()
+        if choice != "ship":
+            return choice
+        return self._ship_pad_table.pad_size_for(self._cargo_ship) if self._ship_pad_table else None
+
+    def _update_mission_cargo(self, state) -> None:
+        """Called from refresh(): recomputes the needs and searches again only when
+        the missions, deliveries, hold or location changed."""
+        self._cargo_ship = getattr(state, "ship", None)
+        self._cargo_groups = cargo_needs(getattr(state, "active_missions", None) or {},
+                                         getattr(state, "cargo_inventory", None) or [])
+        self._start_cargo_search(force=False)
+
+    def _start_cargo_search(self, force: bool) -> None:
+        groups = self._cargo_groups
+        signature = (tuple((g["key"], g["station"], g["to_buy"], g["buyable"]) for g in groups),
+                     self._system, self._cargo_near_combo.currentData(), self._cargo_range_spin.value())
+        if not force and signature == self._cargo_signature:
+            return
+        if not groups:
+            self._cargo_signature = signature
+            self._cargo_sources = []
+            self._render_mission_cargo()
+            return
+        if self._cargo_thread and self._cargo_thread.isRunning():
+            return  # the next refresh tick picks up the change
+        self._cargo_signature = signature
+        self._cargo_status_label.setText("Looking up where to buy…")
+        self._cargo_spinner.start_over(self)
+        self._cargo_worker = _MissionCargoWorker(
+            self._repo.db.db_path, groups, (self._ref_x, self._ref_y, self._ref_z),
+            self._cargo_near_combo.currentData() == "dropoff", self._cargo_range_spin.value(),
+        )
+        if self._cargo_thread is not None:
+            self._cargo_thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
+        self._cargo_thread = QThread()
+        self._cargo_worker.moveToThread(self._cargo_thread)
+        self._cargo_thread.started.connect(self._cargo_worker.run)
+        self._cargo_worker.finished.connect(self._on_cargo_sources)
+        self._cargo_worker.finished.connect(self._cargo_thread.quit, Qt.ConnectionType.DirectConnection)
+        self._cargo_thread.start()
+
+    def _on_cargo_sources(self, sources: list, error: str) -> None:
+        self._cargo_spinner.stop()
+        if error:
+            self._cargo_status_label.setText(f"Source lookup failed: {error}")
+            return
+        self._cargo_sources = sources
+        self._render_mission_cargo()
+
+    def _render_mission_cargo(self) -> None:
+        groups, pad = self._cargo_groups, self._cargo_pad()
+        if not groups:
+            self._cargo_status_label.setText("No active cargo missions.")
+            self._cargo_table.setRowCount(0)
+            self._cargo_detail.setRowCount(0)
+            self._cargo_detail_label.setText("")
+            return
+        to_buy = sum(g["to_buy"] for g in groups if g["buyable"])
+        self._cargo_status_label.setText(
+            f"{len(groups)} cargo need{'s' if len(groups) != 1 else ''} from "
+            f"{sum(g['missions'] for g in groups)} mission(s); {to_buy:,}t left to buy. "
+            f"Pad: {pad or 'any'}, within {self._cargo_range_spin.value()} ly of "
+            f"{'the drop-off' if self._cargo_near_combo.currentData() == 'dropoff' else 'you'}.")
+
+        def source_text(r, to_buy):
+            if r is None:
+                return "none in range"
+            short = " (low stock)" if (r.get("stock") or 0) < to_buy else ""
+            return (f"{r['station_name']} · {r['system_name']} — {r['distance_ly']:.1f} ly, "
+                    f"{r['buy_price']:,} cr{short}")
+
+        selected = self._cargo_table.currentRow()
+        self._cargo_table.setRowCount(len(groups))
+        for row, g in enumerate(groups):
+            rows = self._cargo_sources[row] if row < len(self._cargo_sources) else []
+            picks = pick_sources(rows, g["to_buy"], pad)
+            if not g["buyable"]:
+                nearest = cheapest = "not bought (cargo provided / salvage)"
+            elif g["to_buy"] <= 0:
+                nearest = cheapest = "nothing left to buy"
+            else:
+                nearest = source_text(picks["nearest"], g["to_buy"])
+                cheapest = source_text(picks["cheapest"], g["to_buy"])
+            cells = [g["commodity"], f"{g['station']} ({g['system']})", str(g["missions"]),
+                     f"{g['needed']:,}", f"{g['held']:,}", f"{g['to_buy']:,}",
+                     (g["expiry"] or "")[5:16].replace("T", " "), nearest, cheapest]
+            for col, text in enumerate(cells):
+                self._cargo_table.setItem(row, col, QTableWidgetItem(text))
+        if 0 <= selected < len(groups):
+            self._cargo_table.selectRow(selected)
+        self._render_cargo_detail()
+
+    def _render_cargo_detail(self) -> None:
+        row = self._cargo_table.currentRow()
+        if not (0 <= row < len(self._cargo_groups)):
+            self._cargo_detail.setRowCount(0)
+            self._cargo_detail_label.setText("")
+            return
+        g = self._cargo_groups[row]
+        rows = pick_sources(self._cargo_sources[row] if row < len(self._cargo_sources) else [],
+                            g["to_buy"], self._cargo_pad())["all"]
+        self._cargo_detail_label.setText(f"Every source of {g['commodity']} in range ({len(rows)}), nearest first:")
+        self._cargo_detail.setSortingEnabled(False)
+        self._cargo_detail.setRowCount(len(rows))
+        now = datetime.now(timezone.utc)
+        for i, r in enumerate(rows):
+            try:
+                age_h = (now - datetime.fromisoformat(str(r["last_updated"]).replace("Z", "+00:00"))).total_seconds() / 3600
+            except Exception:
+                age_h = -1.0
+            age = "—" if age_h < 0 else (f"{age_h:.0f}h" if age_h < 24 else f"{age_h / 24:.0f}d")
+            items = [QTableWidgetItem(r["station_name"]), QTableWidgetItem(r["system_name"]),
+                     _NumericTableWidgetItem(f"{r['distance_ly']:.1f}", r["distance_ly"]),
+                     _NumericTableWidgetItem(f"{r['buy_price']:,}", float(r["buy_price"])),
+                     _NumericTableWidgetItem(f"{r['stock']:,}", float(r["stock"])),
+                     QTableWidgetItem(r.get("pad_size") or "?"),
+                     _NumericTableWidgetItem(age, age_h)]
+            for col, it in enumerate(items):
+                self._cargo_detail.setItem(i, col, it)
+        self._cargo_detail.setSortingEnabled(True)
+
+    def _on_cargo_detail_clicked(self, row: int, column: int) -> None:
+        if column in (0, 1) and self._cargo_detail.item(row, column):
+            QApplication.clipboard().setText(self._cargo_detail.item(row, column).text())
 
     def _get_allies(self) -> frozenset:
         return self.allied_powers_getter() if self.allied_powers_getter else frozenset()

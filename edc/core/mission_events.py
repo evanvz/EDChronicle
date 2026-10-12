@@ -15,6 +15,7 @@ from typing import Any, Dict
 MISSION_EVENT_NAMES = {
     "MissionAccepted", "MissionCompleted", "MissionFailed",
     "MissionAbandoned", "MissionRedirected",
+    "CargoDepot",  # cargo mission hand-ins (ItemsDelivered of TotalItemsToDeliver)
 }
 
 
@@ -38,9 +39,18 @@ def apply_mission_event(active: Dict[int, Dict[str, Any]], event: Dict[str, Any]
             "wing": bool(event.get("Wing")),
             "kill_count": event.get("KillCount"),
             "kills_credited": 0,
+            # cargo missions (collect/source, delivery, mining): see edc.core.mission_cargo
+            "commodity": event.get("Commodity"),
+            "commodity_localised": event.get("Commodity_Localised"),
+            "count": event.get("Count"),
+            "delivered": 0,
         }
     elif name in ("MissionCompleted", "MissionFailed", "MissionAbandoned"):
         active.pop(mission_id, None)
+    elif name == "CargoDepot":
+        rec = active.get(mission_id)
+        if rec and isinstance(event.get("ItemsDelivered"), int):
+            rec["delivered"] = event["ItemsDelivered"]
     elif name == "MissionRedirected":
         rec = active.get(mission_id)
         if rec:

@@ -2369,7 +2369,7 @@ class Repository:
 
     def search_market_buy_prices(
         self, commodity_name: str, x: float, y: float, z: float, radius_ly: float,
-        exclude_market_id: Optional[int] = None,
+        exclude_market_id: Optional[int] = None, aliases: Optional[list] = None,
     ) -> list[dict]:
         """
         Cheapest buy prices for a commodity — the mirror of
@@ -2379,9 +2379,13 @@ class Repository:
 
         Filters system_coords via a bounding-box JOIN — see search_market_prices
         for why (bound-parameter count independent of table size).
+
+        `aliases`: other exact spellings of the same commodity to match too --
+        the cache holds one commodity under several (see trade_routes.commodity_key).
         """
+        names = list(dict.fromkeys([commodity_name, *(aliases or [])]))
         rows = self.db.conn.execute(
-            """
+            f"""
             SELECT m.market_id, m.station_name, m.station_type, m.system_name,
                    m.buy_price, m.stock, m.last_updated,
                    si.pads_small, si.pads_medium, si.pads_large, si.station_faction,
@@ -2389,7 +2393,7 @@ class Repository:
             FROM net.market_prices m
             INNER JOIN system_coords sc ON sc.system_name = m.system_name
             LEFT JOIN net.station_info si ON si.market_id = m.market_id
-            WHERE m.commodity_name = ? AND m.buy_price IS NOT NULL AND m.buy_price > 0
+            WHERE m.commodity_name IN ({",".join("?" * len(names))}) AND m.buy_price IS NOT NULL AND m.buy_price > 0
                   AND m.stock IS NOT NULL AND m.stock > 0
                   AND (m.station_type IS NULL OR m.station_type != 'FleetCarrier')
                   AND (si.station_type IS NULL OR si.station_type != 'FleetCarrier')
@@ -2397,7 +2401,7 @@ class Repository:
                   AND sc.x BETWEEN ? AND ? AND sc.y BETWEEN ? AND ? AND sc.z BETWEEN ? AND ?
             """,
             (
-                commodity_name, _market_data_cutoff(),
+                *names, _market_data_cutoff(),
                 x - radius_ly, x + radius_ly, y - radius_ly, y + radius_ly, z - radius_ly, z + radius_ly,
             ),
         ).fetchall()

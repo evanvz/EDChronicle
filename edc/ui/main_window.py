@@ -2765,7 +2765,8 @@ class MainWindow(QMainWindow):
             guardian_unlocks_table=self.guardian_technology_broker,
             edsm_powerplay=self.edsm_powerplay,
         )
-        self.trade_route_panel = TradeRoutePanel(self.repo, edsm_powerplay=self.edsm_powerplay)
+        self.trade_route_panel = TradeRoutePanel(self.repo, edsm_powerplay=self.edsm_powerplay,
+                                                 ship_pad_table=self.ship_pad_sizes)
         self.market_panel.allied_powers_getter = self._allies
         self.trade_route_panel.allied_powers_getter = self._allies
         self.mining_panel.sell_search_requested.connect(self._on_mining_sell_search_requested)
