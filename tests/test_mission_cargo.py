@@ -6,7 +6,7 @@ from edc.core.mission_events import apply_mission_event
 
 
 def _accept(mid, name="Mission_Collect_CivilLiberty", commodity="$AtmosphericExtractors_Name;",
-            loc="Atmospheric Processors", count=32, station="Lundmark Terminal", expiry="2026-10-13T14:41:46Z"):
+            loc="Atmospheric Processors", count=32, station="Lundmark Terminal", expiry="2099-10-13T14:41:46Z"):
     return {"event": "MissionAccepted", "MissionID": mid, "Name": name, "Commodity": commodity,
             "Commodity_Localised": loc, "Count": count, "DestinationSystem": "Ekono",
             "DestinationStation": station, "Expiry": expiry, "Faction": "EUW"}
@@ -30,14 +30,14 @@ def test_accept_records_cargo_fields_and_cargodepot_tracks_delivery():
 def test_missions_combine_per_commodity_and_station_with_hold_and_left_to_buy():
     active = {}
     for mid, count in ((1, 32), (2, 45), (3, 48)):
-        apply_mission_event(active, _accept(mid, count=count, expiry=f"2026-10-1{mid + 2}T00:00:00Z"))
+        apply_mission_event(active, _accept(mid, count=count, expiry=f"2099-10-1{mid + 2}T00:00:00Z"))
     apply_mission_event(active, _accept(4, commodity="$PowerGenerators_Name;", loc="Power Generators", count=63))
     apply_mission_event(active, {"event": "CargoDepot", "MissionID": 1, "ItemsDelivered": 10, "TotalItemsToDeliver": 32})
     apply_mission_event(active, {"event": "MissionAccepted", "MissionID": 5, "Name": "Mission_Massacre"})  # no cargo
     rows = cargo_needs(active, [{"Name": "atmosphericextractors", "Count": 40}])
     ap = next(r for r in rows if r["commodity"] == "Atmospheric Processors")
     assert (ap["missions"], ap["total"], ap["delivered"], ap["needed"], ap["held"], ap["to_buy"]) == (3, 125, 10, 115, 40, 75)
-    assert ap["expiry"] == "2026-10-13T00:00:00Z" and ap["buyable"] and ap["station"] == "Lundmark Terminal"
+    assert ap["expiry"] == "2099-10-13T00:00:00Z" and ap["buyable"] and ap["station"] == "Lundmark Terminal"
     pg = next(r for r in rows if r["commodity"] == "Power Generators")
     assert (pg["needed"], pg["held"], pg["to_buy"]) == (63, 0, 63)
     assert len(rows) == 2
