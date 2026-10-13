@@ -610,7 +610,7 @@ class _EddnFlushWorker(QObject):
     """
     finished = pyqtSignal()
 
-    def __init__(self, db_path, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals=(), system_profiles=(), body_scans=(), faction_names=()):
+    def __init__(self, db_path, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals=(), system_profiles=(), body_scans=(), faction_names=(), visits=()):
         super().__init__()
         self._db_path = db_path
         self._coords, self._market, self._factions = coords, market, factions
@@ -621,6 +621,7 @@ class _EddnFlushWorker(QObject):
         self._system_profiles = system_profiles
         self._body_scans = body_scans
         self._faction_names = faction_names
+        self._visits = visits
 
     def run(self):
         from persistence.database import Database
@@ -634,7 +635,7 @@ class _EddnFlushWorker(QObject):
                 repo, self._coords, self._market, self._factions, self._stations,
                 self._codex, self._fcmaterials, self._carrier_access,
                 self._bgs_status, self._res_sites, self._body_signals, self._system_profiles,
-                self._body_scans, self._faction_names,
+                self._body_scans, self._faction_names, self._visits,
             )
             _elapsed_ms = (time.perf_counter() - _t0) * 1000
             # Diagnostic for the 2026-09-06 investigation: two ~30s WAL
@@ -3405,6 +3406,7 @@ class MainWindow(QMainWindow):
         self._eddn_worker.system_profile_seen.connect(self.eddn_market_cache.on_system_profile_seen)
         self._eddn_worker.body_scan_seen.connect(self.eddn_market_cache.on_body_scan_seen)
         self._eddn_worker.faction_names_seen.connect(self.eddn_market_cache.on_faction_names_seen)
+        self._eddn_worker.system_visit_seen.connect(self.eddn_market_cache.on_system_visit_seen)
         self._refresh_expansion_watch()
         self._eddn_thread.start()
         self._eddn_save_timer.start()
@@ -4128,6 +4130,9 @@ class MainWindow(QMainWindow):
         if name == "ColonisationConstructionDepot":
             if self._save_colonisation_depot(evt):
                 self._refresh_squadron()
+
+        if name in ("FSDJump", "Location", "CarrierJump", "Docked"):
+            self._record_own_test_system_visit(evt)
 
         if name in MISSION_EVENT_NAMES:
             # active_missions itself updates immediately in event_engine.py,
@@ -6509,13 +6514,30 @@ class MainWindow(QMainWindow):
     def _refresh_expansion_watch(self) -> None:
         """Point the EDDN listener at the Expansion Forecast's candidate systems, so
         their faction lists are recorded live (re-read with the new-system check)."""
+        try:
+            names = self.repo.get_experiment_systems()
+            self._experiment_addresses = set(self.repo.get_system_addresses_for_names(names).values()) if names else set()
+        except Exception:
+            log.exception("Failed to read BGS test systems")
         worker = getattr(self, "_eddn_worker", None)
         if worker is None:
             return
         try:
             worker.set_watched_systems(self.repo.get_expansion_candidate_addresses())
+            worker.set_experiment_systems(getattr(self, "_experiment_addresses", set()))
         except Exception:
             log.exception("Failed to update the EDDN expansion-candidate watch")
+
+    def _record_own_test_system_visit(self, evt: dict) -> None:
+        """Our own jump/dock in a BGS test system, with the event's own timestamp:
+        our EDDN uploads carry the same one, so the Experiment Log can subtract
+        them from the EDDN visits and count only other commanders."""
+        addr = evt.get("SystemAddress")
+        if addr in getattr(self, "_experiment_addresses", set()) and isinstance(evt.get("timestamp"), str):
+            try:
+                self.repo.record_bgs_visit(addr, evt["timestamp"], evt.get("event") or "", "journal")
+            except Exception:
+                log.exception("Failed to record own BGS test-system visit")
 
     def _on_wal_checkpoint_tick(self) -> None:
         """See _WalCheckpointWorker for why this is split off the 45s

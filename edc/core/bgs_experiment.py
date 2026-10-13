@@ -30,13 +30,26 @@ def _states(active: Optional[str], pending: Optional[str]) -> str:
 
 
 def build_rows(ticks: List[str], readings: List[tuple], effort_for: Callable[[str, str], dict],
-               now: Optional[str] = None) -> List[dict]:
+               now: Optional[str] = None, visits: Optional[List[tuple]] = None,
+               faction_readings: Optional[dict] = None, faction: str = "") -> List[dict]:
     """ticks: tick times oldest first (...Z); readings: (observed_at, influence,
     active_states, pending_states) oldest first; effort_for(start, end) -> the
     activity dict for that window. Newest window first; the last one is still
-    open (end None) and runs to `now`."""
+    open (end None) and runs to `now`.
+
+    Contamination checks (we can't see other commanders' work directly):
+    visits = [(observed_at, event, source)] -- EDDN jumps/dockings minus our own
+    (same event timestamp as our 'journal' rows) count as other visitors;
+    faction_readings = {faction: [(observed_at, influence)]} -- any faction other
+    than `faction` gaining over the tick means someone worked for it."""
     rows = []
     bounds = list(ticks) + [None]
+    visits = visits or []
+    own = {(v[0], v[1]) for v in visits if v[2] == "journal"}
+
+    def at(series, start, end):
+        seen = [r for r in series if r[0] >= start and (end is None or r[0] < end)]
+        return seen[-1][1] if seen else None
 
     def level(start, end):
         seen = [r for r in readings if r[0] >= start and (end is None or r[0] < end)]
@@ -59,4 +72,20 @@ def build_rows(ticks: List[str], readings: List[tuple], effort_for: Callable[[st
             "ceiling": ceiling(before),
             "states": _states(during[2], during[3]) if during else "",
         })
+        stop = end or now or "9999"
+        rows[-1]["other_visits"] = sum(1 for v in visits if v[2] == "eddn" and start <= v[0] < stop
+                                       and (v[0], v[1]) not in own)
+        up = []
+        for name, series in (faction_readings or {}).items():
+            if name.lower() == faction.lower() or end is None:
+                continue
+            b, a = at(series, start, end), at(series, end, bounds[i + 2])
+            if b is not None and a is not None and (a - b) * 100 >= 0.1:
+                up.append(name)
+        rows[-1]["factions_up"] = sorted(up)
+        # Influence should only change at a tick; differing readings inside one window
+        # mean an update tick.edcd.io didn't list (seen live at Ekono, 2026-10-12/13).
+        inside = {round(r[1], 4) for r in readings if r[0] >= start and (end is None or r[0] < end)}
+        rows[-1]["unlisted_update"] = len(inside) > 1
+        rows[-1]["contaminated"] = bool(rows[-1]["other_visits"] or up or rows[-1]["unlisted_update"])
     return rows[::-1]

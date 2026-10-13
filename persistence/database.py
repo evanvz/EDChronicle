@@ -449,6 +449,16 @@ class Database:
             """CREATE TABLE IF NOT EXISTS bgs_ticks (
                 tick_at TEXT PRIMARY KEY
             )""",
+            # Jumps/dockings in BGS test systems: any commander's (source 'eddn') and
+            # our own (source 'journal', same event timestamps as our EDDN uploads),
+            # so the Experiment Log can count other visitors per tick window.
+            """CREATE TABLE IF NOT EXISTS bgs_visits (
+                system_address INTEGER NOT NULL,
+                observed_at    TEXT    NOT NULL,
+                event          TEXT    NOT NULL,
+                source         TEXT    NOT NULL,
+                PRIMARY KEY (system_address, observed_at, event, source)
+            )""",
             # Systems the squad uses for controlled BGS tests (Experiment Log).
             """CREATE TABLE IF NOT EXISTS bgs_experiment_systems (
                 system_name TEXT PRIMARY KEY,

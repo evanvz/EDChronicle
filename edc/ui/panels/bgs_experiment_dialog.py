@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QObject, Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QApplication, QDialog, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget, QPushButton,
@@ -23,7 +23,21 @@ log = logging.getLogger(__name__)
 
 HISTORY_DAYS = 14
 _COLUMNS = ["Tick (UTC)", "INF", "Bounties", "Trade profit", "Exploration", "SINC pts",
-            "Influence", "Change", "% of headroom", "Likely max", "States"]
+            "Influence", "Change", "% of headroom", "Likely max", "Others seen", "Other factions", "States"]
+_AMBER = "#FFB347"
+
+
+class _TrafficWorker(QObject):
+    """EDSM traffic per test system, off the UI thread (EDSM is rate-gated)."""
+    finished = pyqtSignal(dict)  # {system: {"total", "week", "day"} or None}
+
+    def __init__(self, systems):
+        super().__init__()
+        self._systems = systems
+
+    def run(self):
+        from edc.core.edsm_faction_lookup import fetch_system_traffic
+        self.finished.emit({name: fetch_system_traffic(name) for name in self._systems})
 
 
 def _cr(n: int) -> str:
@@ -46,7 +60,9 @@ def row_cells(r: dict) -> list:
             "" if r["change"] is None else f"{r['change']:+.2f}",
             "" if r["share"] is None else f"{r['share']:.1f}%",
             "" if not r["ceiling"] else f"+{r['ceiling'][0]:.1f}–{r['ceiling'][1]:.1f}",
-            r["states"]]
+            ("⚠ " if r.get("other_visits") else "") + str(r.get("other_visits", "")),
+            ("⚠ " + ", ".join(r["factions_up"]) + " up") if r.get("factions_up") else ("✓" if r["change"] is not None else ""),
+            ("⚠ influence changed with no tick detected; " if r.get("unlisted_update") else "") + r["states"]]
 
 
 class BgsExperimentDialog(QDialog):
@@ -71,7 +87,8 @@ class BgsExperimentDialog(QDialog):
             "Each row is one tick window: your effort for the squad faction in that system, its SINC points, the "
             "influence seen during the window and after the next tick. Jump into every test system once after "
             "each tick so the level gets recorded. '% of headroom' = change ÷ (100% − influence); typical best "
-            "days are 6–8%.")
+            "days are 6–8%. Amber rows are possibly contaminated: another commander was seen (EDDN, minus your "
+            "own uploads), another faction gained over the tick, or influence changed with no tick detected.")
         note.setWordWrap(True)
         note.setStyleSheet("color:#9aa4b0; font-size:11px;")
         layout.addWidget(note)
@@ -80,10 +97,41 @@ class BgsExperimentDialog(QDialog):
         self._tabs.setStyleSheet(TAB_STYLE)
         layout.addWidget(self._tabs, 1)
         self._tables: dict = {}
+        self._traffic: dict = {}
+        self._traffic_labels: dict = {}
+        self._traffic_thread = None
+        self._traffic_worker = None
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
         self.refresh()
+        self._start_traffic_lookup()
+
+    def _start_traffic_lookup(self) -> None:
+        systems = self._panel._repo.get_experiment_systems()
+        if not systems or (self._traffic_thread and self._traffic_thread.isRunning()):
+            return
+        self._traffic_worker = _TrafficWorker(systems)
+        if self._traffic_thread is not None:
+            self._traffic_thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
+        self._traffic_thread = QThread()
+        self._traffic_worker.moveToThread(self._traffic_thread)
+        self._traffic_thread.started.connect(self._traffic_worker.run)
+        self._traffic_worker.finished.connect(self._on_traffic)
+        self._traffic_worker.finished.connect(self._traffic_thread.quit, Qt.ConnectionType.DirectConnection)
+        self._traffic_thread.start()
+
+    def _on_traffic(self, traffic: dict) -> None:
+        self._traffic = traffic
+        for name, label in self._traffic_labels.items():
+            label.setText(self._traffic_text(name))
+
+    def _traffic_text(self, name: str) -> str:
+        t = self._traffic.get(name)
+        if name not in self._traffic:
+            return "EDSM traffic: checking…"
+        return ("EDSM traffic: unavailable" if not t else
+                f"EDSM traffic (EDSM users only): {t.get('day', 0)} today, {t.get('week', 0)} this week")
 
     def _faction(self):
         return getattr(self._panel, "_faction_name", None) or self._panel._repo.get_squadron_faction_name()
@@ -93,6 +141,7 @@ class BgsExperimentDialog(QDialog):
         current = self._tabs.tabText(self._tabs.currentIndex()) if self._tabs.count() else ""
         self._tabs.clear()
         self._tables = {}
+        self._traffic_labels = {}
         faction = self._faction()
         systems = repo.get_experiment_systems()
         since = (datetime.now(timezone.utc) - timedelta(days=HISTORY_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -109,7 +158,9 @@ class BgsExperimentDialog(QDialog):
                 self._tabs.addTab(page, name)
                 continue
             rows = build_rows(ticks, repo.get_influence_readings(addr, faction),
-                              lambda s, e, a=addr: repo.get_faction_activity_between(a, faction, s, e), now=now)
+                              lambda s, e, a=addr: repo.get_faction_activity_between(a, faction, s, e), now=now,
+                              visits=repo.get_bgs_visits(addr), faction_readings=repo.get_all_faction_readings(addr),
+                              faction=faction)
             table = self._fill_table(rows)
             self._tables[name] = (table, rows)
             copy_btn = QPushButton("Copy table")
@@ -118,6 +169,10 @@ class BgsExperimentDialog(QDialog):
             top = QHBoxLayout()
             top.addWidget(QLabel(f"{faction} in {name} — last {HISTORY_DAYS} days, {len(ticks)} ticks recorded"))
             top.addStretch(1)
+            traffic = QLabel(self._traffic_text(name))
+            traffic.setStyleSheet("color:#9aa4b0;")
+            self._traffic_labels[name] = traffic
+            top.addWidget(traffic)
             top.addWidget(copy_btn)
             pl.addLayout(top)
             pl.addWidget(table, 1)
@@ -136,12 +191,16 @@ class BgsExperimentDialog(QDialog):
         for i, r in enumerate(rows):
             for c, text in enumerate(row_cells(r)):
                 item = QTableWidgetItem(text)
-                if c == 8 and r["share"] is not None:
+                if r.get("contaminated"):
+                    item.setForeground(QColor(_AMBER))
+                    item.setToolTip("Possibly contaminated: another commander was seen here, or another faction "
+                                    "gained over this tick — someone else may have moved influence.")
+                elif c == 8 and r["share"] is not None:
                     item.setForeground(QColor("#6BCB77" if r["share"] >= 6 else "#c8c8c8"))
                 t.setItem(i, c, item)
         h = t.horizontalHeader()
         for c in range(len(_COLUMNS)):
-            h.setSectionResizeMode(c, QHeaderView.ResizeMode.Stretch if c in (6, 10)
+            h.setSectionResizeMode(c, QHeaderView.ResizeMode.Stretch if c in (6, 11, 12)
                                    else QHeaderView.ResizeMode.ResizeToContents)
         return t
 

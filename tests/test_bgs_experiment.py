@@ -86,3 +86,70 @@ def test_dialog_tabs_rows_and_copy(tmp_path):
     dlg._copy("ICZ XZ-P b5-1")
     text = QApplication.clipboard().text()
     assert text.startswith("ICZ XZ-P b5-1\n```") and "58.20% → 60.52%" in text and "+2.32" in text
+
+
+def test_other_visitors_and_other_factions_flag_contamination():
+    readings = [("2026-10-17T16:00:00Z", 0.582, "[]", "[]"), ("2026-10-18T16:30:00Z", 0.6052, "[]", "[]")]
+    visits = [
+        ("2026-10-17T16:00:00Z", "FSDJump", "journal"), ("2026-10-17T16:00:00Z", "FSDJump", "eddn"),  # ours, uploaded
+        ("2026-10-17T19:12:00Z", "Docked", "eddn"),                                                     # someone else
+        ("2026-10-18T16:40:00Z", "FSDJump", "eddn"),                                                    # next window
+    ]
+    others = {
+        "EUW": [("2026-10-17T16:00:00Z", 0.582), ("2026-10-18T16:30:00Z", 0.6052)],
+        "Union Party": [("2026-10-17T16:00:00Z", 0.146), ("2026-10-18T16:30:00Z", 0.151)],   # gained: someone helped it
+        "Mafia": [("2026-10-17T16:00:00Z", 0.102), ("2026-10-18T16:30:00Z", 0.097)],
+    }
+    rows = build_rows(TICKS, readings, _effort, visits=visits, faction_readings=others, faction="EUW")
+    first = rows[-1]
+    assert first["other_visits"] == 1
+    assert first["factions_up"] == ["Union Party"]
+    assert first["contaminated"]
+    quiet = build_rows(TICKS, readings, _effort, visits=visits[:2], faction_readings={k: v for k, v in others.items()
+                                                                                       if k != "Union Party"}, faction="EUW")[-1]
+    assert quiet["other_visits"] == 0 and quiet["factions_up"] == [] and not quiet["contaminated"]
+
+
+def test_listener_reports_visits_only_in_test_systems():
+    from edc.core.eddn_listener import EddnPowerPlayWorker
+    w = EddnPowerPlayWorker()
+    seen = []
+    w.system_visit_seen.connect(lambda *a: seen.append(a))
+    w.set_experiment_systems({42})
+    for msg in ({"SystemAddress": 42, "event": "FSDJump", "timestamp": "2026-10-17T16:00:00Z"},
+                {"SystemAddress": 42, "event": "Scan", "timestamp": "2026-10-17T16:01:00Z"},       # not a visit
+                {"SystemAddress": 7, "event": "Docked", "timestamp": "2026-10-17T16:02:00Z"}):     # not a test system
+        w._maybe_emit_visit(msg)
+    assert seen == [(42, "FSDJump", "2026-10-17T16:00:00Z")]
+
+
+def test_visits_flow_to_table_and_own_visit_recorded(tmp_path):
+    from types import SimpleNamespace
+    from edc.core.eddn_market import EddnMarketCache, write_buffers
+    from edc.ui.main_window import MainWindow
+    from persistence.database import Database
+    from persistence.repository import Repository
+    from persistence.schema import SCHEMA_SQL
+    db = Database(tmp_path / "t.db"); db.executescript(SCHEMA_SQL); db.run_migrations()
+    repo = Repository(db)
+    cache = EddnMarketCache(repo=None)
+    cache.on_system_visit_seen(42, "Docked", "2026-10-17T19:12:00.123Z")
+    write_buffers(repo, *cache.pop_buffers())
+    fake = SimpleNamespace(repo=repo, _experiment_addresses={42})
+    MainWindow._record_own_test_system_visit(fake, {"event": "FSDJump", "SystemAddress": 42,
+                                                    "timestamp": "2026-10-17T16:00:00Z"})
+    MainWindow._record_own_test_system_visit(fake, {"event": "FSDJump", "SystemAddress": 7,
+                                                    "timestamp": "2026-10-17T16:05:00Z"})   # not a test system
+    assert repo.get_bgs_visits(42) == [("2026-10-17T16:00:00Z", "FSDJump", "journal"),
+                                       ("2026-10-17T19:12:00Z", "Docked", "eddn")]
+    assert repo.get_bgs_visits(7) == []
+
+
+def test_change_inside_a_window_without_a_detected_tick_is_flagged():
+    """Real Ekono 2026-10-12/13: 76.36% at 21:49 and 75.35% at 12:46 next day, with no
+    tick listed by tick.edcd.io in between -- the window can't be attributed cleanly."""
+    readings = [("2026-10-17T16:30:00Z", 0.7636, "[]", "[]"), ("2026-10-18T12:46:00Z", 0.7535, "[]", "[]")]
+    row = build_rows(["2026-10-17T16:09:00Z"], readings, _effort, now="2026-10-18T14:00:00Z")[0]
+    assert row["unlisted_update"] and row["contaminated"]
+    steady = build_rows(["2026-10-17T16:09:00Z"], readings[:1], _effort, now="2026-10-18T14:00:00Z")[0]
+    assert not steady["unlisted_update"] and not steady["contaminated"]

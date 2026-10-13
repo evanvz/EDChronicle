@@ -2850,6 +2850,25 @@ class Repository:
     def remove_experiment_system(self, system_name: str) -> None:
         self.db.execute("DELETE FROM bgs_experiment_systems WHERE system_name = ?", (system_name,))
 
+    def record_bgs_visit(self, system_address: int, observed_at: str, event: str, source: str) -> None:
+        self.db.execute("INSERT OR IGNORE INTO bgs_visits (system_address, observed_at, event, source) "
+                        "VALUES (?, ?, ?, ?)", (system_address, observed_at, event, source))
+
+    def get_bgs_visits(self, system_address: int) -> list[tuple]:
+        """[(observed_at, event, source)] oldest first."""
+        return [tuple(r) for r in self.db.conn.execute(
+            "SELECT observed_at, event, source FROM bgs_visits WHERE system_address = ? ORDER BY observed_at",
+            (system_address,))]
+
+    def get_all_faction_readings(self, system_address: int) -> dict[str, list[tuple]]:
+        """{faction: [(observed_at, influence)] oldest first} for every faction seen in the system."""
+        out: dict = {}
+        for r in self.db.conn.execute(
+                "SELECT faction_name, data_timestamp, influence FROM faction_snapshots "
+                "WHERE system_address = ? AND data_timestamp IS NOT NULL ORDER BY data_timestamp", (system_address,)):
+            out.setdefault(r[0], []).append((r[1], r[2]))
+        return out
+
     def get_faction_activity_between(self, system_address: int, faction_name: str, start: str, end: str) -> dict:
         """Our own BGS effort for one faction in one system with start <= time < end:
         INF (signed tiers, as the Session report), bounties, combat bonds, trade

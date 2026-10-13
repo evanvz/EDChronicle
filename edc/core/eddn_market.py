@@ -133,6 +133,8 @@ class EddnMarketCache:
         # candidate system, from any commander's journal/1 message (rare: the
         # listener only emits these for the few dozen candidates).
         self._faction_names_buffer: Dict[int, Tuple[str, list, str]] = {}
+        # (system_address, event, timestamp) -- jumps/dockings in BGS test systems
+        self._visit_buffer: set = set()
 
     def on_coords_seen(self, system_name: str, x: float, y: float, z: float) -> None:
         if not system_name:
@@ -202,6 +204,10 @@ class EddnMarketCache:
         if not (isinstance(system_address, int) and system_name):
             return
         self._faction_names_buffer[system_address] = (system_name, list(names), _normalize_ts(timestamp))
+
+    def on_system_visit_seen(self, system_address: int, event: str, timestamp: str) -> None:
+        if isinstance(system_address, int):
+            self._visit_buffer.add((system_address, event, _normalize_ts(timestamp)))
 
     def on_res_signal_seen(self, system_address: int, system_name: str, tiers: list, timestamp: str) -> None:
         if not (isinstance(system_address, int) and system_name):
@@ -295,6 +301,7 @@ class EddnMarketCache:
         system_profiles = list(self._system_profile_buffer.items())
         body_scans = list(self._body_scan_buffer.items())
         faction_names = list(self._faction_names_buffer.items())
+        visits = list(self._visit_buffer)
         self._coord_buffer.clear()
         self._market_buffer.clear()
         self._faction_buffer.clear()
@@ -308,8 +315,9 @@ class EddnMarketCache:
         self._system_profile_buffer.clear()
         self._body_scan_buffer.clear()
         self._faction_names_buffer.clear()
+        self._visit_buffer.clear()
         return (coords, market, factions, stations, codex, fcmaterials, carrier_access,
-                bgs_status, res_sites, body_signals, system_profiles, body_scans, faction_names)
+                bgs_status, res_sites, body_signals, system_profiles, body_scans, faction_names, visits)
 
     def flush(self) -> None:
         """Synchronous flush on the caller's own thread/connection — only
@@ -324,7 +332,7 @@ class EddnMarketCache:
         write_buffers(self._repo, *self.pop_buffers())
 
 
-def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals=(), system_profiles=(), body_scans=(), faction_names=()) -> None:
+def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals=(), system_profiles=(), body_scans=(), faction_names=(), visits=()) -> None:
     """The actual writes — factored out so both the main-thread flush()
     (shutdown) and a background worker (periodic, see main_window.py) can
     use the identical logic against whichever Repository they're given.
@@ -340,11 +348,16 @@ def write_buffers(repo, coords, market, factions, stations, codex, fcmaterials, 
         _write_buffers_inner(
             repo, coords, market, factions, stations, codex, fcmaterials,
             carrier_access, bgs_status, res_sites, body_signals, system_profiles, body_scans,
-            faction_names,
+            faction_names, visits,
         )
 
 
-def _write_buffers_inner(repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals, system_profiles, body_scans, faction_names=()) -> None:
+def _write_buffers_inner(repo, coords, market, factions, stations, codex, fcmaterials, carrier_access, bgs_status, res_sites, body_signals, system_profiles, body_scans, faction_names=(), visits=()) -> None:
+    for system_address, event, timestamp in visits:
+        try:
+            repo.record_bgs_visit(system_address, timestamp, event, "eddn")
+        except Exception:
+            log.exception("Failed to flush BGS test-system visit for system_address=%s", system_address)
     for system_address, (system_name, names, timestamp) in faction_names:
         try:
             repo.save_candidate_faction_count(system_address, system_name, names, timestamp)

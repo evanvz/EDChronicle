@@ -348,3 +348,24 @@ def derive_conflicts_from_factions_states(factions: List[Dict[str, Any]]) -> Lis
             "Faction2": {"Name": combatants[1].get("Name")},
         })
     return conflicts
+
+
+_TRAFFIC_URL = "https://www.edsm.net/api-system-v1/traffic"
+
+
+def fetch_system_traffic(system_name: str) -> Optional[Dict[str, int]]:
+    """EDSM's ship-traffic counts for a system -- {"total", "week", "day"} -- from
+    EDSM users only, so a lower bound. None on any failure. For the BGS Experiment
+    Log's check on other commanders in a test system; shares the module's rate gate."""
+    try:
+        _throttle()
+        resp = requests.get(_TRAFFIC_URL, params={"systemName": system_name},
+                            headers={"User-Agent": _USER_AGENT}, timeout=_TIMEOUT)
+        resp.raise_for_status()
+        traffic = (resp.json() or {}).get("traffic")
+    except Exception as exc:
+        log.warning("EDSM traffic lookup failed for %r: %s", system_name, exc)
+        return None
+    if not isinstance(traffic, dict):
+        return None
+    return {k: traffic[k] for k in ("total", "week", "day") if isinstance(traffic.get(k), int)}

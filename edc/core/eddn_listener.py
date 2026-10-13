@@ -136,6 +136,9 @@ class EddnPowerPlayWorker(QObject):
     # id64, StarSystem, names of the factions present (influence > 0), timestamp --
     # only for systems in watched_systems (the Expansion Forecast's candidates).
     faction_names_seen = pyqtSignal(object, str, list, str)
+    # id64, event, timestamp -- any commander's jump/dock in a BGS test system
+    # (the Experiment Log counts other visitors per tick window).
+    system_visit_seen = pyqtSignal(object, str, str)
     # id64, StarSystem, RES tiers present (list), timestamp. Feeds
     # system_res_sites.
     res_signal_seen = pyqtSignal(object, str, list, str)
@@ -169,6 +172,7 @@ class EddnPowerPlayWorker(QObject):
         # Expansion Forecast candidate systems; swapped whole from the UI thread
         # by set_watched_systems() (a single reference assignment).
         self._watched_systems: frozenset = frozenset()
+        self._experiment_systems: frozenset = frozenset()   # BGS test systems, same swap pattern
         # Diagnostics: per-schema message counts since listener start.
         # Mutated only on the listener thread; read from the UI thread via
         # get_stats() (dict read of ints — GIL makes this safe).
@@ -191,6 +195,15 @@ class EddnPowerPlayWorker(QObject):
         elapsed = max(time.monotonic() - self._stats_start, 1.0)
         stats["msgs_per_sec"] = round(stats["total"] / elapsed, 1)
         return stats
+
+    def set_experiment_systems(self, addresses) -> None:
+        self._experiment_systems = frozenset(addresses)
+
+    def _maybe_emit_visit(self, msg: dict) -> None:
+        addr = msg.get("SystemAddress")
+        if (addr in self._experiment_systems and isinstance(msg.get("timestamp"), str)
+                and msg.get("event") in ("FSDJump", "Location", "CarrierJump", "Docked")):
+            self.system_visit_seen.emit(addr, msg.get("event") or "", msg["timestamp"])
 
     def set_watched_systems(self, addresses) -> None:
         self._watched_systems = frozenset(addresses)
@@ -296,6 +309,7 @@ class EddnPowerPlayWorker(QObject):
                     and all(isinstance(v, (int, float)) for v in star_pos)):
                 self.system_coords_seen.emit(star_system, float(star_pos[0]), float(star_pos[1]), float(star_pos[2]))
 
+            self._maybe_emit_visit(msg)
             if msg.get("event") == "Docked":
                 # No PowerPlay fields on Docked messages — handled entirely
                 # separately from the FSDJump/Location/CarrierJump path below.
