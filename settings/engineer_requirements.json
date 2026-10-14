@@ -1,6 +1,6 @@
 {
-  "last_updated": "2026-08-13",
-  "source": "User-supplied compilation of official/community engineer unlock data",
+  "last_updated": "2026-10-14",
+  "source": "Fact-checked 2026-10-14 against the Elite Dangerous wiki (Engineers page and each engineer's page); commodity names from EDCD FDevIDs",
   "engineers": {
     "Felicity Farseer": {
       "discover": "Public data sources.",
@@ -9,12 +9,12 @@
     },
     "Juri Ishmaak": {
       "discover": "From Felicity Farseer (grade 3-4).",
-      "meet": "Claim more than 50 federal combat bonds.",
-      "unlock": "Provide 100,000 or 1,000,000 credits worth of federal combat bonds (the amount needed depends on the currently unknown conditions)."
+      "meet": "Hand in 50 combat bonds earned fighting for Federal minor factions (the value of each bond doesn't matter).",
+      "unlock": "Provide 100,000 to 1,000,000 credits worth of combat bonds (the amount depends on whether the meeting requirement was met with Federal combat bonds)."
     },
     "Colonel Bris Dekker": {
       "discover": "From Juri Ishmaak (grade 3-4).",
-      "meet": "Friendly with the Federation.",
+      "meet": "Friendly with the Federation. Sol needs a permit, which comes with Federal Navy rank Petty Officer.",
       "unlock": "Provide 1,000,000 or 10,000,000 credits worth of federal combat bonds (the amount needed depends on the currently unknown conditions)."
     },
     "The Sarge": {
@@ -29,17 +29,17 @@
     },
     "Mel Brandon": {
       "discover": "From Elvira Martuuk (grade 3-4).",
-      "meet": "Gain invitation from Colonia Council.",
+      "meet": "Gain Friendly or higher reputation with Colonia Council to receive an invitation mission.",
       "unlock": "Provide 100,000 credits worth of bounty vouchers."
     },
     "Zacariah Nemo": {
       "discover": "From Elvira Martuuk (grade 3-4).",
-      "meet": "Gain invitation from Party of Yoru.",
-      "unlock": "Provide 25 units of Xihe Companions."
+      "meet": "Gain Friendly reputation with Party of Yoru to receive an invitation mission.",
+      "unlock": "Provide 25 units of Xihe Biomorphic Companions."
     },
     "Marco Qwent": {
       "discover": "From Elvira Martuuk (grade 3-4).",
-      "meet": "Gain invitation from Sirius Corporation.",
+      "meet": "Gain Allied reputation with Sirius Corporation (this gives the Sirius permit), then take the invitation mission from Sirius Corporation in Sirius.",
       "unlock": "Provide 25 units of Modular Terminals."
     },
     "Chloe Sedesi": {
@@ -104,7 +104,7 @@
     },
     "Liz Ryder": {
       "discover": "Public sources.",
-      "meet": "Gain Cordial or Friendly status with Eurybia Blue Mafia.",
+      "meet": "Gain Cordial or higher reputation with Eurybia Blue Mafia to receive an invitation mission (at Awyra Flirble in Eurybia).",
       "unlock": "Provide 200 units of Landmines."
     },
     "Etienne Dorn": {
@@ -176,7 +176,7 @@
     },
     "Rosa Dayette": {
       "discover": "Common knowledge.",
-      "unlock": "Sell a total of 10 Culinary Recipes or Cocktail Recipes to stations in Colonia.",
+      "unlock": "Sell a total of 10 Culinary Recipes or Cocktail Recipes to bartenders in Colonia.",
       "referral": "Provide 10 units of Manufacturing Instructions data."
     },
     "Baltanos": {
