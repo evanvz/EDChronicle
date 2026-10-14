@@ -5,8 +5,8 @@
 """One-shot full-history scan to reconstruct which megaships have already
 been visited, at app startup — mirrors bounty_scanner.py's reasoning.
 A megaship's Ship Uplinks (the real merit source, confirmed by journal
-cross-reference) are a fixed, exhaustible set per megaship and can sit in a
-system for many days/sessions, so "already visited" must survive app
+cross-reference) pay merits once per fortnight, and a megaship can sit in a
+system for many days/sessions, so the last visit time must survive app
 restarts, not just live from whenever the app happened to be running.
 
 Visited = a SupercruiseDestinationDrop whose Type matches a megaship
@@ -16,17 +16,17 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Set
+from typing import Dict
 
 from edc.core.megaship_tracker import MegashipTracker
 
 
-def scan_visited_megaships(journal_dir: Path) -> Set[str]:
+def scan_visited_megaships(journal_dir: Path) -> Dict[str, str]:
     journal_dir = Path(journal_dir)
     if not journal_dir.exists():
-        return set()
+        return {}
 
-    visited: Set[str] = set()
+    visited: Dict[str, str] = {}  # key -> latest visit timestamp
     for path in sorted(journal_dir.glob("Journal.*.log")):
         system_address = None
         known_megaships = {}  # system_address -> {signal_name}
@@ -59,7 +59,10 @@ def scan_visited_megaships(journal_dir: Path) -> Set[str]:
                             isinstance(drop_type, str) and system_address is not None
                             and drop_type in known_megaships.get(system_address, set())
                         ):
-                            visited.add(MegashipTracker.key(system_address, drop_type))
+                            k = MegashipTracker.key(system_address, drop_type)
+                            ts = event.get("timestamp") or ""
+                            if ts > visited.get(k, ""):
+                                visited[k] = ts
         except OSError:
             continue
 

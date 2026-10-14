@@ -465,9 +465,9 @@ class ExplorationPanel(QWidget):
                 if isinstance(tr, (int, float)):
                     bits.append(f'<span style="color:#888888;">TR {int(tr)}s</span>')
                 if cat == "Megaship" and s.get("AlreadySeen"):
-                    # Re-scanning grants no further merits -- flag it so it
-                    # doesn't look identical to a fresh, unscanned one.
-                    bits.append('<span style="color:#666666;">(already scanned)</span>')
+                    # Re-scanning within 14 days grants no further merits -- flag
+                    # it so it doesn't look identical to a fresh, unscanned one.
+                    bits.append('<span style="color:#666666;">(scanned, under 14 days ago)</span>')
                 html.append(" ".join(bits))
             pass
 

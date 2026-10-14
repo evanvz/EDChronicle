@@ -403,7 +403,7 @@ class _StartupHistoryScanWorker(QObject):
             "active_combat_bonds": {},
             "squadron_rec": None, "carrier_rec": None, "active_missions": {}, "pp_pledge": None,
             "conflict_progress": {}, "pp_last_collect": {}, "pp_deliveries": {},
-            "bounty_last_commit": {}, "visited_megaships": set(),
+            "bounty_last_commit": {}, "visited_megaships": {},
         }
         if not self._journal_dir:
             self.finished.emit(result)
@@ -4257,15 +4257,15 @@ class MainWindow(QMainWindow):
         if name == "SupercruiseDestinationDrop":
             # Confirms an actual visit to this specific destination — a
             # megaship's Ship Uplinks (the real merit source, verified via
-            # journal cross-reference) are a fixed, exhaustible set per
-            # megaship, so once visited it's done regardless of PP state at
-            # the time. More reliable than guessing from FSS detection alone.
+            # journal cross-reference) pay merits once per fortnight, so the
+            # visit time is recorded regardless of PP state at the time.
+            # More reliable than guessing from FSS detection alone.
             drop_type = evt.get("Type")
             if isinstance(drop_type, str) and drop_type:
                 for s in (getattr(self.state, "system_signals", None) or []):
                     if isinstance(s, dict) and s.get("Category") == "Megaship" and s.get("SignalName") == drop_type:
                         self.megaship_tracker.mark_seen(
-                            MegashipTracker.key(self.state.system_address, drop_type)
+                            MegashipTracker.key(self.state.system_address, drop_type), evt.get("timestamp")
                         )
                         break
 
