@@ -1,6 +1,7 @@
 {
   "game": "Elite Dangerous",
   "version": "Powerplay 2.0",
+  "source": "ED wiki Powerplay page (from Nowski's Frontier forum summary 2024-11-03, compared 2025-11-02; patch notes Update 3, 3.4, Dodec 4.2.2.0) + Ian Doncaster's Powerplay Reference Card https://heatmap.sotl.org.uk/powers/refcard; fact-checked 2026-10-14",
 
   "power_ethos": {
     "Aisling Duval":        {"reinforcement": "Finance", "acquisition": "Social",  "undermining": "Social"},
@@ -47,7 +48,7 @@
           "ethos": "Finance",
           "bonus_powers": ["Edmund Mahon", "Felicia Winters", "Zemina Torval"],
           "merits": "yes", "platform": "ED", "bgs": "joint",
-          "notes": "Must mine and sell in same RS; BGS effect disputed: SINC says mined sales don't move influence, squad treats them as BGS trade"
+          "notes": "Must mine and sell in same RS; BGS effect disputed: SINC says mined sales don't move influence, squad treats them as BGS trade; Doncaster ref card: positive for station owner"
         },
         {
           "action": "Sell Rare Goods",
@@ -79,7 +80,7 @@
             "Nakato Kaine", "Pranav Antal", "Yuri Grom", "Zemina Torval"
           ],
           "merits": "yes", "platform": "ED", "bgs": "safe",
-          "notes": "From PC in a Stronghold (not this RS) to PC in RS"
+          "notes": "Allocation per half hour, 15-250 by rank (Doncaster Powerplay ref card); From PC in a Stronghold (not this RS) to PC in RS"
         },
         {
           "action": "Complete Aid and Humanitarian Missions",
@@ -91,7 +92,7 @@
           "action": "Reboot Mission Completion",
           "ethos": "Social",
           "bonus_powers": ["Aisling Duval"],
-          "merits": "yes", "platform": "ED", "bgs": "joint"
+          "merits": "yes", "platform": "Odyssey", "bgs": "joint"
         },
         {
           "action": "Hand in Salvage",
@@ -113,7 +114,7 @@
           "ethos": "Covert",
           "bonus_powers": ["Arissa Lavigny-Duval", "Archon Delaine", "Zemina Torval"],
           "merits": "yes", "platform": "ED", "bgs": "safe",
-          "notes": "At megaships; Squadron notes: once per week per megaship (unconfirmed)"
+          "notes": "At megaships; once per megaship per fortnight (Doncaster Powerplay ref card)"
         },
         {
           "action": "Scan Ships and Wakes",
@@ -168,7 +169,7 @@
           "action": "Reboot Mission Completion",
           "ethos": "Social",
           "bonus_powers": [],
-          "contested_only": false, "merits": "yes", "platform": "ED", "bgs": "joint"
+          "contested_only": false, "merits": "yes", "platform": "Odyssey", "bgs": "joint"
         },
         {
           "action": "Sell for Large Profits",
@@ -182,7 +183,7 @@
           "ethos": "Finance",
           "bonus_powers": ["Edmund Mahon", "Felicia Winters", "Nakato Kaine", "Zemina Torval"],
           "contested_only": false, "merits": "yes", "platform": "ED", "bgs": "joint",
-          "notes": "Mine in Supporting System, sell in AS; BGS effect disputed: SINC says mined sales don't move influence, squad treats them as BGS trade"
+          "notes": "Mine in Supporting System, sell in AS; BGS effect disputed: SINC says mined sales don't move influence, squad treats them as BGS trade; Doncaster ref card: positive for station owner"
         },
         {
           "action": "Sell Rare Goods",
@@ -200,7 +201,7 @@
             "Nakato Kaine", "Pranav Antal", "Yuri Grom", "Zemina Torval"
           ],
           "contested_only": false, "merits": "yes", "platform": "ED", "bgs": "safe",
-          "notes": "From PC in Supporting System to PC in AS; squadron notes: 30-minute cooldown on collecting media materials (unconfirmed)"
+          "notes": "From PC in Supporting System to PC in AS; allocation per half hour, 15-250 by rank (Doncaster Powerplay ref card; 250 at our rank in our runs)"
         },
         {
           "action": "Holoscreen Hacking",
@@ -213,7 +214,7 @@
           "ethos": "Covert",
           "bonus_powers": ["Jerome Archer", "Pranav Antal", "Yuri Grom"],
           "contested_only": false, "merits": "yes", "platform": "ED", "bgs": "safe",
-          "notes": "At megaships; Squadron notes: once per week per megaship (unconfirmed)"
+          "notes": "At megaships; once per megaship per fortnight (Doncaster Powerplay ref card)"
         },
         {
           "action": "Retrieve Specific Goods",
@@ -273,7 +274,7 @@
           "action": "Collect Escape Pods",
           "ethos": "Social",
           "bonus_powers": ["Aisling Duval", "Arissa Lavigny-Duval", "Felicia Winters", "Pranav Antal"],
-          "contested_only": false, "merits": "suspended", "platform": "ED", "bgs": "safe",
+          "contested_only": false, "merits": "suspended", "platform": "ED", "bgs": "joint",
           "notes": "Collect in AS, deliver to PC in Supporting System"
         }
       ]
@@ -284,6 +285,13 @@
       "label": "Undermining",
       "pp_states": ["Exploited", "Fortified", "Stronghold"],
       "activities": [
+        {
+          "action": "Bounty Hunting",
+          "ethos": "Combat",
+          "bonus_powers": [],
+          "merits": "yes", "platform": "ED", "bgs": "safe",
+          "notes": "Only in Archon Delaine's systems (his undermining weakness; Doncaster Powerplay ref card). Cash the vouchers in another system to keep it BGS-safe"
+        },
         {
           "action": "Power Kills",
           "ethos": "Combat",
@@ -296,7 +304,7 @@
           "ethos": "Finance",
           "bonus_powers": [],
           "merits": "yes", "platform": "ED", "bgs": "joint",
-          "notes": "Mine and sell in same US; BGS effect disputed: SINC says mined sales don't move influence, squad treats them as BGS trade"
+          "notes": "Mine and sell in same US; BGS effect disputed: SINC says mined sales don't move influence, squad treats them as BGS trade; Doncaster ref card: positive for station owner"
         },
         {
           "action": "Transport Powerplay Commodities",
@@ -307,7 +315,7 @@
             "Nakato Kaine", "Pranav Antal", "Yuri Grom", "Zemina Torval"
           ],
           "merits": "yes", "platform": "ED", "bgs": "safe",
-          "notes": "From PC in Stronghold to PC in US"
+          "notes": "Allocation per half hour, 15-250 by rank (Doncaster Powerplay ref card); From PC in Stronghold to PC in US"
         },
         {
           "action": "Flood Markets with Low Value Goods",
@@ -346,7 +354,7 @@
           "ethos": "Covert",
           "bonus_powers": ["Denton Patreus", "Felicia Winters", "Jerome Archer", "Yuri Grom"],
           "merits": "yes", "platform": "ED", "bgs": "safe",
-          "notes": "At megaships; Squadron notes: once per week per megaship (unconfirmed)"
+          "notes": "At megaships; once per megaship per fortnight (Doncaster Powerplay ref card)"
         },
         {
           "action": "Retrieve Specific Goods",
@@ -365,7 +373,7 @@
           "action": "Transfer Power Classified Data",
           "ethos": "Covert",
           "bonus_powers": ["Arissa Lavigny-Duval", "Denton Patreus", "Felicia Winters", "Yuri Grom"],
-          "merits": "no", "platform": "Odyssey", "bgs": "safe",
+          "merits": "yes", "platform": "Odyssey", "bgs": "safe",
           "notes": "Download from US settlements, return to PC in any controlled system"
         },
         {
@@ -385,7 +393,7 @@
           "action": "Collect Escape Pods",
           "ethos": "Social",
           "bonus_powers": ["Aisling Duval", "Edmund Mahon", "Felicia Winters", "Nakato Kaine"],
-          "merits": "suspended", "platform": "ED", "bgs": "safe",
+          "merits": "suspended", "platform": "ED", "bgs": "joint",
           "notes": "Awarded on scoop in US"
         }
       ]
