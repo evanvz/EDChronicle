@@ -2,9 +2,9 @@
   "schema": "edapp.exploration.values.v1",
   "meta": {
     "purpose": "Exploration scan value reference by planet type and terraformable flag. Contains FSS and mapped (FSS+DSS) values; multipliers/first-discovery not used unless enabled later.",
-    "source_note": "Built from user-provided PlanetValues.xlsx (manual extraction from reference sites).",
-    "last_updated_utc": "2025-12-31T19:05:26Z",
-    "count_rows": 21
+    "source_note": "MattG's exploration value formulae (Frontier forum thread 232000), as implemented in EDDiscovery EstimatedValues.cs and EDMC-Pioneer body_calc.py, with the 4.0/Odyssey mapping bonus and efficient mapping; recomputed 2026-10-14",
+    "last_updated_utc": "2026-10-14T00:00:00Z",
+    "count_rows": 20
   },
   "entries": [
     {
@@ -13,9 +13,9 @@
       "median_mass": 0.43914,
       "values": {
         "fss": 143463,
-        "fss_dss": 597762,
+        "fss_dss": 777091,
         "fss_fd": 373004,
-        "fss_fd_dss": 1724965
+        "fss_fd_dss": 2242455
       }
     },
     {
@@ -24,9 +24,9 @@
       "median_mass": 0.498039,
       "values": {
         "fss": 270290,
-        "fss_dss": 1126206,
+        "fss_dss": 1464068,
         "fss_fd": 702753,
-        "fss_fd_dss": 3249900
+        "fss_fd_dss": 4224870
       }
     },
     {
@@ -35,9 +35,9 @@
       "median_mass": 0.780638,
       "values": {
         "fss": 99747,
-        "fss_dss": 415613,
+        "fss_dss": 540297,
         "fss_fd": 259343,
-        "fss_fd_dss": 1199337
+        "fss_fd_dss": 1559138
       }
     },
     {
@@ -46,9 +46,9 @@
       "median_mass": 0.453011,
       "values": {
         "fss": 268616,
-        "fss_dss": 1119231,
+        "fss_dss": 1455001,
         "fss_fd": 698400,
-        "fss_fd_dss": 3229773
+        "fss_fd_dss": 4198704
       }
     },
     {
@@ -57,9 +57,9 @@
       "median_mass": 0.344919,
       "values": {
         "fss": 14070,
-        "fss_dss": 58624,
+        "fss_dss": 76211,
         "fss_fd": 36581,
-        "fss_fd_dss": 169171
+        "fss_fd_dss": 219923
       }
     },
     {
@@ -68,9 +68,9 @@
       "median_mass": 0.466929,
       "values": {
         "fss": 163948,
-        "fss_dss": 683116,
+        "fss_dss": 888051,
         "fss_fd": 426264,
-        "fss_fd_dss": 1971272
+        "fss_fd_dss": 2562654
       }
     },
     {
@@ -79,9 +79,9 @@
       "median_mass": 0.01854,
       "values": {
         "fss": 500,
-        "fss_dss": 1569,
+        "fss_dss": 2777,
         "fss_fd": 1300,
-        "fss_fd_dss": 4527
+        "fss_fd_dss": 7816
       }
     },
     {
@@ -90,9 +90,9 @@
       "median_mass": 0.323933,
       "values": {
         "fss": 31632,
-        "fss_dss": 131802,
+        "fss_dss": 171342,
         "fss_fd": 82244,
-        "fss_fd_dss": 380341
+        "fss_fd_dss": 494443
       }
     },
     {
@@ -101,9 +101,9 @@
       "median_mass": 0.003359,
       "values": {
         "fss": 500,
-        "fss_dss": 1476,
+        "fss_dss": 2777,
         "fss_fd": 1300,
-        "fss_fd_dss": 4260
+        "fss_fd_dss": 7816
       }
     },
     {
@@ -112,9 +112,9 @@
       "median_mass": 0.142312,
       "values": {
         "fss": 129504,
-        "fss_dss": 539601,
+        "fss_dss": 701482,
         "fss_fd": 336711,
-        "fss_fd_dss": 1557130
+        "fss_fd_dss": 2024270
       }
     },
     {
@@ -123,9 +123,9 @@
       "median_mass": 0.180686,
       "values": {
         "fss": 500,
-        "fss_dss": 1752,
+        "fss_dss": 2777,
         "fss_fd": 1300,
-        "fss_fd_dss": 5057
+        "fss_fd_dss": 7816
       }
     },
     {
@@ -134,9 +134,9 @@
       "median_mass": 69.551636,
       "values": {
         "fss": 3845,
-        "fss_dss": 16021,
+        "fss_dss": 20828,
         "fss_fd": 9997,
-        "fss_fd_dss": 46233
+        "fss_fd_dss": 60103
       }
     },
     {
@@ -145,9 +145,9 @@
       "median_mass": 476.240875,
       "values": {
         "fss": 28405,
-        "fss_dss": 118354,
+        "fss_dss": 153861,
         "fss_fd": 73853,
-        "fss_fd_dss": 341536
+        "fss_fd_dss": 443997
       }
     },
     {
@@ -156,9 +156,9 @@
       "median_mass": 1148.921509,
       "values": {
         "fss": 995,
-        "fss_dss": 4145,
+        "fss_dss": 5389,
         "fss_fd": 2587,
-        "fss_fd_dss": 11963
+        "fss_fd_dss": 15551
       }
     },
     {
@@ -167,9 +167,9 @@
       "median_mass": 2615.635376,
       "values": {
         "fss": 1119,
-        "fss_dss": 4663,
+        "fss_dss": 6062,
         "fss_fd": 2910,
-        "fss_fd_dss": 13457
+        "fss_fd_dss": 17494
       }
     },
     {
@@ -178,9 +178,9 @@
       "median_mass": 925.5758060000001,
       "values": {
         "fss": 966,
-        "fss_dss": 4023,
+        "fss_dss": 5230,
         "fss_fd": 2510,
-        "fss_fd_dss": 11609
+        "fss_fd_dss": 15092
       }
     },
     {
@@ -189,9 +189,9 @@
       "median_mass": 170.455071,
       "values": {
         "fss": 774,
-        "fss_dss": 3227,
+        "fss_dss": 4195,
         "fss_fd": 2014,
-        "fss_fd_dss": 9312
+        "fss_fd_dss": 12105
       }
     },
     {
@@ -200,9 +200,9 @@
       "median_mass": 477.001832,
       "values": {
         "fss": 883,
-        "fss_dss": 3679,
+        "fss_dss": 4782,
         "fss_fd": 2295,
-        "fss_fd_dss": 10616
+        "fss_fd_dss": 13800
       }
     },
     {
@@ -211,9 +211,9 @@
       "median_mass": 550.141846,
       "values": {
         "fss": 900,
-        "fss_dss": 3749,
+        "fss_dss": 4874,
         "fss_fd": 2339,
-        "fss_fd_dss": 10818
+        "fss_fd_dss": 14064
       }
     },
     {
@@ -222,20 +222,9 @@
       "median_mass": 47.163769,
       "values": {
         "fss": 667,
-        "fss_dss": 2779,
+        "fss_dss": 3613,
         "fss_fd": 1734,
-        "fss_fd_dss": 8019
-      }
-    },
-    {
-      "planet_type": "Planet Type",
-      "terraformable": false,
-      "median_mass": null,
-      "values": {
-        "fss": null,
-        "fss_dss": null,
-        "fss_fd": null,
-        "fss_fd_dss": null
+        "fss_fd_dss": 10425
       }
     }
   ]
