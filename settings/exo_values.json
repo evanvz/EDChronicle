@@ -2,11 +2,17 @@
   "schema": "edapp.exobiology.values.v1",
   "meta": {
     "purpose": "Base payout values for exobiology species (Vista Genomics). No multipliers.",
-    "source_note": "Built from user-provided ExoValues.xlsx (manual extraction from reference sites).",
-    "last_updated_utc": "2025-12-31T19:05:26Z",
-    "count_species": 118
+    "source_note": "Built from user-provided ExoValues.xlsx; fact-checked 2026-10-14 against EDMC-BioScan/ExploData species & genus data (github.com/Silarn/EDMC-BioScan, github.com/Silarn/EDMC-ExploData) and ED wiki species pages, cross-checked against the player's own SellOrganicData payouts. Names follow the game's Species_Localised (e.g. 'Lividum Brain Tree').",
+    "last_updated_utc": "2026-10-14T00:00:00Z",
+    "count_species": 123
   },
   "species": {
+    "Albidum Sinuous Tubers": {
+      "base_value": 1514500,
+      "genus": "Sinuous Tuber",
+      "ccr_m": 100,
+      "traits": []
+    },
     "Aleoida Arcus": {
       "base_value": 7252500,
       "genus": "Aleoida",
@@ -41,68 +47,18 @@
         "Ammonia"
       ]
     },
-    "Anemone Blatteum Bioluminescent": {
-      "base_value": 1499900,
-      "genus": "Anemone",
+    "Amphora Plant": {
+      "base_value": 1628800,
+      "genus": "Amphora Plant",
       "ccr_m": 100,
-      "traits": [
-        "B or O-Class Stars"
-      ]
+      "traits": []
     },
-    "Anemone Croceum": {
-      "base_value": 3399800,
-      "genus": "Anemone",
+    "Aureum Brain Tree": {
+      "base_value": 1593700,
+      "genus": "Brain Tree",
       "ccr_m": 100,
       "traits": [
-        "B or O-Class Stars"
-      ]
-    },
-    "Anemone Luteolum": {
-      "base_value": 1499900,
-      "genus": "Anemone",
-      "ccr_m": 100,
-      "traits": [
-        "B or O-Class Stars"
-      ]
-    },
-    "Anemone Prasinum Bioluminescent": {
-      "base_value": 1499900,
-      "genus": "Anemone",
-      "ccr_m": 100,
-      "traits": [
-        "B or O-Class Stars"
-      ]
-    },
-    "Anemone Puniceum": {
-      "base_value": 1499900,
-      "genus": "Anemone",
-      "ccr_m": 100,
-      "traits": [
-        "B or O-Class Stars"
-      ]
-    },
-    "Anemone Roseum": {
-      "base_value": 1499900,
-      "genus": "Anemone",
-      "ccr_m": 100,
-      "traits": [
-        "B or O-Class Stars"
-      ]
-    },
-    "Anemone Roseum Bioluminescent": {
-      "base_value": 1499900,
-      "genus": "Anemone",
-      "ccr_m": 100,
-      "traits": [
-        "B or O-Class Stars"
-      ]
-    },
-    "Anemone Rubeum Bioluminescent": {
-      "base_value": 1499900,
-      "genus": "Anemone",
-      "ccr_m": 100,
-      "traits": [
-        "B or O-Class Stars"
+        "Guardian Sites"
       ]
     },
     "Bacterium Acies": {
@@ -156,7 +112,7 @@
       ]
     },
     "Bacterium Nebulus": {
-      "base_value": 9116600,
+      "base_value": 5289900,
       "genus": "Bacterium",
       "ccr_m": 500,
       "traits": [
@@ -173,7 +129,7 @@
       ]
     },
     "Bacterium Scopulum": {
-      "base_value": 8633800,
+      "base_value": 4934500,
       "genus": "Bacterium",
       "ccr_m": 500,
       "traits": [
@@ -216,69 +172,25 @@
         "Oxygen"
       ]
     },
-    "Brain Tree Aureum": {
-      "base_value": 3565100,
-      "genus": "Brain Tree",
+    "Bark Mound": {
+      "base_value": 1471900,
+      "genus": "Bark Mound",
+      "ccr_m": 100,
+      "traits": []
+    },
+    "Blatteum Bioluminescent Anemone": {
+      "base_value": 1499900,
+      "genus": "Anemone",
       "ccr_m": 100,
       "traits": [
-        "Guardian Sites"
+        "B or O-Class Stars"
       ]
     },
-    "Brain Tree Gypseeum": {
-      "base_value": 3565100,
-      "genus": "Brain Tree",
+    "Blatteum Sinuous Tubers": {
+      "base_value": 1514500,
+      "genus": "Sinuous Tuber",
       "ccr_m": 100,
-      "traits": [
-        "Guardian Sites"
-      ]
-    },
-    "Brain Tree Lindigoticum": {
-      "base_value": 3565100,
-      "genus": "Brain Tree",
-      "ccr_m": 100,
-      "traits": [
-        "Guardian Sites"
-      ]
-    },
-    "Brain Tree Lividum": {
-      "base_value": 1593700,
-      "genus": "Brain Tree",
-      "ccr_m": 100,
-      "traits": [
-        "Guardian Sites"
-      ]
-    },
-    "Brain Tree Ostrinum": {
-      "base_value": 3565100,
-      "genus": "Brain Tree",
-      "ccr_m": 100,
-      "traits": [
-        "Guardian Sites"
-      ]
-    },
-    "Brain Tree Puniceum": {
-      "base_value": 3565100,
-      "genus": "Brain Tree",
-      "ccr_m": 100,
-      "traits": [
-        "Guardian Sites"
-      ]
-    },
-    "Brain Tree Roseum": {
-      "base_value": 1593700,
-      "genus": "Brain Tree",
-      "ccr_m": 100,
-      "traits": [
-        "Guardian Sites"
-      ]
-    },
-    "Brain Tree Viride": {
-      "base_value": 1593700,
-      "genus": "Brain Tree",
-      "ccr_m": 100,
-      "traits": [
-        "Guardian Sites"
-      ]
+      "traits": []
     },
     "Cactoida Cortexum": {
       "base_value": 3667600,
@@ -321,6 +233,12 @@
         "Norma Spiral Arm",
         "Water Based Rocky World."
       ]
+    },
+    "Caeruleum Sinuous Tubers": {
+      "base_value": 1514500,
+      "genus": "Sinuous Tuber",
+      "ccr_m": 100,
+      "traits": []
     },
     "Clypeus Lacrimam": {
       "base_value": 8418000,
@@ -375,6 +293,20 @@
         "H2O"
       ]
     },
+    "Croceum Anemone": {
+      "base_value": 1499900,
+      "genus": "Anemone",
+      "ccr_m": 100,
+      "traits": [
+        "B or O-Class Stars"
+      ]
+    },
+    "Crystalline Shards": {
+      "base_value": 1628800,
+      "genus": "Crystalline Shards",
+      "ccr_m": 100,
+      "traits": []
+    },
     "Electricae Pluma": {
       "base_value": 6284600,
       "genus": "Electricae",
@@ -410,7 +342,7 @@
       ]
     },
     "Fonticulua Fluctus": {
-      "base_value": 16777215,
+      "base_value": 20000000,
       "genus": "Fonticulua",
       "ccr_m": 500,
       "traits": []
@@ -559,6 +491,44 @@
         "H2O"
       ]
     },
+    "Gypseeum Brain Tree": {
+      "base_value": 1593700,
+      "genus": "Brain Tree",
+      "ccr_m": 100,
+      "traits": [
+        "Guardian Sites"
+      ]
+    },
+    "Lindigoticum Brain Tree": {
+      "base_value": 1593700,
+      "genus": "Brain Tree",
+      "ccr_m": 100,
+      "traits": [
+        "Guardian Sites"
+      ]
+    },
+    "Lindigoticum Sinuous Tubers": {
+      "base_value": 1514500,
+      "genus": "Sinuous Tuber",
+      "ccr_m": 100,
+      "traits": []
+    },
+    "Lividum Brain Tree": {
+      "base_value": 1593700,
+      "genus": "Brain Tree",
+      "ccr_m": 100,
+      "traits": [
+        "Guardian Sites"
+      ]
+    },
+    "Luteolum Anemone": {
+      "base_value": 1499900,
+      "genus": "Anemone",
+      "ccr_m": 100,
+      "traits": [
+        "B or O-Class Stars"
+      ]
+    },
     "Osseus Cornibus": {
       "base_value": 1483000,
       "genus": "Osseus",
@@ -604,6 +574,50 @@
         "Ammonia"
       ]
     },
+    "Ostrinum Brain Tree": {
+      "base_value": 1593700,
+      "genus": "Brain Tree",
+      "ccr_m": 100,
+      "traits": [
+        "Guardian Sites"
+      ]
+    },
+    "Prasinum Bioluminescent Anemone": {
+      "base_value": 1499900,
+      "genus": "Anemone",
+      "ccr_m": 100,
+      "traits": [
+        "B or O-Class Stars"
+      ]
+    },
+    "Prasinum Sinuous Tubers": {
+      "base_value": 1514500,
+      "genus": "Sinuous Tuber",
+      "ccr_m": 100,
+      "traits": []
+    },
+    "Puniceum Anemone": {
+      "base_value": 1499900,
+      "genus": "Anemone",
+      "ccr_m": 100,
+      "traits": [
+        "B or O-Class Stars"
+      ]
+    },
+    "Puniceum Brain Tree": {
+      "base_value": 1593700,
+      "genus": "Brain Tree",
+      "ccr_m": 100,
+      "traits": [
+        "Guardian Sites"
+      ]
+    },
+    "Radicoida Unicus": {
+      "base_value": 119037,
+      "genus": "Radicoida",
+      "ccr_m": 15,
+      "traits": []
+    },
     "Recepta Conditivus": {
       "base_value": 14313700,
       "genus": "Recepta",
@@ -624,52 +638,48 @@
       "ccr_m": 150,
       "traits": []
     },
-    "Sinuous Tuber Albidum": {
-      "base_value": 3425600,
-      "genus": "Sinuous Tuber",
+    "Roseum Anemone": {
+      "base_value": 1499900,
+      "genus": "Anemone",
       "ccr_m": 100,
-      "traits": []
+      "traits": [
+        "B or O-Class Stars"
+      ]
     },
-    "Sinuous Tuber Blatteum": {
+    "Roseum Bioluminescent Anemone": {
+      "base_value": 1499900,
+      "genus": "Anemone",
+      "ccr_m": 100,
+      "traits": [
+        "B or O-Class Stars"
+      ]
+    },
+    "Roseum Brain Tree": {
+      "base_value": 1593700,
+      "genus": "Brain Tree",
+      "ccr_m": 100,
+      "traits": [
+        "Guardian Sites"
+      ]
+    },
+    "Roseum Sinuous Tubers": {
       "base_value": 1514500,
       "genus": "Sinuous Tuber",
       "ccr_m": 100,
       "traits": []
     },
-    "Sinuous Tuber Caeruleum": {
-      "base_value": 1514500,
-      "genus": "Sinuous Tuber",
+    "Rubeum Bioluminescent Anemone": {
+      "base_value": 1499900,
+      "genus": "Anemone",
       "ccr_m": 100,
-      "traits": []
+      "traits": [
+        "B or O-Class Stars"
+      ]
     },
-    "Sinuous Tuber Lindigoticum": {
-      "base_value": 1514500,
-      "genus": "Sinuous Tuber",
-      "ccr_m": 100,
-      "traits": []
-    },
-    "Sinuous Tuber Prasinum": {
-      "base_value": 1514500,
-      "genus": "Sinuous Tuber",
-      "ccr_m": 100,
-      "traits": []
-    },
-    "Sinuous Tuber Roseus": {
-      "base_value": 1514500,
-      "genus": "Sinuous Tuber",
-      "ccr_m": 100,
-      "traits": []
-    },
-    "Sinuous Tuber Violaceum": {
-      "base_value": 1514500,
-      "genus": "Sinuous Tuber",
-      "ccr_m": 100,
-      "traits": []
-    },
-    "Sinuous Tuber Viride": {
-      "base_value": 1514500,
-      "genus": "Sinuous Tuber",
-      "ccr_m": 100,
+    "Stratum Aranaemus": {
+      "base_value": 2448900,
+      "genus": "Stratum",
+      "ccr_m": 500,
       "traits": []
     },
     "Stratum Araneamus": {
@@ -898,7 +908,7 @@
       "traits": []
     },
     "Tussock Ventusa": {
-      "base_value": 3277700,
+      "base_value": 3227700,
       "genus": "Tussock",
       "ccr_m": 200,
       "traits": []
@@ -910,6 +920,26 @@
       "traits": [
         "H2O"
       ]
+    },
+    "Violaceum Sinuous Tubers": {
+      "base_value": 1514500,
+      "genus": "Sinuous Tuber",
+      "ccr_m": 100,
+      "traits": []
+    },
+    "Viride Brain Tree": {
+      "base_value": 1593700,
+      "genus": "Brain Tree",
+      "ccr_m": 100,
+      "traits": [
+        "Guardian Sites"
+      ]
+    },
+    "Viride Sinuous Tubers": {
+      "base_value": 1514500,
+      "genus": "Sinuous Tuber",
+      "ccr_m": 100,
+      "traits": []
     }
   }
 }
