@@ -106,13 +106,9 @@ class PlanetValueTable:
         if not pt:
             return None
 
-        # Earth-like / Water World / Ammonia World should use their canonical table rows.
-        # Some journal/UI paths may mark them terraformable, but the value table generally
-        # treats them as their own planet classes rather than terraformable variants.
-        if pt in ("Earth-Like World", "Water World", "Ammonia World"):
-            terraformable = False
-
-        row = self._rows.get((pt, terraformable))
+        # Types with no terraformable row (Earth-like, Ammonia) use their plain row;
+        # terraformable Water World has its own, far higher row.
+        row = self._rows.get((pt, terraformable)) or self._rows.get((pt, False))
         if not row:
             return None
 

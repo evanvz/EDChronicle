@@ -16,3 +16,9 @@ def test_earthlike_values():
 
 def test_small_body_floor():
     assert TABLE.estimate("Icy body", False, mapped=True, first_discovered=False) == 2_777
+
+
+def test_terraformable_water_world_uses_its_own_row():
+    assert TABLE.estimate("Water world", True, mapped=False, first_discovered=False) == 268_616
+    assert TABLE.estimate("Water world", False, mapped=False, first_discovered=False) == 99_747
+    assert TABLE.estimate("Earthlike body", True, mapped=False, first_discovered=False) == 270_290
