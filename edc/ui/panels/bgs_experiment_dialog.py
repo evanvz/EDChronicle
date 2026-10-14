@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 
 HISTORY_DAYS = 14
 _COLUMNS = ["Tick (UTC)", "INF", "Bounties", "Trade profit", "Exploration", "SINC pts",
-            "Influence", "Change", "% of headroom", "Likely max", "Others seen", "Other factions", "States"]
+            "Influence", "Change", "% of headroom", "Likely max", "Other arrivals", "Other factions", "States"]
 _AMBER = "#FFB347"
 
 
@@ -88,7 +88,9 @@ class BgsExperimentDialog(QDialog):
             "influence seen during the window and after the next tick. Jump into every test system once after "
             "each tick so the level gets recorded. '% of headroom' = change ÷ (100% − influence); typical best "
             "days are 6–8%. Amber rows are possibly contaminated: another commander was seen (EDDN, minus your "
-            "own uploads), another faction gained over the tick, or influence changed with no tick detected.")
+            "own uploads), another faction gained over the tick, or influence changed with no tick detected. "
+            "'Other arrivals' counts EDDN jumps/dockings, not commanders: EDDN hides who uploaded, so one "
+            "commander jumping in 19 times shows as 19.")
         note.setWordWrap(True)
         note.setStyleSheet("color:#9aa4b0; font-size:11px;")
         layout.addWidget(note)
