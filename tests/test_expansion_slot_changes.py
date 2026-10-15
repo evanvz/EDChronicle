@@ -1,7 +1,7 @@
 """Expansion Forecast: live EDDN faction counts for the candidate systems. A
 change that moves a candidate across the 7-faction line (a slot filled, or a
 retreat opened one) is flagged; drift that doesn't change its role isn't."""
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 from edc.core.expansion_forecast import (
     merge_live_counts, slot_change_text, slot_changes, slot_kind,
@@ -124,7 +124,8 @@ def test_overview_shows_slot_change_line(tmp_path):
     repo = _repo(tmp_path)
     repo.save_expansion_candidates(99, [{"system_name": "Arimavante", "system_address": 1, "faction_count": 6}],
                                    "2026-10-10T12:00:00Z")
-    repo.save_candidate_faction_count(1, "Arimavante", list("ABCDEFG"), date.today().isoformat() + "T07:00:00Z")
+    repo.save_candidate_faction_count(1, "Arimavante", list("ABCDEFG"),
+                                    (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ"))
     shown = []
     fake = SimpleNamespace(repo=repo, overview_panel=SimpleNamespace(set_new_system_alert=shown.append),
                            player_faction_panel=SimpleNamespace(_faction_name="Euw"))
