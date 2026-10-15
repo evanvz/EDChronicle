@@ -162,7 +162,7 @@ class BgsExperimentDialog(QDialog):
             rows = build_rows(ticks, repo.get_influence_readings(addr, faction),
                               lambda s, e, a=addr: repo.get_faction_activity_between(a, faction, s, e), now=now,
                               visits=repo.get_bgs_visits(addr), faction_readings=repo.get_all_faction_readings(addr),
-                              faction=faction)
+                              faction=faction, population=repo.get_system_population(addr))
             table = self._fill_table(rows)
             self._tables[name] = (table, rows)
             copy_btn = QPushButton("Copy table")

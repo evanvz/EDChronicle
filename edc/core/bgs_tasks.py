@@ -553,21 +553,23 @@ def _hinder_view(task: dict, report: dict, history: list, today: Optional[date] 
             "hud": f"Hinder {faction} — {influence_txt}", "updated_at": rows[0].get("snapshot_date") if rows else None}
 
 
-def bgs_point_chips(act: dict, influence: Optional[float]) -> list:
+def bgs_point_chips(act: dict, influence: Optional[float], population: Optional[int] = None) -> list:
     """SINC bucket points for this tick's activity (which bucket still pays) and
     the likely best gain today -- see edc.core.bgs_points. Shared by the Boost
     card and the Session report."""
     chips = []
     args = (act["tier_score"], act["bounties"], act["trade_profit"], act["exploration"])
-    points, hints = bucket_points(*args), bucket_hints(*args)
+    points, hints = bucket_points(*args, population), bucket_hints(*args, population)
     if any(args):
         total = total_points(points)
         empty = hints["empty"]
+        targets = population_targets(population)
+        size = targets["size"] if targets else "small (population unknown)"
         chips.append({
             "text": f"SINC {total:.1f} pts" + (f" · empty: {', '.join(empty)}" if empty and total else ""),
             "tooltip": "SINC bucket points this tick (Complete BGS Guide 2024; community-measured, relative "
                        "effort, not influence %). Every doubling of a bucket adds the same, so a little in an "
-                       "empty bucket beats more in a full one:\n"
+                       "empty bucket beats more in a full one. Scaled to a " + size + " system:\n"
                        + "\n".join(f"{name.capitalize()}: {points[name]:.2f} — next: {hints['next'][name]}"
                                    for name in points),
         })
@@ -582,7 +584,8 @@ def bgs_point_chips(act: dict, influence: Optional[float]) -> list:
     return chips
 
 
-def _boost_view(task: dict, report: dict, history: list, limits: dict, today: Optional[date] = None) -> dict:
+def _boost_view(task: dict, report: dict, history: list, limits: dict, today: Optional[date] = None,
+                population: Optional[int] = None) -> dict:
     faction = task.get("faction_name") or ""
     act = faction_activity(report, task["system_name"], faction)
     lines, line_states = [], []
@@ -655,7 +658,7 @@ def _boost_view(task: dict, report: dict, history: list, limits: dict, today: Op
         chips.append({"text": f"Trade buys {_cr(act['trade_bought'])}"})
     if act["combat_bonds"]:
         chips.append({"text": f"Combat bonds {_cr(act['combat_bonds'])}"})
-    chips += bgs_point_chips(act, latest)
+    chips += bgs_point_chips(act, latest, population)
     structure = {"bars": view_bars, "chips": chips,
                  "detail_lines": [retreat_line] if retreat_line else [],
                  "guide_short": f"Missions · bounties · exploration data · profitable high-demand trade for {faction}"}
@@ -1136,7 +1139,7 @@ def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], histor
         if targets:
             limits = dict(limits, **{k: v for k, v in targets.items() if k != "size"})
         population_basis = _population_basis(targets, population)
-        view = _boost_view(task, report, history, limits, today)
+        view = _boost_view(task, report, history, limits, today, population)
     elif task_type == "hinder":
         view = _hinder_view(task, report, history, today, squadron_faction)
     elif task_type in ("vote", "fight"):

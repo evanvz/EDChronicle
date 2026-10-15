@@ -171,15 +171,16 @@ class SessionActivityDialog(QDialog):
     def _bgs_points_row(self, system_name: str, faction_name: str):
         """Squad faction only: SINC bucket points for the whole tick in this system
         and the likely best gain today (see edc.core.bgs_points)."""
-        influence = None
+        influence = population = None
         try:
             repo = self._panel._repo
             addr = repo.get_system_addresses_for_names([system_name]).get(system_name)
             hist = repo.get_faction_history(addr, faction_name) if addr else []
             influence = hist[0]["influence"] if hist else None
+            population = repo.get_system_population(addr) if addr else None
         except Exception:
             log.exception("Failed to read influence for BGS points")
-        chips = bgs_point_chips(faction_activity(self._report, system_name, faction_name), influence)
+        chips = bgs_point_chips(faction_activity(self._report, system_name, faction_name), influence, population)
         if not chips:
             return None
         row = QLabel("    " + "  ·  ".join(c["text"] for c in chips))

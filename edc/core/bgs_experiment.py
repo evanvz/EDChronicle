@@ -31,7 +31,8 @@ def _states(active: Optional[str], pending: Optional[str]) -> str:
 
 def build_rows(ticks: List[str], readings: List[tuple], effort_for: Callable[[str, str], dict],
                now: Optional[str] = None, visits: Optional[List[tuple]] = None,
-               faction_readings: Optional[dict] = None, faction: str = "") -> List[dict]:
+               faction_readings: Optional[dict] = None, faction: str = "",
+               population: Optional[int] = None) -> List[dict]:
     """ticks: tick times oldest first (...Z); readings: (observed_at, influence,
     active_states, pending_states) oldest first; effort_for(start, end) -> the
     activity dict for that window. Newest window first; the last one is still
@@ -66,7 +67,7 @@ def build_rows(ticks: List[str], readings: List[tuple], effort_for: Callable[[st
         rows.append({
             "start": start, "end": end, "effort": effort,
             "points": total_points(bucket_points(effort["tier_score"], effort["bounties"],
-                                                 effort["trade_profit"], effort["exploration"])),
+                                                 effort["trade_profit"], effort["exploration"], population)),
             "before": before, "after": after_inf, "change": change,
             "share": change / ((1 - before) * 100) * 100 if change is not None and before < 1 else None,
             "ceiling": ceiling(before),

@@ -70,3 +70,12 @@ def test_session_report_points_line_only_for_squad_faction(tmp_path):
     texts = [l.text() for card in dlg._cards for l in card.findChildren(QLabel)]
     lines = [t for t in texts if "SINC" in t]
     assert len(lines) == 1 and "Likely max today +1.5–2.0" in lines[0]
+
+
+def test_population_scales_bases_like_sincs_daily_amounts():
+    small = bucket_points(inf=20, bounties=8_000_000, trade_profit=0, exploration=0, population=150_000)
+    assert small == bucket_points(inf=20, bounties=8_000_000, trade_profit=0, exploration=0)   # small = unscaled
+    large = bucket_points(inf=20, bounties=8_000_000, trade_profit=0, exploration=0, population=2_474_591_197)
+    assert large["bounties"] == pytest.approx(small["bounties"] - 1.33 * 1.5849625, abs=1e-6)  # base x3 (30M/10M)
+    assert large["missions"] == pytest.approx(small["missions"] - 0.5 * 1.7369656, abs=1e-6)   # base x10/3 (50/15 INF)
+    assert bucket_hints(0, 0, 0, 0, population=10_000_000)["next"]["bounties"] == "first 1.8M → +1.33"   # medium x2
