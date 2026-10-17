@@ -35,6 +35,8 @@ _COMMODITY_SCHEMA_REF = "https://eddn.edcd.io/schemas/commodity/3"
 _FCMATERIALS_SCHEMA_REF = "https://eddn.edcd.io/schemas/fcmaterials_journal/1"
 _FSSBODYSIGNALS_SCHEMA_REF = "https://eddn.edcd.io/schemas/fssbodysignals/1"
 _CODEXENTRY_SCHEMA_REF = "https://eddn.edcd.io/schemas/codexentry/1"
+_OUTFITTING_SCHEMA_REF = "https://eddn.edcd.io/schemas/outfitting/2"
+_SHIPYARD_SCHEMA_REF = "https://eddn.edcd.io/schemas/shipyard/2"
 # codexentry-v1.0.json: personal data, never sent
 _CODEX_DISALLOWED = {"IsNewEntry", "NewTraitsDiscovered"}
 
@@ -343,6 +345,58 @@ def build_commodity_message(data: Dict[str, Any], docking_access: Optional[str] 
     return msg
 
 
+def _station_header(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """systemName/stationName/marketId/timestamp from an Outfitting.json or
+    Shipyard.json dict (schema renames), or None if any is missing."""
+    if not isinstance(data, dict):
+        return None
+    system, station, market_id, ts = (data.get(k) for k in ("StarSystem", "StationName", "MarketID", "timestamp"))
+    if not (isinstance(system, str) and system and isinstance(station, str) and station
+            and isinstance(market_id, int) and isinstance(ts, str) and ts):
+        return None
+    return {"systemName": system, "stationName": station, "marketId": market_id, "timestamp": ts}
+
+
+def build_outfitting_message(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """outfitting/2 body from Outfitting.json: module names only, minus anything
+    that depends on the Cmdr rather than the station (outfitting-README
+    "Elisions"; the journal has no sku, so only the name rules apply)."""
+    msg = _station_header(data)
+    items = data.get("Items") if isinstance(data, dict) else None
+    if msg is None or not isinstance(items, list):
+        return None
+    modules = []
+    for it in items:
+        name = it.get("Name") if isinstance(it, dict) else None
+        low = name.lower() if isinstance(name, str) else ""
+        if ((low.startswith(("hpt_", "int_")) or "_armour_" in low)
+                and low != "int_planetapproachsuite" and name not in modules):
+            modules.append(name)
+    if not modules:
+        return None
+    msg["modules"] = modules
+    return msg
+
+
+def build_shipyard_message(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """shipyard/2 body from Shipyard.json: the PriceList ship names."""
+    msg = _station_header(data)
+    prices = data.get("PriceList") if isinstance(data, dict) else None
+    if msg is None or not isinstance(prices, list):
+        return None
+    ships = []
+    for p in prices:
+        name = p.get("ShipType") if isinstance(p, dict) else None
+        if isinstance(name, str) and name and name not in ships:
+            ships.append(name)
+    if not ships:
+        return None
+    msg["ships"] = ships
+    if isinstance(data.get("AllowCobraMkIV"), bool):
+        msg["allowCobraMkIV"] = data["AllowCobraMkIV"]
+    return msg
+
+
 def build_fcmaterials_message(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
     Returns an fcmaterials_journal/1-schema-compliant "message" body built
@@ -606,6 +660,32 @@ class EddnPublisher:
             self._queue.put_nowait(payload)
         except queue.Full:
             log.warning("EDDN publish queue full — dropping commodity message")
+
+    def maybe_publish_station_list(self, kind: str, data: Dict[str, Any]) -> None:
+        """kind "outfitting" (Outfitting.json) or "shipyard" (Shipyard.json)."""
+        if self._is_beta or not self._commander:
+            return
+        build, ref = ((build_outfitting_message, _OUTFITTING_SCHEMA_REF) if kind == "outfitting"
+                      else (build_shipyard_message, _SHIPYARD_SCHEMA_REF))
+        msg = build(data)
+        if msg is None:
+            return
+        self._apply_horizons_odyssey(msg)
+        payload = {
+            "$schemaRef": ref,
+            "header": {
+                "uploaderID": self._commander,
+                "softwareName": _SOFTWARE_NAME,
+                "softwareVersion": _SOFTWARE_VERSION,
+                "gameversion": self._gameversion,
+                "gamebuild": self._gamebuild,
+            },
+            "message": msg,
+        }
+        try:
+            self._queue.put_nowait(payload)
+        except queue.Full:
+            log.warning("EDDN publish queue full — dropping %s message", kind)
 
     def maybe_publish_fcmaterials(self, data: Dict[str, Any]) -> None:
         if self._is_beta:

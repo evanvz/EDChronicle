@@ -4182,6 +4182,17 @@ class MainWindow(QMainWindow):
                 if fc_data and fc_data.get("MarketID") == evt.get("MarketID"):
                     self.eddn_publisher.maybe_publish_fcmaterials(fc_data)
 
+        if name in ("Outfitting", "Shipyard"):
+            if getattr(self.cfg, "eddn_contribute_enabled", False) and not self._replaying:
+                journal_dir = getattr(self.cfg, "journal_dir", None)
+                try:
+                    data = json.loads((Path(journal_dir) / f"{name}.json").read_text(encoding="utf-8", errors="replace"))
+                except Exception:
+                    data = None
+                # The side file is rewritten on each opening; only send it if it's this event's station.
+                if isinstance(data, dict) and data.get("MarketID") == evt.get("MarketID"):
+                    self.eddn_publisher.maybe_publish_station_list(name.lower(), data)
+
         if name == "NavRoute":
             self._load_nav_route()
 
