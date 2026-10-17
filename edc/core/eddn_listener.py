@@ -28,6 +28,9 @@ _JOURNAL_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/journal/"
 _COMMODITY_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/commodity/"
 _FCMATERIALS_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/fcmaterials_journal/"
 _CODEXENTRY_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/codexentry/"
+# The Codex files geology vents and anomalies under Category Biology too; only
+# this subcategory is exobiology species (Canonn codex ref, 2026-10-17).
+_SPECIES_SUBCATEGORY = "$Codex_SubCategory_Organic_Structures;"
 _RELEVANT_EVENTS = {"FSDJump", "Location", "CarrierJump", "Docked", "CodexEntry", "Scan"}
 _RECV_TIMEOUT_MS = 5000
 _RECONNECT_DELAY_S = 5
@@ -297,7 +300,7 @@ class EddnPowerPlayWorker(QObject):
                 # the name from EntryID.
                 self._stats["other"] += 1
                 msg = data.get("message")
-                if (isinstance(msg, dict) and "biology" in str(msg.get("Category") or "").lower()
+                if (isinstance(msg, dict) and msg.get("SubCategory") == _SPECIES_SUBCATEGORY
                         and isinstance(msg.get("SystemAddress"), int) and isinstance(msg.get("BodyID"), int)):
                     self.codex_entry_seen.emit(msg)
                 continue
@@ -330,8 +333,7 @@ class EddnPowerPlayWorker(QObject):
                 continue
 
             if msg.get("event") == "CodexEntry":
-                category = str(msg.get("Category_Localised") or msg.get("Category") or "")
-                if ("biology" in category.lower()
+                if (msg.get("SubCategory") == _SPECIES_SUBCATEGORY
                         and isinstance(msg.get("SystemAddress"), int)
                         and isinstance(msg.get("BodyID"), int)
                         and isinstance(msg.get("Name_Localised"), str) and msg.get("Name_Localised")):

@@ -101,12 +101,11 @@ for non-commercial community tools, not an open-source license grant.
 
 Unlike the other reference files above, this one wasn't ported from a
 specific named open-source project. It's a compilation of each
-Engineer's discover/meet/unlock/referral requirements, supplied directly
-in the development session rather than sourced from a single upstream
-repository. The underlying facts are publicly-known Elite Dangerous game
-mechanics — the same information already documented across many
-community wikis and official sources (e.g. the Elite Dangerous Wiki's
-"Engineers" article) — not proprietary to any one project.
+Engineer's discover/meet/unlock/referral requirements, fact-checked on
+2026-10-14 against the Elite Dangerous Wiki (the "Engineers" article and
+each engineer's own page), with commodity names checked against
+`EDCD/FDevIDs`. The underlying facts are publicly-known Elite Dangerous
+game mechanics, not proprietary to any one project.
 
 ## settings/codex_names.json (Canonn Research Group)
 

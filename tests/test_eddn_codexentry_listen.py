@@ -22,12 +22,16 @@ def test_listener_routes_codexentry_schema():
     w = EddnPowerPlayWorker()
     seen = []
     w.codex_entry_seen.connect(seen.append)
-    msg = {"event": "CodexEntry", "Category": "$Codex_Category_Biology;", "SystemAddress": 42, "BodyID": 7,
+    msg = {"event": "CodexEntry", "Category": "$Codex_Category_Biology;",
+           "SubCategory": "$Codex_SubCategory_Organic_Structures;", "SystemAddress": 42, "BodyID": 7,
            "EntryID": 2420201, "System": "X", "StarPos": [0, 0, 0], "timestamp": "2026-10-17T10:00:00Z"}
-    raw = zlib.compress(json.dumps({"$schemaRef": "https://eddn.edcd.io/schemas/codexentry/1",
-                                    "header": {}, "message": msg}).encode())
+    vent = {**msg, "EntryID": 1400414, "SubCategory": "$Codex_SubCategory_Geology_and_Anomalies;"}  # same Category
+
+    def raw(m):
+        return zlib.compress(json.dumps({"$schemaRef": "https://eddn.edcd.io/schemas/codexentry/1",
+                                         "header": {}, "message": m}).encode())
     sock = MagicMock()
-    sock.recv.side_effect = [raw, KeyboardInterrupt]
+    sock.recv.side_effect = [raw(vent), raw(msg), KeyboardInterrupt]
     try:
         w._pump(sock)
     except KeyboardInterrupt:
