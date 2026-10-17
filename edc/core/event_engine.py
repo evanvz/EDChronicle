@@ -472,7 +472,8 @@ class EventEngine:
             self.state.station_type = None
             self.state.station_name = None
 
-        if name == "Location":
+        # CarrierJump = arriving in a new system aboard a carrier; same fields as Location.
+        if name in ("Location", "CarrierJump"):
             # Happens on login; great for HUD
             new_sys = event.get("StarSystem", self.state.system)
             new_system_address = event.get("SystemAddress")

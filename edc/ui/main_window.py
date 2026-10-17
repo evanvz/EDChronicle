@@ -4108,11 +4108,11 @@ class MainWindow(QMainWindow):
         ):
             self._save_session_ledger()
 
-        if name in ("Docked", "FSDJump", "Location"):
+        if name in ("Docked", "FSDJump", "Location", "CarrierJump"):
             self._save_faction_snapshots(self.state.factions_timestamp)
             self._save_system_bgs_status()
 
-        if name in ("FSDJump", "Location"):
+        if name in ("FSDJump", "Location", "CarrierJump"):
             # PowerplayState*/Powers fields are only ever present on these
             # two events (never Docked), so saving here (not the block
             # above) avoids re-writing the same in-memory reading with a
@@ -4122,7 +4122,7 @@ class MainWindow(QMainWindow):
         if name == "FSSSignalDiscovered" and evt.get("SignalType") == "ResourceExtraction":
             self._save_system_res_tiers(evt.get("timestamp") or "")
 
-        if name in ("FSDJump", "Location"):
+        if name in ("FSDJump", "Location", "CarrierJump"):
             self._maybe_refresh_colonisation_candidates()
 
         if name == "Docked":
@@ -4231,7 +4231,7 @@ class MainWindow(QMainWindow):
 
         incoming_system_address = evt.get("SystemAddress")
 
-        if name in ("Location", "FSDJump"):
+        if name in ("Location", "FSDJump", "CarrierJump"):
             if isinstance(incoming_system_address, int) and incoming_system_address != old_system_address:
                 self.state.system_address = incoming_system_address
                 self._tts_spoken_ships.clear()
@@ -4305,7 +4305,7 @@ class MainWindow(QMainWindow):
             self._schedule_hud_refresh()
 
         # Refresh PowerPlay panel when relevant events occur
-        if name in ("Location", "FSDJump", "Powerplay", "PowerplayState"):
+        if name in ("Location", "FSDJump", "CarrierJump", "Powerplay", "PowerplayState"):
             self._refresh_powerplay()
 
         # Refresh exploration panel when signal or scan data arrives
