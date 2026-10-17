@@ -114,3 +114,53 @@ def test_event_with_all_identifiers_already_present_and_matching():
     msg = build_message(event, "Real System", _STAR_POS, 111)
     assert msg is not None
     assert msg["StarSystem"] == "Real System"
+
+
+# --- found by eddnvalid.weslocke.com (2026-10-17): the real publish path ---
+
+def _published(pub, event, system="Sol", pos=(0.0, 0.0, 0.0), addr=10477373803):
+    pub.maybe_publish(event, system, pos, addr)
+    return pub._queue.get_nowait()
+
+
+def _pub():
+    pub = EddnPublisher()
+    pub.observe({"event": "LoadGame", "Commander": "CMDR Test", "Horizons": True, "Odyssey": True})
+    return pub
+
+
+def test_journal_messages_carry_horizons_odyssey():
+    payload = _published(_pub(), {"timestamp": "2026-10-17T10:00:00Z", "event": "FSDJump",
+                                  "StarSystem": "Sol", "SystemAddress": 10477373803, "StarPos": [0, 0, 0]})
+    assert payload["$schemaRef"].endswith("/journal/1")
+    assert payload["message"]["horizons"] is True and payload["message"]["odyssey"] is True
+
+
+def test_codex_entry_goes_to_codexentry_schema():
+    evt = {"timestamp": "2026-10-17T10:00:00Z", "event": "CodexEntry", "EntryID": 2100401,
+           "Name": "$Codex_Ent_Stratum_02_F_Name;", "Name_Localised": "Stratum Excutitus - Green",
+           "SubCategory": "$Codex_SubCategory_Organic_Structures;", "Category": "$Codex_Category_Biology;",
+           "Region": "$Codex_RegionName_18;", "System": "Sol", "SystemAddress": 10477373803, "BodyID": 4,
+           "Latitude": 1.5, "Longitude": -2.5, "IsNewEntry": True, "NewTraitsDiscovered": False, "VoucherAmount": 2500}
+    payload = _published(_pub(), evt)
+    msg = payload["message"]
+    assert payload["$schemaRef"] == "https://eddn.edcd.io/schemas/codexentry/1"
+    assert msg["StarPos"] == [0.0, 0.0, 0.0] and msg["horizons"] is True
+    assert msg["Latitude"] == 1.5 and msg["VoucherAmount"] == 2500                      # allowed on codexentry
+    for gone in ("IsNewEntry", "NewTraitsDiscovered", "Name_Localised", "BodyID"):
+        assert gone not in msg
+
+
+def test_codex_entry_for_another_system_is_dropped():
+    pub = _pub()
+    pub.maybe_publish({"timestamp": "2026-10-17T10:00:00Z", "event": "CodexEntry", "EntryID": 1,
+                       "System": "Elsewhere", "SystemAddress": 42}, "Sol", (0.0, 0.0, 0.0), 10477373803)
+    assert pub._queue.empty()
+
+
+def test_watcher_passes_session_loadgame_with_bootstrap(tmp_path):
+    from edc.core.journal_watcher import JournalWatcher
+    j = tmp_path / "Journal.2026-10-17T100000.01.log"
+    j.write_text('{"event":"Fileheader"}\n{"event":"LoadGame","Horizons":true,"Odyssey":true}\n'
+                 + '{"event":"Music"}\n' * 20000)
+    assert JournalWatcher._load_game(j) == {"event": "LoadGame", "Horizons": True, "Odyssey": True}

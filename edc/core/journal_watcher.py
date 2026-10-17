@@ -94,10 +94,28 @@ class JournalWatcher(QObject):
         self._cleanup()
         self._current_file = path
         self._fp = path.open("r", encoding="utf-8", errors="replace")
-        self.event_received.emit({"event": "_BootstrapStart"})
+        # The bootstrap below only re-reads the file's tail; LoadGame (the EDDN
+        # horizons/odyssey source) sits at the top, so pass it along here.
+        self.event_received.emit({"event": "_BootstrapStart", "LoadGame": self._load_game(path)})
         self._bootstrap_newest_system()
         self.event_received.emit({"event": "_BootstrapEnd"})
         self.status.emit(f"Tailing: {path.name}")
+
+    @staticmethod
+    def _load_game(path: Path, max_lines: int = 50) -> Optional[Dict[str, Any]]:
+        """The session's LoadGame event (within the file's first lines), or None."""
+        try:
+            with path.open("r", encoding="utf-8", errors="replace") as f:
+                for _ in range(max_lines):
+                    line = f.readline()
+                    if not line:
+                        break
+                    if '"LoadGame"' in line:
+                        evt = json.loads(line)
+                        return evt if evt.get("event") == "LoadGame" else None
+        except (OSError, ValueError):
+            pass
+        return None
 
     def _bootstrap_newest_system(self, max_bytes: int = 256 * 1024, max_events: int = 800) -> None:
         if not self._fp or not self._current_file:

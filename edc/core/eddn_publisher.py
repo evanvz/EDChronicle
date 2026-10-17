@@ -6,7 +6,7 @@
 Data Network, the same feed Spansh/EDSM/Inara consume from. Two schemas:
 
 - journal/1 — Docked, FSDJump, Scan, Location, SAASignalsFound,
-  CarrierJump, CodexEntry events. Everything else is silently skipped
+  CarrierJump events. CodexEntry goes to its own codexentry/1 schema. Everything else is silently skipped
   (not an error — most journal events simply aren't part of this schema).
   Reference: https://github.com/EDCD/EDDN/blob/live/schemas/journal-v1.0.json
 - commodity/3 — the player's own market visits (Market.json), built via
@@ -34,6 +34,9 @@ _SCHEMA_REF = "https://eddn.edcd.io/schemas/journal/1"
 _COMMODITY_SCHEMA_REF = "https://eddn.edcd.io/schemas/commodity/3"
 _FCMATERIALS_SCHEMA_REF = "https://eddn.edcd.io/schemas/fcmaterials_journal/1"
 _FSSBODYSIGNALS_SCHEMA_REF = "https://eddn.edcd.io/schemas/fssbodysignals/1"
+_CODEXENTRY_SCHEMA_REF = "https://eddn.edcd.io/schemas/codexentry/1"
+# codexentry-v1.0.json: personal data, never sent
+_CODEX_DISALLOWED = {"IsNewEntry", "NewTraitsDiscovered"}
 
 _ALLOWED_EVENTS = {"Docked", "FSDJump", "Scan", "Location", "SAASignalsFound", "CarrierJump", "CodexEntry"}
 
@@ -102,6 +105,9 @@ def build_message(
         return None
 
     msg = _strip_localised(copy.deepcopy(event))
+
+    if name == "CodexEntry":
+        return _build_codex_message(msg, star_pos, system_address)
 
     for key in _TOP_LEVEL_DISALLOWED:
         msg.pop(key, None)
@@ -212,6 +218,21 @@ def build_fssbodysignals_message(
     }
     if isinstance(body_name, str) and body_name:
         msg["BodyName"] = body_name
+    return msg
+
+
+def _build_codex_message(msg: Dict[str, Any], star_pos, system_address) -> Optional[Dict[str, Any]]:
+    """codexentry/1 body: the event already carries System/SystemAddress; add
+    StarPos only when SystemAddress matches our tracked system (Developers.md
+    location cross-check). BodyID/BodyName are dropped -- the schema allows them
+    only after a Status.json cross-check we don't do (codexentry-README:37-103)."""
+    for key in _CODEX_DISALLOWED | {"BodyID", "BodyName"}:
+        msg.pop(key, None)
+    if not (isinstance(msg.get("System"), str) and msg["System"] and isinstance(msg.get("EntryID"), int)
+            and isinstance(msg.get("SystemAddress"), int) and msg["SystemAddress"] == system_address
+            and isinstance(star_pos, (list, tuple)) and len(star_pos) == 3):
+        return None
+    msg["StarPos"] = list(star_pos)
     return msg
 
 
@@ -496,9 +517,10 @@ class EddnPublisher:
         msg = build_message(event, star_system, star_pos, system_address)
         if msg is None:
             return
+        self._apply_horizons_odyssey(msg)
 
         payload = {
-            "$schemaRef": _SCHEMA_REF,
+            "$schemaRef": _CODEXENTRY_SCHEMA_REF if event.get("event") == "CodexEntry" else _SCHEMA_REF,
             "header": {
                 "uploaderID": self._commander,
                 "softwareName": _SOFTWARE_NAME,
