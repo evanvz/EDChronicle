@@ -1797,6 +1797,13 @@ class Repository:
         )
         self.db.conn.commit()
 
+    def get_codex_name(self, entry_id: int) -> Optional[str]:
+        """English name ("Stratum Paleas - Emerald") for a Codex EntryID, from our own codex log."""
+        row = self.db.conn.execute(
+            "SELECT codex_name FROM codex_entries WHERE codex_entry_id = ? AND codex_name <> '' LIMIT 1", (entry_id,)
+        ).fetchone()
+        return row[0] if row else None
+
     def get_codex_species_sightings_for_system(self, system_address: int) -> dict[int, dict]:
         """{body_id: {"species_name": str, "last_seen": str}} for every body
         in this system another commander (or us, via our own EDDN publish

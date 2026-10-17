@@ -57,7 +57,7 @@ _FACTION_DISALLOWED = {"HappiestSystem", "HomeSystem", "MyReputation", "Squadron
 _NONMARKETABLE_SYMBOL = "drones"
 
 _SOFTWARE_NAME = "EDChronicle"
-_SOFTWARE_VERSION = "1.0.0"
+_SOFTWARE_VERSION = "1.0.1"  # 1.0.1: horizons/odyssey flags + codexentry/1 (eddnvalid scorecard)
 
 _RETRY_DELAY_SECONDS = 60
 _RETRY_MAX_ATTEMPTS = 5  # a poisoned message must not cycle the queue forever

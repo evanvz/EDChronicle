@@ -180,6 +180,11 @@ class EddnMarketCache:
         system_address = msg.get("SystemAddress")
         body_id = msg.get("BodyID")
         name_localised = msg.get("Name_Localised")
+        if not name_localised and self._repo is not None and isinstance(msg.get("EntryID"), int):
+            # codexentry/1 carries no localised name. ponytail: resolved only for
+            # entries in our own codex log (codex_entries); unknown ones are skipped
+            # until we've logged that variant ourselves.
+            name_localised = self._repo.get_codex_name(msg["EntryID"])
         if not (isinstance(system_address, int) and isinstance(body_id, int) and name_localised):
             return
         self._codex_buffer[(system_address, body_id)] = (

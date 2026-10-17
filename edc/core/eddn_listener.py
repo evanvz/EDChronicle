@@ -27,6 +27,7 @@ _RELAY_URL = "tcp://eddn.edcd.io:9500"
 _JOURNAL_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/journal/"
 _COMMODITY_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/commodity/"
 _FCMATERIALS_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/fcmaterials_journal/"
+_CODEXENTRY_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/codexentry/"
 _RELEVANT_EVENTS = {"FSDJump", "Location", "CarrierJump", "Docked", "CodexEntry", "Scan"}
 _RECV_TIMEOUT_MS = 5000
 _RECONNECT_DELAY_S = 5
@@ -288,6 +289,17 @@ class EddnPowerPlayWorker(QObject):
                 msg = data.get("message")
                 if isinstance(msg, dict):
                     self._maybe_emit_body_signals(msg)
+                continue
+
+            if schema.startswith(_CODEXENTRY_SCHEMA_PREFIX):
+                # Where compliant senders put CodexEntry (journal/1 is the wrong
+                # schema for it); no *_Localised names here, the cache resolves
+                # the name from EntryID.
+                self._stats["other"] += 1
+                msg = data.get("message")
+                if (isinstance(msg, dict) and "biology" in str(msg.get("Category") or "").lower()
+                        and isinstance(msg.get("SystemAddress"), int) and isinstance(msg.get("BodyID"), int)):
+                    self.codex_entry_seen.emit(msg)
                 continue
 
             if not schema.startswith(_JOURNAL_SCHEMA_PREFIX):
