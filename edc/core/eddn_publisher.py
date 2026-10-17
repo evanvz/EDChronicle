@@ -37,6 +37,8 @@ _FSSBODYSIGNALS_SCHEMA_REF = "https://eddn.edcd.io/schemas/fssbodysignals/1"
 _CODEXENTRY_SCHEMA_REF = "https://eddn.edcd.io/schemas/codexentry/1"
 _OUTFITTING_SCHEMA_REF = "https://eddn.edcd.io/schemas/outfitting/2"
 _SHIPYARD_SCHEMA_REF = "https://eddn.edcd.io/schemas/shipyard/2"
+_FSSSIGNAL_SCHEMA_REF = "https://eddn.edcd.io/schemas/fsssignaldiscovered/1"
+_ARRIVAL_EVENTS = ("Location", "FSDJump", "CarrierJump")
 # codexentry-v1.0.json: personal data, never sent
 _CODEX_DISALLOWED = {"IsNewEntry", "NewTraitsDiscovered"}
 
@@ -397,6 +399,29 @@ def build_shipyard_message(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return msg
 
 
+def build_fsssignal_message(signals: list, star_system: str, star_pos, system_address) -> Optional[Dict[str, Any]]:
+    """fsssignaldiscovered/1 body from a contiguous run of FSSSignalDiscovered
+    events (fsssignaldiscovered-README): each signal must match the tracked
+    SystemAddress; mission-target USS dropped; event, SystemAddress,
+    TimeRemaining and *_Localised removed from each signal."""
+    if not (star_system and isinstance(system_address, int)
+            and isinstance(star_pos, (list, tuple)) and len(star_pos) == 3):
+        return None
+    out = []
+    for evt in signals:
+        if evt.get("SystemAddress") != system_address or evt.get("USSType") == "$USS_Type_MissionTarget;":
+            continue
+        sig = _strip_localised(copy.deepcopy(evt))
+        for key in ("event", "SystemAddress", "TimeRemaining"):
+            sig.pop(key, None)
+        if isinstance(sig.get("timestamp"), str) and isinstance(sig.get("SignalName"), str):
+            out.append(sig)
+    if not out:
+        return None
+    return {"event": "FSSSignalDiscovered", "timestamp": out[0]["timestamp"], "SystemAddress": system_address,
+            "StarSystem": star_system, "StarPos": list(star_pos), "signals": out}
+
+
 def build_fcmaterials_message(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
     Returns an fcmaterials_journal/1-schema-compliant "message" body built
@@ -493,6 +518,7 @@ class EddnPublisher:
         self._gameversion: str = ""
         self._gamebuild: str = ""
         self._is_beta: bool = False
+        self._signal_run: list = []   # contiguous FSSSignalDiscovered events awaiting a batch
 
         self._queue: "queue.Queue[Dict[str, Any]]" = queue.Queue(maxsize=_QUEUE_MAX)
         self._thread: Optional[threading.Thread] = None
@@ -660,6 +686,42 @@ class EddnPublisher:
             self._queue.put_nowait(payload)
         except queue.Full:
             log.warning("EDDN publish queue full — dropping commodity message")
+
+    def batch_signals(self, event: Dict[str, Any], star_system: str, star_pos, system_address) -> None:
+        """Call for every live event. FSSSignalDiscovered events are held; the
+        first other event sends them as one message, located by that event if
+        it's an arrival (Odyssey writes signals before it), else by the tracked
+        system (fsssignaldiscovered-README "Batching")."""
+        if event.get("event") == "FSSSignalDiscovered":
+            self._signal_run.append(event)
+            return
+        if not self._signal_run:
+            return
+        run, self._signal_run = self._signal_run, []
+        if event.get("event") in _ARRIVAL_EVENTS:
+            star_system, star_pos, system_address = (event.get("StarSystem"), event.get("StarPos"),
+                                                     event.get("SystemAddress"))
+        if self._is_beta or not self._commander:
+            return
+        msg = build_fsssignal_message(run, star_system, star_pos, system_address)
+        if msg is None:
+            return
+        self._apply_horizons_odyssey(msg)
+        payload = {
+            "$schemaRef": _FSSSIGNAL_SCHEMA_REF,
+            "header": {
+                "uploaderID": self._commander,
+                "softwareName": _SOFTWARE_NAME,
+                "softwareVersion": _SOFTWARE_VERSION,
+                "gameversion": self._gameversion,
+                "gamebuild": self._gamebuild,
+            },
+            "message": msg,
+        }
+        try:
+            self._queue.put_nowait(payload)
+        except queue.Full:
+            log.warning("EDDN publish queue full — dropping fsssignaldiscovered message")
 
     def maybe_publish_station_list(self, kind: str, data: Dict[str, Any]) -> None:
         """kind "outfitting" (Outfitting.json) or "shipyard" (Shipyard.json)."""
