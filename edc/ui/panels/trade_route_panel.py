@@ -12,17 +12,17 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QObject, QThread, pyqtSignal
-from PyQt6.QtGui import QColor
+from PyQt6.QtCore import Qt, QObject, QStringListModel, QThread, pyqtSignal
+from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit,
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QCompleter,
     QSpinBox, QComboBox, QCheckBox, QTableWidget, QTableWidgetItem, QHeaderView, QFrame, QTabWidget,
 )
 
 from edc.core.bgs_tasks import is_rival_power
 from edc.core.mission_cargo import cargo_needs, pick_sources
 from edc.core.trade_routes import (
-    destination_pp_status, find_point_to_point_trades, find_supply_for_destination, find_trade_loops,
+    _parse_ts, destination_pp_status, find_point_to_point_trades, find_supply_for_destination, find_trade_loops,
     station_from_market_items,
 )
 from edc.ui.busy_spinner import BusySpinner
@@ -32,6 +32,22 @@ from edc.ui.style import CARD_STYLE as _CARD_STYLE, LABEL_STYLE as _LABEL_STYLE,
 log = logging.getLogger(__name__)
 
 _PAD_RANK = {"S": 1, "M": 2, "L": 3}
+_STATION_SEP = " — "   # "System — Station" in the autocomplete and typed fields
+
+
+def _split_place(text: str) -> tuple:
+    """"System — Station" or "System" -> (system, station or "")."""
+    system, _sep, station = (text or "").partition(_STATION_SEP)
+    return system.strip(), station.strip()
+
+
+def _contains_completer(completer: QCompleter) -> QCompleter:
+    """Suggestions that match anywhere in the name, any case, as a popup."""
+    completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+    completer.setFilterMode(Qt.MatchFlag.MatchContains)
+    completer.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
+    completer.setMaxVisibleItems(12)
+    return completer
 # EDDN demandBracket; BGS trade wants High (SINC Complete BGS Guide 2024).
 _DEMAND_LEVELS = {1: "Low", 2: "Med", 3: "High"}
 
@@ -233,12 +249,27 @@ class _PointToPointWorker(QObject):
     project's cross-thread rule, one-shot per search click."""
     finished = pyqtSignal(list, str)  # (results, error)
 
-    def __init__(self, db_path, origin_items, destination_system, cargo_capacity):
+    def __init__(self, db_path, origin_items, destination, cargo_capacity, origin="", docked_station=""):
+        """destination/origin: "System" or "System — Station". origin "" means
+        the docked market (origin_items, from Market.json)."""
         super().__init__()
         self._db_path = db_path
         self._origin_items = origin_items
-        self._destination_system = destination_system
+        self._destination = destination
         self._cargo_capacity = cargo_capacity
+        self._origin = origin
+        self._docked_station = docked_station
+
+    @staticmethod
+    def _stations(repo, place: str):
+        """Market snapshot for a typed place, narrowed to its station if one
+        was picked; (stations, label)."""
+        system, station = _split_place(place)
+        system = repo.resolve_system_name_case_insensitive(system) or system
+        stations = repo.get_market_snapshot_for_systems([system])
+        if station:
+            stations = {k: v for k, v in stations.items() if v["station_name"].lower() == station.lower()}
+        return stations, (f"{station} ({system})" if station else system)
 
     def run(self):
         from persistence.database import Database
@@ -247,15 +278,38 @@ class _PointToPointWorker(QObject):
         db = Database(self._db_path)
         try:
             repo = Repository(db)
-            resolved = repo.resolve_system_name_case_insensitive(self._destination_system)
-            destination = resolved or self._destination_system
-            stations = repo.get_market_snapshot_for_systems([destination])
+            stations, dest_label = self._stations(repo, self._destination)
             if not stations:
-                self.finished.emit([], f"No market data for {destination} yet.")
+                self.finished.emit([], f"No market data for {dest_label} yet.")
                 return
-            results = find_point_to_point_trades(
-                self._origin_items, stations, self._cargo_capacity,
-            )
+            if not self._origin:
+                results = find_point_to_point_trades(self._origin_items, stations, self._cargo_capacity)
+                for r in results:
+                    r["buy_station_name"] = self._docked_station
+            else:
+                origins, origin_label = self._stations(repo, self._origin)
+                if not origins:
+                    self.finished.emit([], f"No market data for {origin_label} yet.")
+                    return
+                results = []
+                now = datetime.now(timezone.utc)
+                display = repo.get_commodity_display_name_map()
+                for o in origins.values():
+                    # EDDN buys {commodity: (buy_price, stock, last_updated)} as origin items
+                    items, ages = [], {}
+                    for c, (bp, stock, ts) in o["buys"].items():
+                        name = display.get(c) or (c if c != c.lower() else c.title())
+                        items.append({"name": name, "symbol": c, "buy_price": bp, "stock": stock})
+                        ages[name] = ts
+                    for r in find_point_to_point_trades(items, stations, self._cargo_capacity):
+                        r["buy_station_name"] = o["station_name"]
+                        bought = _parse_ts(ages.get(r["commodity"]))
+                        if bought:   # the older of the two prices decides the row's age
+                            buy_age = (now - bought).total_seconds() / 3600.0
+                            r["data_age_hours"] = max(r["data_age_hours"] or 0.0, buy_age)
+                        results.append(r)
+                results.sort(key=lambda r: r["total_profit"], reverse=True)
+                results = results[:15]
         except Exception as exc:
             log.exception("Point-to-point trade search failed")
             self.finished.emit([], str(exc))
@@ -263,6 +317,32 @@ class _PointToPointWorker(QObject):
         finally:
             db.close()
         self.finished.emit(results, "")
+
+
+class _StationNamesWorker(QObject):
+    """Every system and "System — Station" with market data, for the
+    Point-to-Point autocomplete -- one slow read, once per session."""
+    finished = pyqtSignal(list)
+
+    def __init__(self, db_path):
+        super().__init__()
+        self._db_path = db_path
+
+    def run(self):
+        from persistence.database import Database
+        from persistence.repository import Repository
+
+        names: list = []
+        db = Database(self._db_path)
+        try:
+            pairs = Repository(db).get_market_station_names()
+            names = sorted({s for s, _ in pairs} | {f"{s}{_STATION_SEP}{st}" for s, st in pairs},
+                           key=str.lower)
+        except Exception:
+            log.exception("Failed to load station names for autocomplete")
+        finally:
+            db.close()
+        self.finished.emit(names)
 
 
 class _SellHereWorker(QObject):
@@ -391,6 +471,11 @@ class TradeRoutePanel(QWidget):
         self._sell_worker: Optional[_SellHereWorker] = None
         self._sell_market: Optional[dict] = None   # last docked market: id, names, station, system, xyz
         self._sell_signature = None                 # market contents last searched
+        self._sell_docked = ("", "")                # (station, system) docked now, for buy-here highlighting
+        # Autocomplete for Point-to-Point (systems and "System — Station" with market data)
+        self._place_model = QStringListModel(self)
+        self._names_thread: Optional[QThread] = None
+        self._names_worker: Optional[_StationNamesWorker] = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 8)
@@ -533,8 +618,9 @@ class TradeRoutePanel(QWidget):
         p2p_l.addWidget(p2p_hdr)
 
         p2p_note = QLabel(
-            "What to buy here and sell at a specific destination -- the destination field "
-            "auto-fills from your plotted route if one exists, or type a system name."
+            "What to buy and where to sell it. From: leave empty to buy at the station you're docked at "
+            "(its live market), or type a system or pick a station (EDDN prices). Destination: auto-fills "
+            "from your plotted route, or type a system or pick a station. Suggestions match anywhere in the name."
         )
         p2p_note.setWordWrap(True)
         p2p_note.setStyleSheet("color:#9aa4b0; font-size:11px; background:transparent; border:none;")
@@ -546,12 +632,21 @@ class TradeRoutePanel(QWidget):
 
         p2p_row = QHBoxLayout()
         p2p_row.setSpacing(8)
+        from_label = QLabel("From:")
+        from_label.setStyleSheet(_LABEL_STYLE)
+        self._from_edit = QLineEdit()
+        self._from_edit.setPlaceholderText("Docked station (leave empty), or a system / station")
+        self._from_edit.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
+        self._from_edit.setCompleter(_contains_completer(QCompleter(self._place_model, self)))
+        self._from_edit.textChanged.connect(lambda _t: self._update_p2p_button())
         dest_label = QLabel("Destination:")
         dest_label.setStyleSheet(_LABEL_STYLE)
         self._dest_edit = QLineEdit()
-        self._dest_edit.setPlaceholderText("System name")
+        self._dest_edit.setPlaceholderText("System, or pick a station")
         self._dest_edit.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
+        self._dest_edit.setCompleter(_contains_completer(QCompleter(self._place_model, self)))
         self._dest_edit.textEdited.connect(self._on_dest_edited)
+        self._dest_edit.textChanged.connect(lambda _t: self._update_p2p_button())
         self._p2p_search_btn = QPushButton("Search")
         self._p2p_search_btn.setStyleSheet(
             "QPushButton { background:#1a3a5a; color:#FFB347; border:1px solid #2a5a8a;"
@@ -560,19 +655,22 @@ class TradeRoutePanel(QWidget):
             "QPushButton:disabled { background:#111; color:#555; border-color:#333; }"
         )
         self._p2p_search_btn.clicked.connect(self._start_p2p_search)
+        p2p_row.addWidget(from_label)
+        p2p_row.addWidget(self._from_edit, 1)
         p2p_row.addWidget(dest_label)
         p2p_row.addWidget(self._dest_edit, 1)
         p2p_row.addWidget(self._p2p_search_btn)
         p2p_l.addLayout(p2p_row)
 
-        self._p2p_status_label = QLabel("Dock at a station and enter a destination, then press Search.")
+        self._p2p_status_label = QLabel("Enter a destination (and a From, unless you're docked), then press Search.")
         self._p2p_status_label.setStyleSheet("color:#888888; font-size:12px; background:transparent;")
         p2p_l.addWidget(self._p2p_status_label)
 
         self._p2p_table = QTableWidget()
-        self._p2p_table.setColumnCount(9)
+        self._p2p_table.setColumnCount(10)
         self._p2p_table.setHorizontalHeaderLabels(
-            ["Commodity", "Sell Station", "System", "Buy", "Sell", "Profit/u", "Qty", "Total Profit", "Data Age"]
+            ["Commodity", "Buy Station", "Sell Station", "Sell System", "Buy", "Sell", "Profit/u", "Qty",
+             "Total Profit", "Data Age"]
         )
         self._p2p_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._p2p_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -588,9 +686,9 @@ class TradeRoutePanel(QWidget):
             "QTableWidget::item:selected { background:#1a3a5a; color:#FFB347; }"
         )
         p2p_h = self._p2p_table.horizontalHeader()
-        for c in (0, 1, 2):
+        for c in (0, 1, 2, 3):
             p2p_h.setSectionResizeMode(c, QHeaderView.ResizeMode.Stretch)
-        for c in (3, 4, 5, 6, 7, 8):
+        for c in range(4, 10):
             p2p_h.setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
         self._p2p_table.cellClicked.connect(self._on_p2p_cell_clicked)
         p2p_l.addWidget(self._p2p_table, 1)
@@ -606,6 +704,26 @@ class TradeRoutePanel(QWidget):
         self._tabs.addTab(self._build_bgs_card(), "BGS Supply Run")
         self._tabs.addTab(self._build_mission_cargo_card(), "Mission Cargo")
         root.addWidget(self._tabs, 1)
+        self._load_place_names()
+
+    def _load_place_names(self) -> None:
+        """Fills the autocomplete once, off the UI thread (~10 s on the live cache)."""
+        self._names_worker = _StationNamesWorker(self._repo.db.db_path)
+        self._names_thread = QThread()
+        self._names_worker.moveToThread(self._names_thread)
+        self._names_thread.started.connect(self._names_worker.run)
+        self._names_worker.finished.connect(self._place_model.setStringList)
+        self._names_worker.finished.connect(self._names_thread.quit, Qt.ConnectionType.DirectConnection)
+        self._names_thread.start()
+
+    def _update_p2p_button(self) -> None:
+        """Search needs a destination, cargo capacity and an origin: the docked
+        market, or a typed From. Runs as you type, not only on refresh."""
+        self._p2p_search_btn.setEnabled(
+            bool(self._dest_edit.text().strip())
+            and (bool(self._from_edit.text().strip()) or bool(self._origin_items))
+            and isinstance(self._cargo_capacity, int) and self._cargo_capacity > 0
+        )
 
     def refresh(self, state) -> None:
         """Cheap, safe to call on every general refresh — just updates the
@@ -639,10 +757,7 @@ class TradeRoutePanel(QWidget):
             elif not route_target and not self._dest_user_edited:
                 self._dest_edit.clear()
 
-        self._p2p_search_btn.setEnabled(
-            bool(self._origin_items) and bool(self._dest_edit.text().strip())
-            and isinstance(self._cargo_capacity, int) and self._cargo_capacity > 0
-        )
+        self._update_p2p_button()
 
         self._update_sell_market(state)
         self._update_mission_cargo(state)
@@ -703,8 +818,15 @@ class TradeRoutePanel(QWidget):
             "QPushButton:disabled { background:#111; color:#555; border-color:#333; }")
         self._sell_search_btn.setEnabled(False)
         self._sell_search_btn.clicked.connect(self._start_sell_search)
+        self._sell_pin_check = QCheckBox("Keep this destination")
+        self._sell_pin_check.setStyleSheet(_LABEL_STYLE)
+        self._sell_pin_check.setToolTip(
+            "Keep this station as the place to sell while you fly to a buy station. Docking somewhere else "
+            "won't replace it, and rows for the station you're docked at are highlighted: buy those here. "
+            "Its demand is the snapshot from your last visit. Untick to use the station you're docked at.")
+        self._sell_pin_check.toggled.connect(lambda _on: self._mark_buy_here_rows())
         for w in (near_label, self._sell_near_combo, self._sell_range_spin, pad_label,
-                  self._sell_pad_combo, self._sell_search_btn):
+                  self._sell_pad_combo, self._sell_search_btn, self._sell_pin_check):
             opt_row.addWidget(w)
         opt_row.addStretch(1)
         lay.addLayout(opt_row)
@@ -750,23 +872,52 @@ class TradeRoutePanel(QWidget):
         market_id = getattr(state, "current_market_id", None)
         system = (getattr(state, "current_market_system", None) or "").strip()
         station = (getattr(state, "current_market_station", None) or "").strip()
-        if items and isinstance(market_id, int) and system and system == self._system:
+        pinned = self._sell_pin_check.isChecked() and self._sell_market is not None
+        docked_station = (getattr(state, "station_name", None) or "").strip()
+        if not pinned and items and isinstance(market_id, int) and system and system == self._system:
             signature = (market_id, tuple((i.get("symbol"), i.get("sell_price"), i.get("demand")) for i in items))
             if signature != self._sell_signature:
                 self._sell_signature = signature
                 ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
                 self._sell_market = {"market_id": market_id, "station": station, "system": system,
                                      "xyz": (self._ref_x, self._ref_y, self._ref_z),
-                                     "dest": station_from_market_items(items, ts)}
+                                     "dest": station_from_market_items(items, ts), "read_at": ts}
                 self._start_sell_search()
         if self._sell_market:
-            docked = (getattr(state, "station_name", None) or "").strip() == self._sell_market["station"]
+            docked = docked_station == self._sell_market["station"]
             n = len(self._sell_market["dest"]["sells"])
-            self._sell_station_label.setText(
-                f"{'Docked at' if docked else 'Last docked at'} {self._sell_market['station']} "
-                f"({self._sell_market['system']}) — buying {n} commodit{'y' if n == 1 else 'ies'} with demand.")
+            if pinned and not docked:
+                text = (f"Selling at {self._sell_market['station']} ({self._sell_market['system']}) — kept; "
+                        f"demand as of {self._sell_market['read_at'][11:16]} UTC, "
+                        f"{n} commodit{'y' if n == 1 else 'ies'}.")
+            else:
+                text = (f"{'Docked at' if docked else 'Last docked at'} {self._sell_market['station']} "
+                        f"({self._sell_market['system']}) — buying {n} commodit{'y' if n == 1 else 'ies'} with demand.")
+            self._sell_station_label.setText(text)
+        self._sell_docked = (docked_station, self._system)
+        self._mark_buy_here_rows()
         self._sell_search_btn.setEnabled(bool(self._sell_market) and isinstance(self._cargo_capacity, int)
                                          and self._cargo_capacity > 0)
+
+    def _mark_buy_here_rows(self) -> None:
+        """While the destination is kept, highlight the rows you can buy at
+        the station you're docked at (Buy Station and Buy System match)."""
+        station, system = self._sell_docked
+        on = self._sell_pin_check.isChecked() and bool(station) and self._sell_market is not None
+        hits = 0
+        for row in range(self._sell_table.rowCount()):
+            st, sy = self._sell_table.item(row, 1), self._sell_table.item(row, 2)
+            match = (on and st is not None and sy is not None
+                     and st.text().lower() == station.lower() and sy.text().lower() == system.lower())
+            hits += match
+            for col in range(self._sell_table.columnCount()):
+                it = self._sell_table.item(row, col)
+                if it is not None:
+                    it.setBackground(QColor("#1f3d1f") if match else QBrush())
+        if hits:
+            self._sell_status_label.setText(
+                f"You're docked at a buy station: {hits} highlighted row{'s' if hits != 1 else ''} — buy here "
+                f"and sell at {self._sell_market['station']}.")
 
     def _start_sell_search(self) -> None:
         m = self._sell_market
@@ -816,6 +967,7 @@ class TradeRoutePanel(QWidget):
             f"Found {len(results)} commodit{'y' if len(results) == 1 else 'ies'} you can buy nearby and sell "
             f"here at a profit.")
         _fill_supply_table(self._sell_table, results)
+        self._mark_buy_here_rows()
 
     # --- Mission Cargo: what active cargo missions still need, and where to buy it ---
 
@@ -1158,11 +1310,13 @@ class TradeRoutePanel(QWidget):
 
     def _start_p2p_search(self) -> None:
         destination = self._dest_edit.text().strip()
+        origin = self._from_edit.text().strip()
         if not destination:
             self._p2p_status_label.setText("Enter a destination system first.")
             return
-        if not self._origin_items:
-            self._p2p_status_label.setText("No origin market data yet — dock and open the Commodities screen.")
+        if not origin and not self._origin_items:
+            self._p2p_status_label.setText(
+                "Type a From system or station, or dock and open the Commodities screen to buy where you are.")
             return
         if not isinstance(self._cargo_capacity, int) or self._cargo_capacity <= 0:
             self._p2p_status_label.setText("Cargo capacity unknown yet — undock or check the outfitting screen once.")
@@ -1171,12 +1325,14 @@ class TradeRoutePanel(QWidget):
             return
 
         self._p2p_search_btn.setEnabled(False)
-        self._p2p_status_label.setText(f"Searching for trades to {destination}…")
+        self._p2p_status_label.setText(
+            f"Searching for trades from {origin or self._origin_station or 'here'} to {destination}…")
         self._p2p_table.setRowCount(0)
         self._p2p_loading_spinner.start_over(self)
 
         self._p2p_worker = _PointToPointWorker(
             self._repo.db.db_path, self._origin_items, destination, self._cargo_capacity,
+            origin=origin, docked_station=self._origin_station,
         )
         if self._p2p_thread is not None:
             self._p2p_thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
@@ -1188,10 +1344,7 @@ class TradeRoutePanel(QWidget):
         self._p2p_thread.start()
 
     def _on_p2p_results(self, results: list, error: str) -> None:
-        self._p2p_search_btn.setEnabled(
-            bool(self._origin_items) and bool(self._dest_edit.text().strip())
-            and isinstance(self._cargo_capacity, int) and self._cargo_capacity > 0
-        )
+        self._update_p2p_button()
         self._p2p_loading_spinner.stop()
         if error:
             self._p2p_status_label.setText(error)
@@ -1206,6 +1359,7 @@ class TradeRoutePanel(QWidget):
         self._p2p_table.setRowCount(len(results))
         for row, r in enumerate(results):
             commodity_item = QTableWidgetItem(r["commodity"])
+            buy_station_item = QTableWidgetItem(r.get("buy_station_name") or "")
             station_item = QTableWidgetItem(r["sell_station_name"])
             system_item = QTableWidgetItem(r["sell_system_name"])
             buy_item = _NumericTableWidgetItem(f"{r['buy_price']:,}", float(r["buy_price"]))
@@ -1226,20 +1380,14 @@ class TradeRoutePanel(QWidget):
             for it in (buy_item, sell_item, profit_item, qty_item, total_item, age_item):
                 it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
-            self._p2p_table.setItem(row, 0, commodity_item)
-            self._p2p_table.setItem(row, 1, station_item)
-            self._p2p_table.setItem(row, 2, system_item)
-            self._p2p_table.setItem(row, 3, buy_item)
-            self._p2p_table.setItem(row, 4, sell_item)
-            self._p2p_table.setItem(row, 5, profit_item)
-            self._p2p_table.setItem(row, 6, qty_item)
-            self._p2p_table.setItem(row, 7, total_item)
-            self._p2p_table.setItem(row, 8, age_item)
+            for col, it in enumerate((commodity_item, buy_station_item, station_item, system_item, buy_item,
+                                      sell_item, profit_item, qty_item, total_item, age_item)):
+                self._p2p_table.setItem(row, col, it)
         self._p2p_table.setSortingEnabled(True)
-        self._p2p_table.sortItems(7, Qt.SortOrder.DescendingOrder)
+        self._p2p_table.sortItems(8, Qt.SortOrder.DescendingOrder)
 
     def _on_p2p_cell_clicked(self, row: int, column: int) -> None:
-        if column not in (1, 2):
+        if column not in (1, 2, 3):
             return
         item = self._p2p_table.item(row, column)
         if item and item.text():
@@ -1283,7 +1431,8 @@ class TradeRoutePanel(QWidget):
         self._bgs_dest_combo = QComboBox()
         self._bgs_dest_combo.setEditable(True)
         self._bgs_dest_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-        self._bgs_dest_combo.lineEdit().setPlaceholderText("Pick a station, or type a system name")
+        self._bgs_dest_combo.lineEdit().setPlaceholderText("Pick a station, or type part of a system or station name")
+        _contains_completer(self._bgs_dest_combo.completer())
         self._bgs_dest_combo.setStyleSheet(field_style)
         self._bgs_dest_combo.activated.connect(lambda _i: setattr(self, "_bgs_user_picked", True))
         self._bgs_dest_combo.lineEdit().textEdited.connect(lambda _t: setattr(self, "_bgs_user_picked", True))
@@ -1408,7 +1557,12 @@ class TradeRoutePanel(QWidget):
         idx = self._bgs_dest_combo.findText(text)
         if idx >= 0:
             return self._bgs_dest_combo.itemData(idx), None
-        stations = [d for d in self._bgs_destinations if (d["system_name"] or "").lower() == text.lower()]
+        system, station = _split_place(text)
+        stations = [d for d in self._bgs_destinations
+                    if (d["system_name"] or "").lower() == system.lower()
+                    and (not station or (d["station_name"] or "").lower() == station.lower())]
+        if not stations:   # a station name typed on its own
+            stations = [d for d in self._bgs_destinations if (d["station_name"] or "").lower() == text.lower()]
         if not stations:
             return None, f"{text}: no station controlled by your squadron faction is known there."
         ok = [d for d in stations if d["pp_status"] != "no"]

@@ -2630,6 +2630,18 @@ class Repository:
             for r in rows
         ]
 
+    def get_market_station_names(self) -> list[tuple]:
+        """(system_name, station_name) for every non-carrier station with
+        EDDN market data -- the Trade Routes autocomplete. Slow (~10 s on the
+        live cache): call it from a worker, once."""
+        return [tuple(r) for r in self.db.conn.execute(
+            """
+            SELECT DISTINCT si.system_name, si.station_name FROM net.station_info si
+            WHERE (si.station_type IS NULL OR si.station_type != 'FleetCarrier')
+              AND si.station_name NOT GLOB '[A-Z0-9][A-Z0-9][A-Z0-9]-[A-Z0-9][A-Z0-9][A-Z0-9]'
+              AND EXISTS (SELECT 1 FROM net.market_prices m WHERE m.market_id = si.market_id)
+            """)]
+
     def resolve_system_name_case_insensitive(self, name: str) -> Optional[str]:
         """Resolves a user-typed system name to its exact stored casing,
         via the much smaller system_coords table rather than a

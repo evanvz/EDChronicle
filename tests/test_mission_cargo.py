@@ -103,6 +103,7 @@ def test_panel_tab_shows_needs_nearest_cheapest_and_detail(tmp_path):
     db = Database(tmp_path / "t.db"); db.executescript(SCHEMA_SQL); db.run_migrations()
     pads = SimpleNamespace(pad_size_for=lambda ship: "L" if ship == "type9" else None)
     panel = TradeRoutePanel(Repository(db), ship_pad_table=pads)
+    panel._names_thread.wait(10000)   # autocomplete loader must finish before the panel is dropped
     active = {}
     for mid, count in ((1, 32), (2, 45), (3, 48)):
         apply_mission_event(active, _accept(mid, count=count))

@@ -49,6 +49,7 @@ def test_panel_searches_once_per_docked_market_and_keeps_last_docked(tmp_path):
     app = QApplication.instance() or QApplication([])
     db = Database(tmp_path / "t.db"); db.executescript(SCHEMA_SQL); db.run_migrations()
     panel = TradeRoutePanel(Repository(db))
+    panel._names_thread.wait(10000)   # autocomplete loader must finish before the panel is dropped
     supply = {7: {"station_name": "Cheap Gold Port", "system_name": "Near", "pad_size": "L", "x": 3.0, "y": 0.0,
                   "z": 0.0, "buys": {"Gold": (8000, 500, "2026-10-11T11:00:00Z")}}}
     state = SimpleNamespace(
