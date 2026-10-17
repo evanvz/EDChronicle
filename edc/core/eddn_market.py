@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from edc.core.eddn_publisher import _commodity_symbol
 from edc.core.station_pads import extract_station_info
@@ -81,8 +81,9 @@ def _decode_happiness(faction: Dict[str, Any]) -> Dict[str, Any]:
 
 class EddnMarketCache:
 
-    def __init__(self, repo):
+    def __init__(self, repo, codex_names: Optional[Dict[str, str]] = None):
         self._repo = repo
+        self._codex_names = codex_names or {}   # EntryID (str) -> English name, settings/codex_names.json
         self._coord_buffer: Dict[str, Tuple[str, float, float, float, str]] = {}
         self._market_buffer: Dict[Tuple[int, str], tuple] = {}
         # (system_name, faction dict, is_controlling, timestamp) keyed by
@@ -180,11 +181,12 @@ class EddnMarketCache:
         system_address = msg.get("SystemAddress")
         body_id = msg.get("BodyID")
         name_localised = msg.get("Name_Localised")
-        if not name_localised and self._repo is not None and isinstance(msg.get("EntryID"), int):
-            # codexentry/1 carries no localised name. ponytail: resolved only for
-            # entries in our own codex log (codex_entries); unknown ones are skipped
-            # until we've logged that variant ourselves.
-            name_localised = self._repo.get_codex_name(msg["EntryID"])
+        if not name_localised and isinstance(msg.get("EntryID"), int):
+            # codexentry/1 carries no localised name: Canonn's reference list
+            # first, then our own codex log for anything newer than that file.
+            name_localised = self._codex_names.get(str(msg["EntryID"]))
+            if not name_localised and self._repo is not None:
+                name_localised = self._repo.get_codex_name(msg["EntryID"])
         if not (isinstance(system_address, int) and isinstance(body_id, int) and name_localised):
             return
         self._codex_buffer[(system_address, body_id)] = (

@@ -33,3 +33,14 @@ def test_listener_routes_codexentry_schema():
     except KeyboardInterrupt:
         pass
     assert seen == [msg]
+
+
+def test_codexentry_name_from_canonn_list_before_own_log():
+    import json
+    from pathlib import Path
+    names = json.loads((Path(__file__).resolve().parents[1] / "settings" / "codex_names.json").read_text(encoding="utf-8"))["names"]
+    cache = EddnMarketCache(SimpleNamespace(get_codex_name=lambda eid: None), names)
+    cache.on_codex_entry_seen({"event": "CodexEntry", "Category": "$Codex_Category_Biology;", "SystemAddress": 42,
+                               "BodyID": 7, "EntryID": 2420201, "timestamp": "2026-10-17T10:00:00Z"})
+    assert [r[2] for r in cache._codex_buffer.values()] == ["Stratum Paleas - Emerald"]
+    assert len(names) == 816

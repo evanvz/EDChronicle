@@ -2490,7 +2490,12 @@ class MainWindow(QMainWindow):
         self._guardian_ruins_retry_timer.setInterval(10 * 60 * 1000)
         self._guardian_ruins_retry_timer.timeout.connect(self._maybe_start_guardian_ruins_refresh)
 
-        self.eddn_market_cache = EddnMarketCache(self.repo)
+        try:
+            codex_names = json.loads((settings_base / "codex_names.json").read_text(encoding="utf-8"))["names"]
+        except Exception:
+            log.exception("Failed to load codex_names.json")
+            codex_names = {}
+        self.eddn_market_cache = EddnMarketCache(self.repo, codex_names)
         self._market_flush_timer = QTimer(self)
         self._market_flush_timer.setInterval(45 * 1000)  # batch-write buffered EDDN market data periodically
         self._market_flush_timer.timeout.connect(self._on_market_flush_tick)
