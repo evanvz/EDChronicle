@@ -32,6 +32,8 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+from edc.version import USER_AGENT
+
 log = logging.getLogger(__name__)
 
 _SPHERE_URL = "https://www.edsm.net/api-v1/sphere-systems"
@@ -41,7 +43,7 @@ _TIMEOUT = 15
 # specifically -- same fix already applied elsewhere in this codebase (see
 # edc/core/edsm_faction_lookup.py's own comment for the confirmation this
 # was root-caused, not guessed).
-_USER_AGENT = "EDChronicle/1.0.0 (+https://github.com/evanvz/EDChronicle)"
+_USER_AGENT = USER_AGENT
 
 _MAX_CANDIDATES = 20
 _DEFAULT_RADIUS_LY = 15.0

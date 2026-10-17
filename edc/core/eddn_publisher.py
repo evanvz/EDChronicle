@@ -19,13 +19,17 @@ processing on the UI thread is never blocked by network I/O.
 """
 from __future__ import annotations
 
+import collections
 import copy
+import json
 import logging
 import queue
 import threading
 from typing import Any, Dict, Optional, Sequence
 
 import requests
+
+from edc.version import APP_VERSION
 
 log = logging.getLogger(__name__)
 
@@ -61,7 +65,8 @@ _FACTION_DISALLOWED = {"HappiestSystem", "HomeSystem", "MyReputation", "Squadron
 _NONMARKETABLE_SYMBOL = "drones"
 
 _SOFTWARE_NAME = "EDChronicle"
-_SOFTWARE_VERSION = "1.0.1"  # 1.0.1: horizons/odyssey flags + codexentry/1 (eddnvalid scorecard)
+_SOFTWARE_VERSION = APP_VERSION
+_RECENT_SENT_MAX = 200   # identical-message memory (the game writes some Scans twice)
 
 _RETRY_DELAY_SECONDS = 60
 _RETRY_MAX_ATTEMPTS = 5  # a poisoned message must not cycle the queue forever
@@ -519,6 +524,7 @@ class EddnPublisher:
         self._gamebuild: str = ""
         self._is_beta: bool = False
         self._signal_run: list = []   # contiguous FSSSignalDiscovered events awaiting a batch
+        self._recent_sent: "collections.OrderedDict[str, None]" = collections.OrderedDict()
 
         self._queue: "queue.Queue[Dict[str, Any]]" = queue.Queue(maxsize=_QUEUE_MAX)
         self._thread: Optional[threading.Thread] = None
@@ -608,6 +614,14 @@ class EddnPublisher:
         if msg is None:
             return
         self._apply_horizons_odyssey(msg)
+        # The game sometimes writes the same event twice (identical line, same
+        # timestamp -- seen on arrival-star AutoScans); send it once.
+        key = json.dumps(msg, sort_keys=True)
+        if key in self._recent_sent:
+            return
+        self._recent_sent[key] = None
+        if len(self._recent_sent) > _RECENT_SENT_MAX:
+            self._recent_sent.popitem(last=False)
 
         payload = {
             "$schemaRef": _CODEXENTRY_SCHEMA_REF if event.get("event") == "CodexEntry" else _SCHEMA_REF,

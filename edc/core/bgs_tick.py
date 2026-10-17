@@ -15,11 +15,13 @@ from typing import Optional
 
 import requests
 
+from edc.version import USER_AGENT
+
 log = logging.getLogger(__name__)
 
 _TICK_URL = "https://tick.edcd.io/api/tick"
 _TIMEOUT = 10
-_USER_AGENT = "EDChronicle/1.0.0 (+https://github.com/evanvz/EDChronicle)"
+_USER_AGENT = USER_AGENT
 
 
 def fetch_latest_tick() -> Optional[str]:

@@ -36,11 +36,13 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+from edc.version import USER_AGENT
+
 log = logging.getLogger(__name__)
 
 _POI_URL = "https://edastro.com/gec/json/combined"
 _TIMEOUT = 60
-_USER_AGENT = "EDChronicle/1.0.0 (+https://github.com/evanvz/EDChronicle)"
+_USER_AGENT = USER_AGENT
 
 
 class EdAstroPoiCache:

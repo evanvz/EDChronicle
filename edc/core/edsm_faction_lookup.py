@@ -22,6 +22,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
+from edc.version import USER_AGENT
+
 log = logging.getLogger(__name__)
 
 _FACTIONS_URL = "https://www.edsm.net/api-system-v1/factions"
@@ -35,7 +37,7 @@ _TIMEOUT = 20
 # previously-blocked one) that a plain, identifying UA passes every time,
 # with none of cloudscraper's ~40-60% JS-challenge-emulation flakiness.
 # Replaces the earlier cloudscraper-based bypass entirely.
-_USER_AGENT = "EDChronicle/1.0.0 (+https://github.com/evanvz/EDChronicle)"
+_USER_AGENT = USER_AGENT
 
 # Kept for genuine transient failures (network blips, EDSM-side 5xx, or a
 # single URL stuck behind a stale cached Cloudflare error — see EDSM

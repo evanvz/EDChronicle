@@ -20,11 +20,13 @@ from typing import Dict, Optional
 
 import requests
 
+from edc.version import USER_AGENT
+
 log = logging.getLogger(__name__)
 
 _URL = "https://us-central1-canonn-api-236217.cloudfunctions.net/query/get_gr_data"
 _TIMEOUT = 30
-_USER_AGENT = "EDChronicle/1.0.0 (+https://github.com/evanvz/EDChronicle)"
+_USER_AGENT = USER_AGENT
 
 
 class GuardianRuinsCache:

@@ -36,6 +36,8 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+from edc.version import USER_AGENT
+
 log = logging.getLogger(__name__)
 
 _GZIP_MAGIC = b"\x1f\x8b"
@@ -48,7 +50,7 @@ _TIMEOUT = 120
 # previously-blocked one) that a plain, identifying UA passes every time,
 # with none of cloudscraper's ~40-60% JS-challenge-emulation flakiness.
 # Replaces the earlier cloudscraper-based bypass entirely.
-_USER_AGENT = "EDChronicle/1.0.0 (+https://github.com/evanvz/EDChronicle)"
+_USER_AGENT = USER_AGENT
 
 
 class EdsmPowerPlayCache:

@@ -14,6 +14,8 @@ from typing import List, Optional, Tuple
 
 import requests
 
+from edc.version import USER_AGENT
+
 log = logging.getLogger(__name__)
 
 _NEWS_URL_FMT = (
@@ -22,7 +24,7 @@ _NEWS_URL_FMT = (
 )
 _ARTICLE_URL_FMT = "https://community.elitedangerous.com/en/galnet/uid/{guid}"
 _TIMEOUT = 10
-_USER_AGENT = "EDChronicle/1.0.0 (+https://github.com/evanvz/EDChronicle)"
+_USER_AGENT = USER_AGENT
 _DEFAULT_LIMIT = 5
 
 

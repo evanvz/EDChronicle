@@ -58,12 +58,14 @@ from typing import Dict, List, Optional
 
 import requests
 
+from edc.version import USER_AGENT
+
 log = logging.getLogger(__name__)
 
 _FEED_URL = "http://hosting.zaonce.net/powerplay-data/current/StarSystemsCurrent.csv"
 _PREP_URL = "http://hosting.zaonce.net/powerplay-data/current/PreparationCurrent.csv"
 _TIMEOUT = 60
-_USER_AGENT = "EDChronicle/1.0.0 (+https://github.com/evanvz/EDChronicle)"
+_USER_AGENT = USER_AGENT
 
 # "10 Arietis (62982)" -> "10 Arietis". Frontier's internal per-feed id in
 # the parens isn't the game's SystemAddress/id64, so it's discarded rather

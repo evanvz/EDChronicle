@@ -17,11 +17,13 @@ from typing import Optional, Tuple
 
 import requests
 
+from edc.version import USER_AGENT
+
 log = logging.getLogger(__name__)
 
 _STATUS_URL = "https://ed-server-status.orerve.net/"
 _TIMEOUT = 10
-_USER_AGENT = "EDChronicle/1.0.0 (+https://github.com/evanvz/EDChronicle)"
+_USER_AGENT = USER_AGENT
 
 
 def fetch_server_status() -> Tuple[Optional[str], Optional[str]]:

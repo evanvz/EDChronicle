@@ -164,3 +164,22 @@ def test_watcher_passes_session_loadgame_with_bootstrap(tmp_path):
     j.write_text('{"event":"Fileheader"}\n{"event":"LoadGame","Horizons":true,"Odyssey":true}\n'
                  + '{"event":"Music"}\n' * 20000)
     assert JournalWatcher._load_game(j) == {"event": "LoadGame", "Horizons": True, "Odyssey": True}
+
+
+def test_identical_journal_message_sent_once():
+    """The game writes some arrival-star AutoScans twice, identical down to the
+    timestamp (Journal.2026-10-17, 4 cases); eddnvalid counted the repeat."""
+    pub = _pub()
+    scan = {"timestamp": "2026-10-17T10:33:17Z", "event": "Scan", "ScanType": "AutoScan", "BodyName": "Sol A",
+            "BodyID": 1, "StarSystem": "Sol", "SystemAddress": 10477373803, "StarPos": [0, 0, 0], "StarType": "G"}
+    pub.maybe_publish(scan, "Sol", (0.0, 0.0, 0.0), 10477373803)
+    pub.maybe_publish(dict(scan), "Sol", (0.0, 0.0, 0.0), 10477373803)
+    pub.maybe_publish({**scan, "timestamp": "2026-10-17T10:40:00Z"}, "Sol", (0.0, 0.0, 0.0), 10477373803)  # a real rescan
+    assert pub._queue.qsize() == 2
+
+
+def test_one_version_everywhere():
+    from edc.core import bgs_tick, eddn_publisher
+    from edc.version import APP_VERSION
+    assert eddn_publisher._SOFTWARE_VERSION == APP_VERSION == "1.0.2"
+    assert bgs_tick._USER_AGENT.startswith("EDChronicle/1.0.2 ")
