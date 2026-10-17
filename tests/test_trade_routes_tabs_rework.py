@@ -66,7 +66,8 @@ def test_worker_from_eddn_station_to_destination_station():
                     "buys": {}}},
     }
     repo = SimpleNamespace(resolve_system_name_case_insensitive=lambda n: {"ekono": "Ekono", "sol": "Sol"}.get(n.lower()),
-                           get_market_snapshot_for_systems=lambda names: dict(snaps.get(names[0], {})))
+                           get_market_snapshot_for_systems=lambda names: dict(snaps.get(names[0], {})),
+                           get_commodity_display_name_map=lambda: {"gold": "Gold"})
     w = _PointToPointWorker("x", [], "sol — Abraham Lincoln", 100, origin="ekono — Lundmark Terminal")
     dest, label = w._stations(repo, "sol — Abraham Lincoln")
     assert [v["station_name"] for v in dest.values()] == ["Abraham Lincoln"] and label == "Abraham Lincoln (Sol)"
