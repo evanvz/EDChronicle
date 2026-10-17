@@ -1775,9 +1775,8 @@ class Repository:
         """
         Each record: (system_address, body_id, species_name_localised,
         species_symbol, timestamp) — from EddnMarketCache's codex buffer.
-        Species are deterministic per body, so a later sighting can only
-        ever confirm the same species again; no conflict resolution needed
-        beyond keeping the freshest timestamp.
+        One row per species on a body (a body can have several); a repeat
+        sighting only refreshes the timestamp.
         """
         if not records:
             return
@@ -1788,8 +1787,7 @@ class Repository:
                 system_address, body_id, species_name, species_symbol, last_seen
             )
             VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(system_address, body_id) DO UPDATE SET
-                species_name   = excluded.species_name,
+            ON CONFLICT(system_address, body_id, species_name) DO UPDATE SET
                 species_symbol = excluded.species_symbol,
                 last_seen      = excluded.last_seen
             """,
@@ -1804,15 +1802,18 @@ class Repository:
         ).fetchone()
         return row[0] if row else None
 
-    def get_codex_species_sightings_for_system(self, system_address: int) -> dict[int, dict]:
-        """{body_id: {"species_name": str, "last_seen": str}} for every body
+    def get_codex_species_sightings_for_system(self, system_address: int) -> dict[int, list]:
+        """{body_id: [{"species_name": str, "last_seen": str}, ...]} for every body
         in this system another commander (or us, via our own EDDN publish
         loopback) has already logged a biology CodexEntry for."""
         rows = self.db.conn.execute(
             "SELECT body_id, species_name, last_seen FROM net.codex_species_sightings WHERE system_address = ?",
             (system_address,),
         ).fetchall()
-        return {r["body_id"]: {"species_name": r["species_name"], "last_seen": r["last_seen"]} for r in rows}
+        out: dict[int, list] = {}
+        for r in rows:
+            out.setdefault(r["body_id"], []).append({"species_name": r["species_name"], "last_seen": r["last_seen"]})
+        return out
 
     def find_closest_interstellar_factors(
         self, x: float, y: float, z: float, exclude_factions: Optional[list[str]] = None,

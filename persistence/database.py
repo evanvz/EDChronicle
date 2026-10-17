@@ -529,7 +529,7 @@ class Database:
                 species_name    TEXT    NOT NULL,
                 species_symbol  TEXT,
                 last_seen       TEXT    NOT NULL,
-                PRIMARY KEY (system_address, body_id)
+                PRIMARY KEY (system_address, body_id, species_name)
             )""",
             """CREATE TABLE IF NOT EXISTS net.system_bgs_status (
                 system_address INTEGER PRIMARY KEY,
@@ -558,6 +558,16 @@ class Database:
             "ALTER TABLE net.system_bgs_status ADD COLUMN allegiance TEXT",
             "ALTER TABLE net.system_bgs_status ADD COLUMN profile_timestamp TEXT",
         ]
+        # codex_species_sightings used to hold one species per body (a body can
+        # have several) and let geology in; its rows were never valid, so an
+        # old-keyed table is dropped and rebuilt by the CREATE below.
+        try:
+            pk = [r[1] for r in self.conn.execute("PRAGMA net.table_info(codex_species_sightings)") if r[5]]
+            if pk and "species_name" not in pk:
+                self.conn.execute("DROP TABLE net.codex_species_sightings")
+                self.conn.commit()
+        except Exception:
+            pass
         for sql in personal_migrations + cache_migrations:
             try:
                 self.conn.execute(sql)

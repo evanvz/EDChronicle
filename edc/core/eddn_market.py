@@ -93,9 +93,8 @@ class EddnMarketCache:
         # Keyed by market_id — Docked sightings from any commander network-wide,
         # the same crowdsourcing model Inara/EDSM use for station-service data.
         self._station_buffer: Dict[int, Dict[str, Any]] = {}
-        # Keyed by (system_address, body_id) — biology CodexEntry sightings
-        # from any commander. Species are deterministic per body, so this
-        # tells us exactly what's on a body before we personally DSS it.
+        # Keyed by (system_address, body_id, species name) — exobiology CodexEntry
+        # sightings from any commander: what's on a body before we personally DSS it.
         self._codex_buffer: Dict[Tuple[int, int], tuple] = {}
         # Keyed by (market_id, material_symbol) -- Fleet Carrier material
         # listings from fcmaterials_journal/1 sightings, any commander's.
@@ -189,7 +188,7 @@ class EddnMarketCache:
                 name_localised = self._repo.get_codex_name(msg["EntryID"])
         if not (isinstance(system_address, int) and isinstance(body_id, int) and name_localised):
             return
-        self._codex_buffer[(system_address, body_id)] = (
+        self._codex_buffer[(system_address, body_id, str(name_localised))] = (
             system_address, body_id, str(name_localised), str(msg.get("Name") or ""),
             _normalize_ts(msg.get("timestamp")),
         )

@@ -6923,6 +6923,7 @@ class MainWindow(QMainWindow):
         else:
             codex_sightings = {}
         confirmed_species: list[tuple[str, Optional[int]]] = []
+        confirmed_bodies = 0
 
         for _body, rec in (self.state.bodies or {}).items():
             if not isinstance(rec, dict):
@@ -6947,11 +6948,13 @@ class MainWindow(QMainWindow):
                 hv_unmapped += 1
 
             if isinstance(bio, int) and bio > 0 and not gen:
-                sighting = codex_sightings.get(rec.get("BodyID"))
-                if sighting:
-                    species_name = sighting["species_name"]
-                    value = self.exo_values.get_value(species_name) if self.exo_values else None
-                    confirmed_species.append((species_name, value))
+                sightings = codex_sightings.get(rec.get("BodyID"))
+                if sightings:
+                    confirmed_bodies += 1
+                    for sighting in sightings:
+                        species_name = sighting["species_name"]
+                        value = self.exo_values.get_value(species_name) if self.exo_values else None
+                        confirmed_species.append((species_name, value))
                 else:
                     bio_need_dss += 1
 
@@ -6968,7 +6971,7 @@ class MainWindow(QMainWindow):
             more = len(confirmed_species) - 3
             suffix = f" +{more} more" if more > 0 else ""
             out["exobiology"].append(
-                f"🔬 Action: {len(confirmed_species)} bod{'y' if len(confirmed_species) == 1 else 'ies'} "
+                f"🔬 Action: {confirmed_bodies} bod{'y' if confirmed_bodies == 1 else 'ies'} "
                 f"EDDN-confirmed before DSS — {', '.join(parts)}{suffix} — worth landing to scan"
             )
 
