@@ -107,3 +107,12 @@ repository. The underlying facts are publicly-known Elite Dangerous game
 mechanics — the same information already documented across many
 community wikis and official sources (e.g. the Elite Dangerous Wiki's
 "Engineers" article) — not proprietary to any one project.
+
+## settings/codex_names.json (Canonn Research Group)
+
+The Codex EntryID-to-English-name list for Biology entries was taken from
+Canonn's public codex reference
+(`https://us-central1-canonn-api-236217.cloudfunctions.net/query/codex/ref`,
+fetched 2026-10-17). The names themselves are Frontier Developments' in-game
+Codex names, compiled by Canonn; used under Frontier's Fan Content Policy
+for non-commercial community tools. Only the ID and name are kept.
