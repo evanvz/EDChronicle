@@ -94,28 +94,37 @@ class JournalWatcher(QObject):
         self._cleanup()
         self._current_file = path
         self._fp = path.open("r", encoding="utf-8", errors="replace")
-        # The bootstrap below only re-reads the file's tail; LoadGame (the EDDN
-        # horizons/odyssey source) sits at the top, so pass it along here.
-        self.event_received.emit({"event": "_BootstrapStart", "LoadGame": self._load_game(path)})
+        self.event_received.emit({"event": "_BootstrapStart"})
         self._bootstrap_newest_system()
         self.event_received.emit({"event": "_BootstrapEnd"})
         self.status.emit(f"Tailing: {path.name}")
 
-    @staticmethod
-    def _load_game(path: Path, max_lines: int = 50) -> Optional[Dict[str, Any]]:
-        """The session's LoadGame event (within the file's first lines), or None."""
+    # Written once per session (or on ship change) and needed for the whole
+    # session: commander name, EDDN horizons/odyssey, cargo capacity, ranks.
+    _SESSION_EVENTS = ("Commander", "LoadGame", "Rank", "Progress", "Reputation", "Powerplay",
+                       "SquadronStartup", "Loadout")
+
+    @classmethod
+    def _session_events(cls, path: Path, until_ts: str) -> List[Dict[str, Any]]:
+        """The latest of each _SESSION_EVENTS type at or before until_ts, in
+        file order -- the replay below starts at the last jump and would
+        otherwise miss them (found 2026-10-17: cargo capacity unknown, CMDR ?)."""
+        latest: Dict[str, tuple] = {}
+        markers = tuple(f'"event":"{n}"' for n in cls._SESSION_EVENTS)
         try:
             with path.open("r", encoding="utf-8", errors="replace") as f:
-                for _ in range(max_lines):
-                    line = f.readline()
-                    if not line:
-                        break
-                    if '"LoadGame"' in line:
+                for pos, line in enumerate(f):
+                    if not any(m in line for m in markers):
+                        continue
+                    try:
                         evt = json.loads(line)
-                        return evt if evt.get("event") == "LoadGame" else None
-        except (OSError, ValueError):
-            pass
-        return None
+                    except ValueError:
+                        continue
+                    if evt.get("event") in cls._SESSION_EVENTS and str(evt.get("timestamp", "")) <= until_ts:
+                        latest[evt["event"]] = (pos, evt)
+        except OSError:
+            return []
+        return [evt for _pos, evt in sorted(latest.values(), key=lambda t: t[0])]
 
     def _bootstrap_newest_system(self, max_bytes: int = 256 * 1024, max_events: int = 800) -> None:
         if not self._fp or not self._current_file:
@@ -163,6 +172,9 @@ class JournalWatcher(QObject):
                     break
 
             emitted = 0
+            for evt in self._session_events(self._current_file, str(events[anchor].get("timestamp", ""))):
+                self.event_received.emit(evt)
+                emitted += 1
             for evt in events[anchor:]:
                 self.event_received.emit(evt)
                 emitted += 1

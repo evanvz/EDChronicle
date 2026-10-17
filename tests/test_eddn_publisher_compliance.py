@@ -158,12 +158,28 @@ def test_codex_entry_for_another_system_is_dropped():
     assert pub._queue.empty()
 
 
-def test_watcher_passes_session_loadgame_with_bootstrap(tmp_path):
+def test_watcher_replays_session_events_before_the_last_jump(tmp_path):
+    """Startup replays only the newest system; LoadGame/Loadout etc. from
+    earlier in the file must come first (2026-10-17: cargo unknown, CMDR ?)."""
+    import json
     from edc.core.journal_watcher import JournalWatcher
-    j = tmp_path / "Journal.2026-10-17T100000.01.log"
-    j.write_text('{"event":"Fileheader"}\n{"event":"LoadGame","Horizons":true,"Odyssey":true}\n'
-                 + '{"event":"Music"}\n' * 20000)
-    assert JournalWatcher._load_game(j) == {"event": "LoadGame", "Horizons": True, "Odyssey": True}
+    ev = [{"timestamp": "2026-10-17T09:46:00Z", "event": "Commander", "Name": "B0B R0GERS"},
+          {"timestamp": "2026-10-17T09:46:01Z", "event": "LoadGame", "Horizons": True, "Odyssey": True},
+          {"timestamp": "2026-10-17T10:29:46Z", "event": "Loadout", "Ship": "panthermkii", "CargoCapacity": 1218},
+          {"timestamp": "2026-10-17T11:20:02Z", "event": "Loadout", "Ship": "krait_mkii", "CargoCapacity": 16},
+          {"timestamp": "2026-10-17T11:40:00Z", "event": "FSDJump", "StarSystem": "ICZ VE-Q b5-4"},
+          {"timestamp": "2026-10-17T11:41:00Z", "event": "Music"}]
+    j = tmp_path / "Journal.2026-10-17T094611.01.log"
+    j.write_text("\n".join(json.dumps(e, separators=(",", ":")) for e in ev) + "\n")
+    w = JournalWatcher.__new__(JournalWatcher)
+    seen = []
+    w.event_received = type("S", (), {"emit": staticmethod(seen.append)})()
+    w.status = type("S", (), {"emit": staticmethod(lambda *_: None)})()
+    w._current_file, w._fp = j, j.open("r", encoding="utf-8")
+    w._bootstrap_newest_system()
+    w._fp.close()
+    assert [e["event"] for e in seen] == ["Commander", "LoadGame", "Loadout", "FSDJump", "Music"]
+    assert seen[2]["CargoCapacity"] == 16
 
 
 def test_identical_journal_message_sent_once():

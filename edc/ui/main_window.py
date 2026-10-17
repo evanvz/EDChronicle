@@ -4057,8 +4057,6 @@ class MainWindow(QMainWindow):
 
         if name == "_BootstrapStart":
             self._replaying = True
-            if evt.get("LoadGame"):
-                self.eddn_publisher.observe(evt["LoadGame"])
             return
         if name == "_BootstrapEnd":
             self._replaying = False
