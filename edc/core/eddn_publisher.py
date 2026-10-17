@@ -301,7 +301,7 @@ def build_commodity_message(data: Dict[str, Any], docking_access: Optional[str] 
             dropped_invalid += 1
             continue
 
-        commodities.append({
+        commodity = {
             "name": symbol,
             "meanPrice": mean_price,
             "buyPrice": buy_price,
@@ -310,7 +310,13 @@ def build_commodity_message(data: Dict[str, Any], docking_access: Optional[str] 
             "sellPrice": sell_price,
             "demand": demand,
             "demandBracket": demand_bracket,
-        })
+        }
+        # commodity-README "Statusflags": the optional augmentation built from
+        # Market.json's Producer/Consumer/Rare booleans (never an empty list).
+        flags = [k for k in ("Producer", "Consumer", "Rare") if it.get(k) is True]
+        if flags:
+            commodity["statusFlags"] = flags
+        commodities.append(commodity)
 
     if dropped_invalid:
         log.warning(
@@ -328,6 +334,10 @@ def build_commodity_message(data: Dict[str, Any], docking_access: Optional[str] 
         "timestamp": timestamp,
         "commodities": commodities,
     }
+    # The schema defines stationType ("renamed" from StationType) and wins over the
+    # README's elision list where they differ; all four reference senders use it.
+    if isinstance(data.get("StationType"), str) and data["StationType"]:
+        msg["stationType"] = data["StationType"]
     if isinstance(docking_access, str) and docking_access:
         msg["carrierDockingAccess"] = docking_access
     return msg

@@ -48,6 +48,7 @@ def test_valid_market_produces_compliant_message():
         "stationName": "Jameson Memorial",
         "marketId": 128049152,
         "timestamp": "2026-08-11T10:00:00Z",
+        "stationType": "Orbis",
         "commodities": [{
             "name": "platinum",
             "meanPrice": 55505,
@@ -57,6 +58,7 @@ def test_valid_market_produces_compliant_message():
             "sellPrice": 59006,
             "demand": 33966,
             "demandBracket": 3,
+            "statusFlags": ["Consumer"],
         }],
     }
 
@@ -85,10 +87,17 @@ def test_producer_rare_id_category_are_dropped_from_item():
         assert forbidden_key not in commodity
 
 
-def test_station_type_is_dropped_from_message():
+def test_station_type_sent_under_schema_name():
     msg = build_commodity_message(_market([_item()]))
     assert "StationType" not in msg
-    assert "stationType" not in msg
+    assert msg["stationType"] == "Orbis"
+
+
+def test_status_flags_only_when_any_flag_is_true():
+    msg = build_commodity_message(_market([_item(Consumer=False, Producer=True, Rare=True),
+                                            _item(name="$gold_name;", Consumer=False)]))
+    assert msg["commodities"][0]["statusFlags"] == ["Producer", "Rare"]
+    assert "statusFlags" not in msg["commodities"][1]
 
 
 def test_economies_and_prohibited_are_never_present():
