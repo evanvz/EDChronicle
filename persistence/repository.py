@@ -2014,7 +2014,7 @@ class Repository:
         rows = self.db.conn.execute(
             """
             SELECT market_id, station_name, system_name, station_faction,
-                   station_type, pads_small, pads_medium, pads_large, last_visited
+                   station_type, pads_small, pads_medium, pads_large, last_visited, station_services
             FROM net.station_info
             WHERE LOWER(station_faction) = ? AND system_name = ?
             ORDER BY station_name
@@ -2028,6 +2028,9 @@ class Repository:
             d["pad_size"] = effective_pad_size(
                 d["station_type"], d.get("pads_small"), d.get("pads_medium"), d.get("pads_large")
             )
+            services = (d.pop("station_services", None) or "").lower()
+            d["has_market"] = "commodities" in services
+            d["has_black_market"] = "blackmarket" in services
             out.append(d)
         return out
 
@@ -3327,7 +3330,8 @@ class Repository:
                 "bounties_total": 0,
                 "bounties_max_cashin": 0,
                 "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 0},
-                "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 0, "purchase": 0},
+                "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 0, "purchase": 0,
+                               "loss": 0, "smuggling": 0, "mission_failed": 0},
             })
 
         report: dict = {}

@@ -68,3 +68,27 @@ def test_hinder_card_has_an_influence_bar():
     bar = view["bars"][0]
     assert bar["label"] == "Their influence" and bar["text"] == "10.0% ▼  (was 12.0%)" and bar["state"] == "met"
     assert view["chips"][0]["text"] == "Your missions −6 INF"
+
+
+# --- 2026-10-18: hitting a faction through the stations it owns ---
+
+def _hit_report(loss=0, smuggled=0, failed=0, bought=0):
+    entry = {"missions": {"count": 0, "weighted": 0}, "combat_bonds_total": 0, "bounties_total": 0, "cz_kills": {},
+             "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 0, "purchase": bought,
+                            "loss": loss, "smuggling": smuggled, "mission_failed": failed}}
+    return {"2026-10-18": {"Ekono": {"Rival Front": entry}}}
+
+
+def test_card_lists_their_stations_and_counts_loss_smuggling_and_failed_missions():
+    stations = [{"station_name": "Rival Dock", "pad_size": "L", "has_market": True, "has_black_market": True},
+                {"station_name": "Rival Camp", "pad_size": "M", "has_market": False, "has_black_market": False}]
+    view = build_task_view(_task(), _hit_report(loss=1_200_000, smuggled=64, failed=2), None,
+                           _hist(("2026-10-18", 0.10)), None, LIMITS, faction_stations=stations)
+    assert "Their stations here: Rival Dock (L pad · market · black market), Rival Camp (M pad)" in view["lines"]
+    assert [c["text"] for c in view["chips"]] == ["Sold at a loss −1.2M", "Smuggled 64t", "2 failed missions"]
+
+
+def test_no_stations_known_and_buying_warns():
+    view = build_task_view(_task(), _hit_report(bought=500_000), None, [], None, LIMITS, faction_stations=[])
+    assert any(l.startswith("No Rival Front stations known here") for l in view["lines"])
+    assert any("Buying at Rival Front stations" in w for w in view["warnings"])

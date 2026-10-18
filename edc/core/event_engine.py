@@ -1281,6 +1281,10 @@ class EventEngine:
 
         elif name in MISSION_EVENT_NAMES:
             apply_mission_event(self.state.active_missions, event)
+            # Where it was accepted: a failed mission costs its giver influence there.
+            rec = self.state.active_missions.get(event.get("MissionID")) if name == "MissionAccepted" else None
+            if rec is not None and isinstance(self.state.system_address, int):
+                rec["system_address"] = self.state.system_address
 
         elif name == "Statistics":
             crime = event.get("Crime")

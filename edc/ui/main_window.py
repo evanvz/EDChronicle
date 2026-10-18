@@ -1764,6 +1764,21 @@ class MainWindow(QMainWindow):
         except Exception:
             log.exception("Failed to record faction CZ kill")
 
+    def _record_failed_mission(self, evt: dict) -> None:
+        """A failed mission costs its giver influence in the system it was
+        accepted in (SINC Complete BGS Guide 2024, about -1 INF) -- the Hinder
+        task counts them. Missions accepted before the app started have no
+        recorded system and are skipped."""
+        rec = (getattr(self.state, "active_missions", None) or {}).get(evt.get("MissionID")) or {}
+        faction, system_address = rec.get("faction"), rec.get("system_address")
+        if not (isinstance(faction, str) and faction and isinstance(system_address, int)):
+            return
+        try:
+            self.repo.record_faction_trade_sold(system_address=system_address, faction_name=faction,
+                                                kind="mission_failed", value=1, sold_at=evt.get("timestamp") or "")
+        except Exception:
+            log.exception("Failed to record failed mission")
+
     def _record_faction_trade_sold(self, evt: dict) -> None:
         """Commodity (MarketSell), exploration data (SellExplorationData/
         MultiSellExplorationData), and exobiology (SellOrganicData) sales
@@ -1789,13 +1804,22 @@ class MainWindow(QMainWindow):
             value = evt.get("TotalSale")
             avg_paid = evt.get("AvgPricePaid")
             count = evt.get("Count")
-            # Cargo never bought (mined, mission reward) has AvgPricePaid 0 and
-            # doesn't count as BGS trade (SINC Complete BGS Guide 2024, p37).
-            if not (isinstance(avg_paid, (int, float)) and avg_paid > 0):
-                return
-            if isinstance(value, int) and isinstance(count, int):
-                value = int(value - avg_paid * count)
-            kind = "commodity"
+            if evt.get("BlackMarket"):
+                # Smuggling hurts the station owner (SINC Complete BGS Guide 2024,
+                # "Reducing influence" p36-39); counted in tonnes.
+                value, kind = count, "smuggling"
+            else:
+                # Cargo never bought (mined, mission reward) has AvgPricePaid 0 and
+                # doesn't count as BGS trade (SINC Complete BGS Guide 2024, p37).
+                if not (isinstance(avg_paid, (int, float)) and avg_paid > 0):
+                    return
+                if isinstance(value, int) and isinstance(count, int):
+                    value = int(value - avg_paid * count)
+                kind = "commodity"
+                # A sale at a loss hurts the owner rather than helping: kept apart
+                # from profit (as a positive amount) instead of netting against it.
+                if isinstance(value, int) and value < 0:
+                    value, kind = -value, "loss"
         elif name == "MultiSellExplorationData":
             value = evt.get("TotalEarnings")
             if not isinstance(value, int):
@@ -4086,6 +4110,8 @@ class MainWindow(QMainWindow):
             # TargetFaction for FactionEffects entries with a blank faction name.
             accepted = (getattr(self.state, "active_missions", None) or {}).get(evt.get("MissionID")) or {}
             self._completing_mission_target = accepted.get("target_faction")
+        if name == "MissionFailed" and not self._replaying:
+            self._record_failed_mission(evt)
         state, msgs = self.engine.process(evt)
         self.state = state
 

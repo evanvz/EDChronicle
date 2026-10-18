@@ -415,7 +415,8 @@ def faction_activity(report: dict, system_name: str, faction_name: str) -> dict:
     """This tick's activity for one faction in one system, summed across
     every day in the session report. Names match case-insensitively."""
     total = {k: 0 for k in ("missions", "tier_score", "bounties", "combat_bonds", "cz_kills", "cz_value",
-                            "trade_profit", "trade_bought", "exploration", "exobiology", "bounty_max_cashin")}
+                            "trade_profit", "trade_bought", "exploration", "exobiology", "bounty_max_cashin",
+                            "trade_loss", "smuggling", "missions_failed")}
     for systems in report.values():
         for sys_name, factions in systems.items():
             if not _same(sys_name, system_name):
@@ -434,6 +435,9 @@ def faction_activity(report: dict, system_name: str, faction_name: str) -> dict:
                 total["trade_bought"] += e["trade_sold"].get("purchase", 0)
                 total["exploration"] += e["trade_sold"]["exploration"]
                 total["exobiology"] += e["trade_sold"]["exobiology"]
+                total["trade_loss"] += e["trade_sold"].get("loss", 0)
+                total["smuggling"] += e["trade_sold"].get("smuggling", 0)
+                total["missions_failed"] += e["trade_sold"].get("mission_failed", 0)
     return total
 
 
@@ -498,13 +502,24 @@ def _retreat_countdown(rows: list, today: date) -> tuple:
 
 
 def _hinder_view(task: dict, report: dict, history: list, today: Optional[date] = None,
-                 squadron_faction: str = "") -> dict:
-    """Pushing a faction's influence down. Only the influence trend and our
-    missions' signed effect on it are measurable -- failed missions, trade
-    at a loss and kills aren't credited to a faction in the journal."""
+                 squadron_faction: str = "", stations: Optional[list] = None) -> dict:
+    """Pushing a faction's influence down: the influence trend, our missions'
+    signed effect, and what we did at their stations (sales at a loss and
+    black-market sales are credited to the station owner) plus their missions
+    we failed. Kills aren't credited to a faction in the journal. A faction
+    that owns stations without controlling the system is hit through them."""
     faction = task.get("faction_name") or ""
     act = faction_activity(report, task["system_name"], faction)
     lines, warnings = [], []
+    if stations:
+        parts = []
+        for st in stations:
+            tags = [f"{st['pad_size']} pad" if st.get("pad_size") else "",
+                    "market" if st.get("has_market") else "", "black market" if st.get("has_black_market") else ""]
+            parts.append(f"{st['station_name']} ({' · '.join(t for t in tags if t)})")
+        lines.append(f"Their stations here: {', '.join(parts)}")
+    elif stations is not None:
+        lines.append(f"No {faction} stations known here — only missions and kills reach them in this system")
     if squadron_faction and _same(faction, squadron_faction):
         warnings.append(f"{faction} is your squadron's own faction — check the objective")
     if act["tier_score"] < 0:
@@ -513,6 +528,8 @@ def _hinder_view(task: dict, report: dict, history: list, today: Optional[date] 
         warnings.append(f"Your missions this tick helped {faction} by {act['tier_score']} INF")
     if act["trade_profit"] > 0 or act["exploration"] > 0 or act["bounties"] > 0:
         warnings.append(f"Profitable trade, exploration data or bounties for {faction} this tick help them")
+    if act["trade_bought"] > 0:
+        warnings.append(f"Buying at {faction} stations this tick ({_cr(act['trade_bought'])}) helps them too")
 
     rows = [h for h in history if _same(h.get("faction_name"), faction) and isinstance(h.get("influence"), (int, float))]
     latest = rows[0]["influence"] if rows else None
@@ -546,6 +563,13 @@ def _hinder_view(task: dict, report: dict, history: list, today: Optional[date] 
                      "state": "met" if trend == "▼" else ("against" if trend == "▲" else "")})
     if act["tier_score"] < 0:
         chips.append({"text": f"Your missions −{-act['tier_score']} INF", "color": "#6BCB77"})
+    if act["trade_loss"]:
+        chips.append({"text": f"Sold at a loss −{_cr(act['trade_loss'])}", "color": "#6BCB77"})
+    if act["smuggling"]:
+        chips.append({"text": f"Smuggled {act['smuggling']:,}t", "color": "#6BCB77"})
+    if act["missions_failed"]:
+        n = act["missions_failed"]
+        chips.append({"text": f"{n} failed mission{'s' if n != 1 else ''}", "color": "#6BCB77"})
     short = f"Boost the other factions · missions with a red − on {faction} · fail their missions"
     return {"status": status, "lines": lines, "warnings": warnings, "line_states": [""] * len(lines),
             "bars": bars, "chips": chips, "guide_short": short,
@@ -1131,7 +1155,8 @@ def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], histor
                     cargo: Optional[dict] = None, last_collect: Optional[dict] = None,
                     supporting: Optional[list] = None, collect_system: Optional[dict] = None,
                     collect_batch: Optional[dict] = None,
-                    last_delivery: Optional[dict] = None) -> dict:
+                    last_delivery: Optional[dict] = None,
+                    faction_stations: Optional[list] = None) -> dict:
     task_type = task["task_type"]
     population_basis = ""
     if task_type == "boost":
@@ -1141,7 +1166,7 @@ def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], histor
         population_basis = _population_basis(targets, population)
         view = _boost_view(task, report, history, limits, today, population)
     elif task_type == "hinder":
-        view = _hinder_view(task, report, history, today, squadron_faction)
+        view = _hinder_view(task, report, history, today, squadron_faction, faction_stations)
     elif task_type in ("vote", "fight"):
         view = _conflict_view(task, report, bgs_status, task_type)
     elif task_type == "powerplay":
@@ -1207,7 +1232,10 @@ def build_task_views(repo, since: str, limits: dict, system_address: Optional[in
                                      supporting=(supporting_systems(repo, pledged, t["system_name"], edsm_powerplay)
                                                  if t["task_type"] == "powerplay" and pledged else None),
                                      collect_system=collect_system, collect_batch=collect_batch,
-                                     last_delivery=(deliveries or {}).get((t["system_name"] or "").lower())))
+                                     last_delivery=(deliveries or {}).get((t["system_name"] or "").lower()),
+                                     faction_stations=(repo.find_faction_stations_in_system(t["system_name"],
+                                                                                          t.get("faction_name") or "")
+                                                       if t["task_type"] == "hinder" else None)))
         if t["task_type"] == "powerplay" and pledged and addr is not None:
             _add_progress_trend(views[-1], repo, addr, pledged)
             _add_control_chip(views[-1], repo, addr, merits)

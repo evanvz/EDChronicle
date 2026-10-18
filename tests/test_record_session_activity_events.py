@@ -283,3 +283,38 @@ def test_market_buy_dispatch_fires_when_live():
     evt = {"event": "MarketBuy", "Count": 1, "TotalCost": 10, "timestamp": "2026-09-27T10:00:00Z"}
     MainWindow._on_event(fake_self, evt)
     fake_self._record_faction_trade_sold.assert_called_once_with(evt)
+
+
+# --- 2026-10-18: hinder effort -- loss sales, black market, failed missions ---
+
+def test_loss_sale_is_its_own_kind_not_negative_profit():
+    fake_self = _fake_self(station_faction="Hungarian Wolves")
+    MainWindow._record_faction_trade_sold(fake_self, {"event": "MarketSell", "Count": 282, "SellPrice": 3003,
+                                                      "TotalSale": 846846, "AvgPricePaid": 3763,
+                                                      "timestamp": "2026-10-18T08:10:00Z"})
+    assert fake_self._saved[-1][1]["kind"] == "loss" and fake_self._saved[-1][1]["value"] == 214320
+
+
+def test_black_market_sale_is_smuggling_in_tonnes():
+    fake_self = _fake_self(station_faction="Hungarian Wolves")
+    MainWindow._record_faction_trade_sold(fake_self, {"event": "MarketSell", "Count": 12, "SellPrice": 9000,
+                                                      "TotalSale": 108000, "AvgPricePaid": 0, "BlackMarket": True,
+                                                      "IllegalGoods": True, "timestamp": "2026-10-18T08:10:00Z"})
+    assert fake_self._saved[-1][1]["kind"] == "smuggling" and fake_self._saved[-1][1]["value"] == 12
+
+
+def test_failed_mission_recorded_for_giver_in_accepting_system(tmp_path):
+    from edc.core.event_engine import EventEngine
+    from edc.core.state import GameState
+    eng = EventEngine(GameState(), tmp_path)
+    eng.process({"timestamp": "2026-10-18T08:00:00Z", "event": "Location", "StarSystem": "Ekono",
+                 "SystemAddress": 3205949786483, "StarPos": [0.0, 0.0, 0.0]})
+    eng.process({"timestamp": "2026-10-18T08:01:00Z", "event": "MissionAccepted", "MissionID": 7,
+                 "Faction": "Hungarian Wolves", "Name": "Mission_Courier"})
+    fake_self = _fake_self()
+    fake_self.state = eng.state
+    MainWindow._record_failed_mission(fake_self, {"event": "MissionFailed", "MissionID": 7,
+                                                  "timestamp": "2026-10-18T09:00:00Z"})
+    assert fake_self._saved[-1] == ("trade", {"system_address": 3205949786483, "faction_name": "Hungarian Wolves",
+                                              "kind": "mission_failed", "value": 1,
+                                              "sold_at": "2026-10-18T09:00:00Z"})
