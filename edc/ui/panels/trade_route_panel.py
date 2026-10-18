@@ -22,8 +22,8 @@ from PyQt6.QtWidgets import (
 from edc.core.bgs_tasks import is_rival_power
 from edc.core.mission_cargo import cargo_needs, pick_sources
 from edc.core.trade_routes import (
-    _parse_ts, destination_pp_status, find_point_to_point_trades, find_supply_for_destination, find_trade_loops,
-    station_from_market_items,
+    _parse_ts, destination_pp_status, find_loss_supply, find_point_to_point_trades, find_supply_for_destination,
+    find_trade_loops, station_accepts_from_market_items, station_from_market_items,
 )
 from edc.ui.busy_spinner import BusySpinner
 from edc.ui.panels.market_panel import _NumericTableWidgetItem
@@ -352,8 +352,9 @@ class _SellHereWorker(QObject):
     finished = pyqtSignal(list, str)  # (results, error)
 
     def __init__(self, db_path, dest_station, dest_xyz, center_xyz, radius_ly, cargo_capacity,
-                 required_pad, market_id):
+                 required_pad, market_id, loss: bool = False):
         super().__init__()
+        self._loss = loss
         self._db_path = db_path
         self._dest_station = dest_station
         self._dest_xyz = dest_xyz
@@ -372,14 +373,14 @@ class _SellHereWorker(QObject):
             repo = Repository(db)
             supply = _filter_pad(repo.get_market_snapshot_in_radius(*self._center, self._radius_ly),
                                  self._required_pad)
-            results = find_supply_for_destination(
-                self._dest_station, self._dest_xyz, supply, self._cargo_capacity,
-                dest_market_id=self._market_id,
-            )
+            search = find_loss_supply if self._loss else find_supply_for_destination
+            results = search(self._dest_station, self._dest_xyz, supply, self._cargo_capacity,
+                             dest_market_id=self._market_id)
             names, brackets = self._dest_station["names"], self._dest_station["brackets"]
             for r in results:
                 r["commodity_display"] = names.get(r["commodity"], r["commodity"].title())
-                r["demand_level"] = _DEMAND_LEVELS.get(brackets.get(r["commodity"]), "")
+                r["demand_level"] = ("Zero" if r.get("zero_demand")
+                                     else _DEMAND_LEVELS.get(brackets.get(r["commodity"]), ""))
         except Exception as exc:
             log.exception("Sell-here supply search failed")
             self.finished.emit([], str(exc))
@@ -825,8 +826,15 @@ class TradeRoutePanel(QWidget):
             "won't replace it, and rows for the station you're docked at are highlighted: buy those here. "
             "Its demand is the snapshot from your last visit. Untick to use the station you're docked at.")
         self._sell_pin_check.toggled.connect(lambda _on: self._mark_buy_here_rows())
+        self._sell_loss_check = QCheckBox("Sell at a loss here")
+        self._sell_loss_check.setStyleSheet(_LABEL_STYLE)
+        self._sell_loss_check.setToolTip(
+            "Hinder this station's owner (BGS): find goods you can buy nearby for MORE than this station pays, "
+            "so selling here is a loss. Zero-demand items first (selling into zero demand hurts too), then the "
+            "smallest total loss. Never use it at a station your own faction owns.")
+        self._sell_loss_check.toggled.connect(lambda _on: self._start_sell_search())
         for w in (near_label, self._sell_near_combo, self._sell_range_spin, pad_label,
-                  self._sell_pad_combo, self._sell_search_btn, self._sell_pin_check):
+                  self._sell_pad_combo, self._sell_search_btn, self._sell_pin_check, self._sell_loss_check):
             opt_row.addWidget(w)
         opt_row.addStretch(1)
         lay.addLayout(opt_row)
@@ -881,7 +889,8 @@ class TradeRoutePanel(QWidget):
                 ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
                 self._sell_market = {"market_id": market_id, "station": station, "system": system,
                                      "xyz": (self._ref_x, self._ref_y, self._ref_z),
-                                     "dest": station_from_market_items(items, ts), "read_at": ts}
+                                     "dest": station_from_market_items(items, ts), "read_at": ts,
+                                     "accepts": station_accepts_from_market_items(items, ts)}
                 self._start_sell_search()
         if self._sell_market:
             docked = docked_station == self._sell_market["station"]
@@ -926,7 +935,9 @@ class TradeRoutePanel(QWidget):
         if not isinstance(self._cargo_capacity, int) or self._cargo_capacity <= 0:
             self._sell_status_label.setText("Cargo capacity unknown yet — undock or check the outfitting screen once.")
             return
-        if not m["dest"]["sells"]:
+        loss = self._sell_loss_check.isChecked()
+        dest = m["accepts"] if loss else m["dest"]
+        if not dest["sells"]:
             self._sell_status_label.setText(f"{m['station']} has no demand for any commodity right now.")
             self._sell_table.setRowCount(0)
             return
@@ -937,12 +948,13 @@ class TradeRoutePanel(QWidget):
         radius = self._sell_range_spin.value()
         self._sell_search_btn.setEnabled(False)
         self._sell_status_label.setText(
-            f"Searching within {radius} ly of {'you' if near_me else m['station']} for the best place to buy…")
+            f"Searching within {radius} ly of {'you' if near_me else m['station']} for "
+            f"{'goods that sell here at a loss' if loss else 'the best place to buy'}…")
         self._sell_table.setRowCount(0)
         self._sell_loading_spinner.start_over(self)
         self._sell_worker = _SellHereWorker(
-            self._repo.db.db_path, m["dest"], m["xyz"], center, radius, self._cargo_capacity,
-            self._sell_pad_combo.currentData(), m["market_id"],
+            self._repo.db.db_path, dest, m["xyz"], center, radius, self._cargo_capacity,
+            self._sell_pad_combo.currentData(), m["market_id"], loss=loss,
         )
         if self._sell_thread is not None:
             self._sell_thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
@@ -959,14 +971,19 @@ class TradeRoutePanel(QWidget):
         if error:
             self._sell_status_label.setText(f"Search failed: {error}")
             return
+        loss = self._sell_loss_check.isChecked()
         if not results:
             self._sell_status_label.setText(
-                'No profitable place to buy found in range — try a bigger range or "Buy near: Me".')
+                ('Nothing nearby costs more than this station pays — try a bigger range or "Buy near: Me".' if loss
+                 else 'No profitable place to buy found in range — try a bigger range or "Buy near: Me".'))
+            self._sell_table.setRowCount(0)
             return
+        n = len(results)
         self._sell_status_label.setText(
-            f"Found {len(results)} commodit{'y' if len(results) == 1 else 'ies'} you can buy nearby and sell "
-            f"here at a profit.")
-        _fill_supply_table(self._sell_table, results)
+            f"Found {n} commodit{'y' if n == 1 else 'ies'} that sell here at a loss — this hurts "
+            f"{self._sell_market['station']}'s owner. Zero demand first, then the cheapest loss." if loss else
+            f"Found {n} commodit{'y' if n == 1 else 'ies'} you can buy nearby and sell here at a profit.")
+        _fill_supply_table(self._sell_table, results, loss=loss)
         self._mark_buy_here_rows()
 
     # --- Mission Cargo: what active cargo missions still need, and where to buy it ---
@@ -1633,7 +1650,7 @@ class TradeRoutePanel(QWidget):
         _copy_supply_cell(self._bgs_table, row, column)
 
 
-def _fill_supply_table(table: QTableWidget, results: list) -> None:
+def _fill_supply_table(table: QTableWidget, results: list, loss: bool = False) -> None:
     """Supply-search results (find_supply_for_destination rows plus
     commodity_display/demand_level) into a 12-column supply table; shared by
     the BGS Supply Run and Sell Here cards."""
@@ -1646,7 +1663,7 @@ def _fill_supply_table(table: QTableWidget, results: list) -> None:
             f"{age_hours:.0f}h" if age_hours < 24 else f"{age_hours / 24:.0f}d"
         )
         total_item = _NumericTableWidgetItem(f"{r['total_profit']:,}", float(r["total_profit"]))
-        total_item.setForeground(QColor("#6BCB77"))
+        total_item.setForeground(QColor("#FF6B6B" if loss else "#6BCB77"))
         numeric = [
             _NumericTableWidgetItem(f"{r['dist_to_dest']:.1f}", r["dist_to_dest"]),
             _NumericTableWidgetItem(f"{r['buy_price']:,}", float(r["buy_price"])),
@@ -1667,8 +1684,11 @@ def _fill_supply_table(table: QTableWidget, results: list) -> None:
         for col, it in enumerate(numeric, start=3):
             it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             table.setItem(row, col, it)
+    if loss:   # keep find_loss_supply's order (zero demand first, then the cheapest loss): no sort column
+        table.horizontalHeader().setSortIndicator(-1, Qt.SortOrder.AscendingOrder)
     table.setSortingEnabled(True)
-    table.sortItems(9, Qt.SortOrder.DescendingOrder)
+    if not loss:
+        table.sortItems(9, Qt.SortOrder.DescendingOrder)
 
 
 def _copy_supply_cell(table: QTableWidget, row: int, column: int) -> None:

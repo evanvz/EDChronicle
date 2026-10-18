@@ -74,6 +74,73 @@ def station_from_market_items(items: List[Dict[str, Any]], timestamp: str) -> di
     return {"sells": sells, "brackets": brackets, "names": names}
 
 
+def station_accepts_from_market_items(items: List[Dict[str, Any]], timestamp: str) -> dict:
+    """Like station_from_market_items, but everything the station will take
+    (any sell price), zero-demand "accept only" items included -- for selling
+    at a loss, where those are the best targets."""
+    sells, brackets, names = {}, {}, {}
+    for it in items:
+        key = commodity_key(it.get("symbol") or it.get("name") or "")
+        if key and (it.get("sell_price") or 0) > 0:
+            sells[key] = (it["sell_price"], it.get("demand") or 0, timestamp)
+            brackets[key] = it.get("demand_bracket")
+            names[key] = it.get("name") or key
+    return {"sells": sells, "brackets": brackets, "names": names}
+
+
+def find_loss_supply(
+    dest_station: dict,
+    dest_xyz: tuple,
+    supply_stations: Dict[int, dict],
+    cargo_capacity: int,
+    dest_market_id: Optional[int] = None,
+    max_results: int = 25,
+) -> List[Dict[str, Any]]:
+    """Hinder a station's owner by selling to it at a loss (SINC Complete BGS
+    Guide 2024, "Reducing influence" p36-39): for every commodity the station
+    takes, the nearby source whose buy price is ABOVE this station's sell
+    price by the smallest margin -- the cheapest way to make the sale a loss.
+    Zero-demand items come first (selling into zero demand hurts too), then
+    the smallest total loss. ponytail: smallest loss first, since nobody has
+    measured whether a bigger loss hurts more; re-sort if the Experiment Log
+    shows it does. Same row shape as find_supply_for_destination (profit
+    fields negative) plus zero_demand."""
+    dx, dy, dz = dest_xyz
+    results: List[Dict[str, Any]] = []
+    supply_buys = {mid: {commodity_key(k): v for k, v in s["buys"].items()}
+                   for mid, s in supply_stations.items() if mid != dest_market_id}
+    for commodity, (sell_price, demand, sell_updated) in dest_station["sells"].items():
+        key = commodity_key(commodity)
+        zero = not (isinstance(demand, int) and demand > 1) or dest_station.get("brackets", {}).get(key) == 0
+        best: Optional[Dict[str, Any]] = None
+        for market_id, buys in supply_buys.items():
+            buy_info = buys.get(key)
+            if buy_info is None:
+                continue
+            buy_price, stock, buy_updated = buy_info
+            loss = buy_price - sell_price
+            if loss <= 0 or not (isinstance(stock, int) and stock > 0):
+                continue
+            s = supply_stations[market_id]
+            qty = min(cargo_capacity, stock)
+            dist = ((s["x"] - dx) ** 2 + (s["y"] - dy) ** 2 + (s["z"] - dz) ** 2) ** 0.5
+            if best is not None and (loss * qty, dist) >= (-best["total_profit"], best["dist_to_dest"]):
+                continue
+            ages = [dt for dt in (_parse_ts(buy_updated), _parse_ts(sell_updated)) if dt is not None]
+            best = {
+                "commodity": commodity, "buy_station_name": s["station_name"], "buy_system_name": s["system_name"],
+                "pad_size": s.get("pad_size"), "dist_to_dest": dist, "buy_price": buy_price,
+                "sell_price": sell_price, "profit_per_unit": -loss, "demand": demand, "quantity": qty,
+                "total_profit": -loss * qty, "pp_large_profit": False, "zero_demand": zero,
+                "data_age_hours": ((datetime.now(timezone.utc) - min(ages)).total_seconds() / 3600.0
+                                   if ages else None),
+            }
+        if best is not None:
+            results.append(best)
+    results.sort(key=lambda r: (not r["zero_demand"], -r["total_profit"]))
+    return results[:max_results]
+
+
 def find_point_to_point_trades(
     origin_items: List[Dict[str, Any]],
     destination_stations: Dict[int, dict],
