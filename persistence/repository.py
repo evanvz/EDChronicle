@@ -3331,7 +3331,7 @@ class Repository:
                 "bounties_max_cashin": 0,
                 "cz_kills": {"ground_l": 0, "ground_m": 0, "ground_h": 0, "space_l": 0, "space_m": 0, "space_h": 0},
                 "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 0, "purchase": 0,
-                               "loss": 0, "smuggling": 0, "mission_failed": 0},
+                               "loss": 0, "smuggling": 0, "mission_failed": 0, "mission_abandoned": 0},
             })
 
         report: dict = {}

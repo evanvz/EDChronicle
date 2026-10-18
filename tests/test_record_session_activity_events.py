@@ -318,3 +318,19 @@ def test_failed_mission_recorded_for_giver_in_accepting_system(tmp_path):
     assert fake_self._saved[-1] == ("trade", {"system_address": 3205949786483, "faction_name": "Hungarian Wolves",
                                               "kind": "mission_failed", "value": 1,
                                               "sold_at": "2026-10-18T09:00:00Z"})
+
+
+def test_abandoned_mission_recorded_apart_from_failed(tmp_path):
+    from edc.core.event_engine import EventEngine
+    from edc.core.state import GameState
+    eng = EventEngine(GameState(), tmp_path)
+    eng.process({"timestamp": "2026-10-18T10:00:00Z", "event": "Location", "StarSystem": "HIP 114880",
+                 "SystemAddress": 1487962868083, "StarPos": [0.0, 0.0, 0.0]})
+    eng.process({"timestamp": "2026-10-18T10:12:35Z", "event": "MissionAccepted", "MissionID": 9,
+                 "Faction": "HIP 114880 Empire Party", "Name": "Mission_Massacre"})
+    fake_self = _fake_self()
+    fake_self.state = eng.state
+    MainWindow._record_failed_mission(fake_self, {"event": "MissionAbandoned", "MissionID": 9,
+                                                  "timestamp": "2026-10-18T10:37:02Z"})
+    assert fake_self._saved[-1][1]["kind"] == "mission_abandoned"
+    assert fake_self._saved[-1][1]["faction_name"] == "HIP 114880 Empire Party"

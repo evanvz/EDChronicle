@@ -145,7 +145,7 @@ def test_trade_sold_is_bucketed_by_kind(tmp_path):
     report = repo.get_session_activity_report("2026-09-25T00:00:00Z")
     trade = report["2026-09-25"]["Ekono"]["Elite United Worlds"]["trade_sold"]
     assert trade == {"commodity": 63085, "exploration": 1305717, "exobiology": 0, "purchase": 0,
-                     "loss": 0, "smuggling": 0, "mission_failed": 0}
+                     "loss": 0, "smuggling": 0, "mission_failed": 0, "mission_abandoned": 0}
 
 
 def test_multiple_systems_and_factions_stay_separate(tmp_path):

@@ -416,7 +416,7 @@ def faction_activity(report: dict, system_name: str, faction_name: str) -> dict:
     every day in the session report. Names match case-insensitively."""
     total = {k: 0 for k in ("missions", "tier_score", "bounties", "combat_bonds", "cz_kills", "cz_value",
                             "trade_profit", "trade_bought", "exploration", "exobiology", "bounty_max_cashin",
-                            "trade_loss", "smuggling", "missions_failed")}
+                            "trade_loss", "smuggling", "missions_failed", "missions_abandoned")}
     for systems in report.values():
         for sys_name, factions in systems.items():
             if not _same(sys_name, system_name):
@@ -438,6 +438,7 @@ def faction_activity(report: dict, system_name: str, faction_name: str) -> dict:
                 total["trade_loss"] += e["trade_sold"].get("loss", 0)
                 total["smuggling"] += e["trade_sold"].get("smuggling", 0)
                 total["missions_failed"] += e["trade_sold"].get("mission_failed", 0)
+                total["missions_abandoned"] += e["trade_sold"].get("mission_abandoned", 0)
     return total
 
 
@@ -570,6 +571,12 @@ def _hinder_view(task: dict, report: dict, history: list, today: Optional[date] 
     if act["missions_failed"]:
         n = act["missions_failed"]
         chips.append({"text": f"{n} failed mission{'s' if n != 1 else ''}", "color": "#6BCB77"})
+    if act["missions_abandoned"]:
+        n = act["missions_abandoned"]
+        chips.append({"text": f"{n} abandoned (effect unverified)", "color": "#FFB347",
+                      "tooltip": "Abandoning costs reputation with them; whether it also lowers their influence "
+                                 "isn't confirmed. Compare with their influence trend after the tick. Letting "
+                                 "missions expire (fail) is the confirmed way."})
     short = f"Boost the other factions · missions with a red − on {faction} · fail their missions"
     return {"status": status, "lines": lines, "warnings": warnings, "line_states": [""] * len(lines),
             "bars": bars, "chips": chips, "guide_short": short,

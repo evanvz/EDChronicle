@@ -1767,15 +1767,18 @@ class MainWindow(QMainWindow):
     def _record_failed_mission(self, evt: dict) -> None:
         """A failed mission costs its giver influence in the system it was
         accepted in (SINC Complete BGS Guide 2024, about -1 INF) -- the Hinder
-        task counts them. Missions accepted before the app started have no
-        recorded system and are skipped."""
+        task counts them. Abandoned ones are counted apart: their BGS effect is
+        unverified, so the card shows them next to the influence trend.
+        Missions accepted before the app started have no recorded system and
+        are skipped."""
         rec = (getattr(self.state, "active_missions", None) or {}).get(evt.get("MissionID")) or {}
         faction, system_address = rec.get("faction"), rec.get("system_address")
         if not (isinstance(faction, str) and faction and isinstance(system_address, int)):
             return
         try:
             self.repo.record_faction_trade_sold(system_address=system_address, faction_name=faction,
-                                                kind="mission_failed", value=1, sold_at=evt.get("timestamp") or "")
+                                                kind="mission_failed" if evt.get("event") == "MissionFailed"
+                                                else "mission_abandoned", value=1, sold_at=evt.get("timestamp") or "")
         except Exception:
             log.exception("Failed to record failed mission")
 
@@ -4110,7 +4113,7 @@ class MainWindow(QMainWindow):
             # TargetFaction for FactionEffects entries with a blank faction name.
             accepted = (getattr(self.state, "active_missions", None) or {}).get(evt.get("MissionID")) or {}
             self._completing_mission_target = accepted.get("target_faction")
-        if name == "MissionFailed" and not self._replaying:
+        if name in ("MissionFailed", "MissionAbandoned") and not self._replaying:
             self._record_failed_mission(evt)
         state, msgs = self.engine.process(evt)
         self.state = state
