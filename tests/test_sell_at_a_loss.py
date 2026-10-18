@@ -1,6 +1,7 @@
 """Sell Here's "Sell at a loss here" mode: hinder a station's owner by
 selling goods that cost more elsewhere than the station pays (SINC Complete
-BGS Guide 2024, "Reducing influence")."""
+BGS Guide 2024, "Unprofitable Trade Loops", printed p37: high demand first,
+a big loss)."""
 import time
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -28,11 +29,12 @@ def test_accepts_include_zero_demand_items():
     assert set(accepts["sells"]) == {"gold", "tritium"}
 
 
-def test_cheapest_loss_source_and_zero_demand_first():
+def test_biggest_loss_source_and_high_demand_first():
+    """SINC (printed p37): a loss in high-demand goods beats medium/low, aiming for a big loss."""
     rows = find_loss_supply(station_accepts_from_market_items(ITEMS, TS), (0.0, 0.0, 0.0), SUPPLY, 100)
     assert [(r["commodity"], r["buy_station_name"], r["total_profit"], r["zero_demand"]) for r in rows] == [
-        ("tritium", "Dear Port", -400_000, True),       # zero demand first
-        ("gold", "Dear Port", -300_000, False)]         # the smaller of the two losses (3,000/t, not 7,000/t)
+        ("gold", "Dearer Port", -700_000, False),       # medium demand first, the bigger loss (7,000/t)
+        ("tritium", "Dear Port", -400_000, True)]       # zero demand last
 
 
 def test_panel_loss_mode_switches_search(tmp_path):
@@ -60,7 +62,7 @@ def test_panel_loss_mode_switches_search(tmp_path):
         p.refresh(state); wait()
         assert p._sell_table.item(0, 1).text() == "Cheap Port"          # normal mode: profitable source
         p._sell_loss_check.setChecked(True); wait()
-    assert [p._sell_table.item(r, 0).text() for r in range(p._sell_table.rowCount())] == ["Tritium", "Gold"]
-    assert p._sell_table.item(0, 7).text().startswith("Zero")
+    assert [p._sell_table.item(r, 0).text() for r in range(p._sell_table.rowCount())] == ["Gold", "Tritium"]
+    assert p._sell_table.item(1, 7).text().startswith("Zero")
     assert "at a loss" in p._sell_status_label.text()
     db.close()

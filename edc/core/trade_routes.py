@@ -96,15 +96,15 @@ def find_loss_supply(
     dest_market_id: Optional[int] = None,
     max_results: int = 25,
 ) -> List[Dict[str, Any]]:
-    """Hinder a station's owner by selling to it at a loss (SINC Complete BGS
-    Guide 2024, "Reducing influence" p36-39): for every commodity the station
-    takes, the nearby source whose buy price is ABOVE this station's sell
-    price by the smallest margin -- the cheapest way to make the sale a loss.
-    Zero-demand items come first (selling into zero demand hurts too), then
-    the smallest total loss. ponytail: smallest loss first, since nobody has
-    measured whether a bigger loss hurts more; re-sort if the Experiment Log
-    shows it does. Same row shape as find_supply_for_destination (profit
-    fields negative) plus zero_demand."""
+    """Hinder a station's owner by selling to it at a loss. SINC Complete BGS
+    Guide 2024 ("Unprofitable Trade Loops", printed p37): "trading in
+    high-demand goods at a loss is better than medium (no bars) or low (red
+    bars) demand goods", and its example aims for "a massive loss". So for
+    every commodity the station takes, the nearby source with the HIGHEST buy
+    price above this station's sell price (the biggest loss per load); rows
+    sorted by this station's demand level (high first), then the biggest
+    total loss. Same row shape as find_supply_for_destination (profit fields
+    negative) plus zero_demand."""
     dx, dy, dz = dest_xyz
     results: List[Dict[str, Any]] = []
     supply_buys = {mid: {commodity_key(k): v for k, v in s["buys"].items()}
@@ -124,7 +124,7 @@ def find_loss_supply(
             s = supply_stations[market_id]
             qty = min(cargo_capacity, stock)
             dist = ((s["x"] - dx) ** 2 + (s["y"] - dy) ** 2 + (s["z"] - dz) ** 2) ** 0.5
-            if best is not None and (loss * qty, dist) >= (-best["total_profit"], best["dist_to_dest"]):
+            if best is not None and (loss * qty, -dist) <= (-best["total_profit"], -best["dist_to_dest"]):
                 continue
             ages = [dt for dt in (_parse_ts(buy_updated), _parse_ts(sell_updated)) if dt is not None]
             best = {
@@ -137,7 +137,9 @@ def find_loss_supply(
             }
         if best is not None:
             results.append(best)
-    results.sort(key=lambda r: (not r["zero_demand"], -r["total_profit"]))
+    brackets = dest_station.get("brackets", {})
+    results.sort(key=lambda r: (-(0 if r["zero_demand"] else (brackets.get(commodity_key(r["commodity"])) or 0)),
+                                r["total_profit"]))
     return results[:max_results]
 
 

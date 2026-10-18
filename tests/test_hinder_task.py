@@ -94,10 +94,11 @@ def test_no_stations_known_and_buying_warns():
     assert any("Buying at Rival Front stations" in w for w in view["warnings"])
 
 
-def test_abandoned_missions_shown_as_unverified():
+def test_abandoned_missions_shown_as_no_effect():
     entry = {"missions": {"count": 0, "weighted": 0}, "combat_bonds_total": 0, "bounties_total": 0, "cz_kills": {},
              "trade_sold": {"commodity": 0, "exploration": 0, "exobiology": 0, "purchase": 0, "loss": 0,
                             "smuggling": 0, "mission_failed": 0, "mission_abandoned": 5}}
     view = build_task_view(_task(), {"2026-10-18": {"Ekono": {"Rival Front": entry}}}, None, [], None, LIMITS)
     chip = view["chips"][0]
-    assert chip["text"] == "5 abandoned (effect unverified)" and "expire" in chip["tooltip"]
+    assert chip["text"] == "5 abandoned — no influence effect" and "expire" in chip["tooltip"]   # SINC printed p39
+    assert any("let them expire" in w for w in view["warnings"])

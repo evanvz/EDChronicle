@@ -576,10 +576,10 @@ def _hinder_view(task: dict, report: dict, history: list, today: Optional[date] 
         chips.append({"text": f"{n} failed mission{'s' if n != 1 else ''}", "color": "#6BCB77"})
     if act["missions_abandoned"]:
         n = act["missions_abandoned"]
-        chips.append({"text": f"{n} abandoned (effect unverified)", "color": "#FFB347",
-                      "tooltip": "Abandoning costs reputation with them; whether it also lowers their influence "
-                                 "isn't confirmed. Compare with their influence trend after the tick. Letting "
-                                 "missions expire (fail) is the confirmed way."})
+        chips.append({"text": f"{n} abandoned — no influence effect", "color": "#888888",
+                      "tooltip": "SINC Complete BGS Guide 2024 (printed p39): abandoning gives no influence drop, "
+                                 "only a reputation loss. Let their missions expire instead — about 1 INF each."})
+        warnings.append("Abandoned missions don't lower their influence — let them expire instead")
     short = f"Boost the other factions · missions with a red − on {faction} · fail their missions"
     return {"status": status, "lines": lines, "warnings": warnings, "line_states": [""] * len(lines),
             "bars": bars, "chips": chips, "guide_short": short,
@@ -1133,10 +1133,12 @@ def _bgs_guide(task: dict, limits: dict, population_basis: str = "") -> str:
         # SINC Complete BGS Guide 2024, "Reducing influence" (p36-39), cheapest first.
         return (f"Influence is zero-sum, so boosting the other factions here pushes {faction} down without "
                 f"costing reputation. Take missions that show a red − effect on them. Letting their missions "
-                f"expire (failing them) costs them about 1 INF each, and you lose reputation with them. "
-                f"Trading at a loss or into zero demand, or smuggling, at stations they control also hurts "
-                f"them. Clean kills of their ships work but bring big bounties and notoriety — only when "
-                f"your coordinator asks.")
+                f"expire (failing them) costs them about 1 INF each, and you lose reputation with them; "
+                f"abandoning does nothing to their influence. At stations they own: sell at a loss (high-demand "
+                f"goods hurt most) or smuggle via the black market (not if they're an anarchy — that helps "
+                f"them). Clean kills of their ships hurt most — their own Odyssey settlements are full of their "
+                f"ships and have no ATR — but bring big bounties and notoriety: only when your coordinator asks. "
+                f"(SINC Complete BGS Guide 2024, \"Reducing influence\", printed p36-39.)")
     if task_type == "boost":
         return (f"A bit of each: missions for {faction} (about {limits['tier_score']} INF+ per tick), bounties, "
                 f"exploration data and high-demand profitable trade at {faction}-controlled stations "

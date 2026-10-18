@@ -830,8 +830,9 @@ class TradeRoutePanel(QWidget):
         self._sell_loss_check.setStyleSheet(_LABEL_STYLE)
         self._sell_loss_check.setToolTip(
             "Hinder this station's owner (BGS): find goods you can buy nearby for MORE than this station pays, "
-            "so selling here is a loss. Zero-demand items first (selling into zero demand hurts too), then the "
-            "smallest total loss. Never use it at a station your own faction owns.")
+            "so selling here is a loss. High-demand items first, then the biggest loss — SINC: a loss in "
+            "high-demand goods hurts more than in medium or low demand. Never use it at a station your own "
+            "faction owns.")
         self._sell_loss_check.toggled.connect(lambda _on: self._start_sell_search())
         for w in (near_label, self._sell_near_combo, self._sell_range_spin, pad_label,
                   self._sell_pad_combo, self._sell_search_btn, self._sell_pin_check, self._sell_loss_check):
@@ -981,7 +982,7 @@ class TradeRoutePanel(QWidget):
         n = len(results)
         self._sell_status_label.setText(
             f"Found {n} commodit{'y' if n == 1 else 'ies'} that sell here at a loss — this hurts "
-            f"{self._sell_market['station']}'s owner. Zero demand first, then the cheapest loss." if loss else
+            f"{self._sell_market['station']}'s owner. High demand first, then the biggest loss." if loss else
             f"Found {n} commodit{'y' if n == 1 else 'ies'} you can buy nearby and sell here at a profit.")
         _fill_supply_table(self._sell_table, results, loss=loss)
         self._mark_buy_here_rows()
@@ -1684,7 +1685,7 @@ def _fill_supply_table(table: QTableWidget, results: list, loss: bool = False) -
         for col, it in enumerate(numeric, start=3):
             it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             table.setItem(row, col, it)
-    if loss:   # keep find_loss_supply's order (zero demand first, then the cheapest loss): no sort column
+    if loss:   # keep find_loss_supply's order (high demand first, then the biggest loss): no sort column
         table.horizontalHeader().setSortIndicator(-1, Qt.SortOrder.AscendingOrder)
     table.setSortingEnabled(True)
     if not loss:
