@@ -515,8 +515,11 @@ def _hinder_view(task: dict, report: dict, history: list, today: Optional[date] 
     if stations:
         parts = []
         for st in stations:
-            tags = [f"{st['pad_size']} pad" if st.get("pad_size") else "",
-                    "market" if st.get("has_market") else "", "black market" if st.get("has_black_market") else ""]
+            seen = str(st.get("last_visited") or "")[:7]
+            tags = [f"{st['pad_size']} pad" if st.get("pad_size") and st["pad_size"] != "?" else "",
+                    "market" if st.get("has_market") else "", "black market" if st.get("has_black_market") else "",
+                    # community data can be old: ownership may have changed since
+                    f"data {seen}" if seen and seen < (today or datetime.now(timezone.utc).date()).isoformat()[:7] else ""]
             parts.append(f"{st['station_name']} ({' · '.join(t for t in tags if t)})")
         lines.append(f"Their stations here: {', '.join(parts)}")
     elif stations is not None:

@@ -5,6 +5,7 @@
 """Spansh API client for PowerPlay system search."""
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
@@ -15,8 +16,46 @@ log = logging.getLogger(__name__)
 
 _SEARCH_URL        = "https://spansh.co.uk/api/systems/search"
 _BODIES_SEARCH_URL = "https://spansh.co.uk/api/bodies/search"
+_DUMP_URL          = "https://spansh.co.uk/api/dump/{}"
 _TIMEOUT    = 15
 _BODIES_TIMEOUT = 30
+
+
+
+def fetch_system_stations(system_address: int) -> List[Dict[str, Any]]:
+    """Every station and Odyssey settlement Spansh lists for a system, with
+    its owner, in net.station_info's shape -- our own station list only
+    knows stations someone docked at over EDDN, which misses most surface
+    settlements (HIP 114880: 9 known vs 63 on Spansh, 2026-10-18).
+    station_services keeps only what the BGS cards need (market, black
+    market); last_visited is Spansh's updateTime. [] on any error."""
+    try:
+        resp = requests.get(_DUMP_URL.format(system_address), timeout=_TIMEOUT)
+        resp.raise_for_status()
+        system = resp.json().get("system") or {}
+    except Exception as exc:
+        log.warning("Spansh station dump failed for %s: %s", system_address, exc)
+        return []
+    raw = list(system.get("stations") or [])
+    for body in system.get("bodies") or []:
+        raw += list(body.get("stations") or [])
+    out = []
+    for s in raw:
+        faction = s.get("controllingFaction")
+        if not (isinstance(s.get("id"), int) and s.get("name") and faction) or faction == "FleetCarrier":
+            continue
+        pads = s.get("landingPads") or {}
+        services = s.get("services") or []
+        out.append({
+            "market_id": s["id"], "station_name": s["name"], "system_name": system.get("name"),
+            "station_type": s.get("type"), "pads_small": pads.get("small"), "pads_medium": pads.get("medium"),
+            "pads_large": pads.get("large"),
+            "station_services": json.dumps([tag for svc, tag in (("Market", "commodities"), ("Black Market", "blackmarket"))
+                                            if svc in services]),
+            "station_faction": faction, "last_visited": s.get("updateTime"),
+        })
+    return out
+
 
 # Best mining reserve tiers, worth prioritising over Common/Low/Depleted.
 _GOOD_RESERVE_LEVELS = ["Pristine", "Major"]

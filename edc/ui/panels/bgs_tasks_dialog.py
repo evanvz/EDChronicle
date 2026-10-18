@@ -10,7 +10,7 @@ from __future__ import annotations
 import html
 import logging
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QObject, Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QApplication, QComboBox, QCompleter, QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QProgressBar,
     QPushButton, QScrollArea, QToolTip, QVBoxLayout, QWidget,
@@ -24,6 +24,37 @@ from edc.ui import formatting as fmt
 from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE
 
 log = logging.getLogger("edc.bgs_tasks")
+
+_STATIONS_FETCHED: set = set()   # system addresses whose Spansh station list was read this session
+
+
+class _HinderStationsWorker(QObject):
+    """Fills in the stations of Hinder-task systems from Spansh (owned
+    settlements are mostly missing from our EDDN-built list) -- own DB
+    connection per the cross-thread rule."""
+    finished = pyqtSignal(int)   # stations added
+
+    def __init__(self, db_path, addresses):
+        super().__init__()
+        self._db_path = db_path
+        self._addresses = addresses
+
+    def run(self):
+        from edc.core.spansh_client import fetch_system_stations
+        from persistence.database import Database
+        from persistence.repository import Repository
+
+        added = 0
+        db = Database(self._db_path)
+        try:
+            repo = Repository(db)
+            for addr in self._addresses:
+                added += max(0, repo.save_spansh_stations(fetch_system_stations(addr)))
+        except Exception:
+            log.exception("Failed to load Hinder-task stations from Spansh")
+        finally:
+            db.close()
+        self.finished.emit(added)
 
 _LINE_STYLE = "background:transparent; border:none; color:#c8c8c8;"
 _LINE_STATE_STYLES = {
@@ -255,6 +286,29 @@ class BgsTasksDialog(QDialog):
         if not self._completers_loaded:
             self._load_system_completer()
         self.refresh()
+        self._fetch_hinder_stations()
+
+    def _fetch_hinder_stations(self) -> None:
+        """Once per session per system, off the UI thread."""
+        if getattr(self, "_stations_thread", None) is not None and self._stations_thread.isRunning():
+            return
+        try:
+            todo = [t["system_address"] for t in self._panel._repo.list_bgs_tasks()
+                    if t["task_type"] == "hinder" and isinstance(t["system_address"], int)
+                    and t["system_address"] not in _STATIONS_FETCHED]
+        except Exception:
+            log.exception("Failed to list Hinder tasks")
+            return
+        if not todo:
+            return
+        _STATIONS_FETCHED.update(todo)
+        self._stations_worker = _HinderStationsWorker(self._panel._repo.db.db_path, todo)
+        self._stations_thread = QThread()
+        self._stations_worker.moveToThread(self._stations_thread)
+        self._stations_thread.started.connect(self._stations_worker.run)
+        self._stations_worker.finished.connect(lambda added: self.refresh() if added else None)
+        self._stations_worker.finished.connect(self._stations_thread.quit, Qt.ConnectionType.DirectConnection)
+        self._stations_thread.start()
 
     def refresh(self) -> None:
         tick_iso = getattr(self._panel, "_latest_known_tick", None)

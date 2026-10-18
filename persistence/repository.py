@@ -2034,6 +2034,18 @@ class Repository:
             out.append(d)
         return out
 
+    def save_spansh_stations(self, stations: list[dict]) -> int:
+        """Adds Spansh-listed stations we don't know yet (fetch_system_stations
+        rows); never overwrites a known one -- our own docking and EDDN are
+        fresher. Returns how many were added."""
+        cols = ("market_id", "station_name", "system_name", "station_type", "pads_small", "pads_medium",
+                "pads_large", "station_services", "station_faction", "last_visited")
+        cur = self.db.conn.executemany(
+            f"INSERT OR IGNORE INTO net.station_info ({', '.join(cols)}) VALUES ({', '.join('?' for _ in cols)})",
+            [tuple(s.get(c) for c in cols) for s in stations])
+        self.db.conn.commit()
+        return cur.rowcount
+
     def get_station_info(self, market_id: int) -> dict | None:
         """Full station_info row (as a dict) for a market_id, or None."""
         row = self.db.conn.execute(
