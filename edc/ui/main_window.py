@@ -6740,7 +6740,7 @@ class MainWindow(QMainWindow):
         """Our own EDDN tick detector fired: store it like a tick.edcd.io tick."""
         log.info("BGS tick detected from EDDN at %s", tick_iso)
         try:
-            self.repo.record_bgs_tick(tick_iso)
+            self.repo.record_bgs_tick(tick_iso, source="eddn")
         except Exception:
             log.exception("Failed to record EDDN-detected tick")
         self._on_bgs_tick_check_finished(tick_iso)

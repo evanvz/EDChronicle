@@ -353,7 +353,8 @@ class EddnPowerPlayWorker(QObject):
                 continue
 
             self._maybe_emit_bgs_status(msg, msg.get("timestamp") or "")
-            tick = self.tick_detector.observe(msg.get("SystemAddress"), msg.get("Factions"), msg.get("timestamp") or "")
+            tick = self.tick_detector.observe(msg.get("SystemAddress"), msg.get("Factions"), msg.get("timestamp") or "",
+                                              uploader=(data.get("header") or {}).get("uploaderID"))
             if tick:
                 self.tick_detected.emit(tick)
             self._maybe_emit_system_profile(msg, msg.get("timestamp") or "")

@@ -449,6 +449,8 @@ class Database:
             """CREATE TABLE IF NOT EXISTS bgs_ticks (
                 tick_at TEXT PRIMARY KEY
             )""",
+            # 'eddn' = our own detector (edc.core.tick_detector); NULL/'edcd' = tick.edcd.io.
+            "ALTER TABLE bgs_ticks ADD COLUMN source TEXT",
             # Jumps/dockings in BGS test systems: any commander's (source 'eddn') and
             # our own (source 'journal', same event timestamps as our EDDN uploads),
             # so the Experiment Log can count other visitors per tick window.

@@ -2865,16 +2865,22 @@ class Repository:
 
     # ── BGS Experiment Log ────────────────────────────────────────────────────
 
-    def record_bgs_tick(self, tick_iso: str) -> None:
+    def record_bgs_tick(self, tick_iso: str, source: str = "edcd") -> None:
         """Stores a detected tick, normalised to %Y-%m-%dT%H:%M:%SZ (tick.edcd.io
         sends +00:00; activity timestamps use Z, and these are compared as strings)."""
         dt = datetime.fromisoformat(tick_iso.replace("Z", "+00:00")).astimezone(timezone.utc)
         # Two sources (tick.edcd.io and our EDDN detector): a tick within 6 h of a
-        # stored one is the same tick, or it would split a window in two.
+        # stored one is the same tick, or it would split a window in two. EDDN is
+        # unauthenticated, so tick.edcd.io's time replaces a detected one; a
+        # detected tick never replaces anything.
+        at = dt.strftime("%Y-%m-%dT%H:%M:%SZ")
         lo, hi = ((dt + timedelta(hours=h)).strftime("%Y-%m-%dT%H:%M:%SZ") for h in (-6, 6))
-        if self.db.conn.execute("SELECT 1 FROM bgs_ticks WHERE tick_at BETWEEN ? AND ? LIMIT 1", (lo, hi)).fetchone():
-            return
-        self.db.execute("INSERT OR IGNORE INTO bgs_ticks (tick_at) VALUES (?)", (dt.strftime("%Y-%m-%dT%H:%M:%SZ"),))
+        near = self.db.conn.execute("SELECT tick_at, source FROM bgs_ticks WHERE tick_at BETWEEN ? AND ? LIMIT 1",
+                                    (lo, hi)).fetchone()
+        if near is None:
+            self.db.execute("INSERT OR IGNORE INTO bgs_ticks (tick_at, source) VALUES (?, ?)", (at, source))
+        elif source == "edcd" and near[1] == "eddn":
+            self.db.execute("UPDATE bgs_ticks SET tick_at = ?, source = 'edcd' WHERE tick_at = ?", (at, near[0]))
 
     def get_bgs_ticks(self, since: str = "") -> list[str]:
         return [r[0] for r in self.db.conn.execute(

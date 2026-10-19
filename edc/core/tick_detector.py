@@ -23,6 +23,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 WINDOW = timedelta(minutes=60)      # changes this close together form a burst
 MIN_SYSTEMS = 20                    # distinct systems changing in one burst
+# EDDN is unauthenticated: the burst must come from several uploaders, so one
+# sender can't fake a tick quickly (the relay re-hashes uploader IDs every 3
+# min). ponytail: raises the bar, doesn't stop a patient faker -- tick.edcd.io's
+# time replaces a detected tick when it has one (Repository.record_bgs_tick).
+MIN_UPLOADERS = 5
 MIN_GAP = timedelta(hours=16)       # ticks are daily; no second tick sooner
 MAX_LAG = timedelta(minutes=30)     # ignore messages older than this (replayed journals)
 FORGET = timedelta(hours=48)        # drop systems not seen for this long
@@ -42,7 +47,7 @@ def _iso(dt: datetime) -> str:
 class TickDetector:
     def __init__(self, last_tick: Optional[str] = None):
         self._levels: Dict[int, Tuple[datetime, tuple]] = {}
-        self._changes: deque = deque()          # (time, system_address)
+        self._changes: deque = deque()          # (time, system_address, uploader)
         self._last_tick = _parse(last_tick) if last_tick else None
         self._seen = 0
 
@@ -53,7 +58,7 @@ class TickDetector:
             self._last_tick = t
 
     def observe(self, system_address: Any, factions: List[dict], timestamp: str,
-                now: Optional[datetime] = None) -> Optional[str]:
+                now: Optional[datetime] = None, uploader: Optional[str] = None) -> Optional[str]:
         """Feed one message's Factions; returns the tick time (…Z) when this
         message completes a burst, else None."""
         ts = _parse(timestamp)
@@ -76,12 +81,13 @@ class TickDetector:
         self._levels[system_address] = (ts, levels)
         if prev is None or prev[1] == levels:
             return None
-        self._changes.append((ts, system_address))
+        self._changes.append((ts, system_address, uploader))
         while self._changes and ts - self._changes[0][0] > WINDOW:
             self._changes.popleft()
-        if len({a for _, a in self._changes}) < MIN_SYSTEMS:
+        if (len({c[1] for c in self._changes}) < MIN_SYSTEMS
+                or len({c[2] for c in self._changes if c[2]}) < MIN_UPLOADERS):
             return None
-        tick = min(t for t, _ in self._changes)
+        tick = min(c[0] for c in self._changes)
         if self._last_tick is not None and tick - self._last_tick < MIN_GAP:
             return None
         self._last_tick = tick
