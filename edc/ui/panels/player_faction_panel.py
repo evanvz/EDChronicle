@@ -19,21 +19,14 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from PyQt6.QtCore import Qt, QObject, QThread, QStringListModel, QTimer, pyqtSignal, QDate
+from PyQt6.QtCore import Qt, QObject, QThread, QStringListModel, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QFontMetrics
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QFrame, QFileDialog, QDialog,
     QApplication, QCompleter, QSizePolicy,
 )
-try:
-    from PyQt6.QtCharts import QChart, QChartView, QLineSeries, QDateTimeAxis, QValueAxis
-    _CHARTS_ERROR = ""
-except ImportError as exc:
-    # Windows Smart App Control can block QtCharts.pyd (unsigned, low
-    # reputation) -- confirmed 2026-10-19 after a reboot. The app still
-    # runs; only the influence chart is replaced by a note.
-    _CHARTS_ERROR = str(exc)
+from edc.ui.influence_chart import InfluenceChart
 
 from edc.core.edsm_faction_lookup import (
     fetch_system_factions, fetch_system_coords, fetch_system_stations, ERROR_BLOCKED, ERROR_NOT_FOUND,
@@ -2249,31 +2242,8 @@ class _FactionHistoryDialog(QDialog):
         self._bgs_status_label.setVisible(False)
         layout.addWidget(self._bgs_status_label)
 
-        if _CHARTS_ERROR:
-            self._chart = None
-            note = QLabel("Influence chart unavailable: Windows blocked the chart component (QtCharts.pyd). "
-                          "The table below has the same data.")
-            note.setWordWrap(True)
-            note.setToolTip(_CHARTS_ERROR)
-            note.setStyleSheet("background:transparent; border:none; padding:4px; color:#FFB347;")
-            layout.addWidget(note)
-        else:
-            self._chart = QChart()
-            self._chart.setBackgroundBrush(QColor("#080f18"))
-            self._chart.setTitleBrush(QColor("#c8c8c8"))
-            self._chart.legend().setLabelColor(QColor("#c8c8c8"))
-            self._axis_x = QDateTimeAxis()
-            self._axis_x.setFormat("MMM d")
-            self._axis_x.setLabelsColor(QColor("#888888"))
-            self._axis_y = QValueAxis()
-            self._axis_y.setRange(0, 100)
-            self._axis_y.setLabelFormat("%d%%")
-            self._axis_y.setLabelsColor(QColor("#888888"))
-            self._chart.addAxis(self._axis_x, Qt.AlignmentFlag.AlignBottom)
-            self._chart.addAxis(self._axis_y, Qt.AlignmentFlag.AlignLeft)
-            self._chart_view = QChartView(self._chart)
-            self._chart_view.setMinimumHeight(220)
-            layout.addWidget(self._chart_view)
+        self._chart = InfluenceChart()
+        layout.addWidget(self._chart)
 
         self._table = QTableWidget()
         self._table.setColumnCount(4)
@@ -2382,9 +2352,6 @@ class _FactionHistoryDialog(QDialog):
         for h in history:
             by_faction.setdefault(h.get("faction_name") or "Unknown", []).append(h)
 
-        if self._chart is not None:
-            self._chart.removeAllSeries()
-
         ordered_factions = [p["faction_name"] for p in predictions if p["faction_name"] in by_faction]
         ordered_factions += [f for f in by_faction if f not in ordered_factions]
 
@@ -2392,24 +2359,18 @@ class _FactionHistoryDialog(QDialog):
             idx = ordered_factions.index(fname) if fname in ordered_factions else 0
             return _FACTION_CHART_COLORS[idx % len(_FACTION_CHART_COLORS)]
 
-        for i, fname in enumerate(ordered_factions if self._chart is not None else []):
-            color = colors.get(fname, _fallback_color(fname))
-            series = QLineSeries()
-            series.setName(fname)
-            series.setColor(QColor(color))
-            for h in sorted(by_faction[fname], key=lambda r: r.get("snapshot_date") or ""):
+        chart_series = []
+        for fname in ordered_factions:
+            points = []
+            for h in by_faction[fname]:
                 infl = h.get("influence")
-                if not isinstance(infl, (int, float)):
+                try:
+                    day = date.fromisoformat(h.get("snapshot_date") or "")
+                except ValueError:
                     continue
-                qd = QDate.fromString(h.get("snapshot_date") or "", "yyyy-MM-dd")
-                if not qd.isValid():
-                    continue
-                qdt = qd.startOfDay()
-                series.append(qdt.toMSecsSinceEpoch(), infl * 100)
-            if series.count():
-                self._chart.addSeries(series)
-                series.attachAxis(self._axis_x)
-                series.attachAxis(self._axis_y)
+                if isinstance(infl, (int, float)):
+                    points.append((day, infl * 100))
+            chart_series.append((fname, colors.get(fname, _fallback_color(fname)), points))
 
         # Auto-scale the Y axis to the influence values actually in view --
         # a fixed 0-100% range flattens every faction into a thin band near
@@ -2424,9 +2385,8 @@ class _FactionHistoryDialog(QDialog):
             for h in history
             if isinstance(h.get("influence"), (int, float))
         ]
-        if self._chart is None:
-            pass
-        elif all_influences:
+        y_range = (0.0, 100.0)
+        if all_influences:
             lo, hi = min(all_influences), max(all_influences)
             spread = hi - lo
             if spread < 10:
@@ -2441,9 +2401,8 @@ class _FactionHistoryDialog(QDialog):
             hi = min(100.0, hi)
             if hi - lo < 1:
                 lo, hi = 0.0, 100.0
-            self._axis_y.setRange(lo, hi)
-        else:
-            self._axis_y.setRange(0, 100)
+            y_range = (lo, hi)
+        self._chart.set_data(chart_series, y_range)
 
         self._table.setRowCount(len(history))
         for row, h in enumerate(history):
