@@ -26,7 +26,14 @@ from PyQt6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHeaderView, QFrame, QFileDialog, QDialog,
     QApplication, QCompleter, QSizePolicy,
 )
-from PyQt6.QtCharts import QChart, QChartView, QLineSeries, QDateTimeAxis, QValueAxis
+try:
+    from PyQt6.QtCharts import QChart, QChartView, QLineSeries, QDateTimeAxis, QValueAxis
+    _CHARTS_ERROR = ""
+except ImportError as exc:
+    # Windows Smart App Control can block QtCharts.pyd (unsigned, low
+    # reputation) -- confirmed 2026-10-19 after a reboot. The app still
+    # runs; only the influence chart is replaced by a note.
+    _CHARTS_ERROR = str(exc)
 
 from edc.core.edsm_faction_lookup import (
     fetch_system_factions, fetch_system_coords, fetch_system_stations, ERROR_BLOCKED, ERROR_NOT_FOUND,
@@ -2242,22 +2249,31 @@ class _FactionHistoryDialog(QDialog):
         self._bgs_status_label.setVisible(False)
         layout.addWidget(self._bgs_status_label)
 
-        self._chart = QChart()
-        self._chart.setBackgroundBrush(QColor("#080f18"))
-        self._chart.setTitleBrush(QColor("#c8c8c8"))
-        self._chart.legend().setLabelColor(QColor("#c8c8c8"))
-        self._axis_x = QDateTimeAxis()
-        self._axis_x.setFormat("MMM d")
-        self._axis_x.setLabelsColor(QColor("#888888"))
-        self._axis_y = QValueAxis()
-        self._axis_y.setRange(0, 100)
-        self._axis_y.setLabelFormat("%d%%")
-        self._axis_y.setLabelsColor(QColor("#888888"))
-        self._chart.addAxis(self._axis_x, Qt.AlignmentFlag.AlignBottom)
-        self._chart.addAxis(self._axis_y, Qt.AlignmentFlag.AlignLeft)
-        self._chart_view = QChartView(self._chart)
-        self._chart_view.setMinimumHeight(220)
-        layout.addWidget(self._chart_view)
+        if _CHARTS_ERROR:
+            self._chart = None
+            note = QLabel("Influence chart unavailable: Windows blocked the chart component (QtCharts.pyd). "
+                          "The table below has the same data.")
+            note.setWordWrap(True)
+            note.setToolTip(_CHARTS_ERROR)
+            note.setStyleSheet("background:transparent; border:none; padding:4px; color:#FFB347;")
+            layout.addWidget(note)
+        else:
+            self._chart = QChart()
+            self._chart.setBackgroundBrush(QColor("#080f18"))
+            self._chart.setTitleBrush(QColor("#c8c8c8"))
+            self._chart.legend().setLabelColor(QColor("#c8c8c8"))
+            self._axis_x = QDateTimeAxis()
+            self._axis_x.setFormat("MMM d")
+            self._axis_x.setLabelsColor(QColor("#888888"))
+            self._axis_y = QValueAxis()
+            self._axis_y.setRange(0, 100)
+            self._axis_y.setLabelFormat("%d%%")
+            self._axis_y.setLabelsColor(QColor("#888888"))
+            self._chart.addAxis(self._axis_x, Qt.AlignmentFlag.AlignBottom)
+            self._chart.addAxis(self._axis_y, Qt.AlignmentFlag.AlignLeft)
+            self._chart_view = QChartView(self._chart)
+            self._chart_view.setMinimumHeight(220)
+            layout.addWidget(self._chart_view)
 
         self._table = QTableWidget()
         self._table.setColumnCount(4)
@@ -2366,7 +2382,8 @@ class _FactionHistoryDialog(QDialog):
         for h in history:
             by_faction.setdefault(h.get("faction_name") or "Unknown", []).append(h)
 
-        self._chart.removeAllSeries()
+        if self._chart is not None:
+            self._chart.removeAllSeries()
 
         ordered_factions = [p["faction_name"] for p in predictions if p["faction_name"] in by_faction]
         ordered_factions += [f for f in by_faction if f not in ordered_factions]
@@ -2375,7 +2392,7 @@ class _FactionHistoryDialog(QDialog):
             idx = ordered_factions.index(fname) if fname in ordered_factions else 0
             return _FACTION_CHART_COLORS[idx % len(_FACTION_CHART_COLORS)]
 
-        for i, fname in enumerate(ordered_factions):
+        for i, fname in enumerate(ordered_factions if self._chart is not None else []):
             color = colors.get(fname, _fallback_color(fname))
             series = QLineSeries()
             series.setName(fname)
@@ -2407,7 +2424,9 @@ class _FactionHistoryDialog(QDialog):
             for h in history
             if isinstance(h.get("influence"), (int, float))
         ]
-        if all_influences:
+        if self._chart is None:
+            pass
+        elif all_influences:
             lo, hi = min(all_influences), max(all_influences)
             spread = hi - lo
             if spread < 10:
