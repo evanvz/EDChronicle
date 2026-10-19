@@ -163,6 +163,9 @@ class EddnPowerPlayWorker(QObject):
     # system_bgs_status so the colonisation candidate dialog can show
     # confirmed economy instead of a body-attribute guess.
     system_profile_seen = pyqtSignal(object, str, dict, str)
+    # A BGS tick spotted in the feed (many systems' influence changing at once),
+    # our second tick source next to tick.edcd.io -- see edc.core.tick_detector.
+    tick_detected = pyqtSignal(str)
     finished = pyqtSignal()
 
     def __init__(self, watched_factions=None):
@@ -177,6 +180,8 @@ class EddnPowerPlayWorker(QObject):
         # by set_watched_systems() (a single reference assignment).
         self._watched_systems: frozenset = frozenset()
         self._experiment_systems: frozenset = frozenset()   # BGS test systems, same swap pattern
+        from edc.core.tick_detector import TickDetector
+        self.tick_detector = TickDetector()   # set_last_tick() from the UI thread: one reference swap
         # Diagnostics: per-schema message counts since listener start.
         # Mutated only on the listener thread; read from the UI thread via
         # get_stats() (dict read of ints — GIL makes this safe).
@@ -348,6 +353,9 @@ class EddnPowerPlayWorker(QObject):
                 continue
 
             self._maybe_emit_bgs_status(msg, msg.get("timestamp") or "")
+            tick = self.tick_detector.observe(msg.get("SystemAddress"), msg.get("Factions"), msg.get("timestamp") or "")
+            if tick:
+                self.tick_detected.emit(tick)
             self._maybe_emit_system_profile(msg, msg.get("timestamp") or "")
             self._maybe_emit_faction_names(msg, msg.get("timestamp") or "")
 

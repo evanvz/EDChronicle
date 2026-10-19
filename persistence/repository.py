@@ -2869,6 +2869,11 @@ class Repository:
         """Stores a detected tick, normalised to %Y-%m-%dT%H:%M:%SZ (tick.edcd.io
         sends +00:00; activity timestamps use Z, and these are compared as strings)."""
         dt = datetime.fromisoformat(tick_iso.replace("Z", "+00:00")).astimezone(timezone.utc)
+        # Two sources (tick.edcd.io and our EDDN detector): a tick within 6 h of a
+        # stored one is the same tick, or it would split a window in two.
+        lo, hi = ((dt + timedelta(hours=h)).strftime("%Y-%m-%dT%H:%M:%SZ") for h in (-6, 6))
+        if self.db.conn.execute("SELECT 1 FROM bgs_ticks WHERE tick_at BETWEEN ? AND ? LIMIT 1", (lo, hi)).fetchone():
+            return
         self.db.execute("INSERT OR IGNORE INTO bgs_ticks (tick_at) VALUES (?)", (dt.strftime("%Y-%m-%dT%H:%M:%SZ"),))
 
     def get_bgs_ticks(self, since: str = "") -> list[str]:

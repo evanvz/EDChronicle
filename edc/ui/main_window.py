@@ -901,6 +901,10 @@ class _BgsTickCheckWorker(QObject):
                                                 (today + timedelta(days=1)).isoformat()):
                         repo.record_bgs_tick(t)
                 repo.record_bgs_tick(result)
+                # the newest tick from either source (our EDDN detector may know a later one)
+                stored = repo.get_bgs_ticks()
+                if stored and stored[-1] > result[:19]:
+                    result = stored[-1]
             except Exception:
                 log.exception("Failed to record BGS tick")
             finally:
@@ -3439,6 +3443,12 @@ class MainWindow(QMainWindow):
         self._eddn_worker.body_scan_seen.connect(self.eddn_market_cache.on_body_scan_seen)
         self._eddn_worker.faction_names_seen.connect(self.eddn_market_cache.on_faction_names_seen)
         self._eddn_worker.system_visit_seen.connect(self.eddn_market_cache.on_system_visit_seen)
+        self._eddn_worker.tick_detected.connect(self._on_eddn_tick_detected)
+        try:
+            stored_ticks = self.repo.get_bgs_ticks()
+            self._eddn_worker.tick_detector.set_last_tick(stored_ticks[-1] if stored_ticks else None)
+        except Exception:
+            log.exception("Failed to seed the EDDN tick detector")
         self._refresh_expansion_watch()
         self._eddn_thread.start()
         self._eddn_save_timer.start()
@@ -6721,8 +6731,19 @@ class MainWindow(QMainWindow):
         self._bgs_tick_thread.start()
 
     def _on_bgs_tick_check_finished(self, tick_iso) -> None:
+        if tick_iso and getattr(self, "_eddn_worker", None) is not None:
+            self._eddn_worker.tick_detector.set_last_tick(tick_iso)
         self.player_faction_panel.set_latest_known_tick(tick_iso)
         self.player_faction_panel.maybe_refresh_for_tick(tick_iso)
+
+    def _on_eddn_tick_detected(self, tick_iso: str) -> None:
+        """Our own EDDN tick detector fired: store it like a tick.edcd.io tick."""
+        log.info("BGS tick detected from EDDN at %s", tick_iso)
+        try:
+            self.repo.record_bgs_tick(tick_iso)
+        except Exception:
+            log.exception("Failed to record EDDN-detected tick")
+        self._on_bgs_tick_check_finished(tick_iso)
 
     def _maybe_refresh_colonisation_candidates(self) -> None:
         system_name = getattr(self.state, "system", None)
