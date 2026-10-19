@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (
 from edc.core.edsm_faction_lookup import fetch_populated_cube, fetch_system_factions
 from edc.core.expansion_forecast import (
     CACHE_MAX_AGE_H, CUBE_LY, LOOKUP_MAX, OUTER_CUBE_LY, WATCH_THRESHOLD, alert_text,
-    detect_new_systems, faction_expansion_line, first_expansion, in_cube, predicted_targets, is_current, likely_source, rank_candidates, watched_systems,
+    detect_new_systems, faction_expansion_line, first_expansion, in_cube, predicted_target, is_current, likely_source, rank_candidates, watched_systems,
     SLOT_CHANGE_DAYS, merge_live_counts, slot_change_text, slot_changes,
 )
 
@@ -319,14 +319,8 @@ class ExpansionForecastPanel(QWidget):
              count_cell(c), before(c),
              f"EDDN {c['count_at'][:16].replace('T', ' ')}" if c.get("count_source") else fetched]
             for i, c in enumerate(ranked)])
-        pt = predicted_targets(ranked)
-        if pt["retreat_first"] == pt["invasion_first"]:
-            target = pt["retreat_first"]
-            outcome = f"Likely target: {target}" if target else "Likely target: none eligible"
-        else:
-            target = f"{pt['retreat_first']} / {pt['invasion_first']}"
-            outcome = (f"Likely target: {pt['retreat_first']} if a retreated-from system comes first · "
-                       f"{pt['invasion_first']} if a 7-faction invasion comes first (the order of these two is disputed)")
+        target = predicted_target(ranked)
+        outcome = f"Likely target: {target}" if target else "Likely target: none eligible"
         mine = {c.get("system_address") for c in cached}
         changes = slot_changes({a: lv for a, lv in live.items() if a in mine}, today)
         self._outcome_label.setText("\n".join([slot_change_text(c, target) for c in changes] + [outcome]))
@@ -336,9 +330,9 @@ class ExpansionForecastPanel(QWidget):
         self._target_status.setText(
             f"From {self._source['system_name']}: all {len(cached)} candidates "
             f"in {area} (EDSM, {fetched} UTC; faction counts from live EDDN sightings where we have one; "
-            f"faction here before = our history + EDSM's former-faction list). Tier 1 = fewer than 7 factions, never there; tier 2 = fewer than 7, "
-            f"faction was there before; tier 3 = 7 factions (invasion war) — which of tiers 2 and 3 the game "
-            f"prefers is disputed.{extra}"
+            f"faction here before = our history + EDSM's former-faction list). Tier 1 = fewer than 7 factions, never there; "
+            f"tier 2 = 7 factions (invasion war); tier 3 = fewer than 7, faction was there before — the game's order "
+            f"per the Complete BGS Guide 2025 (Rules of Expansion).{extra}"
             + ("" if any(c["tier"] for c in ranked) or not cached else
                " No eligible system within ±30 ly — the expansion would fail." if outer else
                " No eligible system within ±20 ly — the game would search ±30 ly next, or the expansion fails."))
