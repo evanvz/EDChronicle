@@ -38,3 +38,13 @@ def test_merge_adds_only_ticks_no_global_tick_explains():
                  {"after": "2026-10-19T12:00:00Z", "by": "2026-10-19T13:00:00Z", "confirmed": False}]
     ticks, added = merge_ticks(["2026-10-17T16:25:36Z"], sys_ticks)
     assert ticks == ["2026-10-17T16:25:36Z", "2026-10-19T11:46:38Z"] and list(added) == ["2026-10-19T11:46:38Z"]
+
+
+def test_reading_at_an_inferred_tick_is_not_provisional():
+    from edc.core.bgs_experiment import build_rows
+    effort = lambda s, e: {"tier_score": 0, "bounties": 0, "trade_profit": 0, "exploration": 0, "combat_bonds": 0}
+    readings = [("2026-10-18T17:21:00Z", 0.6018, "[]", "[]"), ("2026-10-19T14:39:00Z", 0.6447, "[]", "[]")]
+    inferred = {"2026-10-19T14:39:00Z": {"after": "2026-10-18T17:21:00Z", "by": "2026-10-19T14:39:00Z"}}
+    rows = build_rows(["2026-10-17T16:25:36Z", "2026-10-19T14:39:00Z"], readings, effort,
+                      now="2026-10-19T15:00:00Z", inferred=inferred)
+    assert not rows[1]["provisional"] and round(rows[1]["change"], 2) == 4.29

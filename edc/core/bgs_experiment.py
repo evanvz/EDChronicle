@@ -99,8 +99,11 @@ def build_rows(ticks: List[str], readings: List[tuple], effort_for: Callable[[st
         rows[-1]["factions_up"] = sorted(up)
         # A reading under 12 h after its tick may still be the old level (propagation):
         # the row's numbers are provisional until a later reading confirms them.
-        rows[-1]["provisional"] = bool((during and during[0] < _settled(start))
-                                       or (after and end is not None and after[0] < _settled(end)))
+        # A tick inferred from the system's own readings sits AT the reading that shows
+        # the change, so that reading is post-tick by definition, not provisional.
+        rows[-1]["provisional"] = bool((during and start not in (inferred or {}) and during[0] < _settled(start))
+                                       or (after and end is not None and end not in (inferred or {})
+                                           and after[0] < _settled(end)))
         # Once propagation has had its 12 h, influence should hold until the next tick;
         # differing settled readings mean an update tick.edcd.io didn't list.
         inside = {round(r[1], 4) for r in readings if r[0] >= _settled(start) and (end is None or r[0] < end)}
