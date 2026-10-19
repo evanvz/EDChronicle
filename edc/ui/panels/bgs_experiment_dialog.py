@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
 )
 
 from edc.core.bgs_experiment import build_rows
+from edc.core.system_ticks import infer_system_ticks, merge_ticks
 from edc.ui.style import HDR_STYLE, PRIMARY_BUTTON_STYLE, TAB_STYLE, TABLE_STYLE
 
 log = logging.getLogger(__name__)
@@ -64,7 +65,11 @@ def row_cells(r: dict) -> list:
             ("⚠ " if r.get("other_visits") else "") + str(r.get("other_visits", "")),
             ("⚠ " + ", ".join(r["factions_up"]) + " up") if r.get("factions_up") else ("✓" if r["change"] is not None else ""),
             ("⚠ influence changed again 12 h+ after the tick, with no tick listed; " if r.get("unlisted_update")
-             else "") + r["states"]]
+             else "")
+            + (f"tick seen in this system's own readings ({r['inferred_from'][0][5:16].replace('T', ' ')} → "
+               f"{r['inferred_from'][1][5:16].replace('T', ' ')}), not listed by tick.edcd.io; "
+               if r.get("inferred_from") else "")
+            + r["states"]]
 
 
 class BgsExperimentDialog(QDialog):
@@ -163,17 +168,21 @@ class BgsExperimentDialog(QDialog):
                                     if addr is None else "Squadron faction not known yet."))
                 self._tabs.addTab(page, name)
                 continue
-            rows = build_rows(ticks, repo.get_influence_readings(addr, faction),
+            sys_ticks, inferred = merge_ticks(ticks, infer_system_ticks(repo.get_system_readings(addr)))
+            sys_ticks = [t for t in sys_ticks if t >= since]
+            rows = build_rows(sys_ticks, repo.get_influence_readings(addr, faction),
                               lambda s, e, a=addr: repo.get_faction_activity_between(a, faction, s, e), now=now,
                               visits=repo.get_bgs_visits(addr), faction_readings=repo.get_all_faction_readings(addr),
-                              faction=faction, population=repo.get_system_population(addr))
+                              faction=faction, population=repo.get_system_population(addr), inferred=inferred)
             table = self._fill_table(rows)
             self._tables[name] = (table, rows)
             copy_btn = QPushButton("Copy table")
             copy_btn.setStyleSheet(PRIMARY_BUTTON_STYLE)
             copy_btn.clicked.connect(lambda _=False, n=name: self._copy(n))
             top = QHBoxLayout()
-            top.addWidget(QLabel(f"{faction} in {name} — last {HISTORY_DAYS} days, {len(ticks)} ticks recorded"))
+            extra = sum(1 for t in inferred if t >= since)
+            top.addWidget(QLabel(f"{faction} in {name} — last {HISTORY_DAYS} days, {len(sys_ticks)} ticks"
+                                 + (f" ({extra} seen only in this system's own readings)" if extra else "")))
             top.addStretch(1)
             traffic = QLabel(self._traffic_text(name))
             traffic.setStyleSheet("color:#9aa4b0;")

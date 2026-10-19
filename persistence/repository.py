@@ -2906,6 +2906,14 @@ class Repository:
             "SELECT observed_at, event, source FROM bgs_visits WHERE system_address = ? ORDER BY observed_at",
             (system_address,))]
 
+    def get_system_readings(self, system_address: int) -> list[tuple]:
+        """(observed_at, faction, influence, active_states, pending_states, source) for
+        every stored reading of the system, oldest first -- for edc.core.system_ticks."""
+        return [tuple(r) for r in self.db.conn.execute(
+            "SELECT data_timestamp, faction_name, influence, active_states, pending_states, source "
+            "FROM faction_snapshots WHERE system_address = ? AND data_timestamp IS NOT NULL "
+            "ORDER BY data_timestamp, faction_name", (system_address,))]
+
     def get_all_faction_readings(self, system_address: int) -> dict[str, list[tuple]]:
         """{faction: [(observed_at, influence)] oldest first} for every faction seen in the system."""
         out: dict = {}

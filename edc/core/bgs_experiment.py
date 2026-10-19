@@ -43,7 +43,7 @@ def _states(active: Optional[str], pending: Optional[str]) -> str:
 def build_rows(ticks: List[str], readings: List[tuple], effort_for: Callable[[str, str], dict],
                now: Optional[str] = None, visits: Optional[List[tuple]] = None,
                faction_readings: Optional[dict] = None, faction: str = "",
-               population: Optional[int] = None) -> List[dict]:
+               population: Optional[int] = None, inferred: Optional[dict] = None) -> List[dict]:
     """ticks: tick times oldest first (...Z); readings: (observed_at, influence,
     active_states, pending_states) oldest first; effort_for(start, end) -> the
     activity dict for that window. Newest window first; the last one is still
@@ -53,7 +53,9 @@ def build_rows(ticks: List[str], readings: List[tuple], effort_for: Callable[[st
     visits = [(observed_at, event, source)] -- EDDN jumps/dockings minus our own
     (same event timestamp as our 'journal' rows) count as other visitors;
     faction_readings = {faction: [(observed_at, influence)]} -- any faction other
-    than `faction` gaining over the tick means someone worked for it."""
+    than `faction` gaining over the tick means someone worked for it.
+    inferred = {tick time: system tick} for ticks that came from the system's
+    own readings (edc.core.system_ticks.merge_ticks), not a global source."""
     rows = []
     bounds = list(ticks) + [None]
     visits = visits or []
@@ -103,5 +105,7 @@ def build_rows(ticks: List[str], readings: List[tuple], effort_for: Callable[[st
         # differing settled readings mean an update tick.edcd.io didn't list.
         inside = {round(r[1], 4) for r in readings if r[0] >= _settled(start) and (end is None or r[0] < end)}
         rows[-1]["unlisted_update"] = len(inside) > 1
+        st = (inferred or {}).get(start)
+        rows[-1]["inferred_from"] = (st["after"], st["by"]) if st else None
         rows[-1]["contaminated"] = bool(rows[-1]["other_visits"] or up or rows[-1]["unlisted_update"])
     return rows[::-1]

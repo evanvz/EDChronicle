@@ -1205,6 +1205,19 @@ def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], histor
     return view
 
 
+def _add_system_update_line(view: dict, repo, addr: int) -> None:
+    """When this system last visibly ticked: its influence or states changed
+    between two of our readings (edc.core.system_ticks). Independent of the
+    global tick sources, which can miss a tick (tick.edcd.io, 2026-10-18)."""
+    from edc.core.system_ticks import infer_system_ticks
+    seen = [st for st in infer_system_ticks(repo.get_system_readings(addr)) if st["confirmed"]]
+    if not seen:
+        return
+    a, b = (str(seen[-1][k])[5:16].replace("T", " ") for k in ("after", "by"))
+    view["lines"].append(f"System last updated between {a} and {b} UTC")
+    view.setdefault("line_states", []).append("")
+
+
 def build_task_views(repo, since: str, limits: dict, system_address: Optional[int] = None,
                      pledged: str = "", pp_activities=None, now: Optional[datetime] = None,
                      edsm_powerplay=None, eddn_powerplay=None,
@@ -1248,6 +1261,8 @@ def build_task_views(repo, since: str, limits: dict, system_address: Optional[in
                                      faction_stations=(repo.find_faction_stations_in_system(t["system_name"],
                                                                                           t.get("faction_name") or "")
                                                        if t["task_type"] == "hinder" else None)))
+        if t["task_type"] in ("boost", "hinder", "vote", "fight") and addr is not None:
+            _add_system_update_line(views[-1], repo, addr)
         if t["task_type"] == "powerplay" and pledged and addr is not None:
             _add_progress_trend(views[-1], repo, addr, pledged)
             _add_control_chip(views[-1], repo, addr, merits)

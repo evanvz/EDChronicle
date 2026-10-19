@@ -75,7 +75,7 @@ def test_builder_reads_population_for_boost_tasks():
         list_bgs_tasks=lambda: [_task("boost", "EUW")],
         get_session_activity_report=lambda since: {},
         get_bgs_status_for_system=lambda addr: None,
-        get_faction_history=lambda addr: [],
+        get_faction_history=lambda addr: [], get_system_readings=lambda addr: [],
         get_system_powerplay_snapshot=lambda addr: None,
         get_system_population=lambda addr: calls.append(addr) or 800_000,
     )
