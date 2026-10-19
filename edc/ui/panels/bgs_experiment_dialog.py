@@ -52,8 +52,9 @@ def _cr(n: int) -> str:
 def row_cells(r: dict) -> list:
     e = r["effort"]
     infl = "" if r["before"] is None else (
-        f"{r['before'] * 100:.2f}%" + (f" → {r['after'] * 100:.2f}%" if r["after"] is not None
-                                       else " → (next tick)" if r["end"] is None else " → no visit since"))
+        ("⏳ " if r.get("provisional") else "")
+        + f"{r['before'] * 100:.2f}%" + (f" → {r['after'] * 100:.2f}%" if r["after"] is not None
+                                         else " → (next tick)" if r["end"] is None else " → no visit since"))
     window = r["start"][5:16].replace("T", " ") + ("" if r["end"] else "  (running)")
     return [window, str(e["tier_score"] or ""), _cr(e["bounties"]), _cr(e["trade_profit"]), _cr(e["exploration"]),
             f"{r['points']:.1f}" if r["points"] else "", infl or "not visited",
@@ -62,7 +63,8 @@ def row_cells(r: dict) -> list:
             "" if not r["ceiling"] else f"+{r['ceiling'][0]:.1f}–{r['ceiling'][1]:.1f}",
             ("⚠ " if r.get("other_visits") else "") + str(r.get("other_visits", "")),
             ("⚠ " + ", ".join(r["factions_up"]) + " up") if r.get("factions_up") else ("✓" if r["change"] is not None else ""),
-            ("⚠ influence changed with no tick detected; " if r.get("unlisted_update") else "") + r["states"]]
+            ("⚠ influence changed again 12 h+ after the tick, with no tick listed; " if r.get("unlisted_update")
+             else "") + r["states"]]
 
 
 class BgsExperimentDialog(QDialog):
@@ -87,8 +89,10 @@ class BgsExperimentDialog(QDialog):
             "Each row is one tick window: your effort for the squad faction in that system, its SINC points, the "
             "influence seen during the window and after the next tick. Jump into every test system once after "
             "each tick so the level gets recorded. '% of headroom' = change ÷ (100% − influence); typical best "
-            "days are 6–8%. Amber rows are possibly contaminated: another commander was seen (EDDN, minus your "
-            "own uploads), another faction gained over the tick, or influence changed with no tick detected. "
+            "days are 6–8%. ⏳ = provisional: read under 12 h after a tick, when a system may not have updated "
+            "yet (SINC BGS protocol) — a later visit or EDDN reading replaces it. Amber rows are possibly "
+            "contaminated: another commander was seen (EDDN, minus your own uploads), another faction gained over "
+            "the tick, or influence changed again 12 h+ after a tick with no tick listed. "
             "'Other arrivals' counts EDDN jumps/dockings, not commanders: EDDN hides who uploaded, so one "
             "commander jumping in 19 times shows as 19.")
         note.setWordWrap(True)

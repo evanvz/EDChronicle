@@ -145,11 +145,28 @@ def test_visits_flow_to_table_and_own_visit_recorded(tmp_path):
     assert repo.get_bgs_visits(7) == []
 
 
-def test_change_inside_a_window_without_a_detected_tick_is_flagged():
-    """Real Ekono 2026-10-12/13: 76.36% at 21:49 and 75.35% at 12:46 next day, with no
-    tick listed by tick.edcd.io in between -- the window can't be attributed cleanly."""
-    readings = [("2026-10-17T16:30:00Z", 0.7636, "[]", "[]"), ("2026-10-18T12:46:00Z", 0.7535, "[]", "[]")]
+def test_change_during_propagation_is_not_contamination():
+    """Real Ekono 2026-10-12/13: 76.36% 5.7 h after the 16:09 tick, 75.35% 20.6 h after.
+    A system can take up to 12 h to update after the tick (SINC BGS protocol),
+    so the early reading was the old level, not an unlisted tick."""
+    readings = [("2026-10-17T21:49:00Z", 0.7636, "[]", "[]"), ("2026-10-18T12:46:00Z", 0.7535, "[]", "[]")]
+    row = build_rows(["2026-10-17T16:09:00Z"], readings, _effort, now="2026-10-18T14:00:00Z")[0]
+    assert not row["unlisted_update"] and not row["contaminated"]
+    assert row["before"] == 0.7535 and not row["provisional"]          # the settled reading is the baseline
+
+
+def test_change_after_propagation_is_flagged():
+    readings = [("2026-10-18T05:00:00Z", 0.7636, "[]", "[]"), ("2026-10-18T12:46:00Z", 0.7535, "[]", "[]")]
     row = build_rows(["2026-10-17T16:09:00Z"], readings, _effort, now="2026-10-18T14:00:00Z")[0]
     assert row["unlisted_update"] and row["contaminated"]
-    steady = build_rows(["2026-10-17T16:09:00Z"], readings[:1], _effort, now="2026-10-18T14:00:00Z")[0]
-    assert not steady["unlisted_update"] and not steady["contaminated"]
+
+
+def test_reading_soon_after_a_tick_is_provisional():
+    """VE-Q 2026-10-17: 59.36% two hours after the 16:25 tick, 59.86% next morning."""
+    ticks = ["2026-10-16T16:31:00Z", "2026-10-17T16:25:00Z"]
+    early = [("2026-10-17T06:00:00Z", 0.5936, "[]", "[]"), ("2026-10-17T18:27:00Z", 0.5936, "[]", "[]")]
+    row = build_rows(ticks, early, _effort, now="2026-10-17T19:00:00Z")[-1]
+    assert row["provisional"] and row["change"] == 0.0
+    later = early + [("2026-10-18T06:06:00Z", 0.5986, "[]", "[]")]
+    row = build_rows(ticks, later, _effort, now="2026-10-18T07:00:00Z")[-1]
+    assert not row["provisional"] and round(row["change"], 2) == 0.50

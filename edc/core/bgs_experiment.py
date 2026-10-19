@@ -14,9 +14,20 @@ jump into each test system once after every tick.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta
 from typing import Callable, List, Optional
 
 from edc.core.bgs_points import bucket_points, ceiling, total_points
+
+# A system can take up to 12 hours after the detected tick to update (SINC BGS
+# experiment protocol, vanderaj/edbgs-science; seen at VE-Q and Ekono 2026-10).
+PROPAGATION_HOURS = 12
+
+
+def _settled(tick: str) -> str:
+    """The time from which readings after `tick` can be trusted."""
+    t = datetime.strptime(tick[:19], "%Y-%m-%dT%H:%M:%S") + timedelta(hours=PROPAGATION_HOURS)
+    return t.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _states(active: Optional[str], pending: Optional[str]) -> str:
@@ -84,9 +95,13 @@ def build_rows(ticks: List[str], readings: List[tuple], effort_for: Callable[[st
             if b is not None and a is not None and (a - b) * 100 >= 0.1:
                 up.append(name)
         rows[-1]["factions_up"] = sorted(up)
-        # Influence should only change at a tick; differing readings inside one window
-        # mean an update tick.edcd.io didn't list (seen live at Ekono, 2026-10-12/13).
-        inside = {round(r[1], 4) for r in readings if r[0] >= start and (end is None or r[0] < end)}
+        # A reading under 12 h after its tick may still be the old level (propagation):
+        # the row's numbers are provisional until a later reading confirms them.
+        rows[-1]["provisional"] = bool((during and during[0] < _settled(start))
+                                       or (after and end is not None and after[0] < _settled(end)))
+        # Once propagation has had its 12 h, influence should hold until the next tick;
+        # differing settled readings mean an update tick.edcd.io didn't list.
+        inside = {round(r[1], 4) for r in readings if r[0] >= _settled(start) and (end is None or r[0] < end)}
         rows[-1]["unlisted_update"] = len(inside) > 1
         rows[-1]["contaminated"] = bool(rows[-1]["other_visits"] or up or rows[-1]["unlisted_update"])
     return rows[::-1]
