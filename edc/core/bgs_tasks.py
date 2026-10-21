@@ -1223,7 +1223,8 @@ def build_task_views(repo, since: str, limits: dict, system_address: Optional[in
                      edsm_powerplay=None, eddn_powerplay=None,
                      cargo: Optional[dict] = None, last_collect: Optional[dict] = None,
                      collect_system: Optional[dict] = None,
-                    collect_batch: Optional[dict] = None, deliveries: Optional[dict] = None) -> list[dict]:
+                    collect_batch: Optional[dict] = None, deliveries: Optional[dict] = None,
+                     until: Optional[str] = None) -> list[dict]:
     """Views for every task (or only those in system_address), in the
     user's priority order."""
     tasks = repo.list_bgs_tasks()
@@ -1231,7 +1232,7 @@ def build_task_views(repo, since: str, limits: dict, system_address: Optional[in
         tasks = [t for t in tasks if t["system_address"] == system_address]
     if not tasks:
         return []
-    report = repo.get_session_activity_report(since)
+    report = repo.get_session_activity_report(since, until)
     week_start = powerplay_week_start(now)
     squadron_faction = (repo.get_squadron_faction_name() or "") if any(t["task_type"] == "hinder" for t in tasks) else ""
     views = []

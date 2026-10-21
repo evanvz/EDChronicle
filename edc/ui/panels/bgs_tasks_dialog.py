@@ -21,6 +21,7 @@ from edc.core.bgs_tasks import (
     cargo_by_name, describe_detection, detect_powerplay_mode, distance_text, task_title, validate_task_input,
 )
 from edc.ui import formatting as fmt
+from edc.core.system_ticks import tick_window
 from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE
 
 log = logging.getLogger("edc.bgs_tasks")
@@ -95,6 +96,12 @@ class BgsTasksDialog(QDialog):
         hdr.setStyleSheet(_HDR_STYLE)
         hdr_row.addWidget(hdr)
         hdr_row.addStretch(1)
+        # Current / Previous tick: what counted for the tick that just happened stays visible.
+        self._window_combo = QComboBox()
+        self._window_combo.addItem("Current tick", "current")
+        self._window_combo.addItem("Previous tick", "previous")
+        self._window_combo.currentIndexChanged.connect(lambda _i: self.refresh())
+        hdr_row.addWidget(self._window_combo)
         refresh_btn = QPushButton("Refresh")
         refresh_btn.clicked.connect(self.refresh)
         hdr_row.addWidget(refresh_btn)
@@ -311,14 +318,15 @@ class BgsTasksDialog(QDialog):
         self._stations_thread.start()
 
     def refresh(self) -> None:
-        tick_iso = getattr(self._panel, "_latest_known_tick", None)
-        if tick_iso:
-            age_txt, _ = fmt.relative_time(tick_iso)
-            self._tick_label.setText(f"Your progress since last tick: {age_txt}")
-            since = tick_iso
-        else:
-            self._tick_label.setText("No BGS tick detected yet — progress counts all recorded activity.")
-            since = "1970-01-01T00:00:00Z"
+        try:
+            window = tick_window(self._panel._repo, self._window_combo.currentData())
+        except Exception:
+            log.exception("Failed to read the tick window")
+            window = {"since": "1970-01-01T00:00:00Z", "until": None, "text": "No BGS tick known yet"}
+        since, until = window["since"], window["until"]
+        self._tick_label.setText(window["text"] + ("" if until else
+                                                   " — your progress since then" if since[:4] != "1970" else
+                                                   " — progress counts all recorded activity"))
         getter = getattr(self._panel, "bgs_limits_getter", None)
         limits = getter() if getter else dict(DEFAULT_LIMITS)
         pledged_getter = getattr(self._panel, "pledged_power_getter", None)
@@ -334,6 +342,7 @@ class BgsTasksDialog(QDialog):
                 collect_system=getattr(getattr(self._panel, "_last_state", None), "pp_collect_system", None),
                 collect_batch=getattr(getattr(self._panel, "_last_state", None), "pp_collect_batch", None),
                 deliveries=getattr(getattr(self._panel, "_last_state", None), "pp_deliveries", None),
+                until=until,
             )
         except Exception:
             log.exception("Failed to build BGS task views")

@@ -2865,22 +2865,44 @@ class Repository:
 
     # ── BGS Experiment Log ────────────────────────────────────────────────────
 
-    def record_bgs_tick(self, tick_iso: str, source: str = "edcd") -> None:
+    def record_bgs_tick(self, tick_iso: str, source: str = "edcd", upper: Optional[str] = None) -> None:
         """Stores a detected tick, normalised to %Y-%m-%dT%H:%M:%SZ (tick.edcd.io
-        sends +00:00; activity timestamps use Z, and these are compared as strings)."""
+        sends +00:00; activity timestamps use Z, and these are compared as strings).
+        Sources: 'edcd' tick.edcd.io; 'eddn' our EDDN burst detector; 'systems' a tick
+        several systems' own readings show that nobody listed, known only as the range
+        tick_at..upper (edc.core.system_ticks.promote_missed_ticks)."""
         dt = datetime.fromisoformat(tick_iso.replace("Z", "+00:00")).astimezone(timezone.utc)
-        # Two sources (tick.edcd.io and our EDDN detector): a tick within 6 h of a
-        # stored one is the same tick, or it would split a window in two. EDDN is
-        # unauthenticated, so tick.edcd.io's time replaces a detected one; a
-        # detected tick never replaces anything.
-        at = dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-        lo, hi = ((dt + timedelta(hours=h)).strftime("%Y-%m-%dT%H:%M:%SZ") for h in (-6, 6))
-        near = self.db.conn.execute("SELECT tick_at, source FROM bgs_ticks WHERE tick_at BETWEEN ? AND ? LIMIT 1",
-                                    (lo, hi)).fetchone()
+        fmt = "%Y-%m-%dT%H:%M:%SZ"
+        at = dt.strftime(fmt)
+        # A tick within 6 h of a stored one (or inside a stored range, 12 h early allowed
+        # for propagation) is the same tick, or it would split a window in two.
+        # tick.edcd.io's time replaces our detected/inferred ones; ours never replace it.
+        near = None
+        for row in self.db.conn.execute(
+                "SELECT tick_at, source, upper FROM bgs_ticks WHERE tick_at BETWEEN ? AND ?",
+                ((dt - timedelta(hours=48)).strftime(fmt), (dt + timedelta(hours=48)).strftime(fmt))):
+            start = datetime.strptime(row[0], fmt).replace(tzinfo=timezone.utc)
+            end = datetime.strptime(row[2], fmt).replace(tzinfo=timezone.utc) if row[2] else start
+            if start - timedelta(hours=12 if row[2] else 6) <= dt <= end + timedelta(hours=6):
+                near = row
+                break
         if near is None:
-            self.db.execute("INSERT OR IGNORE INTO bgs_ticks (tick_at, source) VALUES (?, ?)", (at, source))
-        elif source == "edcd" and near[1] == "eddn":
-            self.db.execute("UPDATE bgs_ticks SET tick_at = ?, source = 'edcd' WHERE tick_at = ?", (at, near[0]))
+            self.db.execute("INSERT OR IGNORE INTO bgs_ticks (tick_at, source, upper) VALUES (?, ?, ?)",
+                            (at, source, upper))
+        elif source == "edcd" and near[1] in ("eddn", "systems"):
+            self.db.execute("UPDATE bgs_ticks SET tick_at = ?, source = 'edcd', upper = NULL WHERE tick_at = ?",
+                            (at, near[0]))
+
+    def get_tick_info(self, limit: int = 2) -> list[dict]:
+        """The newest ticks with where they came from, newest first:
+        [{"at", "source", "upper"}] (upper only for a 'systems' range)."""
+        return [{"at": r[0], "source": r[1] or "edcd", "upper": r[2]} for r in self.db.conn.execute(
+            "SELECT tick_at, source, upper FROM bgs_ticks ORDER BY tick_at DESC LIMIT ?", (limit,))]
+
+    def get_recently_read_systems(self, since: str) -> list[int]:
+        """Systems with a faction reading at or after `since` -- what promote_missed_ticks checks."""
+        return [r[0] for r in self.db.conn.execute(
+            "SELECT DISTINCT system_address FROM faction_snapshots WHERE data_timestamp >= ?", (since,))]
 
     def get_bgs_ticks(self, since: str = "") -> list[str]:
         return [r[0] for r in self.db.conn.execute(
@@ -3261,13 +3283,14 @@ class Repository:
         ).fetchone()
         return row[0]
 
-    def get_powerplay_merits_total_since(self, since: str) -> int:
+    def get_powerplay_merits_total_since(self, since: str, until: Optional[str] = None) -> int:
         row = self.db.conn.execute(
-            "SELECT COALESCE(SUM(merits), 0) FROM powerplay_merits WHERE earned_at >= ?", (since,)
+            "SELECT COALESCE(SUM(merits), 0) FROM powerplay_merits WHERE earned_at >= ? AND earned_at < ?",
+            (since, until or "9999"),
         ).fetchone()
         return row[0]
 
-    def get_session_merits(self, since: str) -> dict:
+    def get_session_merits(self, since: str, until: Optional[str] = None) -> dict:
         """{date: {system_name: {power: merits}}} for every PowerplayMerits
         row earned_at >= since -- the per-system split BGS-Tally can't give
         (it keeps one merits total per power per tick)."""
@@ -3275,8 +3298,8 @@ class Repository:
         for r in self.db.conn.execute(
             "SELECT p.earned_at, s.system_name, p.power, p.merits FROM powerplay_merits p "
             "JOIN systems s ON s.system_address = p.system_address "
-            "WHERE p.earned_at >= ? AND s.system_name IS NOT NULL",
-            (since,),
+            "WHERE p.earned_at >= ? AND p.earned_at < ? AND s.system_name IS NOT NULL",
+            (since, until or "9999"),
         ).fetchall():
             powers = out.setdefault(r[0][:10], {}).setdefault(r[1], {})
             powers[r[2] or "Unknown"] = powers.get(r[2] or "Unknown", 0) + (r[3] or 0)
@@ -3326,7 +3349,7 @@ class Repository:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def get_session_activity_report(self, since: str) -> dict:
+    def get_session_activity_report(self, since: str, until: Optional[str] = None) -> dict:
         """{date: {system_name: {faction_name: {"missions": {...},
         "combat_bonds_total": int, "cz_kills": {...}, "trade_sold": {...}}}}}
         -- everything since the last detected BGS tick (see
@@ -3347,7 +3370,11 @@ class Repository:
             if r["system_name"]
         }
 
-        def _bucket(date: str, system_address: int, faction_name: str) -> dict:
+        def _bucket(ts: str, system_address: int, faction_name: str) -> dict:
+            # until: the end of a past tick window (the Previous tick view)
+            if until and ts >= until:
+                return None
+            date = ts[:10]
             system_name = names.get(system_address)
             if system_name is None:
                 return None
@@ -3373,7 +3400,7 @@ class Repository:
             (since,),
         ).fetchall()
         for r in mission_rows:
-            entry = _bucket(r["completed_at"][:10], r["system_address"], r["faction_name"])
+            entry = _bucket(r["completed_at"], r["system_address"], r["faction_name"])
             if entry is None:
                 continue
             m = entry["missions"]
@@ -3394,7 +3421,7 @@ class Repository:
                 m["secondary_count"] += 1
 
         for r in self.get_faction_combat_bonds_since(since):
-            entry = _bucket(r["earned_at"][:10], r["system_address"], r["faction_name"])
+            entry = _bucket(r["earned_at"], r["system_address"], r["faction_name"])
             if entry is None:
                 continue
             entry["combat_bonds_total"] += r["reward"]
@@ -3404,14 +3431,14 @@ class Repository:
             (since,),
         ).fetchall()
         for r in bounty_rows:
-            entry = _bucket(r["redeemed_at"][:10], r["system_address"], r["faction_name"])
+            entry = _bucket(r["redeemed_at"], r["system_address"], r["faction_name"])
             if entry is None:
                 continue
             entry["bounties_total"] += r["amount"]
             entry["bounties_max_cashin"] = max(entry["bounties_max_cashin"], r["amount"])
 
         for r in self.get_faction_cz_kills_since(since):
-            entry = _bucket(r["earned_at"][:10], r["system_address"], r["faction_name"])
+            entry = _bucket(r["earned_at"], r["system_address"], r["faction_name"])
             if entry is None:
                 continue
             key = f"{r['zone_type']}_{r['size']}"
@@ -3419,7 +3446,7 @@ class Repository:
                 entry["cz_kills"][key] += 1
 
         for r in self.get_faction_trade_sold_since(since):
-            entry = _bucket(r["sold_at"][:10], r["system_address"], r["faction_name"])
+            entry = _bucket(r["sold_at"], r["system_address"], r["faction_name"])
             if entry is None:
                 continue
             if r["kind"] in entry["trade_sold"]:

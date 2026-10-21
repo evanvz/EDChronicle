@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea, QWidget, QFrame,
+    QComboBox, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea, QWidget, QFrame,
 )
 
 from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE
@@ -32,6 +32,7 @@ from edc.core.bgs_tasks import (
 )
 from edc.core.expansion_forecast import alert_text, detect_new_systems
 from edc.core.discord_report import bgs_tally_text
+from edc.core.system_ticks import tick_window
 
 log = logging.getLogger("edc.session_activity")
 
@@ -70,6 +71,12 @@ class SessionActivityDialog(QDialog):
         hdr_row.addWidget(hdr)
         hdr_row.addStretch(1)
         self._report: dict = {}
+        # Current / Previous tick: yesterday's work stays readable (and copyable) after a tick.
+        self._window_combo = QComboBox()
+        self._window_combo.addItem("Current tick", "current")
+        self._window_combo.addItem("Previous tick", "previous")
+        self._window_combo.currentIndexChanged.connect(lambda _i: self.refresh())
+        hdr_row.addWidget(self._window_combo)
         refresh_btn = QPushButton("Refresh")
         refresh_btn.clicked.connect(self.refresh)
         hdr_row.addWidget(refresh_btn)
@@ -131,17 +138,18 @@ class SessionActivityDialog(QDialog):
         self.refresh()
 
     def refresh(self) -> None:
-        tick_iso = getattr(self._panel, "_latest_known_tick", None)
-        if not tick_iso:
-            self._tick_label.setText("No BGS tick detected yet this session — showing all recorded activity.")
-            since = "1970-01-01T00:00:00Z"
-        else:
-            age_txt, _ = fmt.relative_time(tick_iso)
-            self._tick_label.setText(f"Since last tick: {age_txt}")
-            since = tick_iso
+        try:
+            window = tick_window(self._panel._repo, self._window_combo.currentData())
+        except Exception:
+            log.exception("Failed to read the tick window")
+            window = {"since": "1970-01-01T00:00:00Z", "until": None, "text": "No BGS tick known yet"}
+        since, until = window["since"], window["until"]
+        self._until = until
+        self._tick_label.setText(window["text"] + ("" if until else
+                                                   f" — {fmt.relative_time(since)[0]}" if since[:4] != "1970" else ""))
 
         try:
-            report = self._panel._repo.get_session_activity_report(since)
+            report = self._panel._repo.get_session_activity_report(since, until)
         except Exception:
             log.exception("Failed to load session activity report")
             report = {}
@@ -161,7 +169,7 @@ class SessionActivityDialog(QDialog):
         self._new_label.setText("<br>".join(html.escape(alert_text(faction, n)) for n in new))
         self._new_label.setVisible(bool(new))
         try:
-            merits = self._panel._repo.get_session_merits(since)
+            merits = self._panel._repo.get_session_merits(since, until)
         except Exception:
             log.exception("Failed to load session merits")
             merits = {}
@@ -295,7 +303,7 @@ class SessionActivityDialog(QDialog):
         lifetime = getattr(state, "pp_merits", None)
         try:
             week = self._panel._repo.get_powerplay_merits_total_since(powerplay_week_start())
-            tick = self._panel._repo.get_powerplay_merits_total_since(since)
+            tick = self._panel._repo.get_powerplay_merits_total_since(since, getattr(self, "_until", None))
         except Exception:
             log.exception("Failed to load PowerPlay merit totals")
             week = tick = 0
@@ -303,7 +311,8 @@ class SessionActivityDialog(QDialog):
             self._pp_label.setVisible(False)
             return
         # session merits live on the Overview tab
-        parts = [f'<span style="color:{_CHIP_MERITS};">PowerPlay</span> {tick:,} since tick',
+        parts = [f'<span style="color:{_CHIP_MERITS};">PowerPlay</span> {tick:,} '
+                 + ("that tick" if getattr(self, "_until", None) else "since tick"),
                  f"{week:,} this week ({cp_text(week)})"]
         if isinstance(lifetime, int):
             rank = getattr(state, "pp_rank", None)
@@ -312,7 +321,8 @@ class SessionActivityDialog(QDialog):
             getter = getattr(self._panel, "pledged_power_getter", None)
             watch = pp_watch(self._panel._repo, getter() if getter else "",
                              getattr(self._panel, "edsm_powerplay", None))
-            alerts = undermining_alerts(self._panel._repo, since, watch)
+            # undermining is about now, not a past window
+            alerts = [] if getattr(self, "_until", None) else undermining_alerts(self._panel._repo, since, watch)
         except Exception:
             log.exception("Failed to check undermining")
             alerts = []

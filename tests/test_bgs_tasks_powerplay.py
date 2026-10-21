@@ -110,7 +110,7 @@ def test_build_task_views_queries_merits_since_week_start():
     calls = []
     repo = SimpleNamespace(
         list_bgs_tasks=lambda: [_task("powerplay")],
-        get_session_activity_report=lambda since: {},
+        get_session_activity_report=lambda since, until=None: {},
         get_bgs_status_for_system=lambda addr: None,
         get_faction_history=lambda addr: [],
         get_system_powerplay_snapshot=lambda addr: _PP,

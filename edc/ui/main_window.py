@@ -885,25 +885,31 @@ class _BgsTickCheckWorker(QObject):
 
     def run(self):
         result = fetch_latest_tick()
-        if result and self._db_path:
+        if self._db_path:
             # tick history for the BGS Experiment Log -- own connection (cross-thread rule)
             from datetime import datetime, timedelta, timezone
+            from edc.core.system_ticks import promote_missed_ticks
             from persistence.database import Database
             from persistence.repository import Repository
             db = Database(self._db_path)
             try:
                 repo = Repository(db)
-                if not repo.get_bgs_ticks(since=result[:19]):
-                    # a tick we haven't stored: backfill the last 14 days, so ticks
-                    # missed while the app was closed don't merge two windows
-                    today = datetime.now(timezone.utc).date()
-                    for t in fetch_tick_history((today - timedelta(days=14)).isoformat(),
-                                                (today + timedelta(days=1)).isoformat()):
-                        repo.record_bgs_tick(t)
-                repo.record_bgs_tick(result)
-                # the newest tick from either source (our EDDN detector may know a later one)
+                if result:
+                    if not repo.get_bgs_ticks(since=result[:19]):
+                        # a tick we haven't stored: backfill the last 14 days, so ticks
+                        # missed while the app was closed don't merge two windows
+                        today = datetime.now(timezone.utc).date()
+                        for t in fetch_tick_history((today - timedelta(days=14)).isoformat(),
+                                                    (today + timedelta(days=1)).isoformat()):
+                            repo.record_bgs_tick(t)
+                    repo.record_bgs_tick(result)
+                # a tick nobody listed but several monitored systems' own readings show
+                found = promote_missed_ticks(repo)
+                if found:
+                    log.info("BGS tick inferred from systems' own readings: between %s and %s", *found)
+                # the newest tick from any source (EDDN detector, systems) may be later
                 stored = repo.get_bgs_ticks()
-                if stored and stored[-1] > result[:19]:
+                if stored and (not result or stored[-1] > result[:19]):
                     result = stored[-1]
             except Exception:
                 log.exception("Failed to record BGS tick")

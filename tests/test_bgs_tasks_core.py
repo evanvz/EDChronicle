@@ -239,7 +239,7 @@ def test_build_task_views_filters_by_system_and_uses_repo():
     calls = []
     repo = SimpleNamespace(
         list_bgs_tasks=lambda: tasks,
-        get_session_activity_report=lambda since: calls.append(since) or {},
+        get_session_activity_report=lambda since, until=None: calls.append(since) or {},
         get_bgs_status_for_system=lambda addr: None,
         get_faction_history=lambda addr: [], get_system_readings=lambda addr: [],
         get_system_powerplay_snapshot=lambda addr: None,
