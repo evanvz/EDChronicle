@@ -106,7 +106,10 @@ def promote_missed_ticks(repo, now: Optional[datetime] = None) -> Optional[Tuple
     global_ticks = repo.get_bgs_ticks(since=(now - timedelta(days=14)).strftime(fmt))
     gaps = []
     for addr in repo.get_recently_read_systems(since):
-        for st in infer_system_ticks(repo.get_system_readings(addr)):
+        # trusted readings only (our journal, EDSM) on BOTH sides of the change:
+        # EDDN is unauthenticated, so it can't make, widen or shift a promoted tick
+        trusted_rows = [r for r in repo.get_system_readings(addr) if r[5] in _TRUSTED]
+        for st in infer_system_ticks(trusted_rows):
             if not st["confirmed"] or str(st["by"]) < since or str(st["by"]) > latest_ok:
                 continue
             gap = (datetime.strptime(str(st["by"])[:19], "%Y-%m-%dT%H:%M:%S")
@@ -115,16 +118,15 @@ def promote_missed_ticks(repo, now: Optional[datetime] = None) -> Optional[Tuple
                 continue
             if any(_minus_propagation(st["after"]) < g <= st["by"] for g in global_ticks):
                 continue
-            gaps.append((str(st["after"]), str(st["by"]), st["trusted"]))
+            gaps.append((str(st["after"]), str(st["by"])))
     # the moment most systems' gaps share (ties: the latest); their overlap is the tick's range
-    best = max(({b for _, b, _t in gaps}), key=lambda p: (sum(1 for a, b, _t in gaps if a < p <= b), p), default=None)
+    best = max(({b for _, b in gaps}), key=lambda p: (sum(1 for a, b in gaps if a < p <= b), p), default=None)
     if best is None:
         return None
-    group = [(a, b, t) for a, b, t in gaps if a < best <= b]
-    start, end = max(g[0] for g in group), min(g[1] for g in group)
-    if (len(group) < MIN_SYSTEMS_FOR_GLOBAL or start >= end or not any(g[2] for g in group)
-            or (global_ticks and start < max(global_ticks))):
-        return None   # EDDN alone (unauthenticated) never makes a tick: one trusted reading must agree
+    group = [(a, b) for a, b in gaps if a < best <= b]
+    start, end = max(a for a, _ in group), min(b for _, b in group)
+    if len(group) < MIN_SYSTEMS_FOR_GLOBAL or start >= end or (global_ticks and start < max(global_ticks)):
+        return None
     repo.record_bgs_tick(start, source="systems", upper=end)
     return start, end
 

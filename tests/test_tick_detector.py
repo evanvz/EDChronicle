@@ -82,3 +82,15 @@ def test_same_tick_from_both_sources_is_stored_once(tmp_path):
     repo.record_bgs_tick("2026-10-19T16:30:00Z")                       # next day
     assert repo.get_bgs_ticks() == ["2026-10-18T16:25:36Z", "2026-10-19T16:30:00Z"]
     db.close()
+
+
+def test_one_uploader_spamming_the_lull_cannot_suppress_a_real_tick():
+    det = TickDetector(last_tick="2026-10-17T16:25:36Z")
+    _baseline(det, MIN_SYSTEMS + 5)
+    spam_at = T0 + timedelta(hours=3)
+    for a in range(100, 110):                       # fake changes in the lull, all from one sender
+        _feed(det, a, 0.5, spam_at - timedelta(hours=3), uploader="spammer")
+        _feed(det, a, 0.9, spam_at + timedelta(minutes=a - 100), uploader="spammer")
+    tick_at = T0 + timedelta(hours=4)
+    found = [_feed(det, a, 0.51, tick_at + timedelta(minutes=a)) for a in range(MIN_SYSTEMS)]
+    assert found[-1] == _iso(tick_at)

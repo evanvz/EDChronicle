@@ -106,9 +106,10 @@ class TickDetector:
         if len({c[1] for c in burst}) < MIN_SYSTEMS or len({c[2] for c in burst if c[2]}) < MIN_UPLOADERS:
             return None
         tick = min(c[0] for c in burst)
-        lull = {c[1] for c in self._changes if tick - QUIET <= c[0] < tick}
-        if len(lull) > QUIET_MAX:
+        lull = [c for c in self._changes if tick - QUIET <= c[0] < tick]
+        if len({c[1] for c in lull}) > QUIET_MAX and len({c[2] for c in lull if c[2]}) >= MIN_UPLOADERS:
             return None             # not a lull -> activity smear after an earlier tick, not a new one
+            # (needs several uploaders too, so one sender can't suppress a real tick)
         if self._last_tick is not None and tick - self._last_tick < MIN_GAP:
             return None
         self._last_tick = tick
