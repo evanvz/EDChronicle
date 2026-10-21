@@ -21,6 +21,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
 INFLUENCE_EPS = 0.0005   # below this the sources only differ in rounding
+_TRUSTED = ("journal", "edsm")
 PROPAGATION = timedelta(hours=12)   # a system can update up to 12 h after the tick (SINC BGS protocol)
 
 
@@ -64,8 +65,11 @@ def infer_system_ticks(rows: List[tuple]) -> List[Dict[str, object]]:
         if not _differs(prev["factions"], cur["factions"]):
             continue
         nxt = snaps[i + 1] if i + 1 < len(snaps) else None
-        confirmed = cur["source"] == "journal" or (nxt is not None and not _differs(cur["factions"], nxt["factions"]))
-        out.append({"after": prev["at"], "by": cur["at"], "confirmed": confirmed})
+        agreed = nxt is not None and not _differs(cur["factions"], nxt["factions"])
+        confirmed = cur["source"] == "journal" or agreed
+        # trusted: seen by us (journal) or EDSM, not only by unauthenticated EDDN uploads
+        trusted = cur["source"] in _TRUSTED or (agreed and nxt["source"] in _TRUSTED)
+        out.append({"after": prev["at"], "by": cur["at"], "confirmed": confirmed, "trusted": trusted})
     return out
 
 
@@ -86,6 +90,7 @@ def merge_ticks(global_ticks: List[str], system_ticks: List[Dict[str, object]]) 
 
 
 MIN_SYSTEMS_FOR_GLOBAL = 2      # one system can be a fluke; two agreeing is a tick nobody listed
+MAX_GAP = timedelta(hours=48)   # a longer old..new gap says too little about when the tick was
 
 
 def promote_missed_ticks(repo, now: Optional[datetime] = None) -> Optional[Tuple[str, str]]:
@@ -97,23 +102,29 @@ def promote_missed_ticks(repo, now: Optional[datetime] = None) -> Optional[Tuple
     now = now or datetime.now(timezone.utc)
     fmt = "%Y-%m-%dT%H:%M:%SZ"
     since = (now - timedelta(days=4)).strftime(fmt)
+    latest_ok = (now + timedelta(minutes=5)).strftime(fmt)
     global_ticks = repo.get_bgs_ticks(since=(now - timedelta(days=14)).strftime(fmt))
     gaps = []
     for addr in repo.get_recently_read_systems(since):
         for st in infer_system_ticks(repo.get_system_readings(addr)):
-            if not st["confirmed"] or str(st["by"]) < since:
+            if not st["confirmed"] or str(st["by"]) < since or str(st["by"]) > latest_ok:
+                continue
+            gap = (datetime.strptime(str(st["by"])[:19], "%Y-%m-%dT%H:%M:%S")
+                   - datetime.strptime(str(st["after"])[:19], "%Y-%m-%dT%H:%M:%S"))
+            if gap > MAX_GAP:
                 continue
             if any(_minus_propagation(st["after"]) < g <= st["by"] for g in global_ticks):
                 continue
-            gaps.append((str(st["after"]), str(st["by"])))
+            gaps.append((str(st["after"]), str(st["by"]), st["trusted"]))
     # the moment most systems' gaps share (ties: the latest); their overlap is the tick's range
-    best = max(({b for _, b in gaps}), key=lambda p: (sum(1 for a, b in gaps if a < p <= b), p), default=None)
+    best = max(({b for _, b, _t in gaps}), key=lambda p: (sum(1 for a, b, _t in gaps if a < p <= b), p), default=None)
     if best is None:
         return None
-    group = [(a, b) for a, b in gaps if a < best <= b]
-    start, end = max(a for a, _ in group), min(b for _, b in group)
-    if len(group) < MIN_SYSTEMS_FOR_GLOBAL or start >= end or (global_ticks and start < max(global_ticks)):
-        return None
+    group = [(a, b, t) for a, b, t in gaps if a < best <= b]
+    start, end = max(g[0] for g in group), min(g[1] for g in group)
+    if (len(group) < MIN_SYSTEMS_FOR_GLOBAL or start >= end or not any(g[2] for g in group)
+            or (global_ticks and start < max(global_ticks))):
+        return None   # EDDN alone (unauthenticated) never makes a tick: one trusted reading must agree
     repo.record_bgs_tick(start, source="systems", upper=end)
     return start, end
 

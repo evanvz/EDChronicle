@@ -15,7 +15,7 @@ def test_change_between_readings_is_a_system_tick():
             _r("2026-10-19T11:46:38Z", 0.7832), _r("2026-10-19T11:46:38Z", 0.048, faction="Other"),
             _r("2026-10-19T15:00:00Z", 0.7832)]                                         # confirms it
     assert infer_system_ticks(rows) == [{"after": "2026-10-18T23:10:36Z", "by": "2026-10-19T11:46:38Z",
-                                         "confirmed": True}]
+                                         "confirmed": True, "trusted": False}]     # EDDN only: not trusted
 
 
 def test_state_change_alone_counts_and_rounding_does_not():
@@ -103,4 +103,21 @@ def test_previous_window_and_dialogs(tmp_path):
     dlg._window_combo.setCurrentIndex(1)                                                  # Previous tick
     assert dlg._report["2026-10-18"]["ICZ XZ-P b5-1"]["EUW"]["bounties_total"] == 11_035_678
     assert dlg._tick_label.text().startswith("Previous tick window: 10-17 16:25 → 10-18 23:10 UTC")
+    db.close()
+
+
+def test_eddn_only_changes_never_promote_a_tick(tmp_path):
+    """EDDN is unauthenticated: at least one trusted reading (journal or EDSM) must show the change."""
+    from datetime import datetime
+    from edc.core.system_ticks import promote_missed_ticks
+    from persistence.database import Database
+    from persistence.repository import Repository
+    from persistence.schema import SCHEMA_SQL
+    db = Database(tmp_path / "t.db"); db.executescript(SCHEMA_SQL); db.run_migrations()
+    repo = Repository(db)
+    repo.record_bgs_tick("2026-10-17T16:25:36Z")
+    for addr in (1, 2, 3):
+        for at, inf in (("2026-10-18T20:00:00Z", 0.50), ("2026-10-19T10:00:00Z", 0.55), ("2026-10-19T12:00:00Z", 0.55)):
+            repo.save_faction_snapshot(addr, {"Name": "EUW", "Influence": inf}, at[:10] + at[11:13], True, at, "eddn")
+    assert promote_missed_ticks(repo, now=datetime(2026, 10, 19, 15, 0)) is None
     db.close()
