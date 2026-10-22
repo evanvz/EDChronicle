@@ -228,3 +228,25 @@ def test_new_system_with_expansion_recovering_pairs_unconfirmed_source():
     assert ef.alert_text("EUW", out[0]).endswith("likely expansion from Ekono (its influence drop not read yet)")
     plain = {**new, "recovering_states": None}   # no ending shown in the new system -> unchanged
     assert ef.new_systems([plain], [], TODAY, coords=COORDS, unconfirmed=[("Ekono", "2026-10-07")])[0]["source"] is None
+
+
+def test_hidden_drop_ending_still_pairs_as_source():
+    """Ekono's drop can be offset by other commanders' missions in the same
+    tick: an ending under 5 points from a system at 75%+ the day before is
+    still the source for a new system that shows Expansion recovering."""
+    from types import SimpleNamespace
+    rec = '[{"State": "Expansion"}]'
+    coords = {"Ekono": (59.125, -155.15625, 99.8125), "Tucanae Sector YF-W b2-2": (39.46875, -163.9375, 117.96875)}
+    repo = SimpleNamespace(
+        get_squadron_presence=lambda f: [
+            _p(1, "Ekono", 0.755, "2026-09-01", "2026-10-07", rec=rec),
+            _p(2, "Tucanae Sector YF-W b2-2", 0.18, "2026-10-07", "2026-10-07", rec=rec)],
+        get_faction_history=lambda addr, f: {1: [
+            {"snapshot_date": "2026-10-07", "influence": 0.755, "recovering_states": rec},
+            {"snapshot_date": "2026-10-06", "influence": 0.761, "recovering_states": None},
+            # an older, higher expansion ending must not win the "highest" pick
+            {"snapshot_date": "2026-09-20", "influence": 0.65, "recovering_states": rec},
+            {"snapshot_date": "2026-09-19", "influence": 0.80, "recovering_states": None}]}.get(addr, []),
+        get_system_coords_for_names=lambda names: {n: coords[n] for n in names if n in coords})
+    out = ef.detect_new_systems(repo, "EUW", TODAY)
+    assert (out[0]["source"], out[0]["source_confirmed"]) == ("Ekono", False)

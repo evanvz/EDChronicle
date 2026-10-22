@@ -9,7 +9,7 @@ See docs/superpowers/specs/2026-10-08-expansion-forecast-design.md."""
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
 
 WATCH_THRESHOLD = 0.70
@@ -348,12 +348,19 @@ def detect_new_systems(repo, faction: str, today: Optional[date] = None) -> List
     for r in presence:
         if (r.get("influence") or 0.0) >= 0.5:
             hist = list(reversed(repo.get_faction_history(r["system_address"], faction)))
-            endings += [(r["system_name"], d) for _i, d, delta in expansion_endings(hist)
-                        if delta <= -SOURCE_DROP_MIN]
+            ends = expansion_endings(hist)
+            endings += [(r["system_name"], d) for _i, d, delta in ends if delta <= -SOURCE_DROP_MIN]
+            # an ending whose drop other players' work in the same tick hid: the
+            # system was at 75%+ the day before it ended
+            unconfirmed += [(hist[i - 1].get("influence"), r["system_name"], d) for i, d, _delta in ends
+                            if (hist[i - 1].get("influence") or 0.0) >= EXPANSION_THRESHOLD]
             if (r.get("influence") or 0.0) >= EXPANSION_THRESHOLD and is_expanding(r):
                 unconfirmed.append((r.get("influence"), r["system_name"], r.get("last_seen")))
     # the source is the faction's highest-influence system; a new system outside
     # its range is a colonisation, not this expansion
+    # ponytail: highest across all dates read, not on the expansion's first pending day
+    recent = (today - timedelta(days=NEW_SYSTEM_DAYS + 1)).isoformat()
+    unconfirmed = [u for u in unconfirmed if str(u[2])[:10] >= recent]
     unconfirmed = [max(unconfirmed)[1:]] if unconfirmed else []
     names = {r["system_name"] for r in presence} | {n for n, _d in endings}
     return new_systems(presence, endings, today, coords=repo.get_system_coords_for_names(sorted(names)),
