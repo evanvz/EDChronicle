@@ -121,3 +121,30 @@ def test_eddn_only_changes_never_promote_a_tick(tmp_path):
             repo.save_faction_snapshot(addr, {"Name": "EUW", "Influence": inf}, at[:10] + at[11:13], True, at, "eddn")
     assert promote_missed_ticks(repo, now=datetime(2026, 10, 19, 15, 0)) is None
     db.close()
+
+
+def test_single_edsm_reading_per_system_promotes_when_three_overlap(tmp_path):
+    """10-20/10-21: most systems are read once a day, so waiting for a second
+    reading to agree held real ticks back. Three overlapping systems now do;
+    two don't."""
+    from datetime import datetime
+    from edc.core.system_ticks import promote_missed_ticks
+    from persistence.database import Database
+    from persistence.repository import Repository
+    from persistence.schema import SCHEMA_SQL
+    db = Database(tmp_path / "t.db"); db.executescript(SCHEMA_SQL); db.run_migrations()
+    repo = Repository(db)
+    repo.record_bgs_tick("2026-10-19T16:26:44Z", source="eddn")
+    windows = {1: ("2026-10-20T16:36:00Z", "2026-10-21T09:56:00Z"),     # ICZ RD-T c3-16
+               2: ("2026-10-20T16:45:00Z", "2026-10-21T10:42:00Z"),     # HIP 114880
+               3: ("2026-10-20T15:24:00Z", "2026-10-21T15:48:00Z")}     # ICZ RY-R b4-2
+    for addr, (old_at, new_at) in list(windows.items())[:2]:
+        for at, inf in ((old_at, 0.30), (new_at, 0.32)):
+            repo.save_faction_snapshot(addr, {"Name": "F", "Influence": inf}, at[:10], True, at, "edsm")
+    now = datetime(2026, 10, 21, 16, 0)
+    assert promote_missed_ticks(repo, now=now) is None                       # two systems: not enough
+    old_at, new_at = windows[3]
+    for at, inf in ((old_at, 0.30), (new_at, 0.32)):
+        repo.save_faction_snapshot(3, {"Name": "F", "Influence": inf}, at[:10], True, at, "edsm")
+    assert promote_missed_ticks(repo, now=now) == ("2026-10-20T16:45:00Z", "2026-10-21T09:56:00Z")
+    db.close()

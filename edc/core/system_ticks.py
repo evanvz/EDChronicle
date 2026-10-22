@@ -89,14 +89,17 @@ def merge_ticks(global_ticks: List[str], system_ticks: List[Dict[str, object]]) 
     return sorted(set(global_ticks) | set(added)), added
 
 
-MIN_SYSTEMS_FOR_GLOBAL = 2      # one system can be a fluke; two agreeing is a tick nobody listed
+MIN_SYSTEMS_FOR_GLOBAL = 3      # one system can be a fluke; three agreeing is a tick nobody listed
 MAX_GAP = timedelta(hours=48)   # a longer old..new gap says too little about when the tick was
 
 
 def promote_missed_ticks(repo, now: Optional[datetime] = None) -> Optional[Tuple[str, str]]:
-    """When several monitored systems show a confirmed change that no stored
-    tick explains, and their gaps overlap, the galaxy ticked unseen (tick.edcd.io
-    missed 2026-10-18; four systems showed it). Records it as a 'systems' tick
+    """When several monitored systems show a change that no stored tick
+    explains, and their gaps overlap, the galaxy ticked unseen (tick.edcd.io
+    missed 2026-10-18; four systems showed it). A change doesn't wait for a
+    second reading to agree: most systems are only read once a day, so that
+    held the 10-20/10-21 ticks back (only trusted readings count, and three
+    systems must overlap instead). Records it as a 'systems' tick
     known only as the range (latest old reading .. earliest new reading), so
     every "since last tick" view picks it up. Returns (start, end) or None."""
     now = now or datetime.now(timezone.utc)
@@ -110,7 +113,7 @@ def promote_missed_ticks(repo, now: Optional[datetime] = None) -> Optional[Tuple
         # EDDN is unauthenticated, so it can't make, widen or shift a promoted tick
         trusted_rows = [r for r in repo.get_system_readings(addr) if r[5] in _TRUSTED]
         for st in infer_system_ticks(trusted_rows):
-            if not st["confirmed"] or str(st["by"]) < since or str(st["by"]) > latest_ok:
+            if str(st["by"]) < since or str(st["by"]) > latest_ok:
                 continue
             gap = (datetime.strptime(str(st["by"])[:19], "%Y-%m-%dT%H:%M:%S")
                    - datetime.strptime(str(st["after"])[:19], "%Y-%m-%dT%H:%M:%S"))

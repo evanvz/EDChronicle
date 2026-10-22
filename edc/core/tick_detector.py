@@ -17,7 +17,11 @@ monitored system: for hours after a tick some uploaders keep sending the old
 values, so comparing message-to-message flip-flops. Now:
 - each reading is compared with that system's settled value from 2+ h earlier;
 - only a move of more than 0.5 points in some faction counts;
-- the 3 h before the burst must have been quiet, and ticks are 20+ h apart.
+- the 3 h before the burst must have been quiet, and ticks are 12+ h apart.
+
+EDCAS uses 20 h, but ticks came 19 h and 16 h apart on 2026-10-20/21 (10-19
+16:26, 10-20 11:33, 10-21 03:49 -- each backed by monitored systems' own
+changes), and 20 h rejected them.
 
 ponytail: the tick time is the earliest change in the triggering burst, so
 it's accurate to within the first hour of propagation; tick.edcd.io's time
@@ -34,7 +38,7 @@ MIN_SYSTEMS = 20                    # distinct systems changing in one burst
 # EDDN is unauthenticated: the burst must come from several uploaders, so one
 # sender can't fake a tick quickly (the relay re-hashes uploader IDs every 3 min).
 MIN_UPLOADERS = 5
-MIN_GAP = timedelta(hours=20)       # EDCAS: ticks closer than 20 h are false positives
+MIN_GAP = timedelta(hours=12)       # EDCAS uses 20 h; real ticks came 16-19 h apart (2026-10-20/21)
 REFERENCE_AGE = timedelta(hours=2)  # compare with the system's value at least this old
 CHANGE = 0.005                      # 0.5 points of influence (EDCAS)
 QUIET = timedelta(hours=3)          # the lull before a tick (EDCAS)

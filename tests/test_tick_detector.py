@@ -34,8 +34,7 @@ def test_burst_of_changes_is_a_tick():
 
 def test_stale_uploads_flip_flopping_after_a_tick_are_not_a_new_tick():
     """EDCAS: for hours after a tick some uploaders still send the old values. Against
-    a settled 2 h+ reference these don't look like a fresh burst (ours fired at
-    10-20 11:33 and 10-21 03:49, 16 h apart, unconfirmed by any monitored system)."""
+    a settled 2 h+ reference these don't look like a fresh burst."""
     det = TickDetector(last_tick="2026-10-17T16:25:36Z")
     _baseline(det, MIN_SYSTEMS + 5)
     tick_at = T0 + timedelta(hours=4)
@@ -53,11 +52,11 @@ def test_small_moves_do_not_count():
 
 
 def test_unchanged_repeats_stale_messages_and_too_soon_are_ignored():
-    det = TickDetector(last_tick=_iso(T0 - timedelta(hours=10)))      # last tick only 10 h ago
+    det = TickDetector(last_tick=_iso(T0 - timedelta(hours=6)))       # last tick only 6 h ago
     _baseline(det, MIN_SYSTEMS + 5)
     later = T0 + timedelta(hours=4)
     assert all(_feed(det, a, 0.5, later) is None for a in range(MIN_SYSTEMS + 5))       # same levels
-    assert all(_feed(det, a, 0.6, later + timedelta(minutes=1)) is None for a in range(MIN_SYSTEMS + 5))  # < 20 h
+    assert all(_feed(det, a, 0.6, later + timedelta(minutes=1)) is None for a in range(MIN_SYSTEMS + 5))  # < 12 h
     old = T0 - timedelta(hours=2)                                        # a replayed old journal line
     assert det.observe(1, [{"Name": "A", "Influence": 0.9}], _iso(old), now=T0) is None
 
