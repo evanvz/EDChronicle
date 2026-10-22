@@ -237,3 +237,17 @@ def test_readings_from_before_and_after_a_mid_day_tick_are_both_kept(tmp_path):
     assert [r[1] for r in repo.get_influence_readings(42, "EUW")] == [0.6447, 0.6560]
     assert repo.get_recently_read_systems("2026-10-22T00:00:00Z") == [42]
     db.close()
+
+
+def test_a_tick_after_a_recorded_range_is_a_new_tick(tmp_path):
+    from persistence.database import Database
+    from persistence.repository import Repository
+    from persistence.schema import SCHEMA_SQL
+    db = Database(tmp_path / "t.db"); db.executescript(SCHEMA_SQL); db.run_migrations()
+    repo = Repository(db)
+    repo.record_bgs_tick("2026-10-21T15:51:28Z", source="systems", upper="2026-10-22T13:06:42Z")
+    repo.record_bgs_tick("2026-10-22T17:11:37Z", source="eddn")         # 4 h after the range ended
+    repo.record_bgs_tick("2026-10-22T12:00:00Z", source="eddn")         # inside the range: the same tick
+    repo.record_bgs_tick("2026-10-22T19:00:00Z", source="eddn")         # 2 h after 17:11: the same tick
+    assert [t["at"] for t in repo.get_tick_info(5)] == ["2026-10-22T17:11:37Z", "2026-10-21T15:51:28Z"]
+    db.close()

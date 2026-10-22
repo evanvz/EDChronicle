@@ -2897,15 +2897,20 @@ class Repository:
         fmt = "%Y-%m-%dT%H:%M:%SZ"
         at = dt.strftime(fmt)
         # A tick within 6 h of a stored one (or inside a stored range, 12 h early allowed
-        # for propagation) is the same tick, or it would split a window in two.
+        # for propagation) is the same tick, or it would split a window in two. A range's
+        # end is a reading that already showed the tick, so nothing after it is that tick
+        # (the EDDN tick at 10-22 17:11 was dropped as part of the range ending 13:06).
         # tick.edcd.io's time replaces our detected/inferred ones; ours never replace it.
         near = None
         for row in self.db.conn.execute(
                 "SELECT tick_at, source, upper FROM bgs_ticks WHERE tick_at BETWEEN ? AND ?",
                 ((dt - timedelta(hours=48)).strftime(fmt), (dt + timedelta(hours=48)).strftime(fmt))):
             start = datetime.strptime(row[0], fmt).replace(tzinfo=timezone.utc)
-            end = datetime.strptime(row[2], fmt).replace(tzinfo=timezone.utc) if row[2] else start
-            if start - timedelta(hours=12 if row[2] else 6) <= dt <= end + timedelta(hours=6):
+            if row[2]:
+                same = start - timedelta(hours=12) <= dt <= datetime.strptime(row[2], fmt).replace(tzinfo=timezone.utc)
+            else:
+                same = abs(dt - start) <= timedelta(hours=6)
+            if same:
                 near = row
                 break
         if near is None:
