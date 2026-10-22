@@ -217,3 +217,23 @@ def test_older_tick_windows_and_a_reading_two_ticks_later():
     bounty_row = rows[-1]
     assert bounty_row["change"] is None and bounty_row["late_after"][1] == 2
     assert "60.60% → 64.38% after 2 ticks (+3.78 combined)" in row_cells(bounty_row)[6]
+
+
+def test_readings_from_before_and_after_a_mid_day_tick_are_both_kept(tmp_path):
+    """faction_snapshots keeps one row a day, so a morning reading was overwritten
+    by the evening one and the tick between them couldn't be seen (2026-10-22)."""
+    from edc.core.system_ticks import infer_system_ticks
+    from persistence.database import Database
+    from persistence.repository import Repository
+    from persistence.schema import SCHEMA_SQL
+    db = Database(tmp_path / "t.db"); db.executescript(SCHEMA_SQL); db.run_migrations()
+    repo = Repository(db)
+    for at, inf in (("2026-10-22T13:06:42Z", 0.6447), ("2026-10-22T20:00:00Z", 0.6560)):
+        repo.save_faction_snapshot(42, {"Name": "EUW", "Influence": inf}, "2026-10-22", True, at, "journal")
+    assert db.conn.execute("SELECT COUNT(*) FROM faction_snapshots").fetchone()[0] == 1   # one per day, as before
+    assert [r[0] for r in repo.get_system_readings(42)] == ["2026-10-22T13:06:42Z", "2026-10-22T20:00:00Z"]
+    assert [(t["after"], t["by"]) for t in infer_system_ticks(repo.get_system_readings(42))] == [
+        ("2026-10-22T13:06:42Z", "2026-10-22T20:00:00Z")]
+    assert [r[1] for r in repo.get_influence_readings(42, "EUW")] == [0.6447, 0.6560]
+    assert repo.get_recently_read_systems("2026-10-22T00:00:00Z") == [42]
+    db.close()

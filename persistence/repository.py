@@ -158,6 +158,15 @@ def _signed_tier_value(influence_tier, trend) -> int:
     return magnitude
 
 
+# Every faction reading: faction_readings (all of them, since 2026-10-22) plus the
+# older one-per-day faction_snapshots rows. UNION drops the rows both hold.
+_READINGS = (
+    "(SELECT system_address, faction_name, observed_at AS data_timestamp, influence, active_states, "
+    "pending_states, source FROM faction_readings UNION SELECT system_address, faction_name, data_timestamp, "
+    "influence, active_states, pending_states, source FROM faction_snapshots WHERE data_timestamp IS NOT NULL)"
+)
+
+
 class Repository:
     def __init__(self, db: Database):
         self.db = db
@@ -643,6 +652,18 @@ class Repository:
                 source,
             ),
         )
+        if normalized_timestamp:
+            self.db.execute(
+                "INSERT OR IGNORE INTO faction_readings (system_address, faction_name, observed_at, influence, "
+                "active_states, pending_states, source) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (system_address, name, normalized_timestamp,
+                 float(influence) if isinstance(influence, (int, float)) else None,
+                 json.dumps(faction.get("ActiveStates")) if faction.get("ActiveStates") else None,
+                 json.dumps(faction.get("PendingStates")) if faction.get("PendingStates") else None,
+                 source))
+            self.db.execute("DELETE FROM faction_readings WHERE system_address = ? AND faction_name = ? "
+                            "AND observed_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-30 days')",
+                            (system_address, name))
         # Rolling 30-day retention — one row/day already matches the real
         # BGS tick rate, so this just bounds DB growth over time. Never
         # prunes a squadron-faction row though: that flag is an identity
@@ -2903,14 +2924,14 @@ class Repository:
     def get_recently_read_systems(self, since: str) -> list[int]:
         """Systems with a faction reading at or after `since` -- what promote_missed_ticks checks."""
         return [r[0] for r in self.db.conn.execute(
-            "SELECT DISTINCT system_address FROM faction_snapshots WHERE data_timestamp >= ?", (since,))]
+            f"SELECT DISTINCT system_address FROM {_READINGS} WHERE data_timestamp >= ?", (since,))]
 
     def get_systems_to_sample(self, since: str, before: str, limit: int) -> list[tuple]:
         """[(system_address, system_name)] whose newest trusted (journal/EDSM) reading
         falls in since..before, the most often read first (busy systems are the likeliest
         to have a fresh post-tick visit on EDSM) -- edc.core.system_ticks.sample_for_missed_tick."""
         return [tuple(r) for r in self.db.conn.execute(
-            "SELECT f.system_address, s.system_name FROM faction_snapshots f "
+            f"SELECT f.system_address, s.system_name FROM {_READINGS} f "
             "JOIN systems s ON s.system_address = f.system_address "
             "WHERE f.source IN ('journal', 'edsm') AND f.data_timestamp >= ? AND s.system_name IS NOT NULL "
             "GROUP BY f.system_address HAVING MAX(f.data_timestamp) <= ? "
@@ -2946,15 +2967,15 @@ class Repository:
         every stored reading of the system, oldest first -- for edc.core.system_ticks."""
         return [tuple(r) for r in self.db.conn.execute(
             "SELECT data_timestamp, faction_name, influence, active_states, pending_states, source "
-            "FROM faction_snapshots WHERE system_address = ? AND data_timestamp IS NOT NULL "
+            f"FROM {_READINGS} WHERE system_address = ? "
             "ORDER BY data_timestamp, faction_name", (system_address,))]
 
     def get_all_faction_readings(self, system_address: int) -> dict[str, list[tuple]]:
         """{faction: [(observed_at, influence)] oldest first} for every faction seen in the system."""
         out: dict = {}
         for r in self.db.conn.execute(
-                "SELECT faction_name, data_timestamp, influence FROM faction_snapshots "
-                "WHERE system_address = ? AND data_timestamp IS NOT NULL ORDER BY data_timestamp", (system_address,)):
+                f"SELECT faction_name, data_timestamp, influence FROM {_READINGS} "
+                "WHERE system_address = ? ORDER BY data_timestamp", (system_address,)):
             out.setdefault(r[0], []).append((r[1], r[2]))
         return out
 
@@ -2983,11 +3004,10 @@ class Repository:
         }
 
     def get_influence_readings(self, system_address: int, faction_name: str) -> list[tuple]:
-        """[(observed_at, influence, active_states, pending_states)] oldest first,
-        one per day (the day's latest reading)."""
+        """[(observed_at, influence, active_states, pending_states)] oldest first, every reading."""
         return [tuple(r) for r in self.db.conn.execute(
-            "SELECT data_timestamp, influence, active_states, pending_states FROM faction_snapshots "
-            "WHERE system_address = ? AND faction_name = ? AND data_timestamp IS NOT NULL ORDER BY data_timestamp",
+            f"SELECT DISTINCT data_timestamp, influence, active_states, pending_states FROM {_READINGS} "
+            "WHERE system_address = ? AND faction_name = ? ORDER BY data_timestamp",
             (system_address, faction_name))]
 
     def get_expansion_candidate_addresses(self) -> set[int]:

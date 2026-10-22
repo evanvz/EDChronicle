@@ -447,6 +447,27 @@ class Database:
             # 7-faction candidates: the faction an invasion would fight ('' = none, NULL = not known)
             "ALTER TABLE expansion_candidates ADD COLUMN invasion_target TEXT",
             "ALTER TABLE expansion_candidates ADD COLUMN invasion_target_inf REAL",
+            # Every faction reading, not one per day: faction_snapshots keeps only the
+            # day's latest, so a reading from before a mid-day tick was overwritten by
+            # the one after it (2026-10-22) and the change couldn't be seen.
+            """CREATE TABLE IF NOT EXISTS faction_readings (
+                system_address INTEGER NOT NULL,
+                faction_name   TEXT    NOT NULL,
+                observed_at    TEXT    NOT NULL,
+                influence      REAL,
+                active_states  TEXT,
+                pending_states TEXT,
+                source         TEXT,
+                PRIMARY KEY (system_address, faction_name, observed_at)
+            )""",
+            "CREATE INDEX IF NOT EXISTS idx_faction_readings_observed ON faction_readings(observed_at)",
+            # first start only: carry the existing one-per-day readings over, so today's
+            # pre-tick readings survive a post-tick visit the same day
+            """INSERT OR IGNORE INTO faction_readings
+                   (system_address, faction_name, observed_at, influence, active_states, pending_states, source)
+               SELECT system_address, faction_name, data_timestamp, influence, active_states, pending_states, source
+               FROM faction_snapshots
+               WHERE data_timestamp IS NOT NULL AND NOT EXISTS (SELECT 1 FROM faction_readings)""",
             # Every BGS tick seen (tick.edcd.io, normalised to ...Z) -- the
             # boundaries of the BGS Experiment Log's per-tick rows.
             """CREATE TABLE IF NOT EXISTS bgs_ticks (
