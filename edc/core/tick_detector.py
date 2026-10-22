@@ -68,12 +68,27 @@ class TickDetector:
         self._changes: deque = deque()          # (time, system_address, uploader), last QUIET + WINDOW
         self._last_tick = _parse(last_tick) if last_tick else None
         self._seen = 0
+        # diagnostics: the biggest burst since the last snapshot() and what stopped it
+        self._peak: Tuple[int, int, str] = (0, 0, "")
 
     def set_last_tick(self, tick: Optional[str]) -> None:
         """The newest known tick (from either source); keeps the 20 h gap honest."""
         t = _parse(tick) if tick else None
         if t and (self._last_tick is None or t > self._last_tick):
             self._last_tick = t
+
+    def _note(self, n_sys: int, n_upl: int, outcome: str) -> None:
+        if n_sys > self._peak[0]:
+            self._peak = (n_sys, n_upl, outcome)
+
+    def snapshot(self) -> str:
+        """One log line: systems tracked, and the biggest burst of changed
+        systems in an hour since the last call (needs MIN_SYSTEMS from
+        MIN_UPLOADERS uploaders) -- to see why a tick wasn't detected."""
+        n_sys, n_upl, outcome = self._peak
+        self._peak = (0, 0, "")
+        return (f"tick detector: {len(self._history)} systems tracked; biggest burst {n_sys} systems / "
+                f"{n_upl} uploaders in {WINDOW.seconds // 60} min" + (f" ({outcome})" if outcome else ""))
 
     def observe(self, system_address: Any, factions: List[dict], timestamp: str,
                 now: Optional[datetime] = None, uploader: Optional[str] = None) -> Optional[str]:
@@ -107,15 +122,20 @@ class TickDetector:
         while self._changes and ts - self._changes[0][0] > QUIET + WINDOW:
             self._changes.popleft()
         burst = [c for c in self._changes if ts - c[0] <= WINDOW]
-        if len({c[1] for c in burst}) < MIN_SYSTEMS or len({c[2] for c in burst if c[2]}) < MIN_UPLOADERS:
+        n_sys, n_upl = len({c[1] for c in burst}), len({c[2] for c in burst if c[2]})
+        if n_sys < MIN_SYSTEMS or n_upl < MIN_UPLOADERS:
+            self._note(n_sys, n_upl, "too few")
             return None
         tick = min(c[0] for c in burst)
         lull = [c for c in self._changes if tick - QUIET <= c[0] < tick]
         if len({c[1] for c in lull}) > QUIET_MAX and len({c[2] for c in lull if c[2]}) >= MIN_UPLOADERS:
+            self._note(n_sys, n_upl, "no lull before it")
             return None             # not a lull -> activity smear after an earlier tick, not a new one
             # (needs several uploaders too, so one sender can't suppress a real tick)
         if self._last_tick is not None and tick - self._last_tick < MIN_GAP:
+            self._note(n_sys, n_upl, "too soon after the last tick")
             return None
+        self._note(n_sys, n_upl, "tick")
         self._last_tick = tick
         self._changes.clear()
         return _iso(tick)

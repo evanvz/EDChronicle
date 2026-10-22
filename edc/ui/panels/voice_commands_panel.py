@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from pathlib import Path
 
 from PyQt6.QtCore import Qt, pyqtSignal
@@ -231,6 +232,7 @@ class VoiceCommandsPanel(QWidget):
     """Main voice commands configuration panel."""
 
     commands_changed = pyqtSignal()
+    vocab_ready = pyqtSignal()
 
     def __init__(self, config_path: Path, models_dir: Path | None = None):
         super().__init__()
@@ -241,6 +243,10 @@ class VoiceCommandsPanel(QWidget):
 
         self._build_ui()
         self._load_config()
+        # the Vosk model takes ~2 s to load: off the UI thread, then the vocabulary check re-runs
+        self.vocab_ready.connect(self._refresh_table)
+        if models_dir:
+            threading.Thread(target=self._preload_vocab, daemon=True, name="vosk-vocab").start()
         self._load_bindings()
         self._populate_mic_combo()
         self._populate_output_combo()
@@ -562,6 +568,12 @@ class VoiceCommandsPanel(QWidget):
             return f"{src}: {key_str}", "controller_only"
         return f"{src}: {key_str}", "ready"
 
+    def _preload_vocab(self) -> None:
+        from edc.audio.voice_commands import missing_vocab_words, vocab_model_loaded
+        missing_vocab_words([], self._models_dir)    # loads and caches the model
+        if vocab_model_loaded():
+            self.vocab_ready.emit()
+
     def _refresh_table(self):
         def _display_name(cmd: dict) -> str:
             action = cmd.get("action", "")
@@ -581,8 +593,8 @@ class VoiceCommandsPanel(QWidget):
 
             # A phrase with an unrecognised word can never be detected at all —
             # that takes priority over binding status, which is moot otherwise.
-            if self._models_dir:
-                from edc.audio.voice_commands import missing_vocab_words
+            from edc.audio.voice_commands import missing_vocab_words, vocab_model_loaded
+            if self._models_dir and vocab_model_loaded():
                 missing = missing_vocab_words(phrase.split(), self._models_dir)
                 if missing:
                     status = "bad_vocab"

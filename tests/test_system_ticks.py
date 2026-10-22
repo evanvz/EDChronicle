@@ -180,3 +180,17 @@ def test_missed_tick_found_by_sampling_systems_after_the_app_was_closed(tmp_path
     system_ticks._last_sample = None
     assert system_ticks.sample_for_missed_tick(repo, fetch, now) == 0       # the promoted tick ended 6 h ago
     db.close()
+
+
+def test_a_tick_explains_only_one_change_per_system():
+    """ICZ RY-R b4-2: changed by 10-21 15:48 (the 10-21 03:49 tick), then again
+    by 10-22 13:14. The 15:48 reading is 12 h after 03:49, but RY-R had already
+    updated for it, so the second change is a new tick."""
+    from edc.core.system_ticks import merge_ticks
+    ticks = ["2026-10-21T03:49:58Z"]
+    changes = [{"after": "2026-10-20T15:24:15Z", "by": "2026-10-21T15:48:44Z", "confirmed": True},
+               {"after": "2026-10-21T15:48:44Z", "by": "2026-10-22T13:14:29Z", "confirmed": True}]
+    _all, added = merge_ticks(ticks, changes)
+    assert list(added) == ["2026-10-22T13:14:29Z"]
+    _all, added = merge_ticks(ticks, changes[1:])          # no earlier change seen: could be late propagation
+    assert added == {}

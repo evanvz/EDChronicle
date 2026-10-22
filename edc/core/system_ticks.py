@@ -73,17 +73,28 @@ def infer_system_ticks(rows: List[tuple]) -> List[Dict[str, object]]:
     return out
 
 
+def _explained(st: dict, earlier: List[dict], global_ticks: List[str]) -> bool:
+    """A global tick explains a change if it falls before "by" and no more than
+    12 h before "after" (the old reading may predate the system's update) --
+    unless the system already changed after that tick: a tick moves a system
+    once (ICZ RY-R b4-2 had updated for 10-21 03:49 by 10-21 15:48, so its
+    next change was a new tick)."""
+    return any(_minus_propagation(st["after"]) < g <= st["by"]
+               and not any(g < e["by"] <= st["after"] for e in earlier)
+               for g in global_ticks)
+
+
 def merge_ticks(global_ticks: List[str], system_ticks: List[Dict[str, object]]) -> Tuple[List[str], Dict[str, dict]]:
     """Global ticks plus confirmed system ticks that no global tick explains,
     placed at "by" (the first reading that shows the change). A global tick
     explains a change if it falls before "by" and no more than 12 h before
-    "after" -- the old reading may simply predate the system's update.
+    "after" -- the old reading may simply predate the system's update (see _explained).
     Returns (sorted tick times, {added time: the system tick})."""
     added: Dict[str, dict] = {}
-    for st in system_ticks:
+    for i, st in enumerate(system_ticks):
         if not st["confirmed"]:
             continue
-        if any(_minus_propagation(st["after"]) < g <= st["by"] for g in global_ticks):
+        if _explained(st, system_ticks[:i], global_ticks):
             continue
         added[str(st["by"])] = st
     return sorted(set(global_ticks) | set(added)), added
@@ -112,14 +123,15 @@ def promote_missed_ticks(repo, now: Optional[datetime] = None) -> Optional[Tuple
         # trusted readings only (our journal, EDSM) on BOTH sides of the change:
         # EDDN is unauthenticated, so it can't make, widen or shift a promoted tick
         trusted_rows = [r for r in repo.get_system_readings(addr) if r[5] in _TRUSTED]
-        for st in infer_system_ticks(trusted_rows):
+        changes = infer_system_ticks(trusted_rows)
+        for i, st in enumerate(changes):
             if str(st["by"]) < since or str(st["by"]) > latest_ok:
                 continue
             gap = (datetime.strptime(str(st["by"])[:19], "%Y-%m-%dT%H:%M:%S")
                    - datetime.strptime(str(st["after"])[:19], "%Y-%m-%dT%H:%M:%S"))
             if gap > MAX_GAP:
                 continue
-            if any(_minus_propagation(st["after"]) < g <= st["by"] for g in global_ticks):
+            if _explained(st, changes[:i], global_ticks):
                 continue
             gaps.append((str(st["after"]), str(st["by"])))
     # the moment most systems' gaps share (ties: the latest); their overlap is the tick's range

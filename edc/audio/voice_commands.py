@@ -169,6 +169,10 @@ def ensure_model(models_dir: Path) -> Path | None:
 _vocab_model = None  # lazily-loaded vosk.Model, cached — loading takes ~1-2s
 
 
+def vocab_model_loaded() -> bool:
+    return _vocab_model is not None
+
+
 def missing_vocab_words(words: list[str], models_dir: Path) -> list[str]:
     """
     Return the subset of `words` that Vosk's acoustic model doesn't recognise

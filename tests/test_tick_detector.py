@@ -93,3 +93,12 @@ def test_one_uploader_spamming_the_lull_cannot_suppress_a_real_tick():
     tick_at = T0 + timedelta(hours=4)
     found = [_feed(det, a, 0.51, tick_at + timedelta(minutes=a)) for a in range(MIN_SYSTEMS)]
     assert found[-1] == _iso(tick_at)
+
+
+def test_snapshot_reports_biggest_burst_and_why_it_stopped():
+    det = TickDetector(last_tick="2026-10-17T16:25:36Z")
+    _baseline(det, 5)
+    for a in range(5):
+        _feed(det, a, 0.6, T0 + timedelta(hours=4, minutes=a))
+    assert det.snapshot().endswith("biggest burst 5 systems / 5 uploaders in 60 min (too few)")
+    assert "biggest burst 0 systems" in det.snapshot()          # reset after each report

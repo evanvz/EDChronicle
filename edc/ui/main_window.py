@@ -4102,6 +4102,7 @@ class MainWindow(QMainWindow):
             stats.get("fcmaterials", 0), stats.get("fsssignaldiscovered", 0),
             stats.get("other", 0), stats.get("invalid", 0), stats.get("total", 0),
         )
+        log.info(self._eddn_worker.tick_detector.snapshot())
 
     def _on_status(self, msg: str):
         self.status.setText(f"Status: {msg}")
