@@ -2905,6 +2905,18 @@ class Repository:
         return [r[0] for r in self.db.conn.execute(
             "SELECT DISTINCT system_address FROM faction_snapshots WHERE data_timestamp >= ?", (since,))]
 
+    def get_systems_to_sample(self, since: str, before: str, limit: int) -> list[tuple]:
+        """[(system_address, system_name)] whose newest trusted (journal/EDSM) reading
+        falls in since..before, the most often read first (busy systems are the likeliest
+        to have a fresh post-tick visit on EDSM) -- edc.core.system_ticks.sample_for_missed_tick."""
+        return [tuple(r) for r in self.db.conn.execute(
+            "SELECT f.system_address, s.system_name FROM faction_snapshots f "
+            "JOIN systems s ON s.system_address = f.system_address "
+            "WHERE f.source IN ('journal', 'edsm') AND f.data_timestamp >= ? AND s.system_name IS NOT NULL "
+            "GROUP BY f.system_address HAVING MAX(f.data_timestamp) <= ? "
+            "ORDER BY COUNT(DISTINCT f.data_timestamp) DESC, MAX(f.data_timestamp) DESC LIMIT ?",
+            (since, before, limit))]
+
     def get_bgs_ticks(self, since: str = "") -> list[str]:
         return [r[0] for r in self.db.conn.execute(
             "SELECT tick_at FROM bgs_ticks WHERE tick_at >= ? ORDER BY tick_at", (since,))]

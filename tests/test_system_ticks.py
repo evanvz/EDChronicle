@@ -148,3 +148,35 @@ def test_single_edsm_reading_per_system_promotes_when_three_overlap(tmp_path):
         repo.save_faction_snapshot(3, {"Name": "F", "Influence": inf}, at[:10], True, at, "edsm")
     assert promote_missed_ticks(repo, now=now) == ("2026-10-20T16:45:00Z", "2026-10-21T09:56:00Z")
     db.close()
+
+
+def test_missed_tick_found_by_sampling_systems_after_the_app_was_closed(tmp_path):
+    """No tick known for 20+ h: a few systems read from EDSM right away bracket
+    the tick with their readings from before the gap; then not again for 2 h."""
+    from datetime import datetime, timezone
+    from edc.core import system_ticks
+    from persistence.database import Database
+    from persistence.repository import Repository
+    from persistence.schema import SCHEMA_SQL
+    db = Database(tmp_path / "t.db"); db.executescript(SCHEMA_SQL); db.run_migrations()
+    repo = Repository(db)
+    repo.record_bgs_tick("2026-10-19T16:26:44Z", source="eddn")
+    for addr in (1, 2, 3, 4):
+        repo.save_system_name_if_missing(addr, f"S{addr}")
+        repo.save_faction_snapshot(addr, {"Name": "F", "Influence": 0.30}, "2026-10-20", True,
+                                   f"2026-10-20T1{addr}:00:00Z", "edsm")
+    repo.save_faction_snapshot(4, {"Name": "F", "Influence": 0.30}, "2026-10-21", True,
+                               "2026-10-21T17:00:00Z", "edsm")              # read 1 h ago: not sampled
+    asked = []
+
+    def fetch(name):
+        asked.append(name)
+        return {"system_address": int(name[1:]), "factions": [
+            {"Name": "F", "Influence": 0.33, "is_controlling": True, "LastUpdate": "2026-10-21T12:00:00Z"}]}, None
+    now = datetime(2026, 10, 21, 18, 0, tzinfo=timezone.utc)
+    system_ticks._last_sample = None
+    assert system_ticks.sample_for_missed_tick(repo, fetch, now) == 3 and sorted(asked) == ["S1", "S2", "S3"]
+    assert system_ticks.promote_missed_ticks(repo, now) == ("2026-10-20T13:00:00Z", "2026-10-21T12:00:00Z")
+    system_ticks._last_sample = None
+    assert system_ticks.sample_for_missed_tick(repo, fetch, now) == 0       # the promoted tick ended 6 h ago
+    db.close()

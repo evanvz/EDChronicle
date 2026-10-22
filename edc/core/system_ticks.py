@@ -134,6 +134,46 @@ def promote_missed_ticks(repo, now: Optional[datetime] = None) -> Optional[Tuple
     return start, end
 
 
+SAMPLE_AFTER = timedelta(hours=20)   # no tick known for this long: one was probably missed
+SAMPLE_EVERY = timedelta(hours=2)
+SAMPLE_SYSTEMS = 10
+_last_sample: Optional[datetime] = None
+
+
+def sample_for_missed_tick(repo, fetch, now: Optional[datetime] = None) -> int:
+    """After the app was closed over a tick (no tick known for 20 h), read a few
+    monitored systems from EDSM now instead of waiting for the once-a-day full
+    refresh: their new readings plus the ones from before the gap bracket the
+    tick for promote_missed_ticks. Systems whose newest trusted reading is
+    6-48 h old, newest first. fetch = edsm_faction_lookup.fetch_system_factions.
+    Returns the number of systems read (0 = not needed or not due)."""
+    global _last_sample
+    now = now or datetime.now(timezone.utc)
+    fmt = "%Y-%m-%dT%H:%M:%SZ"
+    info = repo.get_tick_info(1)
+    # a promoted tick is known only as a range: its end is when it was last seen
+    newest = (info[0].get("upper") or info[0]["at"]) if info else None
+    if newest and now - datetime.strptime(newest[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc) < SAMPLE_AFTER:
+        return 0
+    if _last_sample and now - _last_sample < SAMPLE_EVERY:
+        return 0
+    _last_sample = now
+    read = 0
+    for addr, name in repo.get_systems_to_sample((now - MAX_GAP).strftime(fmt),
+                                                 (now - timedelta(hours=6)).strftime(fmt), SAMPLE_SYSTEMS):
+        result, _err = fetch(name)
+        if not result:
+            continue
+        with repo.db.deferred_commit():
+            for f in result["factions"]:
+                f = dict(f)
+                is_controlling = bool(f.pop("is_controlling", False))
+                repo.save_faction_snapshot(result["system_address"], f, now.date().isoformat(), is_controlling,
+                                           f.pop("LastUpdate", None), "edsm")
+        read += 1
+    return read
+
+
 def tick_label(info: Optional[dict]) -> str:
     """One line for the newest tick: when, and how we know."""
     if not info:

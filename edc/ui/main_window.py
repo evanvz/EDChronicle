@@ -905,6 +905,14 @@ class _BgsTickCheckWorker(QObject):
                     repo.record_bgs_tick(result)
                 # a tick nobody listed but several monitored systems' own readings show
                 found = promote_missed_ticks(repo)
+                if not found:
+                    # app closed over a tick: read a few systems now, not at the daily refresh
+                    from edc.core.edsm_faction_lookup import fetch_system_factions
+                    from edc.core.system_ticks import sample_for_missed_tick
+                    sampled = sample_for_missed_tick(repo, fetch_system_factions)
+                    if sampled:
+                        log.info("No BGS tick for 20 h: read %d systems from EDSM to find it", sampled)
+                        found = promote_missed_ticks(repo)
                 if found:
                     log.info("BGS tick inferred from systems' own readings: between %s and %s", *found)
                 # the newest tick from any source (EDDN detector, systems) may be later
