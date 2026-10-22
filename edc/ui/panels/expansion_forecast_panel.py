@@ -338,9 +338,8 @@ class ExpansionForecastPanel(QWidget):
         target = predicted_target(ranked)
         outcome = f"Likely target: {target}" if target else "Likely target: none eligible"
         mine = {c.get("system_address") for c in cached}
-        # a system the faction is in now changed because of us (Arimavante 6 -> 7 on arrival)
-        changes = slot_changes({a: lv for a, lv in live.items()
-                                if a in mine and (self._faction() or "") not in lv["factions"]}, today)
+        changes = slot_changes({a: lv for a, lv in live.items() if a in mine}, today,
+                               faction=self._faction() or "")
         self._outcome_label.setText("\n".join([slot_change_text(c, target) for c in changes] + [outcome]))
         outer = any((c.get("ring") or CUBE_LY) > CUBE_LY for c in cached)
         area = ("the ±20 ly cube and the ±30 ly ring (nothing eligible within ±20 ly)" if outer

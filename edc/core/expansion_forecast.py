@@ -249,11 +249,15 @@ def merge_live_counts(cached: List[Dict[str, Any]], live: Dict[int, Dict[str, An
 
 
 def slot_changes(live: Dict[int, Dict[str, Any]], today: date,
-                 days: int = SLOT_CHANGE_DAYS) -> List[Dict[str, Any]]:
+                 days: int = SLOT_CHANGE_DAYS, faction: str = "") -> List[Dict[str, Any]]:
     """Candidates whose faction count crossed the 7-faction line within `days`
-    (a slot filled or opened, an invasion target appeared or went), newest first."""
+    (a slot filled or opened, an invasion target appeared or went), newest first.
+    Systems `faction` is in now are skipped: no longer a target, and the change
+    may be our own arrival (Arimavante 6 -> 7, 2026-10-22)."""
     out = []
     for lv in live.values():
+        if faction and faction in (lv.get("factions") or []):
+            continue
         changed, prev = lv.get("changed_at"), lv.get("prev_count")
         if not changed or prev is None or slot_kind(prev) == slot_kind(lv["faction_count"]):
             continue

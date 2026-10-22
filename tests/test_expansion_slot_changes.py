@@ -29,6 +29,9 @@ def test_slot_changes_only_flags_crossing_the_line_within_days():
     }
     got = slot_changes(live, TODAY)
     assert [c["system_name"] for c in got] == ["Arimavante", "Opened"]  # newest first
+    # our own arrival filled it (Arimavante 2026-10-22): not a target, not flagged
+    live[1] = _live(7, prev=6, changed="2026-10-11T07:00:00Z", factions=[f"F{i}" for i in range(6)] + ["EUW"])
+    assert [c["system_name"] for c in slot_changes(live, TODAY, faction="EUW")] == ["Opened"]
 
 
 def test_slot_change_text():

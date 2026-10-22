@@ -6563,7 +6563,8 @@ class MainWindow(QMainWindow):
                 log.exception("Failed to check for new faction systems")
             try:
                 # an expansion candidate gaining or losing a free slot (live EDDN counts)
-                changes = [slot_change_text(c) for c in slot_changes(self.repo.get_candidate_faction_counts(), date.today())]
+                changes = [slot_change_text(c) for c in slot_changes(self.repo.get_candidate_faction_counts(), date.today(),
+                                                                     faction=faction)]
                 text = "\n".join([t for t in [text] if t] + changes)
             except Exception:
                 log.exception("Failed to check expansion candidate faction counts")
