@@ -162,3 +162,35 @@ def test_retreated_from_comes_before_invasion():
                                       "faction_present": False, "been_before": False}]) + ranked
     assert ef.predicted_target(with_tier1) == "Fresh"
     assert ef.predicted_target([]) is None
+
+
+def _f(name, inf, ctrl=False, active=(), pending=()):
+    return {"Name": name, "Influence": inf, "is_controlling": ctrl,
+            "ActiveStates": [{"State": s} for s in active], "PendingStates": [{"State": s} for s in pending]}
+
+
+def test_invasion_target_skips_natives_controller_and_conflicts():
+    # TaexaliTemu 2026-10-22: Aces Wild and HIP 109787 Collective are the only non-natives
+    factions = [_f("Aces Wild Aerospace Corporation", 0.30, ctrl=True), _f("HIP 109787 Collective", 0.12),
+                _f("Revolutionary TaexaliTemu for Equality", 0.05), _f("TaexaliTemu Camorra", 0.04),
+                _f("TaexaliTemu Empire Group", 0.20), _f("TaexaliTemu Exchange", 0.19),
+                _f("TaexaliTemu Jet Central Exchange", 0.10), _f("Gone", 0.0)]
+    assert ef.invasion_target("TaexaliTemu", factions) == {"name": "HIP 109787 Collective", "influence": 0.12}
+    factions[1] = _f("HIP 109787 Collective", 0.12, pending=("Civil war",))
+    assert ef.invasion_target("TaexaliTemu", factions) is None
+
+
+def test_seven_factions_without_target_not_eligible_and_lowest_target_first():
+    ranked = ef.rank_candidates([
+        {"system_name": "Natives", "distance_ly": 3.0, "faction_count": 7, "faction_present": False,
+         "invasion_target": ""},
+        {"system_name": "Near", "distance_ly": 5.0, "faction_count": 7, "faction_present": False,
+         "invasion_target": "A", "invasion_target_inf": 0.20},
+        {"system_name": "Far", "distance_ly": 15.0, "faction_count": 7, "faction_present": False,
+         "invasion_target": "B", "invasion_target_inf": 0.04},
+        {"system_name": "Unknown", "distance_ly": 1.0, "faction_count": 7, "faction_present": False}])
+    assert [(c["system_name"], c["tier"]) for c in ranked] == [
+        ("Far", 3), ("Near", 3), ("Unknown", 3), ("Natives", None)]
+    assert ranked[-1]["no_target"]
+    assert ef.predicted_target(ranked) == "Far"
+    assert ef.predicted_target(ef.rank_candidates([ranked[-1]])) is None

@@ -51,7 +51,7 @@ def test_forecast_tab_renders_from_fresh_cache(tmp_path):
     rows = _table_texts(w._target_table)
     # Arimavante: EUW was there before (left) -> tier 2, so YF-W ranks first
     assert [r[2] for r in rows] == ["Tucanae Sector YF-W b2-2", "Arimavante", "Unlooked"]
-    assert rows[1][1] == "2" and rows[1][5] == "yes (history)" and rows[2][1] == "not checked"
+    assert rows[1][1] == "2" and rows[1][6] == "yes (history)" and rows[2][1] == "not checked"
 
 
 def test_no_faction_and_no_watched_system(tmp_path):

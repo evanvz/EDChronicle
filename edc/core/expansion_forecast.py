@@ -151,6 +151,27 @@ def in_cube(src: tuple, xyz: tuple, half: float = CUBE_LY) -> bool:
     return all(abs(a - b) <= half for a, b in zip(src, xyz))
 
 
+_CONFLICT_STATES = {"war", "civilwar", "election"}
+
+
+def invasion_target(system_name: str, factions: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """The faction an invasion of a 7-faction system would fight: the lowest-
+    influence one that isn't native, isn't the controller and isn't already in
+    a conflict (Complete BGS Guide 2025, printed p65). None = no such faction,
+    so the expansion skips the system.
+    ponytail: native = the faction's name contains the system's name (EDSM's
+    isPlayer flag is unreliable -- all False in Arimavante). A native named
+    otherwise counts as a target here."""
+    def busy(f):
+        names = parse_states(f.get("ActiveStates")) + parse_states(f.get("PendingStates"))
+        return any(s.lower().replace(" ", "") in _CONFLICT_STATES for s in names)
+    ok = [f for f in factions
+          if (f.get("Influence") or 0) > 0 and not f.get("is_controlling")
+          and system_name.lower() not in str(f.get("Name") or "").lower() and not busy(f)]
+    low = min(ok, key=lambda f: f["Influence"], default=None)
+    return {"name": low["Name"], "influence": low["Influence"]} if low else None
+
+
 def rank_candidates(cands: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """tier 1: <7 factions, never been there; tier 2: <7, retreated from
     before; tier 3: exactly 7 (invasion war). 8+ and systems where the faction
@@ -161,8 +182,11 @@ def rank_candidates(cands: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     from Ekono into Arimavante (6 factions, retreated from before) rather than
     TaexaliTemu (7 factions) -- the squad bot's "retreated first" order. The
     guide also says the pick can look random, so this is one confirmed case.
-    ponytail: invasions are ordered by distance; the guide picks the lowest-
-    influence target, which needs the target's influence stored."""
+    A 7-faction system whose lookup found no invasion target (invasion_target
+    "": natives, the controller or factions already in a conflict only) can't
+    be invaded and goes to the end with tier None and no_target. Invasions
+    are ordered by the target's influence, lowest first (the guide's pick);
+    unknown targets (older cache, EDDN-only count) after them by distance."""
     ranked, unchecked = [], []
     for c in cands:
         if c.get("faction_present"):
@@ -173,10 +197,17 @@ def rank_candidates(cands: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             continue
         if n >= 8:
             continue
+        if n == 7 and c.get("invasion_target") == "":
+            unchecked.append({**c, "tier": None, "no_target": True})
+            continue
         tier = 3 if n == 7 else (2 if c.get("been_before") else 1)
         ranked.append({**c, "tier": tier})
+
+    def order(c):
+        inf = c.get("invasion_target_inf") if c["tier"] == 3 else None
+        return (c.get("ring") or CUBE_LY, c["tier"], inf if inf is not None else 2.0, c.get("distance_ly") or 0.0)
     # the +-20 ly ring (all tiers) comes before the +-30 ly ring
-    ranked.sort(key=lambda c: (c.get("ring") or CUBE_LY, c["tier"], c.get("distance_ly") or 0.0))
+    ranked.sort(key=order)
     unchecked.sort(key=lambda c: c.get("distance_ly") or 0.0)
     return ranked + unchecked
 

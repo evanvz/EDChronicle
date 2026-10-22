@@ -444,6 +444,9 @@ class Database:
             # faction listed there means it was in that system before (tier 2).
             "ALTER TABLE expansion_candidates ADD COLUMN faction_former INTEGER",
             "ALTER TABLE expansion_candidates ADD COLUMN ring REAL",
+            # 7-faction candidates: the faction an invasion would fight ('' = none, NULL = not known)
+            "ALTER TABLE expansion_candidates ADD COLUMN invasion_target TEXT",
+            "ALTER TABLE expansion_candidates ADD COLUMN invasion_target_inf REAL",
             # Every BGS tick seen (tick.edcd.io, normalised to ...Z) -- the
             # boundaries of the BGS Experiment Log's per-tick rows.
             """CREATE TABLE IF NOT EXISTS bgs_ticks (

@@ -2856,11 +2856,12 @@ class Repository:
             for r in rows:
                 self.db.execute(
                     "INSERT OR REPLACE INTO expansion_candidates (source_address, system_address, system_name, "
-                    "distance_ly, faction_count, faction_present, faction_former, ring, fetched_at) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "distance_ly, faction_count, faction_present, faction_former, ring, fetched_at, "
+                    "invasion_target, invasion_target_inf) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (source_address, r.get("system_address"), r["system_name"], r.get("distance_ly"),
                      r.get("faction_count"), 1 if r.get("faction_present") else 0,
-                     1 if r.get("faction_former") else 0, r.get("ring") or 20.0, fetched_at),
+                     1 if r.get("faction_former") else 0, r.get("ring") or 20.0, fetched_at,
+                     r.get("invasion_target"), r.get("invasion_target_inf")),
                 )
 
     # ── BGS Experiment Log ────────────────────────────────────────────────────
@@ -3020,7 +3021,8 @@ class Repository:
     def get_expansion_candidates(self, source_address: int) -> list[dict]:
         rows = self.db.conn.execute(
             "SELECT system_name, system_address, distance_ly, faction_count, faction_present, faction_former, "
-            "ring, fetched_at FROM expansion_candidates WHERE source_address = ? ORDER BY distance_ly",
+            "ring, fetched_at, invasion_target, invasion_target_inf FROM expansion_candidates "
+            "WHERE source_address = ? ORDER BY distance_ly",
             (source_address,),
         ).fetchall()
         return [dict(r, faction_present=bool(r["faction_present"]), faction_former=bool(r["faction_former"]))
