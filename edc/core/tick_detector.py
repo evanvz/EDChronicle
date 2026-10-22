@@ -18,6 +18,10 @@ values, so comparing message-to-message flip-flops. Now:
 - each reading is compared with that system's settled value from 2+ h earlier;
 - only a move of more than 0.5 points in some faction counts;
 - the 3 h before the burst must have been quiet, and ticks are 12+ h apart.
+- the detector must have watched that whole quiet spell: right after a start it
+  has no 2 h-old readings, so it sees no changes and every spell looks quiet.
+  On 2026-10-22 it fired at 17:11 UTC from the steady ~20 systems/hour that
+  change all the time, its "quiet" 3 h being the blind warm-up after a restart.
 
 EDCAS uses 20 h, but ticks came 19 h and 16 h apart on 2026-10-20/21 (10-19
 16:26, 10-20 11:33, 10-21 03:49 -- each backed by monitored systems' own
@@ -68,6 +72,7 @@ class TickDetector:
         self._changes: deque = deque()          # (time, system_address, uploader), last QUIET + WINDOW
         self._last_tick = _parse(last_tick) if last_tick else None
         self._seen = 0
+        self._started: Optional[datetime] = None   # first reading seen: changes are visible 2 h later
         # diagnostics: the biggest burst since the last snapshot() and what stopped it
         self._peak: Tuple[int, int, str] = (0, 0, "")
 
@@ -106,6 +111,8 @@ class TickDetector:
         if not levels:
             return None
         self._seen += 1
+        if self._started is None:
+            self._started = ts
         if self._seen % 5000 == 0:
             self._history = {a: h for a, h in self._history.items() if h and now - h[-1][0] < FORGET}
         hist = self._history.setdefault(system_address, deque())
@@ -127,6 +134,9 @@ class TickDetector:
             self._note(n_sys, n_upl, "too few")
             return None
         tick = min(c[0] for c in burst)
+        if tick - QUIET < self._started + REFERENCE_AGE:
+            self._note(n_sys, n_upl, "still warming up")
+            return None             # the quiet spell before it wasn't watched
         lull = [c for c in self._changes if tick - QUIET <= c[0] < tick]
         if len({c[1] for c in lull}) > QUIET_MAX and len({c[2] for c in lull if c[2]}) >= MIN_UPLOADERS:
             self._note(n_sys, n_upl, "no lull before it")
