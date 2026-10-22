@@ -69,6 +69,7 @@ from edc.core.edastro_poi import EdAstroPoiCache
 from edc.core.server_status import fetch_server_status
 from edc.core.galnet_news import fetch_frontier_notices, fetch_latest_headlines
 from edc.core.game_version import note_game_version
+from edc.core.journal_shape_watch import JournalShapeWatch
 from edc.core.eddn_publisher import EddnPublisher, _commodity_symbol, build_commodity_message
 from edc.core.canonn_client import CanonnClient, SystemPoi
 from edc.core.engineering_blueprints import EngineeringBlueprintTable
@@ -2346,7 +2347,10 @@ class MainWindow(QMainWindow):
         data_dir = app_dir / "data"
         data_dir.mkdir(parents=True, exist_ok=True)
         self._game_version_path = data_dir / "game_version.json"
-        self._game_update_notice: tuple[str, str | None] | None = None
+        # game changes the app may need to follow: version change, new journal events/fields
+        self._app_notices: list[tuple[str, str | None]] = []
+        self._journal_watch = JournalShapeWatch(data_dir / "journal_shapes.json")
+        self._journal_watch.start_baseline(getattr(self.cfg, "journal_dir", None))
         self.db = Database(data_dir / "edhelper.db")
         self.db.executescript(SCHEMA_SQL)
         self.db.run_migrations()
@@ -4140,10 +4144,16 @@ class MainWindow(QMainWindow):
             previous = note_game_version(self._game_version_path, evt.get("gameversion"))
             if previous:
                 log.info("Elite Dangerous updated: %s -> %s", previous, evt.get("gameversion"))
-                self._game_update_notice = (
+                self._app_notices.insert(0, (
                     f"Game updated {previous} → {evt.get('gameversion')}: check the update notes for "
-                    f"changes that affect the app", "https://www.elitedangerous.com/news/updates")
+                    f"changes that affect the app", "https://www.elitedangerous.com/news/updates"))
                 self._on_galnet_refreshed(self._galnet_headlines)
+        shape_note = self._journal_watch.observe(evt)
+        if shape_note:
+            log.warning("%s -- a game change the app may need to follow", shape_note)
+            self._append(f"[JOURNAL] {shape_note}")
+            self._app_notices.append((f"{shape_note} (the app may need updating)", None))
+            self._on_galnet_refreshed(self._galnet_headlines)
         if name == "MissionCompleted":
             # The engine drops the mission from active_missions below; keep its
             # TargetFaction for FactionEffects entries with a blank faction name.
@@ -6722,9 +6732,7 @@ class MainWindow(QMainWindow):
         self._galnet_thread.start()
 
     def _on_galnet_refreshed(self, headlines: list[tuple[str, str | None]]) -> None:
-        headlines = [h for h in headlines if h != self._game_update_notice]
-        if self._game_update_notice:
-            headlines = [self._game_update_notice] + headlines
+        headlines = self._app_notices + [h for h in headlines if h not in self._app_notices]
         if not headlines:
             return
         self._galnet_headlines = headlines

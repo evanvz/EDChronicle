@@ -162,6 +162,7 @@ def test_bootstrap_replay_does_not_double_apply_backpackchange_over_disk_snapsho
         engine=engine,
         state=engine.state,
         eddn_publisher=SimpleNamespace(observe=lambda evt: None),
+        _journal_watch=SimpleNamespace(observe=lambda evt: None),
         engineering_panel=SimpleNamespace(refresh=lambda state: None),
         _append=lambda text: None,
         _refresh_engineering=lambda: None,
