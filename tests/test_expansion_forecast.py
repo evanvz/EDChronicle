@@ -69,7 +69,7 @@ def test_rank_candidates_tiers_and_order():
     ]
     out = ef.rank_candidates(cands)
     assert [(c["system_name"], c["tier"]) for c in out] == [
-        ("Arimavante", 1), ("YF-W", 1), ("Seven", 2), ("Left before", 3), ("Not checked", None)]   # guide 2025 p65
+        ("Arimavante", 1), ("YF-W", 1), ("Left before", 2), ("Seven", 3), ("Not checked", None)]   # Arimavante 2026-10-22
 
 
 COORDS = {"Ekono": (59.125, -155.15625, 99.8125),
@@ -148,15 +148,16 @@ def test_faction_expansion_line_uses_freshest_data_and_source_ending():
     assert ef.faction_expansion_line([], {}, TODAY) == ""
 
 
-def test_invasion_comes_before_retreated_from():
-    """Ekono, 2026-10-09: no tier 1; Arimavante retreated-from, TaexaliTemu
-    7 factions. Complete BGS Guide 2025 (Rules of Expansion): invasion first."""
+def test_retreated_from_comes_before_invasion():
+    """Ekono: no tier 1; Arimavante retreated-from (6 factions), TaexaliTemu 7
+    factions. EUW expanded into Arimavante (2026-10-21/22), not TaexaliTemu as
+    the 2025 BGS guide's order would have it."""
     ranked = ef.rank_candidates([
         {"system_name": "Arimavante", "distance_ly": 10.9, "faction_count": 6, "faction_present": False,
          "been_before": True},
         {"system_name": "TaexaliTemu", "distance_ly": 13.2, "faction_count": 7, "faction_present": False,
          "been_before": False}])
-    assert ef.predicted_target(ranked) == "TaexaliTemu"
+    assert ef.predicted_target(ranked) == "Arimavante"
     with_tier1 = ef.rank_candidates([{"system_name": "Fresh", "distance_ly": 19.0, "faction_count": 4,
                                       "faction_present": False, "been_before": False}]) + ranked
     assert ef.predicted_target(with_tier1) == "Fresh"

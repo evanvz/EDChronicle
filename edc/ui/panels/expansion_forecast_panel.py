@@ -331,8 +331,8 @@ class ExpansionForecastPanel(QWidget):
             f"From {self._source['system_name']}: all {len(cached)} candidates "
             f"in {area} (EDSM, {fetched} UTC; faction counts from live EDDN sightings where we have one; "
             f"faction here before = our history + EDSM's former-faction list). Tier 1 = fewer than 7 factions, never there; "
-            f"tier 2 = 7 factions (invasion war); tier 3 = fewer than 7, faction was there before — the game's order "
-            f"per the Complete BGS Guide 2025 (Rules of Expansion).{extra}"
+            f"tier 2 = fewer than 7, faction was there before; tier 3 = 7 factions (invasion war) — the order EUW's "
+            f"own expansion into Arimavante confirmed (2026-10-22; the 2025 BGS guide puts invasions first).{extra}"
             + ("" if any(c["tier"] for c in ranked) or not cached else
                " No eligible system within ±30 ly — the expansion would fail." if outer else
                " No eligible system within ±20 ly — the game would search ±30 ly next, or the expansion fails."))

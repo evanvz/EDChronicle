@@ -152,13 +152,17 @@ def in_cube(src: tuple, xyz: tuple, half: float = CUBE_LY) -> bool:
 
 
 def rank_candidates(cands: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Rules of Expansion (SINC Complete BGS Guide 2025 V3.0, printed p65):
-    tier 1: <7 factions, never been there; tier 2: exactly 7 (invasion war);
-    tier 3: <7, retreated from before. 8+ and systems where the faction is
-    present now are dropped; not-looked-up rows go last. The guide picks the
-    invasion with the lowest-influence target; ponytail: we only store faction
-    counts, so invasions are ordered by distance -- store the target's
-    influence in the lookup if that ever picks the wrong one."""
+    """tier 1: <7 factions, never been there; tier 2: <7, retreated from
+    before; tier 3: exactly 7 (invasion war). 8+ and systems where the faction
+    is present now are dropped; not-looked-up rows go last.
+
+    Tiers 2/3 follow what EUW actually did, not the Complete BGS Guide 2025
+    (printed p65, which puts the invasion first): on 2026-10-21/22 EUW expanded
+    from Ekono into Arimavante (6 factions, retreated from before) rather than
+    TaexaliTemu (7 factions) -- the squad bot's "retreated first" order. The
+    guide also says the pick can look random, so this is one confirmed case.
+    ponytail: invasions are ordered by distance; the guide picks the lowest-
+    influence target, which needs the target's influence stored."""
     ranked, unchecked = [], []
     for c in cands:
         if c.get("faction_present"):
@@ -169,7 +173,7 @@ def rank_candidates(cands: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             continue
         if n >= 8:
             continue
-        tier = 2 if n == 7 else (3 if c.get("been_before") else 1)
+        tier = 3 if n == 7 else (2 if c.get("been_before") else 1)
         ranked.append({**c, "tier": tier})
     # the +-20 ly ring (all tiers) comes before the +-30 ly ring
     ranked.sort(key=lambda c: (c.get("ring") or CUBE_LY, c["tier"], c.get("distance_ly") or 0.0))
@@ -178,10 +182,8 @@ def rank_candidates(cands: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 def predicted_target(ranked: List[Dict[str, Any]]) -> Optional[str]:
-    """The likely target: the first ranked candidate that was looked up.
-    The order of invasion vs retreated-from was disputed until the 2025
-    guide (printed p65) put the invasion first -- matching the squad's
-    experience (Peregrin, 2026-10-09)."""
+    """The likely target: the first ranked candidate that was looked up
+    (retreated-from before invasion -- confirmed by Arimavante, 2026-10-22)."""
     return next((c["system_name"] for c in ranked if c.get("tier")), None)
 
 

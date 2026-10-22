@@ -51,7 +51,7 @@ def test_forecast_tab_renders_from_fresh_cache(tmp_path):
     rows = _table_texts(w._target_table)
     # Arimavante: EUW was there before (left) -> tier 2, so YF-W ranks first
     assert [r[2] for r in rows] == ["Tucanae Sector YF-W b2-2", "Arimavante", "Unlooked"]
-    assert rows[1][1] == "3" and rows[1][5] == "yes (history)" and rows[2][1] == "not checked"
+    assert rows[1][1] == "2" and rows[1][5] == "yes (history)" and rows[2][1] == "not checked"
 
 
 def test_no_faction_and_no_watched_system(tmp_path):
@@ -383,7 +383,7 @@ def test_worker_marks_faction_listed_at_zero_as_former(tmp_path, monkeypatch):
     cached = repo.get_expansion_candidates(1)
     assert cached[0]["faction_former"] is True
     ranked = rank_candidates([dict(c, been_before=c["faction_former"]) for c in cached])
-    assert ranked[0]["tier"] == 3   # retreated-from: after invasions (guide 2025)
+    assert ranked[0]["tier"] == 2   # retreated-from: before invasions (Arimavante 2026-10-22)
 
 
 def test_worker_uses_edsm_cube_list_including_systems_missing_locally(tmp_path, monkeypatch):
