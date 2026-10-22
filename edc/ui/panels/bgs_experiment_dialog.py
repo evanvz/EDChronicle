@@ -55,7 +55,10 @@ def row_cells(r: dict) -> list:
     infl = "" if r["before"] is None else (
         ("⏳ " if r.get("provisional") else "")
         + f"{r['before'] * 100:.2f}%" + (f" → {r['after'] * 100:.2f}%" if r["after"] is not None
-                                         else " → (next tick)" if r["end"] is None else " → no visit since"))
+                                         else " → (next tick)" if r["end"] is None
+                                         else (f" → {r['late_after'][0] * 100:.2f}% after {r['late_after'][1]} ticks "
+                                               f"({r['late_after'][2]:+.2f} combined)") if r.get("late_after")
+                                         else " → no visit since"))
     window = r["start"][5:16].replace("T", " ") + ("" if r["end"] else "  (running)")
     return [window, str(e["tier_score"] or ""), _cr(e["bounties"]), _cr(e["trade_profit"]), _cr(e["exploration"]),
             f"{r['points']:.1f}" if r["points"] else "", infl or "not visited",

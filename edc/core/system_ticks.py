@@ -199,14 +199,18 @@ def tick_label(info: Optional[dict]) -> str:
     return f"Last tick: {short(info['at'])} UTC ({how})"
 
 
-def tick_window(repo, which: str = "current") -> Dict[str, Optional[str]]:
+def tick_window(repo, which="current") -> Dict[str, Optional[str]]:
     """{"since", "until", "text"} for the current tick window (since the newest
-    tick) or the previous one (between the last two) -- what Session Activity and
-    BGS Tasks show, so yesterday's work can still be read and copied after a tick."""
-    ticks = repo.get_tick_info(2)
+    tick), the previous one (between the last two), or `which` = n windows back
+    -- what Session Activity and BGS Tasks show, so earlier work can still be
+    read and copied after a tick (or two: a missed tick recorded later pushes it back)."""
+    back = {"current": 0, "previous": 1}.get(which, which)
+    ticks = repo.get_tick_info(back + 1)
     newest = ticks[0] if ticks else None
-    if which == "previous" and len(ticks) == 2:
+    if back and len(ticks) == back + 1:
         short = lambda t: str(t)[5:16].replace("T", " ")
-        return {"since": ticks[1]["at"], "until": newest["at"],
-                "text": f"Previous tick window: {short(ticks[1]['at'])} → {short(newest['at'])} UTC. {tick_label(newest)}"}
+        name = "Previous tick window" if back == 1 else f"Tick window {back} back"
+        since, until = ticks[back]["at"], ticks[back - 1]["at"]
+        return {"since": since, "until": until,
+                "text": f"{name}: {short(since)} → {short(until)} UTC. {tick_label(newest)}"}
     return {"since": newest["at"] if newest else "1970-01-01T00:00:00Z", "until": None, "text": tick_label(newest)}

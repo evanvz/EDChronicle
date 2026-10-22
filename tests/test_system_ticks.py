@@ -194,3 +194,26 @@ def test_a_tick_explains_only_one_change_per_system():
     assert list(added) == ["2026-10-22T13:14:29Z"]
     _all, added = merge_ticks(ticks, changes[1:])          # no earlier change seen: could be late propagation
     assert added == {}
+
+
+def test_older_tick_windows_and_a_reading_two_ticks_later():
+    """VE-Q: 18M bounties on 10-20, next read 10-22 after two ticks. Session
+    Activity can go 2 windows back; the Experiment Log shows the later reading
+    as a combined change, not as that window's result."""
+    from edc.core.bgs_experiment import build_rows
+    from edc.core.system_ticks import tick_window
+    from edc.ui.panels.bgs_experiment_dialog import row_cells
+    from types import SimpleNamespace
+    ticks = ["2026-10-20T11:33:01Z", "2026-10-21T03:49:58Z", "2026-10-21T15:51:28Z"]
+    repo = SimpleNamespace(get_tick_info=lambda n: [{"at": t, "source": "eddn", "upper": None}
+                                                    for t in reversed(ticks)][:n])
+    w = tick_window(repo, 2)
+    assert (w["since"], w["until"]) == ("2026-10-20T11:33:01Z", "2026-10-21T03:49:58Z")
+    assert w["text"].startswith("Tick window 2 back: 10-20 11:33 → 10-21 03:49 UTC")
+    assert tick_window(repo, 5)["until"] is None                   # not that many ticks: current
+    effort = {"tier_score": 0, "bounties": 0, "trade_profit": 0, "exploration": 0}
+    rows = build_rows(ticks, [("2026-10-20T18:03:12Z", 0.6060, None, None), ("2026-10-22T13:10:36Z", 0.6438, None, None)],
+                      lambda s, e: effort, now="2026-10-22T16:00:00Z")
+    bounty_row = rows[-1]
+    assert bounty_row["change"] is None and bounty_row["late_after"][1] == 2
+    assert "60.60% → 64.38% after 2 ticks (+3.78 combined)" in row_cells(bounty_row)[6]

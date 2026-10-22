@@ -100,6 +100,8 @@ class BgsTasksDialog(QDialog):
         self._window_combo = QComboBox()
         self._window_combo.addItem("Current tick", "current")
         self._window_combo.addItem("Previous tick", "previous")
+        self._window_combo.addItem("2 ticks back", 2)
+        self._window_combo.addItem("3 ticks back", 3)
         self._window_combo.currentIndexChanged.connect(lambda _i: self.refresh())
         hdr_row.addWidget(self._window_combo)
         refresh_btn = QPushButton("Refresh")

@@ -97,6 +97,12 @@ def build_rows(ticks: List[str], readings: List[tuple], effort_for: Callable[[st
             if b is not None and a is not None and (a - b) * 100 >= 0.1:
                 up.append(name)
         rows[-1]["factions_up"] = sorted(up)
+        # no reading in the next window: the first later one spans more than one tick
+        # (VE-Q's 18M bounties, 10-20, next read 10-22 after two ticks) -- shown, but not
+        # used as this window's change, since it can't be split between the ticks
+        late = next((r for r in readings if r[0] >= end), None) if end is not None and after is None else None
+        rows[-1]["late_after"] = None if late is None or before is None else (
+            late[1], sum(1 for t in ticks if end <= t <= late[0]), (late[1] - before) * 100)
         # A reading under 12 h after its tick may still be the old level (propagation):
         # the row's numbers are provisional until a later reading confirms them.
         # A tick inferred from the system's own readings sits AT the reading that shows
