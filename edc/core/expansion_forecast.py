@@ -280,12 +280,19 @@ def slot_change_text(item: Dict[str, Any], likely_target: Optional[str] = None) 
 
 
 def new_systems(presence: List[Dict[str, Any]], endings: List[tuple], today: date,
-                days: int = NEW_SYSTEM_DAYS, coords: Optional[Dict[str, tuple]] = None) -> List[Dict[str, Any]]:
+                days: int = NEW_SYSTEM_DAYS, coords: Optional[Dict[str, tuple]] = None,
+                unconfirmed: Optional[List[tuple]] = None) -> List[Dict[str, Any]]:
     """Systems the faction first appeared in within `days`, small (<= 20%),
     paired with an expansion ending within +-1 day: endings are
     [(source system name, "YYYY-MM-DD"), ...]. A source must also lie within
     30 ly (the game's extended search cube) of the new system, per `coords`
-    {name: (x, y, z)}; the nearest qualifying source wins, none without coords."""
+    {name: (x, y, z)}; the nearest qualifying source wins, none without coords.
+    The source's drop can be read days late (Ekono still read 76% "Expansion"
+    the day EUW arrived in Arimavante, 2026-10-22, which was then labelled a
+    colonisation): a new system that itself shows Expansion recovering (the
+    expansion ended as it arrived) is paired with an `unconfirmed` source
+    instead -- [(name, date)]: the faction's highest-influence system, at 75%+,
+    still reading Expansion."""
     coords = coords or {}
     out = []
     for r in presence:
@@ -296,18 +303,23 @@ def new_systems(presence: List[Dict[str, Any]], endings: List[tuple], today: dat
         if seen > today or (today - seen).days > days:
             continue
         new_xyz = coords.get(r.get("system_name"))
-        near = []
-        for name, d in endings:
-            src_xyz = coords.get(name)
-            if (name != r.get("system_name") and new_xyz and src_xyz
-                    and abs((date.fromisoformat(str(d)[:10]) - seen).days) <= 1
-                    and in_cube(src_xyz, new_xyz, half=30.0)):
-                near.append((sum((a - b) ** 2 for a, b in zip(src_xyz, new_xyz)), name))
-        source = min(near)[1] if near else None
+
+        def nearest(sources):
+            near = []
+            for name, d in sources:
+                src_xyz = coords.get(name)
+                if (name != r.get("system_name") and new_xyz and src_xyz
+                        and abs((date.fromisoformat(str(d)[:10]) - seen).days) <= 1
+                        and in_cube(src_xyz, new_xyz, half=30.0)):
+                    near.append((sum((a - b) ** 2 for a, b in zip(src_xyz, new_xyz)), name))
+            return min(near)[1] if near else None
+        source, confirmed = nearest(endings), True
+        if not source and "Expansion" in parse_states(r.get("recovering_states")):
+            source, confirmed = nearest(unconfirmed or []), False
         # no source-size drop within range -> not an expansion: most likely the
         # faction's own colonisation (or a system first reported late)
         out.append({"system_name": r.get("system_name"), "influence": inf,
-                    "first_seen": str(first)[:10], "source": source,
+                    "first_seen": str(first)[:10], "source": source, "source_confirmed": bool(source and confirmed),
                     "kind": "expansion" if source else "colonisation"})
     return sorted(out, key=lambda x: x["first_seen"], reverse=True)
 
@@ -315,7 +327,8 @@ def new_systems(presence: List[Dict[str, Any]], endings: List[tuple], today: dat
 def alert_text(faction: str, item: Dict[str, Any]) -> str:
     pct = f"{item['influence'] * 100:.1f}%"
     if item.get("source"):
-        return f"🆕 {faction} entered {item['system_name']} ({pct}) — likely expansion from {item['source']}"
+        return (f"🆕 {faction} entered {item['system_name']} ({pct}) — likely expansion from {item['source']}"
+                + ("" if item.get("source_confirmed", True) else " (its influence drop not read yet)"))
     return (f"🆕 {faction} appeared in {item['system_name']} ({pct}) — no expansion source in range, "
             "likely colonisation")
 
@@ -331,11 +344,17 @@ def detect_new_systems(repo, faction: str, today: Optional[date] = None) -> List
     expansion ends), to keep it to a few history queries."""
     today = today or date.today()
     presence = repo.get_squadron_presence(faction)
-    endings = []
+    endings, unconfirmed = [], []
     for r in presence:
         if (r.get("influence") or 0.0) >= 0.5:
             hist = list(reversed(repo.get_faction_history(r["system_address"], faction)))
             endings += [(r["system_name"], d) for _i, d, delta in expansion_endings(hist)
                         if delta <= -SOURCE_DROP_MIN]
+            if (r.get("influence") or 0.0) >= EXPANSION_THRESHOLD and is_expanding(r):
+                unconfirmed.append((r.get("influence"), r["system_name"], r.get("last_seen")))
+    # the source is the faction's highest-influence system; a new system outside
+    # its range is a colonisation, not this expansion
+    unconfirmed = [max(unconfirmed)[1:]] if unconfirmed else []
     names = {r["system_name"] for r in presence} | {n for n, _d in endings}
-    return new_systems(presence, endings, today, coords=repo.get_system_coords_for_names(sorted(names)))
+    return new_systems(presence, endings, today, coords=repo.get_system_coords_for_names(sorted(names)),
+                       unconfirmed=unconfirmed)

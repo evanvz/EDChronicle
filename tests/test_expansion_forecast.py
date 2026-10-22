@@ -89,7 +89,8 @@ def test_new_system_paired_with_expansion_ending():
                 _p(1, "Ekono", 0.6789, "2026-09-08", "2026-10-07")]
     out = ef.new_systems(presence, [("Ekono", "2026-10-07")], TODAY, coords=COORDS)
     assert out == [{"system_name": "Tucanae Sector YF-W b2-2", "influence": 0.090992,
-                    "first_seen": "2026-10-07", "source": "Ekono", "kind": "expansion"}]
+                    "first_seen": "2026-10-07", "source": "Ekono", "source_confirmed": True,
+                    "kind": "expansion"}]
     assert ef.alert_text("Elite United Worlds", out[0]) == (
         "🆕 Elite United Worlds entered Tucanae Sector YF-W b2-2 (9.1%) — likely expansion from Ekono")
 
@@ -130,6 +131,27 @@ def test_detect_new_systems_ignores_zero_drop_endings():
         get_system_coords_for_names=lambda names: {n: coords[n] for n in names if n in coords})
     out = ef.detect_new_systems(repo, "EUW", TODAY)
     assert [(o["system_name"], o["source"]) for o in out] == [("Tucanae Sector YF-W b2-2", "Ekono")]
+
+
+def test_unread_drop_source_is_only_the_highest_influence_system():
+    """Expansion comes from the faction's highest-influence system; a new system
+    near a lower 75%+ system but out of the top system's range is a colonisation."""
+    from types import SimpleNamespace
+    exp = '[{"State": "Expansion"}]'
+    coords = {"Top": (0.0, 0.0, 0.0), "Second": (100.0, 0.0, 0.0), "Near top": (10.0, 0.0, 0.0),
+              "Near second": (110.0, 0.0, 0.0)}
+
+    def repo(new):
+        return SimpleNamespace(
+            get_squadron_presence=lambda f: [
+                _p(1, "Top", 0.82, "2026-09-01", "2026-10-07", state="Expansion", active=exp),
+                _p(2, "Second", 0.77, "2026-09-01", "2026-10-07", state="Expansion", active=exp),
+                _p(3, new, 0.18, "2026-10-07", "2026-10-07", rec=exp)],
+            get_faction_history=lambda addr, f: [],
+            get_system_coords_for_names=lambda names: {n: coords[n] for n in names if n in coords})
+    assert ef.detect_new_systems(repo("Near top"), "EUW", TODAY)[0]["source"] == "Top"
+    far = ef.detect_new_systems(repo("Near second"), "EUW", TODAY)[0]
+    assert far["source"] is None and far["kind"] == "colonisation"
 
 
 
@@ -194,3 +216,15 @@ def test_seven_factions_without_target_not_eligible_and_lowest_target_first():
     assert ranked[-1]["no_target"]
     assert ef.predicted_target(ranked) == "Far"
     assert ef.predicted_target(ef.rank_candidates([ranked[-1]])) is None
+
+
+def test_new_system_with_expansion_recovering_pairs_unconfirmed_source():
+    """Arimavante 2026-10-22: EUW arrived with Expansion recovering while Ekono
+    still read 76% in Expansion (its drop not read yet) -- not a colonisation."""
+    new = {**_p(2, "Tucanae Sector YF-W b2-2", 0.18, "2026-10-07", "2026-10-07"),
+           "recovering_states": '[{"State": "Expansion"}]'}
+    out = ef.new_systems([new], [], TODAY, coords=COORDS, unconfirmed=[("Ekono", "2026-10-07")])
+    assert out[0]["source"] == "Ekono" and out[0]["kind"] == "expansion" and not out[0]["source_confirmed"]
+    assert ef.alert_text("EUW", out[0]).endswith("likely expansion from Ekono (its influence drop not read yet)")
+    plain = {**new, "recovering_states": None}   # no ending shown in the new system -> unchanged
+    assert ef.new_systems([plain], [], TODAY, coords=COORDS, unconfirmed=[("Ekono", "2026-10-07")])[0]["source"] is None
