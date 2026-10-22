@@ -475,6 +475,9 @@ class VoiceCommandsPanel(QWidget):
             names = []
 
         saved = self._data.get("output_device")
+        # None = the OS default, looked up for every announcement, so switching to
+        # headphones in Windows moves the voice too (resolve_playback_device_id)
+        self._output_combo.addItem("Windows default (follows your sound settings)", None)
         for name in names:
             self._output_combo.addItem(name, name)
 
