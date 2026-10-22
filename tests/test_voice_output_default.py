@@ -24,3 +24,18 @@ def test_no_device_name_means_os_default():
     with mock.patch("miniaudio.Devices") as devices:
         assert resolve_playback_device_id(None) is None
         devices.assert_not_called()
+
+
+def test_windows_default_microphone(tmp_path):
+    QApplication.instance() or QApplication([])
+    from edc.audio.voice_commands import WINDOWS_DEFAULT_MIC, _pick_capture_device
+    from edc.ui.panels.voice_commands_panel import VoiceCommandsPanel
+    fake = mock.Mock()
+    assert _pick_capture_device(fake, WINDOWS_DEFAULT_MIC) == (None, "Windows default")   # OS default device
+    fake.Devices.assert_not_called()
+    cfg = tmp_path / "vc.json"
+    cfg.write_text(json.dumps({"input_device": "Headset (TOZO H20)"}), encoding="utf-8")
+    panel = VoiceCommandsPanel(cfg)
+    assert panel._mic_combo.itemText(0).startswith("Windows default")
+    panel._mic_combo.setCurrentIndex(0)
+    assert panel.input_device() == WINDOWS_DEFAULT_MIC

@@ -78,6 +78,11 @@ _FRAGMENT_WINDOW      = 5.0   # seconds — join final results this close togeth
 _LOOPBACK_HINTS = ("stereo mix", "what u hear", "loopback", "wave out", "speakers")
 
 
+# Mic setting meaning "whatever Windows uses": miniaudio opens the OS default and
+# (WASAPI automatic stream routing) follows it when it changes, e.g. to headphones.
+WINDOWS_DEFAULT_MIC = "(Windows default)"
+
+
 def _pick_capture_device(miniaudio_mod, preferred_name: str | None = None):
     """
     Pick a real microphone input, avoiding loopback/"Stereo Mix" style devices
@@ -85,6 +90,8 @@ def _pick_capture_device(miniaudio_mod, preferred_name: str | None = None):
     If preferred_name is given (from the user's Voice Cmds panel selection), it
     is matched first. Returns (device_id, name) or (None, None) for OS default.
     """
+    if preferred_name == WINDOWS_DEFAULT_MIC:
+        return None, "Windows default"
     try:
         devices = miniaudio_mod.Devices()
         captures = devices.get_captures()

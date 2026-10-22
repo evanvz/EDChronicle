@@ -426,6 +426,8 @@ class VoiceCommandsPanel(QWidget):
             names = []
 
         saved = self._data.get("input_device")
+        from edc.audio.voice_commands import WINDOWS_DEFAULT_MIC
+        self._mic_combo.addItem("Windows default (follows your sound settings)", WINDOWS_DEFAULT_MIC)
         for name in names:
             label = name
             if any(h in name.lower() for h in self._LOOPBACK_HINTS):
