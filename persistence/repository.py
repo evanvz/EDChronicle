@@ -1236,7 +1236,7 @@ class Repository:
         active_war = None
         own_row = self.db.conn.execute(
             """
-            SELECT faction_state, active_states, snapshot_date
+            SELECT faction_state, active_states, pending_states, snapshot_date
             FROM faction_snapshots
             WHERE system_address = ? AND faction_name = ?
             ORDER BY snapshot_date DESC
@@ -1247,7 +1247,7 @@ class Repository:
         if own_row is not None and _row_is_at_war(own_row["faction_state"], own_row["active_states"]):
             war_rivals = self.db.conn.execute(
                 """
-                SELECT fs.faction_name, fs.influence, fs.faction_state, fs.active_states
+                SELECT fs.faction_name, fs.influence, fs.faction_state, fs.active_states, fs.pending_states
                 FROM faction_snapshots fs
                 WHERE fs.system_address = ? AND fs.faction_name != ?
                   AND fs.snapshot_date = ?
@@ -1256,7 +1256,10 @@ class Repository:
             ).fetchall()
             best_opponent = None
             for r in war_rivals:
-                if not _row_is_at_war(r["faction_state"], r["active_states"]):
+                # a rival read earlier the same day may still show the war as pending
+                # (EDDN brings only the squadron faction's row: Arimavante 2026-10-22)
+                if not (_row_is_at_war(r["faction_state"], r["active_states"])
+                        or _row_is_at_war(None, r["pending_states"])):
                     continue
                 r_influence = r["influence"] if isinstance(r["influence"], (int, float)) else 0.0
                 best_influence = best_opponent["influence"] if best_opponent and isinstance(best_opponent["influence"], (int, float)) else -1.0
@@ -1267,6 +1270,25 @@ class Repository:
             else:
                 active_war = {"faction_name": None, "influence": None}
 
+        # a war or civil war that starts at the next tick: the opponent is the
+        # rival with the same pending state on its latest row
+        pending_war = None
+        if own_row is not None and active_war is None and _row_is_at_war(None, own_row["pending_states"]):
+            pending_war = {"faction_name": None, "influence": None}
+            for r in self.db.conn.execute(
+                    """
+                    SELECT fs.faction_name, fs.influence, fs.faction_state, fs.active_states, fs.pending_states
+                    FROM faction_snapshots fs
+                    WHERE fs.system_address = ? AND fs.faction_name != ?
+                      AND fs.snapshot_date = (SELECT MAX(snapshot_date) FROM faction_snapshots fs2
+                                              WHERE fs2.system_address = fs.system_address
+                                                AND fs2.faction_name = fs.faction_name)
+                    """, (system_address, faction_name)):
+                # the rival may already show it active, read after the tick (EDDN, Arimavante 10-22)
+                if _row_is_at_war(None, r["pending_states"]) or _row_is_at_war(r["faction_state"], r["active_states"]):
+                    pending_war = {"faction_name": r["faction_name"], "influence": r["influence"]}
+                    break
+
         return {
             "influence": our_influence,
             "trend": trend,
@@ -1274,6 +1296,7 @@ class Repository:
             "days_in_retreat_range": days_in_retreat_range,
             "conflict_risk": conflict_risk,
             "active_war": active_war,
+            "pending_war": pending_war,
         }
 
     def get_all_faction_predictions_for_system(self, system_address: int) -> List[dict]:

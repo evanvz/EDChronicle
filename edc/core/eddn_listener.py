@@ -433,7 +433,12 @@ class EddnPowerPlayWorker(QObject):
         # journal-only) — highest Influence among all factions in this same
         # message is used as an is_controlling heuristic instead.
         is_controlling = bool(best_name and target.get("Name") == best_name)
-        self.faction_seen.emit(system_address, star_system, dict(target), is_controlling, timestamp)
+        # every faction in the system rides along, so the system's rows all come from
+        # the same reading (Arimavante 2026-10-22: EUW's row showed the war active
+        # while Cameron's, from an earlier visit, still showed it pending)
+        sighting = dict(target)
+        sighting["SystemFactions"] = [dict(f) for f in factions if isinstance(f, dict) and f.get("Name")]
+        self.faction_seen.emit(system_address, star_system, sighting, is_controlling, timestamp)
 
     def _maybe_emit_faction_names(self, msg: dict, timestamp: str) -> None:
         system_address = msg.get("SystemAddress")

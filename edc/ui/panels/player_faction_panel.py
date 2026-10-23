@@ -299,6 +299,16 @@ def _format_forecast(prediction: Optional[Dict[str, Any]]) -> Tuple[str, str]:
             return (f"⚔ At War vs {opponent} ({influence * 100:.1f}%)", "#FF6B6B")
         return ("⚔ At War — opponent unknown (EDSM data incomplete)", "#FF6B6B")
 
+    pending_war = prediction.get("pending_war")
+    if pending_war:
+        opponent = pending_war.get("faction_name")
+        influence = pending_war.get("influence")
+        if not opponent:
+            return ("⚔ War pending — starts at the next tick", "#FFB347")
+        return (f"⚔ War pending vs {opponent}"
+                + (f" ({influence * 100:.1f}%)" if isinstance(influence, (int, float)) else "")
+                + " — starts at the next tick", "#FFB347")
+
     conflict = prediction.get("conflict_risk")
     if conflict:
         diff_pct = conflict.get("diff", 0.0) * 100
@@ -2274,6 +2284,10 @@ class _FactionHistoryDialog(QDialog):
         except Exception:
             log.exception("Failed to load faction predictions for system %s", self._system_address)
             predictions = []
+        # only the factions in the system now: EDSM keeps factions that left at 0%
+        # (Arimavante listed 7 of them next to the 7 present)
+        current = {p["faction_name"] for p in predictions if (p.get("influence") or 0) > 0}
+        predictions = [p for p in predictions if p["faction_name"] in current]
 
         colors: Dict[str, str] = {
             p["faction_name"]: _FACTION_CHART_COLORS[i % len(_FACTION_CHART_COLORS)]
@@ -2307,6 +2321,7 @@ class _FactionHistoryDialog(QDialog):
         except Exception:
             log.exception("Failed to load faction history for system %s", self._system_address)
             history = []
+        history = [h for h in history if h.get("faction_name") in current]
 
         # Latest recorded state for the tracked squadron faction specifically
         # (not any faction in the system) -- used below to tell "no war is
