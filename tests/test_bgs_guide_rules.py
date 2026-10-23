@@ -162,3 +162,17 @@ def test_war_guide_follows_squadron_priority():
     fight = build_task_view(_task("fight", "A", "B"), {}, None, [], None, LIMITS)["guide"]
     assert "secondary objectives" in fight and "massacre missions" in fight
     assert "squad advice: about every 10M" in fight  # squad-only, labelled as such
+
+
+def test_fight_card_shows_massacre_mission_progress():
+    """Arimavante 2026-10-23: 'Kill Cameron's Combat Services ships', 36 kills, for EUW."""
+    missions = {1: {"faction": "A", "target_faction": "B", "destination_system": "tucanae",
+                    "kill_count": 36, "kills_credited": 18},
+                2: {"faction": "Other", "target_faction": "B", "destination_system": "Tucanae",
+                    "kill_count": 10, "kills_credited": 2},                       # another faction's mission
+                3: {"faction": "A", "destination_system": "Tucanae", "kill_count": None}}   # not a massacre
+    view = build_task_view(_task("fight", "A", "B"), {}, None, [], None, LIMITS, missions=missions)
+    assert "Massacre mission vs B: 18 / 36 kills (the app's count)" in view["lines"]
+    assert any(c["text"] == "Massacre 18/36 kills" for c in view["chips"])
+    assert not any("Massacre" in c["text"] for c in build_task_view(_task("fight", "A", "B"), {}, None, [], None,
+                                                                    LIMITS)["chips"])

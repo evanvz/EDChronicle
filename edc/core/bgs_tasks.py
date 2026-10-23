@@ -701,7 +701,21 @@ def _boost_view(task: dict, report: dict, history: list, limits: dict, today: Op
             "updated_at": None}
 
 
-def _conflict_view(task: dict, report: dict, bgs_status: Optional[dict], kind: str) -> dict:
+def massacre_progress(missions: Optional[dict], faction: str, system: str) -> list:
+    """Active massacre missions for `faction` with kills in `system`:
+    [(target faction, kills credited, kill count)]. Kills are the app's own count,
+    one mission at a time (edc.core.mission_events.credit_massacre_kill), so they
+    can run a little behind the game's."""
+    out = []
+    for rec in (missions or {}).values():
+        if (isinstance(rec.get("kill_count"), int) and rec.get("faction") == faction
+                and (rec.get("destination_system") or "").lower() == (system or "").lower()):
+            out.append((rec.get("target_faction") or "?", rec.get("kills_credited", 0), rec["kill_count"]))
+    return out
+
+
+def _conflict_view(task: dict, report: dict, bgs_status: Optional[dict], kind: str,
+                   missions: Optional[dict] = None) -> dict:
     faction = task.get("faction_name") or ""
     opponent = task.get("opponent_name") or ""
     war_types = ("election",) if kind == "vote" else ("war", "civilwar")
@@ -733,6 +747,9 @@ def _conflict_view(task: dict, report: dict, bgs_status: Optional[dict], kind: s
             f"Your actions: {cz_count} (worth {act['cz_value']:.1f} low space CZs), "
             f"combat bonds {_cr(act['combat_bonds'])}, {_missions(act['missions'])}"
         )
+        massacres = massacre_progress(missions, faction, task["system_name"])
+        for target, done, need in massacres:
+            lines.append(f"Massacre mission vs {target}: {done} / {need} kills (the app's count)")
         acted = bool(act["cz_kills"] or act["combat_bonds"] or act["missions"])
         if opponent and faction_activity(report, task["system_name"], opponent)["combat_bonds"]:
             warnings.append(f"You cashed combat bonds for {opponent}")
@@ -776,6 +793,9 @@ def _conflict_view(task: dict, report: dict, bgs_status: Optional[dict], kind: s
             chips.append({"text": f"Bonds {_cr(act['combat_bonds'])}"})
         if act["missions"]:
             chips.append({"text": f"{act['missions']} missions"})
+        if massacres:
+            done, need = sum(m[1] for m in massacres), sum(m[2] for m in massacres)
+            chips.append({"text": f"Massacre {done}/{need} kills", "color": "#6BCB77" if done >= need else ""})
         short = f"Win conflict zones for {faction} · bonds, massacre missions, bounties break ties"
     return {"status": status, "lines": lines, "warnings": warnings,
             "bars": bars, "chips": chips, "detail_lines": [], "guide_short": short,
@@ -1168,7 +1188,7 @@ def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], histor
                     supporting: Optional[list] = None, collect_system: Optional[dict] = None,
                     collect_batch: Optional[dict] = None,
                     last_delivery: Optional[dict] = None,
-                    faction_stations: Optional[list] = None) -> dict:
+                    faction_stations: Optional[list] = None, missions: Optional[dict] = None) -> dict:
     task_type = task["task_type"]
     population_basis = ""
     if task_type == "boost":
@@ -1180,7 +1200,7 @@ def build_task_view(task: dict, report: dict, bgs_status: Optional[dict], histor
     elif task_type == "hinder":
         view = _hinder_view(task, report, history, today, squadron_faction, faction_stations)
     elif task_type in ("vote", "fight"):
-        view = _conflict_view(task, report, bgs_status, task_type)
+        view = _conflict_view(task, report, bgs_status, task_type, missions)
     elif task_type == "powerplay":
         view = _powerplay_view(pp, pledged, merits, pp_activities,
                                allied_powers(pledged, limits.get("allied_powers")),
@@ -1224,7 +1244,7 @@ def build_task_views(repo, since: str, limits: dict, system_address: Optional[in
                      cargo: Optional[dict] = None, last_collect: Optional[dict] = None,
                      collect_system: Optional[dict] = None,
                     collect_batch: Optional[dict] = None, deliveries: Optional[dict] = None,
-                     until: Optional[str] = None) -> list[dict]:
+                     until: Optional[str] = None, missions: Optional[dict] = None) -> list[dict]:
     """Views for every task (or only those in system_address), in the
     user's priority order."""
     tasks = repo.list_bgs_tasks()
@@ -1261,7 +1281,8 @@ def build_task_views(repo, since: str, limits: dict, system_address: Optional[in
                                      last_delivery=(deliveries or {}).get((t["system_name"] or "").lower()),
                                      faction_stations=(repo.find_faction_stations_in_system(t["system_name"],
                                                                                           t.get("faction_name") or "")
-                                                       if t["task_type"] == "hinder" else None)))
+                                                       if t["task_type"] == "hinder" else None),
+                                     missions=missions))
         if t["task_type"] in ("boost", "hinder", "vote", "fight") and addr is not None:
             _add_system_update_line(views[-1], repo, addr)
         if t["task_type"] == "powerplay" and pledged and addr is not None:

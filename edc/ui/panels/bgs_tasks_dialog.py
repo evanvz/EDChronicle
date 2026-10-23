@@ -345,6 +345,7 @@ class BgsTasksDialog(QDialog):
                 collect_batch=getattr(getattr(self._panel, "_last_state", None), "pp_collect_batch", None),
                 deliveries=getattr(getattr(self._panel, "_last_state", None), "pp_deliveries", None),
                 until=until,
+                missions=getattr(getattr(self._panel, "_last_state", None), "active_missions", None),
             )
         except Exception:
             log.exception("Failed to build BGS task views")
