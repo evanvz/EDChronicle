@@ -4585,18 +4585,23 @@ class MainWindow(QMainWindow):
         ctrl = (getattr(state, "system_controlling_power", None) or "").strip()
         pp_state_val = (getattr(state, "system_powerplay_state", None) or "").strip()
         merit = ""
-        if pledged:
-            # Marking "done" happens on confirmed drop-in
-            # (SupercruiseDestinationDrop), not here — this
-            # only decides whether it's worth alerting about.
-            # Reinforcement: our own power controls this system
-            if ctrl and ctrl.lower() == pledged.lower():
+        powers = getattr(state, "system_powers", None) or []
+        # Marking "done" happens on confirmed drop-in
+        # (SupercruiseDestinationDrop), not here — this
+        # only decides whether it's worth alerting about.
+        # Ship uplink scans only paid where our power is in the system's
+        # Powers list (119 scans in 2026 journals: 0 of 10 elsewhere), and
+        # not in enemy Strongholds lately (0 of 3 since April, incl. Achenar
+        # 2026-10-23); the mode needs the real controller -- an empty one
+        # made Achenar, A. Lavigny-Duval's Stronghold, read as acquisition.
+        if pledged and (not powers or any(p.lower() == pledged.lower() for p in powers)):
+            mode = powerplay_mode(pledged, ctrl, pp_state_val, powers, allies=_allies_of(self))
+            if mode == "Reinforcement":
                 merit = ExplorationPhrases.megaship_pp_merits("reinforcement")
-            # Acquisition: no controlling power, PP-active, and our
-            # power in range (listed in the system's Powers).
-            elif powerplay_mode(pledged, "", pp_state_val,
-                                getattr(state, "system_powers", None)) == "Acquisition":
+            elif mode == "Acquisition":
                 merit = ExplorationPhrases.megaship_pp_merits("acquisition")
+            elif mode == "Undermining" and pp_state_val.lower() != "stronghold":
+                merit = ExplorationPhrases.megaship_pp_merits("undermining")
         war = active_system_war(getattr(state, "system_conflicts", None))
         warning = ExplorationPhrases.megaship_conflict_warning(war[0]) if war else ""
         if merit or warning:

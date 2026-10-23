@@ -110,11 +110,11 @@
           "merits": "yes", "platform": "ED", "bgs": "safe"
         },
         {
-          "action": "Scan Datalinks",
+          "action": "Scan Ship Log Uplinks",
           "ethos": "Covert",
           "bonus_powers": ["Arissa Lavigny-Duval", "Archon Delaine", "Zemina Torval"],
           "merits": "yes", "platform": "ED", "bgs": "safe",
-          "notes": "At megaships; once per megaship per fortnight (Doncaster Powerplay ref card)"
+          "notes": "At megaships (journal: DataScanned "Ship Uplink"); merits only where your power is present, and not in enemy Strongholds lately (journals 2026); "once per megaship per fortnight" per the Doncaster ref card, but re-scans within 14 days still paid"
         },
         {
           "action": "Scan Ships and Wakes",
@@ -210,11 +210,11 @@
           "contested_only": false, "merits": "yes", "platform": "ED", "bgs": "safe"
         },
         {
-          "action": "Scan Datalinks",
+          "action": "Scan Ship Log Uplinks",
           "ethos": "Covert",
           "bonus_powers": ["Jerome Archer", "Pranav Antal", "Yuri Grom"],
           "contested_only": false, "merits": "yes", "platform": "ED", "bgs": "safe",
-          "notes": "At megaships; once per megaship per fortnight (Doncaster Powerplay ref card)"
+          "notes": "At megaships (journal: DataScanned "Ship Uplink"); merits only where your power is present, and not in enemy Strongholds lately (journals 2026); "once per megaship per fortnight" per the Doncaster ref card, but re-scans within 14 days still paid"
         },
         {
           "action": "Retrieve Specific Goods",
@@ -350,11 +350,11 @@
           "merits": "yes", "platform": "ED", "bgs": "joint"
         },
         {
-          "action": "Scan Datalinks",
+          "action": "Scan Ship Log Uplinks",
           "ethos": "Covert",
           "bonus_powers": ["Denton Patreus", "Felicia Winters", "Jerome Archer", "Yuri Grom"],
           "merits": "yes", "platform": "ED", "bgs": "safe",
-          "notes": "At megaships; once per megaship per fortnight (Doncaster Powerplay ref card)"
+          "notes": "At megaships (journal: DataScanned "Ship Uplink"); merits only where your power is present, and not in enemy Strongholds lately (journals 2026); "once per megaship per fortnight" per the Doncaster ref card, but re-scans within 14 days still paid"
         },
         {
           "action": "Retrieve Specific Goods",

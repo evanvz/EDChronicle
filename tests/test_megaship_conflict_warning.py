@@ -138,3 +138,26 @@ def test_known_megaship_is_called_out_at_the_jump_and_not_again():
     arrival = MainWindow._tts_router(fake_self, "FSDJump", {"event": "FSDJump"}, state)
     assert "megaship" in arrival.lower()
     assert MainWindow._tts_router(fake_self, "FSSSignalDiscovered", _MEGASHIP_EVT, state) == ""   # said already
+
+
+def _scan(ctrl, state_val, powers, pledged="Aisling Duval"):
+    fake_self, st = _fake_self([], pp_power=pledged, ctrl=ctrl, pp_state=state_val)
+    st.system_powers = powers
+    fake_self.cfg.pp_allied_powers = None
+    fake_self.state = st
+    return MainWindow._tts_router(fake_self, "FSSSignalDiscovered", _MEGASHIP_EVT, st).lower()
+
+
+def test_megaship_merit_callout_follows_where_uplink_scans_paid():
+    """119 ship uplink scans in the 2026 journals: paid where our power is in the
+    Powers list, not elsewhere, and not in enemy Strongholds lately (Achenar
+    2026-10-23, A. Lavigny-Duval's Stronghold, was called out as acquisition)."""
+    alds, aisling, lyr = "A. Lavigny-Duval", "Aisling Duval", "Li Yong-Rui"
+    assert _scan(alds, "Stronghold", [alds, aisling]) == ""                       # Achenar (an ally, too)
+    assert _scan(lyr, "Stronghold", [lyr, aisling]) == ""                         # enemy Stronghold
+    assert "undermin" in _scan(lyr, "Fortified", [lyr, aisling])
+    assert _scan(lyr, "Fortified", [lyr]) == ""                                   # we're not present
+    assert _scan(alds, "Fortified", [alds, aisling]) == ""                        # ZYADA ally: never undermined
+    assert "reinforce" in _scan(aisling, "Exploited", [aisling])
+    assert "acquisition" in _scan("", "Unoccupied", [aisling])
+    assert _scan("", "Unoccupied", ["Li Yong-Rui"]) == ""                         # out of our range
