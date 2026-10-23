@@ -106,3 +106,21 @@ def test_same_tick_from_both_sources_is_stored_once(tmp_path):
     assert repo.get_bgs_ticks() == ["2026-10-18T16:25:36Z", "2026-10-19T16:30:00Z"]
     assert all(t["confirmed"] for t in repo.get_tick_info(5))
     db.close()
+
+
+def test_a_wave_of_updates_after_the_tick_confirms_it():
+    det = TickDetector(last_tick="2026-10-21T03:49:58Z")
+    _hours(det, 0, 8, lambda a, h: 0.5)
+    assert _hours(det, 8, 9, lambda a, h: 0.55 if a % 4 == 0 else 0.5)
+    # systems keep updating over the next hours, a different quarter each hour
+    _hours(det, 9, 14, lambda a, h: 0.55 + (0.02 * h if a % 4 == h % 4 else 0) if a % 4 == 0 or a % 4 <= h - 8 else 0.5)
+    assert det.pop_confirmed() == _iso(T0 + timedelta(hours=8))
+    assert det.pop_confirmed() is None                                    # reported once
+
+
+def test_a_blip_without_a_wave_stays_unconfirmed():
+    det = TickDetector(last_tick="2026-10-21T03:49:58Z")
+    _hours(det, 0, 8, lambda a, h: 0.5)
+    assert _hours(det, 8, 9, lambda a, h: 0.55 if a % 3 == 0 else 0.5)
+    _hours(det, 9, 23, lambda a, h: 0.55 if a % 3 == 0 else 0.5)          # nothing more changes
+    assert det.pop_confirmed() is None and det._wave is None              # judged, left unconfirmed

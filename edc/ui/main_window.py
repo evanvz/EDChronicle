@@ -4109,6 +4109,13 @@ class MainWindow(QMainWindow):
             stats.get("other", 0), stats.get("invalid", 0), stats.get("total", 0),
         )
         log.info(self._eddn_worker.tick_detector.snapshot())
+        confirmed = self._eddn_worker.tick_detector.pop_confirmed()
+        if confirmed:
+            try:
+                self.repo.confirm_bgs_tick(confirmed)
+                log.info("EDDN-detected BGS tick %s confirmed by the wave of system updates after it", confirmed)
+            except Exception:
+                log.exception("Failed to confirm BGS tick")
 
     def _on_status(self, msg: str):
         self.status.setText(f"Status: {msg}")
@@ -4679,11 +4686,9 @@ class MainWindow(QMainWindow):
                     base = ExplorationPhrases.arrived()
                 if security:
                     base = f"{base} {ExplorationPhrases.security_state(security)}"
-                # megaships visited here before: said now, not only once the game lists
-                # the signals (that can wait for the first supercruise drop)
-                mega = [self._megaship_callout(state, getattr(state, "system_address", None), name)
-                        for name in self.megaship_tracker.known_in_system(getattr(state, "system_address", None))]
-                return " ".join([base] + [m for m in mega if m])
+                # no megaship merit line here: megaships move (HIP 115929 II left
+                # Arimavante, 2026-10-23); only the signal list confirms one is here
+                return base
 
             if event_type == "LoadGame":
                 cmdr = getattr(state, "commander", None) or evt.get("Commander") or ""

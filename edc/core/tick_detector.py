@@ -53,6 +53,11 @@ MIN_GAP = timedelta(hours=12)       # real ticks came 16-19 h apart (2026-10-20/
 MAX_LAG = timedelta(minutes=30)     # ignore messages older than this (replayed journals)
 FORGET = timedelta(hours=48)        # drop systems not seen for this long
 SAVE_EVERY = timedelta(minutes=15)
+# A real tick is a wave: systems update over the next hours (up to 12 h, SINC
+# BGS protocol), so the share stays raised. A post-restart blip doesn't.
+WAVE_HOURS = 12
+WAVE_RATIO = 1.5           # an hour in the wave: share at least this times the usual one
+WAVE_MIN_HOURS = 3         # ...needed for the tick to count as confirmed
 
 
 def _parse(ts: str) -> Optional[datetime]:
@@ -85,6 +90,8 @@ class TickDetector:
         self._loaded = False
         self._saved_at: Optional[datetime] = None
         self._peak: Tuple[float, int, int, str] = (0.0, 0, 0, "")   # diagnostics, see snapshot()
+        self._wave: Optional[dict] = None       # {"tick", "base"} of the last firing, until judged
+        self._confirmed: Optional[str] = None   # a tick the wave confirmed, for pop_confirmed()
         self._last_rates: Tuple[float, Optional[float]] = (0.0, None)
 
     def set_last_tick(self, tick: Optional[str]) -> None:
@@ -103,6 +110,8 @@ class TickDetector:
                 data = json.load(f)
             self._history = {int(a): deque((_parse(t), lv) for t, lv in h) for a, h in data["history"].items()}
             self._hours = {_parse(h): (set(c), set(ch)) for h, (c, ch) in data["hours"].items()}
+            if data.get("wave"):
+                self._wave = {"tick": _parse(data["wave"]["tick"]), "base": data["wave"]["base"]}
             log.info("Tick detector: reloaded %d systems, %d hours", len(self._history), len(self._hours))
         except FileNotFoundError:
             pass
@@ -118,7 +127,8 @@ class TickDetector:
         try:
             data = {"history": {str(a): [(_iso(t), lv) for t, lv in h] for a, h in self._history.items()
                                 if h and now - h[-1][0] < FORGET},
-                    "hours": {_iso(h): (sorted(c), sorted(ch)) for h, (c, ch) in self._hours.items()}}
+                    "hours": {_iso(h): (sorted(c), sorted(ch)) for h, (c, ch) in self._hours.items()},
+                    "wave": ({"tick": _iso(self._wave["tick"]), "base": self._wave["base"]} if self._wave else None)}
             tmp = Path(str(self.state_path) + ".tmp")
             with gzip.open(tmp, "wt", encoding="utf-8", compresslevel=1) as f:   # ~50k systems: speed over size
                 json.dump(data, f, separators=(",", ":"))
@@ -133,6 +143,26 @@ class TickDetector:
         rates = [len(ch) / len(c) for h, (c, ch) in sorted(self._hours.items())
                  if h < current and len(c) >= MIN_HOUR_SYSTEMS][-BASELINE_HOURS:]
         return statistics.median(rates) if len(rates) >= MIN_BASELINE_HOURS else None
+
+    def _judge_wave(self, now: datetime) -> None:
+        """Confirm the last firing once WAVE_MIN_HOURS of the full hours after it
+        had a raised share; drop it after WAVE_HOURS (it stays unconfirmed, never removed)."""
+        w = self._wave
+        if not w:
+            return
+        start, end, current = _hour(w["tick"]) + timedelta(hours=1), w["tick"] + timedelta(hours=WAVE_HOURS), _hour(now)
+        raised = sum(1 for h, (c, ch) in self._hours.items()
+                     if start <= h < current and h < end and len(c) >= MIN_HOUR_SYSTEMS
+                     and len(ch) / len(c) >= WAVE_RATIO * max(w["base"], 0.001))
+        if raised >= WAVE_MIN_HOURS:
+            self._confirmed, self._wave = _iso(w["tick"]), None
+        elif now >= end + timedelta(hours=1):
+            self._wave = None
+
+    def pop_confirmed(self) -> Optional[str]:
+        """The tick the EDDN wave confirmed since the last call, else None."""
+        t, self._confirmed = self._confirmed, None
+        return t
 
     def _note(self, rate: float, n_changed: int, n_upl: int, outcome: str) -> None:
         if self._peak[3] != "(tick)" and rate >= self._peak[0]:   # a firing stays the reported one
@@ -173,6 +203,8 @@ class TickDetector:
             self._hours = {h: v for h, v in self._hours.items() if now - h < timedelta(hours=24)}
         if self._saved_at is None or now - self._saved_at >= SAVE_EVERY:
             self.save(now)
+        if self._wave and self._seen % 200 == 0:
+            self._judge_wave(ts)
         hist = self._history.setdefault(system_address, deque())
         # the settled reference: the newest reading at least REFERENCE_AGE old
         ref = next((lv for t, lv in reversed(hist) if ts - t >= REFERENCE_AGE), None)
@@ -218,4 +250,5 @@ class TickDetector:
             return None
         self._note(rate, n_changed, n_upl, "(tick)")
         self._last_tick = tick
+        self._wave = {"tick": tick, "base": base}
         return _iso(tick)

@@ -70,13 +70,6 @@ class MegashipTracker:
             return False
         return current - seen < RESCAN_AFTER
 
-    def known_in_system(self, system_address) -> list:
-        """Names of megaships visited before in this system -- known at the jump,
-        before the game lists the system's signals (Ekono 2026-10-23: none until
-        the first supercruise drop, 2.5 min later). A megaship can have moved on."""
-        prefix = f"{system_address}|"
-        return sorted(k[len(prefix):] for k in self._visits if k.startswith(prefix))
-
     def mark_seen(self, key: str, when: Optional[str] = None) -> None:
         self.merge_seen({key: when or _now()})
 
