@@ -186,6 +186,30 @@ def sample_for_missed_tick(repo, fetch, now: Optional[datetime] = None) -> int:
     return read
 
 
+def confirm_ticks(repo, now: Optional[datetime] = None) -> List[str]:
+    """EDDN-detected ticks of the last 3 days that a system's own readings now
+    back: a change (from any source, EDDN included -- every reading is evidence
+    here, it only clears the "unconfirmed" note) that the tick explains. One
+    system is enough; a tick is never removed for lack of one. Returns the ticks
+    confirmed now."""
+    now = now or datetime.now(timezone.utc)
+    fmt = "%Y-%m-%dT%H:%M:%SZ"
+    since = (now - timedelta(days=3)).strftime(fmt)
+    open_ticks = [t["at"] for t in repo.get_tick_info(10) if not t["confirmed"] and t["at"] >= since]
+    if not open_ticks:
+        return []
+    done = []
+    for addr in repo.get_recently_read_systems(min(open_ticks)):
+        for st in infer_system_ticks(repo.get_system_readings(addr)):
+            for t in open_ticks:
+                if t not in done and _minus_propagation(st["after"]) < t <= st["by"]:
+                    repo.confirm_bgs_tick(t)
+                    done.append(t)
+        if len(done) == len(open_ticks):
+            break
+    return done
+
+
 def tick_label(info: Optional[dict]) -> str:
     """One line for the newest tick: when, and how we know."""
     if not info:
@@ -196,6 +220,8 @@ def tick_label(info: Optional[dict]) -> str:
                 f"systems' own influence changes (tick.edcd.io didn't list it); activity in that range may "
                 f"count for either tick")
     how = {"eddn": "our EDDN detector, ±1 h", "edcd": "tick.edcd.io"}.get(info.get("source"), "tick.edcd.io")
+    if info.get("confirmed") is False:
+        how += "; unconfirmed until a system's readings show it"
     return f"Last tick: {short(info['at'])} UTC ({how})"
 
 

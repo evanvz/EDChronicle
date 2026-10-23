@@ -72,7 +72,8 @@ def test_missed_tick_seen_in_several_systems_is_promoted(tmp_path):
     assert info["source"] == "systems" and "between 10-18 23:10 and 10-19 14:29" in tick_label(info)
     assert promote_missed_ticks(repo, now=datetime(2026, 10, 19, 15, 10)) is None          # now explained
     repo.record_bgs_tick("2026-10-19T02:15:00+00:00")                                      # tick.edcd.io catches up
-    assert repo.get_tick_info(1)[0] == {"at": "2026-10-19T02:15:00Z", "source": "edcd", "upper": None}
+    assert repo.get_tick_info(1)[0] == {"at": "2026-10-19T02:15:00Z", "source": "edcd", "upper": None,
+                                        "confirmed": True}
     db.close()
 
 
@@ -250,4 +251,28 @@ def test_a_tick_after_a_recorded_range_is_a_new_tick(tmp_path):
     repo.record_bgs_tick("2026-10-22T12:00:00Z", source="eddn")         # inside the range: the same tick
     repo.record_bgs_tick("2026-10-22T19:00:00Z", source="eddn")         # 2 h after 17:11: the same tick
     assert [t["at"] for t in repo.get_tick_info(5)] == ["2026-10-22T17:11:37Z", "2026-10-21T15:51:28Z"]
+    db.close()
+
+
+def test_eddn_tick_is_unconfirmed_until_a_system_shows_it(tmp_path):
+    """10-22 17:11: Arimavante's war went from pending (18:04) to active (18:35)."""
+    from datetime import datetime
+    import json
+    from edc.core.system_ticks import confirm_ticks, tick_label
+    from persistence.database import Database
+    from persistence.repository import Repository
+    from persistence.schema import SCHEMA_SQL
+    db = Database(tmp_path / "t.db"); db.executescript(SCHEMA_SQL); db.run_migrations()
+    repo = Repository(db)
+    repo.record_bgs_tick("2026-10-22T17:11:37Z", source="eddn")
+    assert "unconfirmed" in tick_label(repo.get_tick_info(1)[0])
+    now = datetime(2026, 10, 22, 19, 0)
+    assert confirm_ticks(repo, now) == []                                   # no readings yet
+    war = [{"State": "War"}]
+    repo.save_faction_snapshot(1, {"Name": "EUW", "Influence": 0.18, "PendingStates": war}, "2026-10-22", False,
+                               "2026-10-22T18:04:06Z", "journal")
+    repo.save_faction_snapshot(1, {"Name": "EUW", "Influence": 0.18, "ActiveStates": war}, "2026-10-22", False,
+                               "2026-10-22T18:35:01Z", "eddn")
+    assert confirm_ticks(repo, now) == ["2026-10-22T17:11:37Z"]
+    assert "unconfirmed" not in tick_label(repo.get_tick_info(1)[0])
     db.close()

@@ -1,10 +1,12 @@
-"""Second tick source: a burst of systems changing influence in the EDDN feed
-(tick.edcd.io listed no tick for 2026-10-18 while influence still moved)."""
+"""Second tick source: an hour in which far more systems change influence than
+usual, in the EDDN feed (redesigned 2026-10-23: relative to the usual share,
+no fixed system count or quiet-spell rule, state kept across restarts)."""
 from datetime import datetime, timedelta, timezone
 
-from edc.core.tick_detector import MIN_SYSTEMS, TickDetector
+from edc.core.tick_detector import TickDetector
 
-T0 = datetime(2026, 10, 18, 16, 0, tzinfo=timezone.utc)
+T0 = datetime(2026, 10, 22, 0, 0, tzinfo=timezone.utc)
+N = 200                                           # systems in the feed
 
 
 def _iso(dt):
@@ -16,57 +18,78 @@ def _feed(det, addr, inf, at, uploader=None):
                        uploader=uploader if uploader is not None else f"u{addr % 7}")
 
 
-def _baseline(det, n, inf=0.5, uploader=None):
-    for a in range(n):                                     # pre-tick lull: same values, several hours
-        for h in (0, 1, 2, 3, 4, 5):
-            _feed(det, a, inf, T0 + timedelta(hours=h, minutes=a), uploader)
+def _hours(det, first, last, level, background=2, start_level=None):
+    """Every system read once an hour; `background` systems a hour drift (late
+    updates, stale uploads), as the real feed does. level(a, h) gives the rest."""
+    found = []
+    for h in range(first, last):
+        for a in range(N):
+            inf = level(a, h)
+            if a < background * h:                 # each hour a few more systems have drifted
+                inf += 0.02
+            found.append(_feed(det, a, inf, T0 + timedelta(hours=h, minutes=a % 60)))
+    return [f for f in found if f]
 
 
-def test_burst_of_changes_is_a_tick():
-    det = TickDetector(last_tick="2026-10-17T16:25:36Z")
-    _baseline(det, MIN_SYSTEMS + 5)
-    tick_at = T0 + timedelta(hours=6)
-    found = [_feed(det, a, 0.51, tick_at + timedelta(minutes=a)) for a in range(MIN_SYSTEMS)]
-    assert found[:-1] == [None] * (MIN_SYSTEMS - 1)
-    assert found[-1] == _iso(tick_at)                                  # earliest change in the burst
-    assert _feed(det, 99, 0.6, tick_at + timedelta(minutes=30)) is None   # no second tick right after
+def test_burst_well_above_the_usual_share_is_a_tick():
+    det = TickDetector(last_tick="2026-10-21T03:49:58Z")
+    assert _hours(det, 0, 8, lambda a, h: 0.5) == []                       # background only
+    tick = T0 + timedelta(hours=8)
+    found = _hours(det, 8, 9, lambda a, h: 0.55 if a % 3 == 0 else 0.5)   # a third of the systems move
+    assert found and found[0] == _iso(tick)                                 # earliest change in the burst
+    assert "(tick)" in det.snapshot()
 
 
-def test_stale_uploads_flip_flopping_after_a_tick_are_not_a_new_tick():
-    """EDCAS: for hours after a tick some uploaders still send the old values. Against
-    a settled 2 h+ reference these don't look like a fresh burst."""
-    det = TickDetector(last_tick="2026-10-17T16:25:36Z")
-    _baseline(det, MIN_SYSTEMS + 5)
-    tick_at = T0 + timedelta(hours=6)
-    assert [_feed(det, a, 0.51, tick_at + timedelta(minutes=a)) for a in range(MIN_SYSTEMS)][-1] == _iso(tick_at)
-    # old and new values keep alternating from the tick for the next 30 hours
-    flips = [_feed(det, a, 0.50 if h % 2 else 0.51, tick_at + timedelta(hours=h, minutes=a))
-             for h in range(1, 31) for a in range(MIN_SYSTEMS + 5)]
-    assert not any(flips)                                             # never a quiet lull -> no false tick
+def test_steady_background_is_never_a_tick():
+    det = TickDetector(last_tick="2026-10-21T03:49:58Z")
+    assert _hours(det, 0, 20, lambda a, h: 0.5, background=8) == []        # 8 a hour, every hour
+
+
+def test_no_tick_before_the_usual_share_is_known():
+    det = TickDetector(last_tick="2026-10-21T03:49:58Z")
+    assert _hours(det, 0, 4, lambda a, h: 0.5 if h < 3 else 0.6) == []    # burst in hour 3: no baseline yet
+    assert "learning the usual share" in det.snapshot()
 
 
 def test_small_moves_do_not_count():
-    det = TickDetector(last_tick="2026-10-17T16:25:36Z")
-    _baseline(det, MIN_SYSTEMS + 5)
-    assert not any(_feed(det, a, 0.503, T0 + timedelta(hours=6, minutes=a)) for a in range(MIN_SYSTEMS + 5))
-
-
-def test_unchanged_repeats_stale_messages_and_too_soon_are_ignored():
-    det = TickDetector(last_tick=_iso(T0 - timedelta(hours=4)))       # last tick only 10 h before the changes
-    _baseline(det, MIN_SYSTEMS + 5)
-    later = T0 + timedelta(hours=6)
-    assert all(_feed(det, a, 0.5, later) is None for a in range(MIN_SYSTEMS + 5))       # same levels
-    assert all(_feed(det, a, 0.6, later + timedelta(minutes=1)) is None for a in range(MIN_SYSTEMS + 5))  # < 12 h
-    old = T0 - timedelta(hours=2)                                        # a replayed old journal line
-    assert det.observe(1, [{"Name": "A", "Influence": 0.9}], _iso(old), now=T0) is None
+    det = TickDetector(last_tick="2026-10-21T03:49:58Z")
+    assert _hours(det, 0, 9, lambda a, h: 0.5 if h < 8 else 0.503, background=0) == []
 
 
 def test_one_uploader_cannot_fake_a_tick():
-    det = TickDetector(last_tick="2026-10-17T16:25:36Z")
-    _baseline(det, MIN_SYSTEMS + 5, uploader="faker")
-    later = T0 + timedelta(hours=6)
-    assert all(_feed(det, a, 0.9, later + timedelta(minutes=a), uploader="faker") is None
-               for a in range(MIN_SYSTEMS + 5))
+    det = TickDetector(last_tick="2026-10-21T03:49:58Z")
+    _hours(det, 0, 8, lambda a, h: 0.5)
+    at = T0 + timedelta(hours=8)
+    assert not any(_feed(det, a, 0.9, at + timedelta(seconds=a), uploader="faker") for a in range(N))
+
+
+def test_too_soon_after_the_last_tick():
+    det = TickDetector(last_tick=_iso(T0))
+    _hours(det, 0, 8, lambda a, h: 0.5)
+    assert _hours(det, 8, 9, lambda a, h: 0.6) == []                       # 8 h after a tick
+    assert "too soon" in det.snapshot()
+
+
+def test_stale_flip_flops_after_a_tick_are_not_another_tick():
+    det = TickDetector(last_tick="2026-10-21T03:49:58Z")
+    _hours(det, 0, 8, lambda a, h: 0.5)
+    first = _hours(det, 8, 9, lambda a, h: 0.6)
+    later = _hours(det, 9, 19, lambda a, h: 0.5 if h % 2 else 0.6)        # old and new values keep alternating
+    assert len(first) == 1 and later == []
+
+
+def test_state_survives_a_restart(tmp_path):
+    path = tmp_path / "state.json.gz"
+    det = TickDetector(last_tick="2026-10-21T03:49:58Z", state_path=path)
+    _hours(det, 0, 8, lambda a, h: 0.5)
+    det.save(T0 + timedelta(hours=8))
+    again = TickDetector(last_tick="2026-10-21T03:49:58Z", state_path=path)   # restarted
+    found = _hours(again, 8, 9, lambda a, h: 0.55 if a % 3 == 0 else 0.5)
+    assert found and found[0] == _iso(T0 + timedelta(hours=8))           # no blind warm-up
+    broken = tmp_path / "broken.json.gz"
+    broken.write_bytes(b"not gzip")
+    assert TickDetector(state_path=broken).observe(1, [{"Name": "A", "Influence": 0.5}],
+                                                   _iso(T0), now=T0) is None   # bad file: starts empty
 
 
 def test_same_tick_from_both_sources_is_stored_once(tmp_path):
@@ -76,40 +99,10 @@ def test_same_tick_from_both_sources_is_stored_once(tmp_path):
     db = Database(tmp_path / "t.db"); db.executescript(SCHEMA_SQL); db.run_migrations()
     repo = Repository(db)
     repo.record_bgs_tick("2026-10-18T16:20:00Z", source="eddn")        # EDDN detector first
+    assert repo.get_tick_info(1)[0]["confirmed"] is False
     repo.record_bgs_tick("2026-10-18T16:25:36+00:00")                  # tick.edcd.io, same tick: its time wins
     repo.record_bgs_tick("2026-10-18T18:00:00Z", source="eddn")        # a later detection can't move it
     repo.record_bgs_tick("2026-10-19T16:30:00Z")                       # next day
     assert repo.get_bgs_ticks() == ["2026-10-18T16:25:36Z", "2026-10-19T16:30:00Z"]
+    assert all(t["confirmed"] for t in repo.get_tick_info(5))
     db.close()
-
-
-def test_one_uploader_spamming_the_lull_cannot_suppress_a_real_tick():
-    det = TickDetector(last_tick="2026-10-17T16:25:36Z")
-    _baseline(det, MIN_SYSTEMS + 5)
-    spam_at = T0 + timedelta(hours=3)
-    for a in range(100, 110):                       # fake changes in the lull, all from one sender
-        _feed(det, a, 0.5, spam_at - timedelta(hours=3), uploader="spammer")
-        _feed(det, a, 0.9, spam_at + timedelta(minutes=a - 100), uploader="spammer")
-    tick_at = T0 + timedelta(hours=6)
-    found = [_feed(det, a, 0.51, tick_at + timedelta(minutes=a)) for a in range(MIN_SYSTEMS)]
-    assert found[-1] == _iso(tick_at)
-
-
-def test_snapshot_reports_biggest_burst_and_why_it_stopped():
-    det = TickDetector(last_tick="2026-10-17T16:25:36Z")
-    _baseline(det, 5)
-    for a in range(5):
-        _feed(det, a, 0.6, T0 + timedelta(hours=6, minutes=a))
-    assert det.snapshot().endswith("biggest burst 5 systems / 5 uploaders in 60 min (too few)")
-    assert "biggest burst 0 systems" in det.snapshot()          # reset after each report
-
-
-def test_no_tick_until_the_quiet_spell_was_watched():
-    """10-22 17:11: restarted at 15:12, blind for 2 h, so the 3 h 'lull' was unseen."""
-    det = TickDetector(last_tick="2026-10-17T16:25:36Z")
-    for a in range(MIN_SYSTEMS + 5):            # watched from T0, for 3 h only
-        for h in (0, 1, 2, 3):
-            _feed(det, a, 0.5, T0 + timedelta(hours=h, minutes=a))
-    early = T0 + timedelta(hours=4)             # lull 1..4 h: the first 2 h were blind
-    assert not any(_feed(det, a, 0.51, early + timedelta(minutes=a)) for a in range(MIN_SYSTEMS + 5))
-    assert det.snapshot().endswith("(still warming up)")

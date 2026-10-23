@@ -236,6 +236,7 @@ class EddnPowerPlayWorker(QObject):
                 sub.close(linger=0)
             if not self._stop:
                 time.sleep(_RECONNECT_DELAY_S)
+        self.tick_detector.save()
         ctx.term()
         self.finished.emit()
 

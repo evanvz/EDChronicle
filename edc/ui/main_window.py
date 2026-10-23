@@ -918,6 +918,9 @@ class _BgsTickCheckWorker(QObject):
                         found = promote_missed_ticks(repo)
                 if found:
                     log.info("BGS tick inferred from systems' own readings: between %s and %s", *found)
+                from edc.core.system_ticks import confirm_ticks
+                for t in confirm_ticks(repo):
+                    log.info("EDDN-detected BGS tick %s confirmed by a system's own readings", t)
                 # the newest tick from any source (EDDN detector, systems) may be later
                 stored = repo.get_bgs_ticks()
                 if stored and (not result or stored[-1] > result[:19]):
@@ -3466,6 +3469,8 @@ class MainWindow(QMainWindow):
         self._eddn_worker.faction_names_seen.connect(self.eddn_market_cache.on_faction_names_seen)
         self._eddn_worker.system_visit_seen.connect(self.eddn_market_cache.on_system_visit_seen)
         self._eddn_worker.tick_detected.connect(self._on_eddn_tick_detected)
+        # the detector's readings survive restarts (else it's blind for hours after one)
+        self._eddn_worker.tick_detector.state_path = self._game_version_path.parent / "tick_detector_state.json.gz"
         try:
             stored_ticks = self.repo.get_bgs_ticks()
             self._eddn_worker.tick_detector.set_last_tick(stored_ticks[-1] if stored_ticks else None)

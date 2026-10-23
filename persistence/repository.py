@@ -2937,17 +2937,22 @@ class Repository:
                 near = row
                 break
         if near is None:
-            self.db.execute("INSERT OR IGNORE INTO bgs_ticks (tick_at, source, upper) VALUES (?, ?, ?)",
-                            (at, source, upper))
+            self.db.execute("INSERT OR IGNORE INTO bgs_ticks (tick_at, source, upper, confirmed) VALUES (?, ?, ?, ?)",
+                            (at, source, upper, 0 if source == "eddn" else 1))
         elif source == "edcd" and near[1] in ("eddn", "systems"):
-            self.db.execute("UPDATE bgs_ticks SET tick_at = ?, source = 'edcd', upper = NULL WHERE tick_at = ?",
-                            (at, near[0]))
+            self.db.execute("UPDATE bgs_ticks SET tick_at = ?, source = 'edcd', upper = NULL, confirmed = 1 "
+                            "WHERE tick_at = ?", (at, near[0]))
 
     def get_tick_info(self, limit: int = 2) -> list[dict]:
         """The newest ticks with where they came from, newest first:
-        [{"at", "source", "upper"}] (upper only for a 'systems' range)."""
-        return [{"at": r[0], "source": r[1] or "edcd", "upper": r[2]} for r in self.db.conn.execute(
-            "SELECT tick_at, source, upper FROM bgs_ticks ORDER BY tick_at DESC LIMIT ?", (limit,))]
+        [{"at", "source", "upper", "confirmed"}] (upper only for a 'systems' range;
+        confirmed False only for an EDDN-detected tick no system reading has shown yet)."""
+        return [{"at": r[0], "source": r[1] or "edcd", "upper": r[2], "confirmed": r[3] != 0}
+                for r in self.db.conn.execute(
+                    "SELECT tick_at, source, upper, confirmed FROM bgs_ticks ORDER BY tick_at DESC LIMIT ?", (limit,))]
+
+    def confirm_bgs_tick(self, tick_at: str) -> None:
+        self.db.execute("UPDATE bgs_ticks SET confirmed = 1 WHERE tick_at = ?", (tick_at,))
 
     def get_recently_read_systems(self, since: str) -> list[int]:
         """Systems with a faction reading at or after `since` -- what promote_missed_ticks checks."""

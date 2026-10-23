@@ -4,51 +4,55 @@
 
 """Second BGS tick source: spot the tick in the live EDDN feed.
 
-Faction influence only changes at a tick, so when many systems' influence
-changes within a short time, the tick has happened -- the same idea behind
-tick.edcd.io, which listed no tick at all for 2026-10-18 while Ekono's
-influence still moved. Fed from the EDDN listener thread (FSDJump/Location/
-CarrierJump Factions); pure Python, no Qt or DB.
+Faction influence only changes at a tick, so when far more systems than
+usual change influence within an hour, the tick has happened -- the idea
+behind tick.edcd.io, which has listed no tick since 2026-10-17. Fed from the
+EDDN listener thread (FSDJump/Location/CarrierJump Factions); no Qt or DB.
 
-Lessons from EDCAS's server-side detector (arne-fuchs/edcas-client,
-crates/edcas-server/src/tick.rs), adopted 2026-10-21 after our first version
-fired at 10-20 11:33 and 10-21 03:49 UTC, 16 h apart and unconfirmed by any
-monitored system: for hours after a tick some uploaders keep sending the old
-values, so comparing message-to-message flip-flops. Now:
-- each reading is compared with that system's settled value from 2+ h earlier;
-- only a move of more than 0.5 points in some faction counts;
-- the 3 h before the burst must have been quiet, and ticks are 12+ h apart.
-- the detector must have watched that whole quiet spell: right after a start it
-  has no 2 h-old readings, so it sees no changes and every spell looks quiet.
-  On 2026-10-22 it fired at 17:11 UTC from the steady ~20 systems/hour that
-  change all the time, its "quiet" 3 h being the blind warm-up after a restart.
+Rules (redesigned 2026-10-23 after the fixed thresholds misfired both ways):
+- each reading is compared with that system's value from 2+ h earlier (stale
+  uploads flip-flop message to message, EDCAS tick.rs); a move of more than
+  0.5 points in any faction is a change;
+- some systems change every hour anyway (late updates, stale uploads) -- 20 an
+  hour with 4,600 systems watched, 75-200 overnight with more -- so the test
+  is relative: the share of compared systems that changed in the last hour
+  must be RATIO times the usual share (median of the previous hours);
+- at least MIN_UPLOADERS uploaders (EDDN is unauthenticated) and MIN_CHANGED
+  systems, and ticks are 12+ h apart (10-20 11:33 and 10-21 03:49 were 16 h).
+The per-system readings and hourly shares are saved now and then and reloaded
+at start, so a restart doesn't blind the detector for hours.
 
-EDCAS uses 20 h, but ticks came 19 h and 16 h apart on 2026-10-20/21 (10-19
-16:26, 10-20 11:33, 10-21 03:49 -- each backed by monitored systems' own
-changes), and 20 h rejected them.
-
-ponytail: the tick time is the earliest change in the triggering burst, so
-it's accurate to within the first hour of propagation; tick.edcd.io's time
-replaces it when it has one (Repository.record_bgs_tick).
+ponytail: RATIO is a first guess; snapshot() logs the shares so it can be set
+from a real tick's burst.
 """
 from __future__ import annotations
 
+import gzip
+import json
+import logging
+import statistics
 from collections import deque
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-WINDOW = timedelta(minutes=60)      # changes this close together form a burst
-MIN_SYSTEMS = 20                    # distinct systems changing in one burst
+log = logging.getLogger(__name__)
+
+WINDOW = timedelta(minutes=60)      # the hour whose share of changed systems is tested
+REFERENCE_AGE = timedelta(hours=2)  # compare with the system's value at least this old
+CHANGE = 0.005                      # 0.5 points of influence (EDCAS)
+RATIO = 3.0                         # last hour's share of changed systems vs the usual share
+BASELINE_HOURS = 6                  # the usual share: median of up to this many earlier hours
+MIN_BASELINE_HOURS = 3              # ...and needs at least this many with enough systems
+MIN_HOUR_SYSTEMS = 50               # an hour with fewer compared systems says too little
+MIN_CHANGED = 10                    # changed systems in the hour
 # EDDN is unauthenticated: the burst must come from several uploaders, so one
 # sender can't fake a tick quickly (the relay re-hashes uploader IDs every 3 min).
 MIN_UPLOADERS = 5
-MIN_GAP = timedelta(hours=12)       # EDCAS uses 20 h; real ticks came 16-19 h apart (2026-10-20/21)
-REFERENCE_AGE = timedelta(hours=2)  # compare with the system's value at least this old
-CHANGE = 0.005                      # 0.5 points of influence (EDCAS)
-QUIET = timedelta(hours=3)          # the lull before a tick (EDCAS)
-QUIET_MAX = 3                       # changed systems allowed in that lull
+MIN_GAP = timedelta(hours=12)       # real ticks came 16-19 h apart (2026-10-20/21)
 MAX_LAG = timedelta(minutes=30)     # ignore messages older than this (replayed journals)
 FORGET = timedelta(hours=48)        # drop systems not seen for this long
+SAVE_EVERY = timedelta(minutes=15)
 
 
 def _parse(ts: str) -> Optional[datetime]:
@@ -62,43 +66,96 @@ def _iso(dt: datetime) -> str:
     return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _hour(dt: datetime) -> datetime:
+    return dt.replace(minute=0, second=0, microsecond=0)
+
+
 def _moved(a: Dict[str, float], b: Dict[str, float]) -> bool:
     return any(abs(a[f] - b[f]) > CHANGE for f in set(a) & set(b))
 
 
 class TickDetector:
-    def __init__(self, last_tick: Optional[str] = None):
+    def __init__(self, last_tick: Optional[str] = None, state_path: Optional[Path] = None):
         self._history: Dict[int, deque] = {}    # system -> [(time, {faction: influence})], oldest first
-        self._changes: deque = deque()          # (time, system_address, uploader), last QUIET + WINDOW
+        self._recent: deque = deque()           # (time, system, changed, uploader) compared readings, last WINDOW
+        self._hours: Dict[datetime, Tuple[set, set]] = {}   # hour -> (compared systems, changed systems)
         self._last_tick = _parse(last_tick) if last_tick else None
         self._seen = 0
-        self._started: Optional[datetime] = None   # first reading seen: changes are visible 2 h later
-        # diagnostics: the biggest burst since the last snapshot() and what stopped it
-        self._peak: Tuple[int, int, str] = (0, 0, "")
+        self.state_path = state_path            # set before the listener thread starts
+        self._loaded = False
+        self._saved_at: Optional[datetime] = None
+        self._peak: Tuple[float, int, int, str] = (0.0, 0, 0, "")   # diagnostics, see snapshot()
+        self._last_rates: Tuple[float, Optional[float]] = (0.0, None)
 
     def set_last_tick(self, tick: Optional[str]) -> None:
-        """The newest known tick (from either source); keeps the 20 h gap honest."""
+        """The newest known tick (from either source); keeps the 12 h gap honest."""
         t = _parse(tick) if tick else None
         if t and (self._last_tick is None or t > self._last_tick):
             self._last_tick = t
 
-    def _note(self, n_sys: int, n_upl: int, outcome: str) -> None:
-        if n_sys > self._peak[0]:
-            self._peak = (n_sys, n_upl, outcome)
+    # ── saved state ───────────────────────────────────────────────────────────
+    def _load(self) -> None:
+        self._loaded = True
+        if not self.state_path:
+            return
+        try:
+            with gzip.open(self.state_path, "rt", encoding="utf-8") as f:
+                data = json.load(f)
+            self._history = {int(a): deque((_parse(t), lv) for t, lv in h) for a, h in data["history"].items()}
+            self._hours = {_parse(h): (set(c), set(ch)) for h, (c, ch) in data["hours"].items()}
+            log.info("Tick detector: reloaded %d systems, %d hours", len(self._history), len(self._hours))
+        except FileNotFoundError:
+            pass
+        except Exception as exc:
+            log.warning("Tick detector state not reloaded: %s", exc)
+
+    def save(self, now: Optional[datetime] = None) -> None:
+        """Writes the per-system readings and hourly shares (called on the listener thread)."""
+        if not self.state_path:
+            return
+        now = now or datetime.now(timezone.utc)
+        self._saved_at = now
+        try:
+            data = {"history": {str(a): [(_iso(t), lv) for t, lv in h] for a, h in self._history.items()
+                                if h and now - h[-1][0] < FORGET},
+                    "hours": {_iso(h): (sorted(c), sorted(ch)) for h, (c, ch) in self._hours.items()}}
+            tmp = Path(str(self.state_path) + ".tmp")
+            with gzip.open(tmp, "wt", encoding="utf-8", compresslevel=1) as f:   # ~50k systems: speed over size
+                json.dump(data, f, separators=(",", ":"))
+            tmp.replace(self.state_path)
+        except Exception as exc:
+            log.warning("Tick detector state not saved: %s", exc)
+
+    # ── detection ─────────────────────────────────────────────────────────────
+    def _baseline(self, now: datetime) -> Optional[float]:
+        """Median share of changed systems over the earlier full hours."""
+        current = _hour(now - WINDOW)
+        rates = [len(ch) / len(c) for h, (c, ch) in sorted(self._hours.items())
+                 if h < current and len(c) >= MIN_HOUR_SYSTEMS][-BASELINE_HOURS:]
+        return statistics.median(rates) if len(rates) >= MIN_BASELINE_HOURS else None
+
+    def _note(self, rate: float, n_changed: int, n_upl: int, outcome: str) -> None:
+        if self._peak[3] != "(tick)" and rate >= self._peak[0]:   # a firing stays the reported one
+            self._peak = (rate, n_changed, n_upl, outcome)
 
     def snapshot(self) -> str:
-        """One log line: systems tracked, and the biggest burst of changed
-        systems in an hour since the last call (needs MIN_SYSTEMS from
-        MIN_UPLOADERS uploaders) -- to see why a tick wasn't detected."""
-        n_sys, n_upl, outcome = self._peak
-        self._peak = (0, 0, "")
-        return (f"tick detector: {len(self._history)} systems tracked; biggest burst {n_sys} systems / "
-                f"{n_upl} uploaders in {WINDOW.seconds // 60} min" + (f" ({outcome})" if outcome else ""))
+        """One log line: what was compared in the last hour, the share that
+        changed against the usual share, and the strongest burst since the last
+        call with what stopped it -- to tune RATIO from a real tick."""
+        rate, base = self._last_rates
+        peak = self._peak
+        self._peak = (0.0, 0, 0, "")
+        base_txt = f"{base:.1%}" if base is not None else "not yet"
+        return (f"tick detector: {len(self._history)} systems tracked; last hour {rate:.1%} changed, "
+                f"usual {base_txt} (fires at {RATIO:g}x); strongest {peak[0]:.1%} "
+                f"({peak[1]} systems / {peak[2]} uploaders){' ' + peak[3] if peak[3] else ''}")
 
     def observe(self, system_address: Any, factions: List[dict], timestamp: str,
                 now: Optional[datetime] = None, uploader: Optional[str] = None) -> Optional[str]:
         """Feed one message's Factions; returns the tick time (…Z) when this
         message completes a burst, else None."""
+        if not self._loaded:
+            self._load()
         ts = _parse(timestamp)
         now = now or datetime.now(timezone.utc)
         if ts is None or not isinstance(system_address, int) or not isinstance(factions, list):
@@ -111,41 +168,54 @@ class TickDetector:
         if not levels:
             return None
         self._seen += 1
-        if self._started is None:
-            self._started = ts
         if self._seen % 5000 == 0:
             self._history = {a: h for a, h in self._history.items() if h and now - h[-1][0] < FORGET}
+            self._hours = {h: v for h, v in self._hours.items() if now - h < timedelta(hours=24)}
+        if self._saved_at is None or now - self._saved_at >= SAVE_EVERY:
+            self.save(now)
         hist = self._history.setdefault(system_address, deque())
         # the settled reference: the newest reading at least REFERENCE_AGE old
         ref = next((lv for t, lv in reversed(hist) if ts - t >= REFERENCE_AGE), None)
         hist.append((ts, levels))
         while len(hist) > 2 and ts - hist[1][0] >= REFERENCE_AGE:
             hist.popleft()          # keep one reading older than the reference age, drop the rest
-        if ref is None or not _moved(ref, levels):
+        if ref is None:
             return None
-        if any(c[1] == system_address for c in self._changes if ts - c[0] <= WINDOW):
-            return None             # this system already counted in the current hour
-        self._changes.append((ts, system_address, uploader))
-        while self._changes and ts - self._changes[0][0] > QUIET + WINDOW:
-            self._changes.popleft()
-        burst = [c for c in self._changes if ts - c[0] <= WINDOW]
-        n_sys, n_upl = len({c[1] for c in burst}), len({c[2] for c in burst if c[2]})
-        if n_sys < MIN_SYSTEMS or n_upl < MIN_UPLOADERS:
-            self._note(n_sys, n_upl, "too few")
+        changed = _moved(ref, levels)
+        compared, moved = self._hours.setdefault(_hour(ts), (set(), set()))
+        compared.add(system_address)
+        if changed:
+            moved.add(system_address)
+        self._recent.append((ts, system_address, changed, uploader))
+        while self._recent and ts - self._recent[0][0] > WINDOW:
+            self._recent.popleft()
+        if not changed:
             return None
-        tick = min(c[0] for c in burst)
-        if tick - QUIET < self._started + REFERENCE_AGE:
-            self._note(n_sys, n_upl, "still warming up")
-            return None             # the quiet spell before it wasn't watched
-        lull = [c for c in self._changes if tick - QUIET <= c[0] < tick]
-        if len({c[1] for c in lull}) > QUIET_MAX and len({c[2] for c in lull if c[2]}) >= MIN_UPLOADERS:
-            self._note(n_sys, n_upl, "no lull before it")
-            return None             # not a lull -> activity smear after an earlier tick, not a new one
-            # (needs several uploaders too, so one sender can't suppress a real tick)
+        hour_systems = {r[1] for r in self._recent}
+        if len(hour_systems) < MIN_HOUR_SYSTEMS:
+            return None             # too few systems compared this hour to judge a share
+        burst = [r for r in self._recent if r[2]]
+        n_upl = len({r[3] for r in burst if r[3]})
+        # the busiest uploader's changes don't count: one sender (EDDN is
+        # unauthenticated) mustn't make the burst on its own
+        by_upl: Dict[Any, set] = {}
+        for r in burst:
+            by_upl.setdefault(r[3], set()).add(r[1])
+        top = max(by_upl, key=lambda u: len(by_upl[u]))
+        n_changed = len({r[1] for r in burst if r[3] != top})
+        rate = n_changed / len(hour_systems)
+        base = self._baseline(ts)
+        self._last_rates = (rate, base)
+        if base is None:
+            self._note(rate, n_changed, n_upl, "(learning the usual share)")
+            return None
+        if n_changed < MIN_CHANGED or n_upl < MIN_UPLOADERS or rate < RATIO * max(base, 0.001):
+            self._note(rate, n_changed, n_upl, "")
+            return None
+        tick = min(r[0] for r in burst)
         if self._last_tick is not None and tick - self._last_tick < MIN_GAP:
-            self._note(n_sys, n_upl, "too soon after the last tick")
+            self._note(rate, n_changed, n_upl, "(too soon after the last tick)")
             return None
-        self._note(n_sys, n_upl, "tick")
+        self._note(rate, n_changed, n_upl, "(tick)")
         self._last_tick = tick
-        self._changes.clear()
         return _iso(tick)

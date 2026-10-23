@@ -477,6 +477,9 @@ class Database:
             "ALTER TABLE bgs_ticks ADD COLUMN source TEXT",
             # 'systems' ticks are only known as a range: tick_at (last old reading) .. upper
             "ALTER TABLE bgs_ticks ADD COLUMN upper TEXT",
+            # a tick from our EDDN detector stays unconfirmed until a system's own
+            # readings show a change it explains (edc.core.system_ticks.confirm_ticks)
+            "ALTER TABLE bgs_ticks ADD COLUMN confirmed INTEGER",
             # Jumps/dockings in BGS test systems: any commander's (source 'eddn') and
             # our own (source 'journal', same event timestamps as our EDDN uploads),
             # so the Experiment Log can count other visitors per tick window.
