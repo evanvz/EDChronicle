@@ -3512,7 +3512,7 @@ class MainWindow(QMainWindow):
         self._eddn_worker.system_coords_seen.connect(self.eddn_market_cache.on_coords_seen)
         self._eddn_worker.commodity_seen.connect(self.eddn_market_cache.on_commodity_message)
         self._eddn_worker.faction_seen.connect(self.eddn_market_cache.on_faction_seen)
-        self._eddn_worker.faction_seen.connect(self._on_eddn_current_system)
+        self._eddn_worker.current_system_seen.connect(self._on_eddn_current_system)
         self._eddn_worker.station_seen.connect(self.eddn_market_cache.on_station_seen)
         self._eddn_worker.codex_entry_seen.connect(self.eddn_market_cache.on_codex_entry_seen)
         self._eddn_worker.fcmaterials_seen.connect(self.eddn_market_cache.on_fcmaterials_message)
@@ -4386,6 +4386,9 @@ class MainWindow(QMainWindow):
                 self._tts_spoken_signal_bodies.clear()
                 self._tts_phenomena_announced.clear()
                 self._tts_megaship_announced.clear()
+                self._eddn_pending_reading = None
+                if getattr(self, "_eddn_worker", None) is not None:
+                    self._eddn_worker.set_current_system(incoming_system_address)
                 self._tts_cnb_announced.clear()
                 self.load_current_system_data()
                 self._load_persisted_rings(incoming_system_address)

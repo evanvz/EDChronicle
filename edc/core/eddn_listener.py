@@ -133,6 +133,8 @@ class EddnPowerPlayWorker(QObject):
     # emitted for factions in watched_factions, so this stays rare rather than
     # firing on every journal/1 message network-wide.
     faction_seen = pyqtSignal(object, str, dict, bool, str)
+    # an upload of the system the commander is in (any system): its factions and conflicts
+    current_system_seen = pyqtSignal(object, str, dict, bool, str)
     # id64, StarSystem, war conflicts (list), multi-state factions (list),
     # timestamp -- unconditional (any system), unlike faction_seen which is
     # gated to watched_factions. Feeds system_bgs_status.
@@ -213,6 +215,10 @@ class EddnPowerPlayWorker(QObject):
         if (addr in self._experiment_systems and isinstance(msg.get("timestamp"), str)
                 and msg.get("event") in ("FSDJump", "Location", "CarrierJump", "Docked")):
             self.system_visit_seen.emit(addr, msg.get("event") or "", msg["timestamp"])
+
+    def set_current_system(self, address) -> None:
+        """The system the commander is in (one reference swap from the UI thread)."""
+        self._current_system = address
 
     def set_watched_systems(self, addresses) -> None:
         self._watched_systems = frozenset(addresses)
@@ -360,6 +366,13 @@ class EddnPowerPlayWorker(QObject):
                 self.tick_detected.emit(tick)
             self._maybe_emit_system_profile(msg, msg.get("timestamp") or "")
             self._maybe_emit_faction_names(msg, msg.get("timestamp") or "")
+            if (msg.get("SystemAddress") == getattr(self, "_current_system", None)
+                    and isinstance(msg.get("Factions"), list) and msg["Factions"]):
+                self.current_system_seen.emit(
+                    msg["SystemAddress"], msg.get("StarSystem") or "",
+                    {"SystemFactions": [dict(f) for f in msg["Factions"] if isinstance(f, dict) and f.get("Name")],
+                     "SystemConflicts": [dict(c) for c in (msg.get("Conflicts") or []) if isinstance(c, dict)]},
+                    False, msg.get("timestamp") or "")
 
             power = msg.get("ControllingPower")
             power_state = msg.get("PowerplayState")

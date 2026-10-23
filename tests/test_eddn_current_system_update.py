@@ -54,3 +54,28 @@ def test_older_disagreeing_or_other_system_uploads_are_ignored():
     MainWindow._on_eddn_current_system(win, 123, "Elsewhere", {"SystemFactions": [{"Name": "X"}]}, False,
                                        "2026-10-23T20:00:00Z")
     assert win.state.system_conflicts[0]["Status"] == "pending"
+
+
+def test_listener_forwards_any_system_the_commander_is_in():
+    """Not only systems with the squadron faction: the current one, whatever it is."""
+    import json, zlib
+    from unittest.mock import MagicMock
+    from edc.core.eddn_listener import EddnPowerPlayWorker
+    w = EddnPowerPlayWorker()          # no watched factions at all
+    seen = []
+    w.current_system_seen.connect(lambda addr, name, s, c, ts: seen.append((addr, name, len(s["SystemFactions"]))))
+    w.set_current_system(99)
+
+    def raw(addr):
+        msg = {"event": "FSDJump", "StarSystem": f"S{addr}", "SystemAddress": addr, "StarPos": [0, 0, 0],
+               "timestamp": "2026-10-23T19:00:00Z", "Factions": [{"Name": "A", "Influence": 0.6},
+                                                                {"Name": "B", "Influence": 0.4}]}
+        return zlib.compress(json.dumps({"$schemaRef": "https://eddn.edcd.io/schemas/journal/1",
+                                         "header": {"uploaderID": "u"}, "message": msg}).encode())
+    sock = MagicMock()
+    sock.recv.side_effect = [raw(5), raw(99), KeyboardInterrupt]
+    try:
+        w._pump(sock)
+    except KeyboardInterrupt:
+        pass
+    assert seen == [(99, "S99", 2)]

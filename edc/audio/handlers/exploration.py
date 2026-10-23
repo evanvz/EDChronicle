@@ -201,9 +201,9 @@ class ExplorationPhrases:
         "Caution — there's a {war} in this system. Expect hostiles at the megaship.",
         "Heads up, Commander — {war} in this system. The megaship may be under attack, expect hostiles.",
         "{war} under way here. Expect hostiles around the megaship.",
-        "Expect company at the megaship, Commander. There's a {war} in this system.",
-        "{war} in progress here. The megaship could be a hot zone.",
-        "Careful around the megaship. {war} under way in this system.",
+        "Expect hostiles at the megaship, Commander. There's a {war} in this system.",
+        "{war} in progress here. Hostiles likely around the megaship.",
+        "Careful around the megaship. {war} under way, expect hostiles.",
     ]
 
     NHSS_DETECTED = [
