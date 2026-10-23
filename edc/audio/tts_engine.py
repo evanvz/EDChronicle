@@ -112,7 +112,7 @@ def _kokoro_wav(text: str, voice: str, speed: float) -> tuple[bytes, int] | None
             return None
         try:
             _load_kokoro()
-            kvoice = _KOKORO_VOICE.get(voice, "am_michael")
+            kvoice = _KOKORO_VOICE.get(voice) or (voice if voice in _EXTRA_KOKORO_VOICES else "am_michael")
             samples, sr = _kokoro.create(text, voice=kvoice, speed=min(2.0, max(0.5, speed)),
                                          lang="en-gb" if kvoice.startswith("b") else "en-us")
         except Exception as e:
@@ -208,6 +208,25 @@ _ALERT_VOICE_DISPLAY = [
     "Nicole — US Female",
     "Isabella — GB Female",
 ]
+
+# The rest of the installed Kokoro pack (models/kokoro/voices-v1.0.bin, 54 voices),
+# by their own ids, added after the old ones so saved voice indexes keep their
+# voice. The non-English ones read English text with their language's accent
+# (added 2026-10-23 to try out). Prefix: language/accent, then f/m.
+_EXTRA_KOKORO_VOICES = [
+    "af_alloy", "af_aoede", "af_jessica", "af_kore", "af_nova", "af_river", "af_sky",
+    "am_adam", "am_santa", "bf_alice", "bf_lily",
+    "am_echo", "am_fenrir", "am_liam", "am_puck", "bm_daniel", "bm_fable", "bm_lewis",
+    "ef_dora", "em_alex", "em_santa", "ff_siwis", "hf_alpha", "hf_beta", "hm_omega", "hm_psi",
+    "if_sara", "im_nicola", "jf_alpha", "jf_gongitsune", "jf_nezumi", "jf_tebukuro", "jm_kumo",
+    "pf_dora", "pm_alex", "pm_santa", "zf_xiaobei", "zf_xiaoni", "zf_xiaoxiao", "zf_xiaoyi",
+    "zm_yunjian", "zm_yunxi", "zm_yunxia", "zm_yunyang",
+]
+_ACCENT = {"a": "US", "b": "GB", "e": "Spanish accent", "f": "French accent", "h": "Hindi accent",
+           "i": "Italian accent", "j": "Japanese accent", "p": "Portuguese accent", "z": "Chinese accent"}
+_ALERT_VOICE_POOL += _EXTRA_KOKORO_VOICES
+_ALERT_VOICE_DISPLAY += [f"{v[3:].capitalize()} — {_ACCENT[v[0]]} {'Female' if v[1] == 'f' else 'Male'}"
+                         for v in _EXTRA_KOKORO_VOICES]
 
 
 class TTSWorker(QObject):

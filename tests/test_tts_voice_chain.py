@@ -27,7 +27,7 @@ def test_every_voice_id_maps_to_a_kokoro_voice():
     with patch.object(tts, "QThread"), patch.object(tts, "TTSWorker"), patch.object(tts, "CommsWorker"):
         engine.start()
     used |= set(engine._comms_voice_pool)
-    assert used <= set(tts._KOKORO_VOICE)
+    assert used <= set(tts._KOKORO_VOICE) | set(tts._EXTRA_KOKORO_VOICES)   # old Edge ids, or Kokoro's own
 
 
 def test_ship_computer_fx_keeps_peak_and_length():
@@ -39,3 +39,12 @@ def test_ship_computer_fx_keeps_peak_and_length():
     assert abs(np.abs(y).max() - 0.5) < 1e-4
     assert not np.allclose(x, y)
     assert len(tts._ship_computer_fx(np.zeros(0, dtype="float32"), sr)) == 0
+
+
+def test_every_installed_kokoro_voice_is_selectable_and_old_indexes_keep_their_voice():
+    from edc.audio import tts_engine as t
+    assert len(t._ALERT_VOICE_POOL) == len(t._ALERT_VOICE_DISPLAY) == 54
+    assert t._ALERT_VOICE_POOL[:3] == ["en-US-AriaNeural", "en-US-JennyNeural", "en-US-GuyNeural"]   # saved index 0-2
+    kokoro = {t._KOKORO_VOICE.get(v) or v for v in t._ALERT_VOICE_POOL}
+    assert len(kokoro) == 54 and "ff_siwis" in kokoro
+    assert "Siwis — French accent Female" in t._ALERT_VOICE_DISPLAY
