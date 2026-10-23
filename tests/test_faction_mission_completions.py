@@ -78,8 +78,8 @@ def test_counts_are_scoped_to_system_and_faction(tmp_path):
 
 def test_multiple_completions_accumulate(tmp_path):
     repo = _repo(tmp_path)
-    for _ in range(3):
-        repo.record_faction_mission_completion(123, "Test Faction", _iso(0))
+    for minutes in (0, 1, 2):                        # three missions, minutes apart
+        repo.record_faction_mission_completion(123, "Test Faction", _iso(minutes / 1440))
     repo.record_faction_mission_completion(123, "Test Faction", _iso(2))
     counts = repo.get_faction_mission_completion_counts(123, "Test Faction")
     assert counts == _counts(
@@ -170,3 +170,22 @@ def test_missing_trend_still_defaults_to_positive(tmp_path):
     counts = repo.get_faction_mission_completion_counts(123, "Test Faction")
     b = _bucket(count=1, weighted=3, primary_count=1, primary_weighted=3)
     assert counts == _counts(today=b, last_7_days=b)
+
+
+def test_the_same_completion_replayed_at_startup_is_stored_once(tmp_path):
+    """Arimavante 2026-10-23: one massacre mission was stored 3 times, once per app start."""
+    repo = _repo(tmp_path)
+    for _ in range(3):
+        repo.record_faction_mission_completion(123, "Test Faction", "2026-10-23T08:52:27Z",
+                                               mission_type="Massacre Conflict Civil War")
+    assert repo.db.conn.execute("SELECT COUNT(*) FROM faction_mission_completions").fetchone()[0] == 1
+
+
+def test_the_same_cz_replayed_at_startup_is_stored_once(tmp_path):
+    repo = _repo(tmp_path)
+    for _ in range(2):
+        repo.record_faction_cz_kill(system_address=123, faction_name="EUW", zone_type="space", size="l",
+                                    earned_at="2026-10-23T07:24:03Z")
+    repo.record_faction_cz_kill(system_address=123, faction_name="EUW", zone_type="space", size="l",
+                                earned_at="2026-10-23T07:42:53Z")
+    assert repo.db.conn.execute("SELECT COUNT(*) FROM faction_cz_kills").fetchone()[0] == 2

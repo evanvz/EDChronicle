@@ -4232,7 +4232,8 @@ class MainWindow(QMainWindow):
         if name == "MissionCompleted":
             self._record_faction_mission_completion(evt)
 
-        if name == "FactionKillBond" and not self._replaying:
+        if name == "FactionKillBond":
+            # the replay records CZs fought before the app started; repeats are skipped
             self._record_faction_cz_kill(evt)
 
         if name == "RedeemVoucher" and not self._replaying:

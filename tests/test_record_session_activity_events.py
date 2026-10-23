@@ -215,11 +215,13 @@ def _dispatch_fake_self(replaying: bool):
     return fake_self
 
 
-def test_faction_kill_bond_dispatch_skipped_during_replay():
+def test_faction_kill_bond_dispatch_recorded_during_replay():
+    """CZs fought before the app started come in through the replay (repeats are
+    skipped by the repository)."""
     fake_self = _dispatch_fake_self(replaying=True)
     evt = {"event": "FactionKillBond", "AwardingFaction": "Elite United Worlds", "Reward": 15000, "timestamp": "2026-09-25T10:00:00Z"}
     MainWindow._on_event(fake_self, evt)
-    fake_self._record_faction_cz_kill.assert_not_called()
+    fake_self._record_faction_cz_kill.assert_called_once_with(evt)
 
 
 def test_faction_kill_bond_dispatch_records_cz_kill_only():

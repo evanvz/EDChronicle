@@ -3147,14 +3147,23 @@ class Repository:
         get_faction_mission_completion_counts/get_session_activity_report
         for where the sign is actually applied). None defaults to positive
         at read time, matching the only behavior that ever existed before
-        this column."""
+        this column.
+
+        The startup replay re-reads the current journal, so the same completion
+        arrives again on every restart (one massacre mission was stored 3 times,
+        2026-10-23): an identical row is skipped.
+        ponytail: two missions with the same type, tier and second would merge;
+        store the MissionID if that ever happens."""
         self.db.execute(
             "INSERT INTO faction_mission_completions "
             "(system_address, faction_name, completed_at, influence_tier, is_primary, mission_type, reward, trend) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM faction_mission_completions "
+            "WHERE system_address = ? AND faction_name = ? AND completed_at = ? AND is_primary = ? "
+            "AND mission_type IS ? AND influence_tier IS ? AND trend IS ?)",
             (
                 system_address, faction_name, completed_at, influence_tier, 1 if is_primary else 0,
                 mission_type, reward, trend,
+                system_address, faction_name, completed_at, 1 if is_primary else 0, mission_type, influence_tier, trend,
             ),
         )
 
@@ -3377,11 +3386,13 @@ class Repository:
     ) -> None:
         """One row per confirmed CZ kill credit -- see event_engine.py's
         _credit_cz_kill for how ground/space and size are inferred, and
-        main_window.py's _record_faction_cz_kill for how it gets here."""
+        main_window.py's _record_faction_cz_kill for how it gets here.
+        The same CZ seen again (startup replay of the current journal) is skipped."""
         self.db.execute(
             "INSERT INTO faction_cz_kills (system_address, faction_name, zone_type, size, earned_at) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (system_address, faction_name, zone_type, size, earned_at),
+            "SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM faction_cz_kills WHERE system_address = ? "
+            "AND faction_name = ? AND zone_type = ? AND earned_at = ?)",
+            (system_address, faction_name, zone_type, size, earned_at, system_address, faction_name, zone_type, earned_at),
         )
 
     def get_faction_cz_kills_since(self, since: str) -> list[dict]:
