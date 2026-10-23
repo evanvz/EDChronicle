@@ -4567,6 +4567,43 @@ class MainWindow(QMainWindow):
         except Exception:
             return ""
 
+    def _megaship_callout(self, state, system_address, signal_name: str) -> str:
+        """The merit / conflict callout for one megaship, once per system visit
+        ("" if not worth it or already said)."""
+        mega_key = MegashipTracker.key(system_address, signal_name)
+        # has_seen() only ever gets set on a confirmed drop-in
+        # (SupercruiseDestinationDrop), so it can't gate this
+        # announcement -- FSSSignalDiscovered can re-fire for
+        # the same still-undocked megaship (confirmed live: the
+        # merit callout played twice for one signal), so track
+        # "already announced this system" separately, cleared
+        # on system change like the other TTS announce sets.
+        if (not signal_name or mega_key in self._tts_megaship_announced
+                or self.megaship_tracker.has_seen(mega_key)):
+            return ""
+        pledged = (getattr(state, "pp_power", None) or "").strip()
+        ctrl = (getattr(state, "system_controlling_power", None) or "").strip()
+        pp_state_val = (getattr(state, "system_powerplay_state", None) or "").strip()
+        merit = ""
+        if pledged:
+            # Marking "done" happens on confirmed drop-in
+            # (SupercruiseDestinationDrop), not here — this
+            # only decides whether it's worth alerting about.
+            # Reinforcement: our own power controls this system
+            if ctrl and ctrl.lower() == pledged.lower():
+                merit = ExplorationPhrases.megaship_pp_merits("reinforcement")
+            # Acquisition: no controlling power, PP-active, and our
+            # power in range (listed in the system's Powers).
+            elif powerplay_mode(pledged, "", pp_state_val,
+                                getattr(state, "system_powers", None)) == "Acquisition":
+                merit = ExplorationPhrases.megaship_pp_merits("acquisition")
+        war = active_system_war(getattr(state, "system_conflicts", None))
+        warning = ExplorationPhrases.megaship_conflict_warning(war[0]) if war else ""
+        if merit or warning:
+            self._tts_megaship_announced.add(mega_key)
+            return f"{merit} {warning}".strip()
+        return ""
+
     def _tts_router(self, event_type: str, evt: dict, state) -> str:
         """Route journal events to TTS phrase generators."""
         try:
@@ -4632,8 +4669,12 @@ class MainWindow(QMainWindow):
                 else:
                     base = ExplorationPhrases.arrived()
                 if security:
-                    return f"{base} {ExplorationPhrases.security_state(security)}"
-                return base
+                    base = f"{base} {ExplorationPhrases.security_state(security)}"
+                # megaships visited here before: said now, not only once the game lists
+                # the signals (that can wait for the first supercruise drop)
+                mega = [self._megaship_callout(state, getattr(state, "system_address", None), name)
+                        for name in self.megaship_tracker.known_in_system(getattr(state, "system_address", None))]
+                return " ".join([base] + [m for m in mega if m])
 
             if event_type == "LoadGame":
                 cmdr = getattr(state, "commander", None) or evt.get("Commander") or ""
@@ -4697,39 +4738,7 @@ class MainWindow(QMainWindow):
                         and evt.get("SystemAddress") != getattr(state, "system_address", None)):
                     return ""
                 if sig_type == "megaship":
-                    signal_name = evt.get("SignalName") or ""
-                    mega_key = MegashipTracker.key(evt.get("SystemAddress"), signal_name)
-                    # has_seen() only ever gets set on a confirmed drop-in
-                    # (SupercruiseDestinationDrop), so it can't gate this
-                    # announcement -- FSSSignalDiscovered can re-fire for
-                    # the same still-undocked megaship (confirmed live: the
-                    # merit callout played twice for one signal), so track
-                    # "already announced this system" separately, cleared
-                    # on system change like the other TTS announce sets.
-                    if (signal_name and mega_key not in self._tts_megaship_announced
-                            and not self.megaship_tracker.has_seen(mega_key)):
-                        pledged = (getattr(state, "pp_power", None) or "").strip()
-                        ctrl = (getattr(state, "system_controlling_power", None) or "").strip()
-                        pp_state_val = (getattr(state, "system_powerplay_state", None) or "").strip()
-                        merit = ""
-                        if pledged:
-                            # Marking "done" happens on confirmed drop-in
-                            # (SupercruiseDestinationDrop), not here — this
-                            # only decides whether it's worth alerting about.
-                            # Reinforcement: our own power controls this system
-                            if ctrl and ctrl.lower() == pledged.lower():
-                                merit = ExplorationPhrases.megaship_pp_merits("reinforcement")
-                            # Acquisition: no controlling power, PP-active, and our
-                            # power in range (listed in the system's Powers).
-                            elif powerplay_mode(pledged, "", pp_state_val,
-                                                getattr(state, "system_powers", None)) == "Acquisition":
-                                merit = ExplorationPhrases.megaship_pp_merits("acquisition")
-                        war = active_system_war(getattr(state, "system_conflicts", None))
-                        warning = ExplorationPhrases.megaship_conflict_warning(war[0]) if war else ""
-                        if merit or warning:
-                            self._tts_megaship_announced.add(mega_key)
-                            return f"{merit} {warning}".strip()
-                    return ""
+                    return self._megaship_callout(state, evt.get("SystemAddress"), evt.get("SignalName") or "")
 
                 if sig_type == "navbeacon":
                     # Compromised Navigation Beacon shares SignalType with a

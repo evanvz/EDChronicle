@@ -33,12 +33,14 @@ def test_pending_war_election_and_empty_do_not_count():
     assert active_system_war(None) is None
 
 
-def _fake_self(conflicts, pp_power="", ctrl="", pp_state=""):
-    return SimpleNamespace(
-        cfg=SimpleNamespace(tts_enabled=True, tts_events={"FSSSignalDiscovered": True}),
+def _fake_self(conflicts, pp_power="", ctrl="", pp_state="", known=()):
+    fake = SimpleNamespace(
+        cfg=SimpleNamespace(tts_enabled=True, tts_events={"FSSSignalDiscovered": True, "FSDJump": True}),
         _tts_megaship_announced=set(),
-        megaship_tracker=SimpleNamespace(has_seen=lambda key: False),
-    ), SimpleNamespace(
+        megaship_tracker=SimpleNamespace(has_seen=lambda key: False, known_in_system=lambda addr: list(known)),
+    )
+    fake._megaship_callout = lambda *a: MainWindow._megaship_callout(fake, *a)
+    return fake, SimpleNamespace(
         system_address=560249932147, system_conflicts=conflicts, pp_power=pp_power,
         system_controlling_power=ctrl, system_powerplay_state=pp_state,
     )
@@ -124,3 +126,15 @@ def test_acquisition_callout_when_your_power_is_in_range():
     fake_self, state = _fake_self([], pp_power="Aisling Duval", ctrl="", pp_state="Unoccupied")
     state.system_powers = ["Aisling Duval"]
     assert "acquisition" in MainWindow._tts_router(fake_self, "FSSSignalDiscovered", _MEGASHIP_EVT, state).lower()
+
+
+def test_known_megaship_is_called_out_at_the_jump_and_not_again():
+    """Ekono 2026-10-23: the game listed EKO-490 only at the first supercruise drop,
+    2.5 min after the jump; a megaship visited there before is said at the jump."""
+    fake_self, state = _fake_self([], pp_power="Aisling Duval", ctrl="Aisling Duval",
+                                  known=["PER-251 Bellmarsh-class Reformatory"])
+    state.system = "Ekono"
+    state.system_powers, state.system_security = ["Aisling Duval"], ""
+    arrival = MainWindow._tts_router(fake_self, "FSDJump", {"event": "FSDJump"}, state)
+    assert "megaship" in arrival.lower()
+    assert MainWindow._tts_router(fake_self, "FSSSignalDiscovered", _MEGASHIP_EVT, state) == ""   # said already
