@@ -201,7 +201,12 @@ class PowerplayPanel(QWidget):
         if not pledged:
             return ""
         friendly = bool(ctrl and ctrl == pledged)
-        enemy = bool(ctrl and ctrl != pledged and ctrl != "Unoccupied")
+        # a coalition ally (ZYADA by default; set by MainWindow) isn't an enemy
+        getter = getattr(self, "allied_powers_getter", None)
+        allied = bool(ctrl and getter and ctrl.strip().lower() in getter())
+        enemy = bool(ctrl and ctrl != pledged and ctrl != "Unoccupied" and not allied)
+        if allied:
+            return f"Allied space ({ctrl}): a coalition partner; no undermining here."
         st = (pp_state or "").strip()
         pows = powers if isinstance(powers, list) else []
 

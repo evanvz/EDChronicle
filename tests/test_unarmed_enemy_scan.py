@@ -27,3 +27,16 @@ def test_armed_ship_still_gets_it(tmp_path):
     eng = _engine(tmp_path, armed=True)
     state, _ = eng.process(dict(SCAN))
     assert state.pp_enemy_alerts and "PP enemy scan" in state.pp_enemy_alerts[0]
+
+
+def test_coalition_ally_is_not_called_enemy_in_the_powerplay_panel():
+    """Achenar: A. Lavigny-Duval's Stronghold read "Enemy Stronghold" while the
+    megaship callout treated that ZYADA power as an ally."""
+    from types import SimpleNamespace
+    from edc.core.bgs_tasks import allied_powers
+    from edc.ui.panels.powerplay_panel import PowerplayPanel
+    panel = SimpleNamespace(allied_powers_getter=lambda: allied_powers("Aisling Duval"))
+    action = PowerplayPanel.derive_pp_action(panel, "Aisling Duval", "A. Lavigny-Duval", "Stronghold", [])
+    assert action.startswith("Allied space (A. Lavigny-Duval)")
+    assert PowerplayPanel.derive_pp_action(panel, "Aisling Duval", "Li Yong-Rui", "Stronghold", []).startswith(
+        "Enemy Stronghold")

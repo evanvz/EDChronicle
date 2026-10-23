@@ -2854,6 +2854,7 @@ class MainWindow(QMainWindow):
         self.trade_route_panel = TradeRoutePanel(self.repo, edsm_powerplay=self.edsm_powerplay,
                                                  ship_pad_table=self.ship_pad_sizes)
         self.market_panel.allied_powers_getter = self._allies
+        self.powerplay_panel.allied_powers_getter = self._allies
         self.trade_route_panel.allied_powers_getter = self._allies
         self.mining_panel.sell_search_requested.connect(self._on_mining_sell_search_requested)
         self.market_panel.destination_selected.connect(self._on_market_destination_selected)
@@ -5909,6 +5910,8 @@ class MainWindow(QMainWindow):
                     lines.append(f"🟡 PP: Neutral ({ctrl}) — {pp_state or 'Active'}{extra}")
                 elif ctrl and ctrl == pledged:
                     lines.append(f"🟢 PP: Friendly space ({ctrl}) — {pp_state or 'Active'}")
+                elif ctrl and not is_rival_power(ctrl, pledged, _allies_of(self)):
+                    lines.append(f"🔵 PP: Allied ({ctrl}) — {pp_state or 'Active'}")
                 elif ctrl and ctrl != pledged:
                     lines.append(f"🔴 PP: Enemy-Controlled ({ctrl}) — {pp_state or 'Active'} (caution)")
                 else:
@@ -5919,7 +5922,7 @@ class MainWindow(QMainWindow):
                 # --- Action hint (Overview only) ---
                 s = str(pp_state or "").lower()
                 friendly = bool(ctrl and ctrl == pledged)
-                enemy = bool(ctrl and ctrl != pledged and ctrl != "Unoccupied")
+                enemy = bool(ctrl and ctrl != "Unoccupied" and is_rival_power(ctrl, pledged, _allies_of(self)))
 
                 action = None
                 if "stronghold" in s or "fortified" in s:
