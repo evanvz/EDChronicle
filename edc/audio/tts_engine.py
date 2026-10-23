@@ -520,18 +520,7 @@ class TTSEngine:
         self._thread.start()
         log.info(f"TTS engine thread started — voice={voice_name}")
 
-        self._comms_voice_pool = [
-            "en-US-GuyNeural",
-            "en-US-ChristopherNeural",
-            "en-GB-RyanNeural",
-            "en-AU-WilliamNeural",
-            "en-CA-LiamNeural",
-            "en-IE-ConnorNeural",
-            "en-IN-PrabhatNeural",
-            "en-US-EricNeural",
-            "en-US-RogerNeural",
-            "en-GB-ThomasNeural",
-        ]
+        self._comms_voice_pool = self._npc_voices()
         log.info(f"TTS comms voice pool: {len(self._comms_voice_pool)} voices")
 
         self._comms_worker = CommsWorker(
@@ -687,6 +676,20 @@ class TTSEngine:
         except Exception:
             pass
 
+    def _npc_voices(self) -> list:
+        """NPC comms: every installed voice -- female and accented ones too --
+        except the Commander Assist voice and the squadron voice, which stay
+        fixed and easy to tell apart (each Kokoro voice once)."""
+        kokoro = lambda v: _KOKORO_VOICE.get(v) or v
+        commander = _ALERT_VOICE_POOL[self._voice_index] if self._voice_index < len(_ALERT_VOICE_POOL) else _ALERT_VOICE_POOL[0]
+        taken = {kokoro(commander), kokoro(self._SQUADRON_VOICE)}
+        out = []
+        for v in _ALERT_VOICE_POOL:
+            if kokoro(v) not in taken:
+                taken.add(kokoro(v))
+                out.append(v)
+        return out
+
     def load_from_config(self, cfg):
         """Apply settings from AppConfig."""
         try:
@@ -709,6 +712,7 @@ class TTSEngine:
             if self._comms_worker:
                 self._comms_worker._rate   = self._comms_rate
                 self._comms_worker._volume = self._comms_volume
+                self._comms_voice_pool = self._npc_voices()   # the Commander voice may have changed
         except Exception:
             pass
 

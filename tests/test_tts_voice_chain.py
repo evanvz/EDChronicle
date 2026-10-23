@@ -48,3 +48,16 @@ def test_every_installed_kokoro_voice_is_selectable_and_old_indexes_keep_their_v
     kokoro = {t._KOKORO_VOICE.get(v) or v for v in t._ALERT_VOICE_POOL}
     assert len(kokoro) == 54 and "ff_siwis" in kokoro
     assert "Siwis — French accent Female" in t._ALERT_VOICE_DISPLAY
+
+
+def test_npc_comms_use_every_other_voice():
+    """Commander Assist and squadron chat keep their own voice; NPC comms get all the
+    rest, female and accented ones included (was 10 male voices)."""
+    engine = tts.TTSEngine(voice_index=2)                                 # Michael (am_michael)
+    pool = engine._npc_voices()
+    kokoro = {tts._KOKORO_VOICE.get(v) or v for v in pool}
+    assert len(pool) == len(kokoro) == 52                                 # 54 minus commander and squadron
+    assert "am_michael" not in kokoro and "am_fenrir" not in kokoro
+    assert {"af_heart", "bf_emma", "ff_siwis", "jm_kumo"} <= kokoro
+    engine._voice_index = 0                                               # Commander voice changed to Heart
+    assert "af_heart" not in {tts._KOKORO_VOICE.get(v) or v for v in engine._npc_voices()}
