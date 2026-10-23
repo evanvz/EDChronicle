@@ -1156,7 +1156,9 @@ class EventEngine:
                 }
                 self.state.cz_pending_space = None
 
-        elif name == "SupercruiseExit":
+        elif name in ("SupercruiseDestinationDrop", "SupercruiseExit"):
+            # the zone type is on SupercruiseDestinationDrop ("$Warzone_PointRace_Low:#index=1;");
+            # SupercruiseExit carries none, so space CZs were never counted (fixed 2026-10-23)
             zone_type = (event.get("Type") or "").lower()
             for prefix, size in (("$warzone_pointrace_low", "l"), ("$warzone_pointrace_med", "m"), ("$warzone_pointrace_high", "h")):
                 if zone_type.startswith(prefix):

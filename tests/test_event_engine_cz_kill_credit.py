@@ -77,3 +77,22 @@ def test_last_cz_credit_not_set_again_when_ground_cz_kill_size_upgrades(tmp_path
     tally = state.cz_kills["Elite United Worlds"]
     assert tally.get("ground_m") == 1
     assert tally.get("ground_l", 0) == 0
+
+
+def test_space_cz_from_the_real_journal_sequence(tmp_path):
+    """Arimavante 2026-10-23: the zone type is on SupercruiseDestinationDrop; the
+    SupercruiseExit after it has no Type. Each visit counts once, for the
+    faction whose bonds you earn (any faction, not only the squadron's)."""
+    engine = _engine(tmp_path)
+    for drop_at, bonds in (("07:22:33", ("07:24:03", "07:26:00")), ("07:40:12", ("07:42:53",))):
+        engine.process({"event": "SupercruiseDestinationDrop", "timestamp": f"2026-10-23T{drop_at}Z",
+                        "Type": "$Warzone_PointRace_Low:#index=1;", "Type_Localised": "Conflict Zone [Low Intensity]",
+                        "Threat": 0})
+        engine.process({"event": "SupercruiseExit", "timestamp": f"2026-10-23T{drop_at}Z", "Taxi": False,
+                        "Multicrew": False, "StarSystem": "Arimavante", "SystemAddress": 4756911035114,
+                        "Body": "Arimavante 1", "BodyID": 1, "BodyType": "Planet"})
+        for t in bonds:
+            engine.process(_bond_event(42473, ts=f"2026-10-23T{t}Z"))
+        engine.process({"event": "SupercruiseEntry", "timestamp": f"2026-10-23T{bonds[-1]}Z",
+                        "StarSystem": "Arimavante", "SystemAddress": 4756911035114})
+    assert engine.state.cz_kills == {"Elite United Worlds": {"space_l": 2}}
