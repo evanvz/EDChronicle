@@ -84,3 +84,20 @@ def test_saasignalsfound_still_marks_dss_mapped(tmp_path):
     rows = repo.get_bodies(3205949786483)
     row = next(r for r in rows if r["body_name"] == "Test Body")
     assert row["dss_mapped"] == 1
+
+
+def test_a_scan_after_mapping_does_not_unmap_the_body(tmp_path):
+    """Ekono A 1: SAAScanComplete (5 probes) at 2026-08-02 14:03:42, the Detailed
+    Scan 1 s later and a NavBeaconDetail Scan on 08-31 each saved it as unmapped,
+    so the "worth the detour" callout kept coming for a mapped planet."""
+    repo = _repo(tmp_path)
+    imp = _importer(tmp_path, repo)
+    body = {"BodyName": "Ekono A 1", "BodyID": 3, "SystemAddress": 3205949786483}
+    imp._process_event({**body, "event": "Scan", "ScanType": "AutoScan", "PlanetClass": "Earthlike body",
+                        "TerraformState": "Terraformed", "WasDiscovered": False, "WasMapped": True})
+    imp._process_event({**body, "event": "SAAScanComplete", "ProbesUsed": 5, "EfficiencyTarget": 6})
+    for scan_type in ("Detailed", "NavBeaconDetail"):
+        imp._process_event({**body, "event": "Scan", "ScanType": scan_type, "PlanetClass": "Earthlike body",
+                            "TerraformState": "Terraformed", "WasDiscovered": False, "WasMapped": True})
+    row = next(r for r in repo.get_bodies(3205949786483) if r["body_name"] == "Ekono A 1")
+    assert row["dss_mapped"] == 1

@@ -257,7 +257,9 @@ class Repository:
                 terraformable           = excluded.terraformable,
                 landable                = COALESCE(excluded.landable, bodies.landable),
                 was_mapped              = excluded.was_mapped,
-                dss_mapped              = excluded.dss_mapped,
+                -- mapped stays mapped: a later Scan of the body carries no mapping and
+                -- reset it (Ekono A 1: SAAScanComplete 2026-08-02 14:03:42, Scan 1 s later)
+                dss_mapped              = MAX(COALESCE(bodies.dss_mapped, 0), COALESCE(excluded.dss_mapped, 0)),
                 estimated_value         = COALESCE(excluded.estimated_value, bodies.estimated_value),
                 distance_ls             = COALESCE(excluded.distance_ls, bodies.distance_ls),
                 volcanism               = COALESCE(excluded.volcanism, bodies.volcanism),
