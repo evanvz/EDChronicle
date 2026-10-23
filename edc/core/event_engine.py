@@ -909,8 +909,10 @@ class EventEngine:
                 parts.append(f"Bounty: {bounty:,} cr")
             if bgs_war_faction_match:
                 parts.append(f"At war with your squadron faction ({faction})")
+            # Unarmed (explorer/hauler): nothing to engage with, so no Overview
+            # alert either -- the voice callout is already silent then (combat_callout)
             if self.state.ship_has_weapons is False:
-                parts.append("⚠️ You have no weapons fitted — do not engage")
+                return self.state, msgs
 
             alert = " | ".join(parts)
 
