@@ -62,6 +62,8 @@ class PowerPlayPhrases:
         "Expansion target. Acquisition available.",
         "Expansion underway here, Commander. Worth pushing.",
         "System's expanding. Good time to get involved.",
+        "Acquisition running here. Every merit counts, Commander.",
+        "Expansion push in this system. Lend a hand if you can.",
     ]
 
     PP_ACQUISITION_CONTESTED = [
@@ -88,6 +90,8 @@ class PowerPlayPhrases:
         "{power} operating here. No system control.",
         "{power}'s here, Commander, just not in charge.",
         "We've got a foothold — {power} present, not controlling.",
+        "{power} has a presence here, but someone else holds control.",
+        "{power} is in range, Commander. No control yet.",
     ]
 
     PP_UNDERMINING_PRESENT = [
@@ -96,6 +100,8 @@ class PowerPlayPhrases:
         "{power} active in this system. Undermining target.",
         "{power}'s in this system. Undermining's on the table.",
         "We've got presence here — {power}, undermining possible.",
+        "{power} can undermine here, Commander.",
+        "In range for undermining. {power} is present.",
     ]
 
     PP_NOT_PRESENT = [
@@ -104,6 +110,8 @@ class PowerPlayPhrases:
         "{power} not present. No undermining opportunity.",
         "Nothing of ours here, Commander. {power} isn't present.",
         "{power} has no foothold in this system.",
+        "{power} has no reach here, Commander.",
+        "Outside {power}'s range. Nothing to do here for PowerPlay.",
     ]
 
     @staticmethod

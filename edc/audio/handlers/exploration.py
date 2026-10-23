@@ -55,6 +55,19 @@ class ExplorationPhrases:
         "{count} bodies could pay for this whole trip, Commander.",
     ]
 
+    VALUABLE_BODY_SINGLE = [
+        "One high value planet in this system.",
+        "Cartographic alert. One body worth mapping here.",
+        "One body here is worth the detour, Commander.",
+        "There's one world worth slowing down for.",
+    ]
+
+    FSS_COMPLETE_SINGLE = [
+        "Full system scan complete. Just the one body.",
+        "Honk complete. One body in this system.",
+        "Discovery scan finished. A single body out here.",
+    ]
+
     FSS_COMPLETE = [
         "Full system scan complete. {bodies} bodies catalogued.",
         "Honk complete. {bodies} bodies in this system.",
@@ -102,6 +115,8 @@ class ExplorationPhrases:
         "Ancient technology present. {count} Guardian signal.",
         "Guardian ruins nearby, Commander. {count} signal.",
         "Old tech on the scanners. {count} Guardian signal.",
+        "Guardian structure below, Commander. {count} signal.",
+        "{count} Guardian signal on this world. Something old down there.",
     ]
 
     GUARDIAN_SIGNALS_MULTIPLE = [
@@ -110,6 +125,8 @@ class ExplorationPhrases:
         "Ancient technology detected. {count} Guardian signals.",
         "{count} Guardian sites here. Worth the trip down, Commander.",
         "Plenty of old tech on this one — {count} Guardian signals.",
+        "{count} Guardian signals below. This world has history, Commander.",
+        "Guardian ruins, {count} signals. Bring the SRV.",
     ]
 
     GUARDIAN_SIGNALS_UNCHARTED = [
@@ -118,6 +135,8 @@ class ExplorationPhrases:
         "Ancient technology detected in an unknown system. {count} Guardian signal. Worth investigating.",
         "{count} Guardian signal, no record of this site anywhere. Yours to claim, Commander.",
         "Nobody's logged this one. {count} Guardian signal, uncharted.",
+        "Uncharted Guardian site. {count} signal. Could be a first, Commander.",
+        "{count} Guardian signal on a body nobody has logged. Mark it.",
     ]
 
     GUARDIAN_SIGNALS_UNCHARTED_MULTIPLE = [
@@ -126,6 +145,8 @@ class ExplorationPhrases:
         "Multiple Guardian signals in an unknown system. {count} detected. Consider logging this location.",
         "{count} Guardian signals, none of them logged anywhere. Worth the write-up.",
         "Fresh find, Commander — {count} Guardian signals, uncharted.",
+        "{count} Guardian signals, uncharted. Mark this one, Commander.",
+        "Unlogged Guardian site. {count} signals on this body.",
     ]
 
     THARGOID_SIGNALS = [
@@ -134,6 +155,8 @@ class ExplorationPhrases:
         "Non-human signal detected. {count} Thargoid signal.",
         "{count} Thargoid signal on this body. Eyes open, Commander.",
         "Non-human tech nearby. {count} signal. Proceed carefully.",
+        "{count} Thargoid signal below. Keep it quiet, Commander.",
+        "Thargoid tech on this body. {count} signal.",
     ]
 
     THARGOID_SIGNALS_MULTIPLE = [
@@ -142,6 +165,8 @@ class ExplorationPhrases:
         "Non-human signatures detected. {count} Thargoid signals.",
         "{count} Thargoid signals here. Tread carefully, Commander.",
         "Non-human presence confirmed. {count} signals — stay sharp.",
+        "{count} Thargoid signals. Not a place to linger, Commander.",
+        "Thargoid presence, {count} signals. Watch the scanners.",
     ]
 
     HUMAN_SIGNALS = [
@@ -176,6 +201,9 @@ class ExplorationPhrases:
         "Caution — there's a {war} in this system. Expect hostiles at the megaship.",
         "Heads up, Commander — {war} in this system. The megaship may be under attack, expect hostiles.",
         "{war} under way here. Expect hostiles around the megaship.",
+        "Expect company at the megaship, Commander. There's a {war} in this system.",
+        "{war} in progress here. The megaship could be a hot zone.",
+        "Careful around the megaship. {war} under way in this system.",
     ]
 
     NHSS_DETECTED = [
@@ -184,6 +212,8 @@ class ExplorationPhrases:
         "Caution. Non-human signal source. Threat level {threat}.",
         "Something non-human out there. Threat level {threat}, Commander.",
         "Unidentified non-human contact. Threat level {threat} — proceed with care.",
+        "Non-human signal source, threat level {threat}. Your call, Commander.",
+        "Thargoid activity on sensors. Threat level {threat}.",
     ]
 
     MEGASHIP_PP_UNDERMINING = [
@@ -192,6 +222,8 @@ class ExplorationPhrases:
         "Megaship signal. Undermining target — scan it.",
         "Megaship in range — good target for undermining, Commander.",
         "There's our undermining opportunity. Megaship on sensors.",
+        "Megaship nearby. Scan its log uplink to undermine.",
+        "Undermining opportunity, Commander. Megaship in the system.",
     ]
 
     MEGASHIP_PP_REINFORCEMENT = [
@@ -200,6 +232,8 @@ class ExplorationPhrases:
         "Megaship signal. Reinforce — scan the megaship.",
         "Megaship in range — good target for reinforcement, Commander.",
         "There's our reinforcement opportunity. Megaship on sensors.",
+        "Megaship nearby. Scan its log uplink to reinforce.",
+        "Reinforcement opportunity, Commander. Megaship in the system.",
     ]
 
     MEGASHIP_PP_ACQUISITION = [
@@ -208,24 +242,35 @@ class ExplorationPhrases:
         "Megaship signal. Acquisition target — scan it.",
         "Megaship in range — good target for acquisition, Commander.",
         "There's our acquisition opportunity. Megaship on sensors.",
+        "Megaship nearby. Scan its log uplink for acquisition.",
+        "Acquisition opportunity, Commander. Megaship in the system.",
     ]
 
     CNB_PP_REINFORCEMENT = [
         "Compromised nav beacon. No security response — good reinforcement kills, Commander.",
         "Compromised beacon on sensors. Free-fire zone for reinforcement merits.",
         "Compromised nav beacon detected. Security's offline — hunt for reinforcement merits.",
+        "No patrols at this beacon, Commander. Reinforcement merits for the taking.",
+        "Compromised beacon ahead. Lawless space, good reinforcement hunting.",
+        "Compromised nav beacon. Watch your six, but the reinforcement merits are worth it.",
     ]
 
     CNB_PP_ACQUISITION = [
         "Compromised nav beacon. No security response — good acquisition kills, Commander.",
         "Compromised beacon on sensors. Free-fire zone for acquisition merits.",
         "Compromised nav beacon detected. Security's offline — hunt for acquisition merits.",
+        "No patrols at this beacon, Commander. Acquisition merits for the taking.",
+        "Compromised beacon ahead. Lawless space, good acquisition hunting.",
+        "Compromised nav beacon. Watch your six, but the acquisition merits are worth it.",
     ]
 
     CNB_PP_UNDERMINING = [
         "Compromised nav beacon. No security response — good undermining kills, Commander.",
         "Compromised beacon on sensors. Free-fire zone for undermining merits.",
         "Compromised nav beacon detected. Security's offline — hunt for undermining merits.",
+        "No patrols at this beacon, Commander. Undermining merits for the taking.",
+        "Compromised beacon ahead. Lawless space, good undermining hunting.",
+        "Compromised nav beacon. Watch your six, but the undermining merits are worth it.",
     ]
 
     CODEX_ENTRY = [
@@ -275,10 +320,14 @@ class ExplorationPhrases:
 
     @staticmethod
     def valuable_bodies_summary(count: int) -> str:
+        if count == 1:
+            return pick(ExplorationPhrases.VALUABLE_BODY_SINGLE)
         return pick(ExplorationPhrases.VALUABLE_BODIES_SUMMARY, count=count)
 
     @staticmethod
     def fss_complete(bodies: int) -> str:
+        if bodies == 1:
+            return pick(ExplorationPhrases.FSS_COMPLETE_SINGLE)
         return pick(ExplorationPhrases.FSS_COMPLETE, bodies=bodies)
 
     @staticmethod

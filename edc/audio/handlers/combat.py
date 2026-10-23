@@ -45,12 +45,12 @@ class CombatPhrases:
         "Incoming fire detected.",
         "Combat alert. Taking damage.",
         "We're being hit, Commander.",
-        "Shields down, taking fire.",
+        "Taking hits, Commander.",
         "Return fire or evade, your call, Commander.",
     ]
 
     KILL_BOND = [
-        "Kill bond awarded received. {credits} credits from {faction}.",
+        "Kill bond received. {credits} credits from {faction}.",
         "Combat bond from {faction}. {credits} credits received.",
         "{credits} credits received.",
         "That's {credits} credits from {faction}, well earned.",

@@ -29,12 +29,23 @@ class StatusPhrases:
         "Another one for {faction} — {credits} credits received.",
     ]
 
+    SYSTEMS_ONLINE = [
+        "All systems online.",
+        "All systems online. Ready when you are, Commander.",
+        "Systems check complete. Everything's green.",
+        "Ship computer online. All systems nominal.",
+        "Startup complete. Standing by, Commander.",
+        "Everything's up and running, Commander.",
+    ]
+
     SCAN_COMPLETE = [
         "External {scan_type} scan complete.",
         "External scan finished. {scan_type}.",
         "External {scan_type} scan done.",
         "{scan_type} scan wrapped up, Commander.",
         "That's the {scan_type} scan done.",
+        "{scan_type} scan complete, Commander.",
+        "Scan finished. {scan_type}.",
     ]
 
     @staticmethod
@@ -46,6 +57,10 @@ class StatusPhrases:
     def mission_complete(credits: int, faction: str) -> str:
         return pick(StatusPhrases.MISSION_COMPLETE,
                     credits=f"{credits:,}", faction=faction)
+
+    @staticmethod
+    def systems_online() -> str:
+        return pick(StatusPhrases.SYSTEMS_ONLINE)
 
     @staticmethod
     def scan_complete(scan_type: str = "") -> str:

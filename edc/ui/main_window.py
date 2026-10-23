@@ -4637,9 +4637,9 @@ class MainWindow(QMainWindow):
                     star_class = str(evt.get("StarClass") or "").strip().upper()
                     if star_class:
                         if star_class[0] in ("K", "G", "B", "F", "O", "A", "M"):
-                            parts.append("Next Start is Scoopable.")
+                            parts.append("Next star is scoopable.")
                         else:
-                            parts.append("Next Start is Not scoopable.")
+                            parts.append("Next star is not scoopable.")
                     return " ".join(parts)
                 return ""
 
@@ -5315,7 +5315,7 @@ class MainWindow(QMainWindow):
         if voice_enabled and not self._voice_ready:
             return
         self._online_announced = True
-        self.tts.speak("All systems online.", priority=5, volume_scale=self._feedback_tts_scale())
+        self.tts.speak(StatusPhrases.systems_online(), priority=5, volume_scale=self._feedback_tts_scale())
 
     def _on_journal_shutdown(self):
         """Game closed cleanly (journal Shutdown event). The app stays
