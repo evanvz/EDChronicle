@@ -68,7 +68,9 @@ class JournalShapeWatch:
         """A one-line note when `event` is a new event type or carries new
         top-level fields (then remembered, so each is reported once), else None."""
         shapes, name = self._shapes, event.get("event")
-        if shapes is None or not isinstance(name, str) or name.startswith("_"):
+        # "Status" is Status.json (edc.core.status_watcher), not the journal: its
+        # fields come and go with what you're doing (on a planet, in the SRV)
+        if shapes is None or not isinstance(name, str) or name.startswith("_") or name == "Status":
             return None
         known = shapes.get(name)
         if known is None:

@@ -75,6 +75,7 @@ def test_journal_shape_watch_flags_new_events_and_fields_once(tmp_path):
     assert watch.observe({"timestamp": "t", "event": "Bounty", "Unconfirmed": False}) is None   # once
     assert watch.observe({"event": "UnconfirmedBounty"}) == "New journal event: UnconfirmedBounty"
     assert watch.observe({"event": "_BootstrapEnd"}) is None                                    # app-internal
+    assert watch.observe({"event": "Status", "Altitude": 5}) is None                            # Status.json, not the journal
     again = JournalShapeWatch(tmp_path / "shapes.json")    # remembered across restarts
     assert again.observe({"event": "UnconfirmedBounty"}) is None
     again.start_baseline(str(jdir))                        # baseline exists: no rescan
