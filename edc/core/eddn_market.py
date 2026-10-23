@@ -391,7 +391,7 @@ def _write_buffers_inner(repo, coords, market, factions, stations, codex, fcmate
                 top = max(others, key=lambda f: f.get("Influence") if isinstance(f.get("Influence"), (int, float)) else -1,
                           default=None)
                 for f in others or [faction]:
-                    f = _decode_happiness({k: v for k, v in f.items() if k != "SystemFactions"})
+                    f = _decode_happiness({k: v for k, v in f.items() if k not in ("SystemFactions", "SystemConflicts")})
                     # EDDN carries no SystemFaction: the highest influence is taken as the controller
                     controlling = f.get("Name") == top.get("Name") if others else is_controlling
                     repo.save_faction_snapshot(

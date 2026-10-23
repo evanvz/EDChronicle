@@ -1768,6 +1768,58 @@ class MainWindow(QMainWindow):
         except Exception:
             log.exception("Failed to record PowerPlay merits")
 
+    @staticmethod
+    def _bgs_reading_key(factions, conflicts) -> tuple:
+        """What a BGS update changes: each faction's influence and states, and the
+        conflicts with their days won."""
+        names = lambda lst: tuple(sorted(s.get("State", "") for s in (lst or []) if isinstance(s, dict)))
+        fac = tuple(sorted((f.get("Name"), round(float(f.get("Influence") or 0), 4), f.get("FactionState"),
+                            names(f.get("ActiveStates")), names(f.get("PendingStates")))
+                           for f in factions if isinstance(f, dict)))
+        con = tuple(sorted((c.get("WarType"), c.get("Status"),
+                            (c.get("Faction1") or {}).get("Name"), (c.get("Faction1") or {}).get("WonDays"),
+                            (c.get("Faction2") or {}).get("Name"), (c.get("Faction2") or {}).get("WonDays"))
+                           for c in conflicts if isinstance(c, dict)))
+        return fac, con
+
+    def _on_eddn_current_system(self, system_address, system_name, sighting, _is_controlling, timestamp) -> None:
+        """Another player's EDDN upload of the system we're in: when it's newer than
+        our own reading and shows a change, the BGS update (tick) has reached the
+        system -- refresh the current-system view without waiting for our next jump.
+        Same rule as system ticks (edc.core.system_ticks): a change counts once a
+        second reading agrees, since stale uploads can show old values."""
+        if system_address != getattr(self.state, "system_address", None) or not isinstance(sighting, dict):
+            return
+        factions = [f for f in (sighting.get("SystemFactions") or []) if isinstance(f, dict) and f.get("Name")]
+        conflicts = sighting.get("SystemConflicts") or []
+        ts = str(timestamp or "")
+        if not factions or ts <= str(getattr(self.state, "factions_timestamp", "") or ""):
+            return
+        key = self._bgs_reading_key(factions, conflicts)
+        if key == self._bgs_reading_key(getattr(self.state, "factions", None) or [],
+                                        getattr(self.state, "system_conflicts", None) or []):
+            self._eddn_pending_reading = None
+            return
+        pending = self._eddn_pending_reading
+        if not pending or pending[0] != key or pending[1] == ts:
+            self._eddn_pending_reading = (key, ts)
+            return
+        self._eddn_pending_reading = None
+        # EDDN strips the player's own fields (SquadronFaction, MyReputation): keep ours
+        old = {f.get("Name"): f for f in (getattr(self.state, "factions", None) or []) if isinstance(f, dict)}
+        for f in factions:
+            for k in ("SquadronFaction", "MyReputation"):
+                if k in (old.get(f["Name"]) or {}) and k not in f:
+                    f[k] = old[f["Name"]][k]
+        self.state.factions = factions
+        self.state.system_conflicts = conflicts
+        self.state.factions_timestamp = ts
+        msg = f"BGS update: the tick has reached {system_name} (other players' EDDN uploads, {ts[11:16]} UTC)"
+        log.info(msg)
+        self._append(msg)
+        self._schedule_hud_refresh()
+        self._refresh_player_faction()
+
     def _record_faction_cz_kill(self, evt: dict) -> None:
         """state.last_cz_credit is a one-shot signal set by
         event_engine.py's _credit_cz_kill only when THIS FactionKillBond
@@ -3260,6 +3312,7 @@ class MainWindow(QMainWindow):
         self._tts_fss_complete_systems: set = set()  # system_address values already announced "FSS complete"
         self._tts_phenomena_announced: set = set()  # signal names already announced this system
         self._tts_megaship_announced: set = set()  # megaship keys already announced this system
+        self._eddn_pending_reading: tuple | None = None   # see _on_eddn_current_system
         self._tts_cnb_announced: set = set()  # compromised nav beacon keys already announced this system
         self._tts_ship_cooldown_until: float = 0.0  # monotonic timestamp
         self._tts_under_attack_cooldown_until: float = 0.0
@@ -3459,6 +3512,7 @@ class MainWindow(QMainWindow):
         self._eddn_worker.system_coords_seen.connect(self.eddn_market_cache.on_coords_seen)
         self._eddn_worker.commodity_seen.connect(self.eddn_market_cache.on_commodity_message)
         self._eddn_worker.faction_seen.connect(self.eddn_market_cache.on_faction_seen)
+        self._eddn_worker.faction_seen.connect(self._on_eddn_current_system)
         self._eddn_worker.station_seen.connect(self.eddn_market_cache.on_station_seen)
         self._eddn_worker.codex_entry_seen.connect(self.eddn_market_cache.on_codex_entry_seen)
         self._eddn_worker.fcmaterials_seen.connect(self.eddn_market_cache.on_fcmaterials_message)

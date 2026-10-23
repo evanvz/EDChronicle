@@ -439,6 +439,7 @@ class EddnPowerPlayWorker(QObject):
         # while Cameron's, from an earlier visit, still showed it pending)
         sighting = dict(target)
         sighting["SystemFactions"] = [dict(f) for f in factions if isinstance(f, dict) and f.get("Name")]
+        sighting["SystemConflicts"] = [dict(c) for c in (msg.get("Conflicts") or []) if isinstance(c, dict)]
         self.faction_seen.emit(system_address, star_system, sighting, is_controlling, timestamp)
 
     def _maybe_emit_faction_names(self, msg: dict, timestamp: str) -> None:
