@@ -4550,7 +4550,10 @@ class MainWindow(QMainWindow):
             tag_parts = []
             if "boom" in faction_tags:
                 tag_parts.append("HGE active")
-            if "war" in faction_tags:
+            # from the system's own Conflicts, not FactionState: the game shows a
+            # faction's war elsewhere as its state in every system (EUW "War" in the
+            # ICZ test systems, 2026-10-23, while only Arimavante had CZs)
+            if active_system_war(getattr(state, "system_conflicts", None)):
                 tag_parts.append("Combat Zones active")
             if "outbreak" in faction_tags:
                 tag_parts.append("HGE outbreak")
