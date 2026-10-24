@@ -170,6 +170,15 @@ def _stale_suffix(sys_rec: Dict[str, Any]) -> str:
 _GENERAL_BGS_HINT = "Also always helps: trade, missions & bounty vouchers at their stations."
 
 
+def _active_state_names(s: Dict[str, Any]) -> List[str]:
+    """This system's active states: its ActiveStates plus FactionState, except a
+    conflict FactionState, which is faction-wide (EUW "War" in every system from its
+    Arimavante war) -- a conflict here is in the system's own ActiveStates."""
+    fs = s.get("faction_state")
+    names = [fs] if fs and fs != "None" and fs.lower().replace(" ", "") not in ("war", "civilwar", "election") else []
+    return names + [st for st in _parse_states(s.get("active_states")) if st not in names]
+
+
 def _bgs_action_core(sys_rec: Dict[str, Any]) -> Tuple[str, str]:
     active = {s.lower() for s in _parse_states(sys_rec.get("active_states"))}
     pending = {s.lower() for s in _parse_states(sys_rec.get("pending_states"))}
@@ -1266,8 +1275,7 @@ class PlayerFactionPanel(QWidget):
         today = _utc_today()
 
         for s in systems:
-            active_names = [s.get("faction_state")] if s.get("faction_state") and s.get("faction_state") != "None" else []
-            active_names += [st for st in _parse_states(s.get("active_states")) if st not in active_names]
+            active_names = _active_state_names(s)
             active_lower = {n.lower() for n in active_names}
             pending_lower = {n.lower() for n in _parse_states(s.get("pending_states"))}
             system_address = s.get("system_address")
@@ -1391,8 +1399,7 @@ class PlayerFactionPanel(QWidget):
         )
         ctrl_item = QTableWidgetItem("★ Yes" if s.get("is_controlling") else "No")
 
-        active_names = [s.get("faction_state")] if s.get("faction_state") and s.get("faction_state") != "None" else []
-        active_names += [st for st in _parse_states(s.get("active_states")) if st not in active_names]
+        active_names = _active_state_names(s)
         active_item = QTableWidgetItem(", ".join(active_names) if active_names else "—")
 
         active_lower = {n.lower() for n in active_names}

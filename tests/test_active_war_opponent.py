@@ -149,3 +149,10 @@ def test_faction_wide_war_state_is_not_a_war_here(repo):
     preds = {p["faction_name"]: p for p in repo.get_all_faction_predictions_for_system(1)}
     assert preds["Elite United Worlds"]["active_war"] is None
     assert preds["Ekono Jet Public Holdings"]["active_war"]["faction_name"] == "Union Party of Wangai"
+
+
+def test_status_buckets_ignore_a_faction_wide_war_state():
+    from edc.ui.panels.player_faction_panel import _active_state_names
+    assert _active_state_names({"faction_state": "War", "active_states": None}) == []           # Ekono
+    assert _active_state_names({"faction_state": "War", "active_states": '[{"State": "War"}]'}) == ["War"]
+    assert _active_state_names({"faction_state": "Boom", "active_states": None}) == ["Boom"]
