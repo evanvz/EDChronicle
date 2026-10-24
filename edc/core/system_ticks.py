@@ -22,7 +22,9 @@ from typing import Dict, List, Optional, Tuple
 
 INFLUENCE_EPS = 0.0005   # below this the sources only differ in rounding
 _TRUSTED = ("journal", "edsm")
-PROPAGATION = timedelta(hours=12)   # a system can update up to 12 h after the tick (SINC BGS protocol)
+# a system can update up to 22 h after the tick: EDDataHub measured it on its EDDN
+# archive (ticks.py MAX_LAG); the SINC BGS protocol says 12 h
+PROPAGATION = timedelta(hours=22)
 
 
 def _minus_propagation(ts: str) -> str:
@@ -75,7 +77,7 @@ def infer_system_ticks(rows: List[tuple]) -> List[Dict[str, object]]:
 
 def _explained(st: dict, earlier: List[dict], global_ticks: List[str]) -> bool:
     """A global tick explains a change if it falls before "by" and no more than
-    12 h before "after" (the old reading may predate the system's update) --
+    22 h before "after" (the old reading may predate the system's update) --
     unless the system already changed after that tick: a tick moves a system
     once (ICZ RY-R b4-2 had updated for 10-21 03:49 by 10-21 15:48, so its
     next change was a new tick)."""
@@ -87,7 +89,7 @@ def _explained(st: dict, earlier: List[dict], global_ticks: List[str]) -> bool:
 def merge_ticks(global_ticks: List[str], system_ticks: List[Dict[str, object]]) -> Tuple[List[str], Dict[str, dict]]:
     """Global ticks plus confirmed system ticks that no global tick explains,
     placed at "by" (the first reading that shows the change). A global tick
-    explains a change if it falls before "by" and no more than 12 h before
+    explains a change if it falls before "by" and no more than 22 h before
     "after" -- the old reading may simply predate the system's update (see _explained).
     Returns (sorted tick times, {added time: the system tick})."""
     added: Dict[str, dict] = {}

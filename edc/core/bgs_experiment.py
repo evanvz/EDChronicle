@@ -21,7 +21,7 @@ from edc.core.bgs_points import bucket_points, ceiling, total_points
 
 # A system can take up to 12 hours after the detected tick to update (SINC BGS
 # experiment protocol, vanderaj/edbgs-science; seen at VE-Q and Ekono 2026-10).
-PROPAGATION_HOURS = 12
+PROPAGATION_HOURS = 22   # EDDataHub measured up to 22 h (edc.core.system_ticks.PROPAGATION)
 
 
 def _settled(tick: str) -> str:
@@ -103,14 +103,14 @@ def build_rows(ticks: List[str], readings: List[tuple], effort_for: Callable[[st
         late = next((r for r in readings if r[0] >= end), None) if end is not None and after is None else None
         rows[-1]["late_after"] = None if late is None or before is None else (
             late[1], sum(1 for t in ticks if end <= t <= late[0]), (late[1] - before) * 100)
-        # A reading under 12 h after its tick may still be the old level (propagation):
+        # A reading under 22 h after its tick may still be the old level (propagation):
         # the row's numbers are provisional until a later reading confirms them.
         # A tick inferred from the system's own readings sits AT the reading that shows
         # the change, so that reading is post-tick by definition, not provisional.
         rows[-1]["provisional"] = bool((during and start not in (inferred or {}) and during[0] < _settled(start))
                                        or (after and end is not None and end not in (inferred or {})
                                            and after[0] < _settled(end)))
-        # Once propagation has had its 12 h, influence should hold until the next tick;
+        # Once propagation has had its 22 h, influence should hold until the next tick;
         # differing settled readings mean an update tick.edcd.io didn't list.
         inside = {round(r[1], 4) for r in readings if r[0] >= _settled(start) and (end is None or r[0] < end)}
         rows[-1]["unlisted_update"] = len(inside) > 1

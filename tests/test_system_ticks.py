@@ -161,7 +161,7 @@ def test_missed_tick_found_by_sampling_systems_after_the_app_was_closed(tmp_path
     from persistence.schema import SCHEMA_SQL
     db = Database(tmp_path / "t.db"); db.executescript(SCHEMA_SQL); db.run_migrations()
     repo = Repository(db)
-    repo.record_bgs_tick("2026-10-19T16:26:44Z", source="eddn")
+    repo.record_bgs_tick("2026-10-19T06:00:00Z", source="eddn")
     for addr in (1, 2, 3, 4):
         repo.save_system_name_if_missing(addr, f"S{addr}")
         repo.save_faction_snapshot(addr, {"Name": "F", "Influence": 0.30}, "2026-10-20", True,
