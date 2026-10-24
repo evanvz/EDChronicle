@@ -53,6 +53,11 @@ MIN_GAP = timedelta(hours=12)       # real ticks came 16-19 h apart (2026-10-20/
 MAX_LAG = timedelta(minutes=30)     # ignore messages older than this (replayed journals)
 FORGET = timedelta(hours=48)        # drop systems not seen for this long
 SAVE_EVERY = timedelta(minutes=15)
+# Readings from before the app was closed longer than this aren't compared with:
+# whatever changed while it was off would look like a burst at the restart and be
+# dated then (fired 06:25 UTC on 2026-10-24 after 7 h offline). A tick in such a
+# gap is found from system readings instead (edc.core.system_ticks).
+MAX_OFFLINE = timedelta(hours=1)
 # A real tick is a wave: systems update over the next hours (up to 12 h, SINC
 # BGS protocol), so the share stays raised. A post-restart blip doesn't.
 WAVE_HOURS = 12
@@ -91,6 +96,8 @@ class TickDetector:
         self._saved_at: Optional[datetime] = None
         self._peak: Tuple[float, int, int, str] = (0.0, 0, 0, "")   # diagnostics, see snapshot()
         self._wave: Optional[dict] = None       # {"tick", "base"} of the last firing, until judged
+        self._offline_from: Optional[datetime] = None   # newest reading before the app was closed
+        self._resumed_at: Optional[datetime] = None
         self._confirmed: Optional[str] = None   # a tick the wave confirmed, for pop_confirmed()
         self._last_rates: Tuple[float, Optional[float]] = (0.0, None)
 
@@ -112,6 +119,7 @@ class TickDetector:
             self._hours = {_parse(h): (set(c), set(ch)) for h, (c, ch) in data["hours"].items()}
             if data.get("wave"):
                 self._wave = {"tick": _parse(data["wave"]["tick"]), "base": data["wave"]["base"]}
+            self._offline_from = max((h[-1][0] for h in self._history.values() if h), default=None)
             log.info("Tick detector: reloaded %d systems, %d hours", len(self._history), len(self._hours))
         except FileNotFoundError:
             pass
@@ -205,9 +213,15 @@ class TickDetector:
             self.save(now)
         if self._wave and self._seen % 200 == 0:
             self._judge_wave(ts)
+        if self._offline_from and self._resumed_at is None:
+            self._resumed_at = ts
+        stale_before = (self._offline_from if self._offline_from and self._resumed_at
+                        and self._resumed_at - self._offline_from > MAX_OFFLINE else None)
         hist = self._history.setdefault(system_address, deque())
-        # the settled reference: the newest reading at least REFERENCE_AGE old
-        ref = next((lv for t, lv in reversed(hist) if ts - t >= REFERENCE_AGE), None)
+        # the settled reference: the newest reading at least REFERENCE_AGE old, not
+        # from before a long offline gap
+        ref = next((lv for t, lv in reversed(hist)
+                    if ts - t >= REFERENCE_AGE and (stale_before is None or t > stale_before)), None)
         hist.append((ts, levels))
         while len(hist) > 2 and ts - hist[1][0] >= REFERENCE_AGE:
             hist.popleft()          # keep one reading older than the reference age, drop the rest

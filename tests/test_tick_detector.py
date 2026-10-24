@@ -124,3 +124,14 @@ def test_a_blip_without_a_wave_stays_unconfirmed():
     assert _hours(det, 8, 9, lambda a, h: 0.55 if a % 3 == 0 else 0.5)
     _hours(det, 9, 23, lambda a, h: 0.55 if a % 3 == 0 else 0.5)          # nothing more changes
     assert det.pop_confirmed() is None and det._wave is None              # judged, left unconfirmed
+
+
+def test_no_tick_from_changes_made_while_the_app_was_closed(tmp_path):
+    """2026-10-24: app closed 23:12-06:21 UTC; on restart everything that changed
+    overnight looked like a burst and was dated 06:25."""
+    path = tmp_path / "state.json.gz"
+    det = TickDetector(last_tick="2026-10-21T03:49:58Z", state_path=path)
+    _hours(det, 0, 8, lambda a, h: 0.5)
+    det.save(T0 + timedelta(hours=8))
+    again = TickDetector(last_tick="2026-10-21T03:49:58Z", state_path=path)       # back 7 h later
+    assert _hours(again, 15, 16, lambda a, h: 0.55 if a % 3 == 0 else 0.5) == []   # changed overnight
