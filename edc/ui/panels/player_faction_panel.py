@@ -175,7 +175,9 @@ def _bgs_action_core(sys_rec: Dict[str, Any]) -> Tuple[str, str]:
     pending = {s.lower() for s in _parse_states(sys_rec.get("pending_states"))}
     recovering = {s.lower() for s in _parse_states(sys_rec.get("recovering_states"))}
     faction_state = (sys_rec.get("faction_state") or "").strip().lower()
-    if faction_state:
+    # a conflict FactionState is faction-wide (its war elsewhere); this system's own
+    # conflicts are in its ActiveStates
+    if faction_state and faction_state not in ("war", "civilwar", "civil war", "election"):
         active.add(faction_state)
     is_controlling = bool(sys_rec.get("is_controlling"))
 
@@ -2333,7 +2335,7 @@ class _FactionHistoryDialog(QDialog):
         latest_tracked = max(tracked_rows, key=lambda h: h.get("snapshot_date") or "", default=None)
         tracked_state = (latest_tracked.get("faction_state") or "").strip().lower() if latest_tracked else ""
         tracked_active = {s.lower() for s in _parse_states(latest_tracked.get("active_states"))} if latest_tracked else set()
-        state_suggests_war = tracked_state in ("war", "civilwar") or bool(tracked_active & {"war", "civilwar"})
+        state_suggests_war = bool(tracked_active & {"war", "civilwar"})   # FactionState is faction-wide
 
         parts = []
         if bgs_status is not None:

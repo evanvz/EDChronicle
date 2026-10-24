@@ -124,13 +124,20 @@ def _parse_states(raw) -> List[str]:
     ]
 
 
+_CONFLICT_STATES = {"war", "civilwar", "civil war", "election"}
+
+
 def _row_has_state(faction_state, active_states, state_names: set) -> bool:
     """True if a faction_snapshots row's own faction_state or active_states
     contains any of state_names -- mirrors player_faction_panel.py's
     _bgs_action_core() state checks, duplicated as logic (not imported)
     for the same layering reason as _parse_states() above."""
     states = {s.lower() for s in _parse_states(active_states)}
-    if isinstance(faction_state, str) and faction_state.strip():
+    # FactionState is faction-wide for conflicts: the game shows a faction's war
+    # elsewhere as its state in every system (EUW "War" in Ekono, 2026-10-24, from its
+    # Arimavante war) -- a conflict here shows in this system's ActiveStates
+    if (isinstance(faction_state, str) and faction_state.strip()
+            and faction_state.strip().lower() not in _CONFLICT_STATES):
         states.add(faction_state.strip().lower())
     return bool(states & state_names)
 

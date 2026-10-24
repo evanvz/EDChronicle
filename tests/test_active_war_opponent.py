@@ -33,6 +33,8 @@ def _faction(name, influence, faction_state=None, active_states=None):
     f = {"Name": name, "Influence": influence, "Government": "Democracy", "Allegiance": "Federation"}
     if faction_state is not None:
         f["FactionState"] = faction_state
+        if faction_state in ("War", "CivilWar", "Election") and active_states is None:
+            f["ActiveStates"] = [{"State": faction_state}]   # a conflict here also shows in ActiveStates
     if active_states is not None:
         f["ActiveStates"] = active_states
     return f
@@ -134,3 +136,16 @@ def test_forecast_falls_through_to_conflict_risk_when_not_at_war():
     text, color = _format_forecast(prediction)
     assert text == "⚔ Conflict risk vs Close Rival (Δ3.0%)"
     assert color == "#FFB347"
+
+
+def test_faction_wide_war_state_is_not_a_war_here(repo):
+    """Ekono 2026-10-24: EUW's FactionState read "War" (its Arimavante war) with no
+    War in its ActiveStates, while Ekono Jet Public Holdings fought Union Party of
+    Wangai -- EUW was shown at war with Ekono Jet Public Holdings."""
+    f = _faction("Elite United Worlds", 0.6373, faction_state="War", active_states=[])
+    _save(repo, 1, f)
+    _save(repo, 1, _faction("Ekono Jet Public Holdings", 0.0773, faction_state="War"))
+    _save(repo, 1, _faction("Union Party of Wangai", 0.0773, faction_state="War"))
+    preds = {p["faction_name"]: p for p in repo.get_all_faction_predictions_for_system(1)}
+    assert preds["Elite United Worlds"]["active_war"] is None
+    assert preds["Ekono Jet Public Holdings"]["active_war"]["faction_name"] == "Union Party of Wangai"

@@ -31,6 +31,8 @@ def _faction(name, influence, faction_state=None, active_states=None):
     f = {"Name": name, "Influence": influence, "Government": "Democracy", "Allegiance": "Federation"}
     if faction_state is not None:
         f["FactionState"] = faction_state
+        if faction_state in ("War", "CivilWar", "Election") and active_states is None:
+            f["ActiveStates"] = [{"State": faction_state}]   # a conflict here also shows in ActiveStates
     if active_states is not None:
         f["ActiveStates"] = active_states
     return f

@@ -31,6 +31,8 @@ def _faction(name, influence=0.5, faction_state="None", squadron=False):
     f = {"Name": name, "Influence": influence, "Government": "Democracy", "Allegiance": "Federation"}
     if faction_state != "None":
         f["FactionState"] = faction_state
+        if faction_state in ("War", "CivilWar", "Election"):    # a conflict here also shows in ActiveStates
+            f["ActiveStates"] = [{"State": faction_state}]
     if squadron:
         f["SquadronFaction"] = True
     return f
@@ -93,7 +95,7 @@ def test_get_player_faction_system_status_also_attaches_corroboration(tmp_path):
 
 
 def test_bgs_action_core_downgrades_uncorroborated_war():
-    sys_rec = {"faction_state": "War", "war_corroborated": False, "is_controlling": True}
+    sys_rec = {"faction_state": "War", "active_states": '[{"State": "War"}]', "war_corroborated": False, "is_controlling": True}
     text, color = _bgs_action_core(sys_rec)
     assert "no opposing faction confirmed" in text
     assert color == "#FFB347"
@@ -107,7 +109,7 @@ def test_bgs_action_core_quantifies_staleness_from_data_timestamp():
     from datetime import datetime, timedelta, timezone
     stale_date = (datetime.now(timezone.utc).date() - timedelta(days=18)).isoformat() + "T00:00:00Z"
     sys_rec = {
-        "faction_state": "War", "war_corroborated": False, "is_controlling": True,
+        "faction_state": "War", "active_states": '[{"State": "War"}]', "war_corroborated": False, "is_controlling": True,
         "data_timestamp": stale_date,
     }
     text, _color = _bgs_action_core(sys_rec)
@@ -116,13 +118,13 @@ def test_bgs_action_core_quantifies_staleness_from_data_timestamp():
 
 
 def test_bgs_action_core_falls_back_to_generic_phrasing_without_a_timestamp():
-    sys_rec = {"faction_state": "War", "war_corroborated": False, "is_controlling": True}
+    sys_rec = {"faction_state": "War", "active_states": '[{"State": "War"}]', "war_corroborated": False, "is_controlling": True}
     text, _color = _bgs_action_core(sys_rec)
     assert "may be stale EDSM data" in text
 
 
 def test_bgs_action_core_keeps_full_message_when_corroborated():
-    sys_rec = {"faction_state": "War", "war_corroborated": True, "is_controlling": True}
+    sys_rec = {"faction_state": "War", "active_states": '[{"State": "War"}]', "war_corroborated": True, "is_controlling": True}
     text, color = _bgs_action_core(sys_rec)
     assert text.startswith("⚔ War/Civil War active")
     assert color == "#FF6B6B"
@@ -132,7 +134,7 @@ def test_bgs_action_core_defaults_to_full_message_when_field_absent():
     # A caller that never attached war_corroborated (e.g. an older code
     # path) must not be silently downgraded -- only an explicit False
     # (checked-and-not-found) triggers the caveat.
-    sys_rec = {"faction_state": "War", "is_controlling": True}
+    sys_rec = {"faction_state": "War", "active_states": '[{"State": "War"}]', "is_controlling": True}
     text, color = _bgs_action_core(sys_rec)
     assert text.startswith("⚔ War/Civil War active")
 
@@ -186,14 +188,14 @@ def test_war_and_election_corroboration_are_independent(tmp_path):
 
 
 def test_bgs_action_core_downgrades_uncorroborated_election():
-    sys_rec = {"faction_state": "Election", "election_corroborated": False, "is_controlling": True}
+    sys_rec = {"faction_state": "Election", "active_states": '[{"State": "Election"}]', "election_corroborated": False, "is_controlling": True}
     text, color = _bgs_action_core(sys_rec)
     assert "no contesting faction confirmed" in text
     assert color == "#FFB347"
 
 
 def test_bgs_action_core_keeps_full_election_message_when_corroborated():
-    sys_rec = {"faction_state": "Election", "election_corroborated": True, "is_controlling": True}
+    sys_rec = {"faction_state": "Election", "active_states": '[{"State": "Election"}]', "election_corroborated": True, "is_controlling": True}
     text, color = _bgs_action_core(sys_rec)
     assert text.startswith("🗳 Election in progress")
     assert color == "#FFD93D"
