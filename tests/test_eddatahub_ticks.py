@@ -55,3 +55,20 @@ def test_status_bar_and_own_detection_follow_the_hub():
     assert "#888888" in hub_style["s"] and "#555555" not in own_style["s"]
     MainWindow._on_eddn_tick_detected(win, "2026-10-24T06:25:08Z")
     assert recorded                                                              # fallback in use
+
+
+def test_hub_is_opt_in_and_odd_answers_are_rejected():
+    from datetime import datetime, timedelta, timezone
+    from edc.config import AppConfig
+    assert AppConfig().eddatahub_url == ""                                     # public installs: off
+    now = datetime.now(timezone.utc)
+    resp = mock.Mock()
+    resp.raise_for_status.return_value = None
+    resp.json.return_value = [{"tick": (now - timedelta(days=1)).isoformat()},
+                              {"tick": (now + timedelta(days=1)).isoformat()},   # future: dropped
+                              {"tick": (now - timedelta(days=90)).isoformat()}]  # outside the window: dropped
+    with mock.patch.object(eddatahub_client.requests, "get", return_value=resp):
+        assert len(eddatahub_client.fetch_ticks("http://hub:8080")) == 1
+    resp.json.return_value = [{"tick": now.isoformat()}] * 500                   # flood
+    with mock.patch.object(eddatahub_client.requests, "get", return_value=resp):
+        assert eddatahub_client.fetch_ticks("http://hub:8080") is None

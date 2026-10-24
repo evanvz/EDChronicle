@@ -49,8 +49,10 @@ class AppConfig:
     push_to_talk_key: str = "f9"
     always_on_top: bool = False
     eddn_contribute_enabled: bool = True
-    # the squadron's EDDataHub service (BGS ticks); "" turns it off
-    eddatahub_url: str = "http://172.16.10.197:8080"
+    # the squadron's EDDataHub service (BGS ticks), e.g. http://172.16.10.197:8080.
+    # Opt-in: empty by default, so a public install never trusts whatever answers on
+    # a LAN address (it would replace and silence the app's own tick detection).
+    eddatahub_url: str = ""
     market_search_radius_ly: int = 100
     last_market_prune_date: Optional[str] = None
     search_indexes_ensured: bool = False
@@ -204,7 +206,7 @@ class ConfigStore:
                 push_to_talk_key=str(data.get("push_to_talk_key", "f9") or "f9"),
                 always_on_top=bool(data.get("always_on_top", False)),
                 eddn_contribute_enabled=bool(data.get("eddn_contribute_enabled", True)),
-                eddatahub_url=str(data.get("eddatahub_url", "http://172.16.10.197:8080") or ""),
+                eddatahub_url=str(data.get("eddatahub_url", "") or ""),
                 market_search_radius_ly=int(data.get("market_search_radius_ly", 100) or 100),
                 last_market_prune_date=data.get("last_market_prune_date"),
                 search_indexes_ensured=bool(data.get("search_indexes_ensured", False)),

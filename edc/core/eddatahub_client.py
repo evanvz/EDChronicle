@@ -11,7 +11,7 @@ nothing of ours is sent to it."""
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 import requests
@@ -20,8 +20,8 @@ from edc.version import USER_AGENT
 
 log = logging.getLogger(__name__)
 
-DEFAULT_URL = "http://172.16.10.197:8080"
 _TIMEOUT = 8
+_MAX_TICKS = 100          # a 14-day answer holds ~15; more means a wrong or hostile answer
 
 
 def fetch_ticks(base_url: str, days: int = 14) -> Optional[List[str]]:
@@ -35,10 +35,15 @@ def fetch_ticks(base_url: str, days: int = 14) -> Optional[List[str]]:
                             headers={"User-Agent": USER_AGENT}, timeout=_TIMEOUT)
         resp.raise_for_status()
         rows = resp.json()
+        if not isinstance(rows, list) or len(rows) > _MAX_TICKS:
+            raise ValueError("not a tick list")
+        now = datetime.now(timezone.utc)
         out = []
         for r in rows:
             t = datetime.fromisoformat(str(r["tick"]).replace("Z", "+00:00")).astimezone(timezone.utc)
-            out.append(t.strftime("%Y-%m-%dT%H:%M:%SZ"))
+            # only ticks inside the window asked for: nothing future-dated or ancient
+            if now - timedelta(days=days + 1) <= t <= now + timedelta(minutes=5):
+                out.append(t.strftime("%Y-%m-%dT%H:%M:%SZ"))
         return out
     except Exception as exc:
         log.info("EDDataHub not reachable (%s) -- using the app's own tick detection", exc)
