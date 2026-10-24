@@ -72,3 +72,32 @@ def test_hub_is_opt_in_and_odd_answers_are_rejected():
     resp.json.return_value = [{"tick": now.isoformat()}] * 500                   # flood
     with mock.patch.object(eddatahub_client.requests, "get", return_value=resp):
         assert eddatahub_client.fetch_ticks("http://hub:8080") is None
+
+
+def test_system_ticks_from_the_hub_settle_readings(tmp_path):
+    """VE-Q: a reading 5 h after the tick is provisional under the 22 h allowance,
+    but settled once EDDataHub says the tick showed in its reports at 4 h."""
+    from edc.core.bgs_experiment import build_rows
+    from persistence.database import Database
+    from persistence.repository import Repository
+    from persistence.schema import SCHEMA_SQL
+    resp = mock.Mock()
+    resp.raise_for_status.return_value = None
+    resp.json.return_value = [{"system": 7, "tick": "2026-10-23T16:10:36+00:00", "last_before": "2026-10-23T15:00:00+00:00",
+                               "first_after": "2026-10-23T20:00:00+00:00", "status": "seen"},
+                              {"system": 99, "tick": "2026-10-23T16:10:36+00:00", "last_before": "2026-10-23T15:00:00+00:00",
+                               "first_after": "2026-10-23T20:00:00+00:00", "status": "seen"}]   # not asked for
+    with mock.patch.object(eddatahub_client.requests, "get", return_value=resp):
+        rows = eddatahub_client.fetch_system_ticks("http://hub:8080", [7])
+    assert rows == [(7, "2026-10-23T16:10:36Z", "2026-10-23T15:00:00Z", "2026-10-23T20:00:00Z", "seen")]
+    db = Database(tmp_path / "t.db"); db.executescript(SCHEMA_SQL); db.run_migrations()
+    repo = Repository(db)
+    repo.save_hub_system_ticks(rows)
+    reached = repo.get_hub_system_ticks(7)
+    assert reached == {"2026-10-23T16:10:36Z": "2026-10-23T20:00:00Z"}
+    effort = lambda s, e: {"tier_score": 0, "bounties": 0, "trade_profit": 0, "exploration": 0}
+    readings = [("2026-10-23T21:00:00Z", 0.6438, None, None)]
+    ticks = ["2026-10-23T16:10:36Z"]
+    assert build_rows(ticks, readings, effort, now="2026-10-23T22:00:00Z")[0]["provisional"]
+    assert not build_rows(ticks, readings, effort, now="2026-10-23T22:00:00Z", reached=reached)[0]["provisional"]
+    db.close()

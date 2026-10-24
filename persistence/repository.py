@@ -2955,6 +2955,18 @@ class Repository:
                 for r in self.db.conn.execute(
                     "SELECT tick_at, source, upper, confirmed FROM bgs_ticks ORDER BY tick_at DESC LIMIT ?", (limit,))]
 
+    def save_hub_system_ticks(self, rows) -> None:
+        """[(system address, tick, last_before, first_after, status)] from EDDataHub."""
+        with self.db.deferred_commit():
+            for r in rows:
+                self.db.execute("INSERT OR REPLACE INTO hub_system_ticks (system_address, tick_at, last_before, "
+                                "first_after, status) VALUES (?, ?, ?, ?, ?)", tuple(r))
+
+    def get_hub_system_ticks(self, system_address: int) -> dict:
+        """{tick: first_after} for one system -- when each tick showed in its reports."""
+        return dict(self.db.conn.execute("SELECT tick_at, first_after FROM hub_system_ticks WHERE system_address = ?",
+                                         (system_address,)).fetchall())
+
     def confirm_bgs_tick(self, tick_at: str) -> None:
         self.db.execute("UPDATE bgs_ticks SET confirmed = 1 WHERE tick_at = ?", (tick_at,))
 

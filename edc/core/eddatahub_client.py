@@ -48,3 +48,31 @@ def fetch_ticks(base_url: str, days: int = 14) -> Optional[List[str]]:
     except Exception as exc:
         log.info("EDDataHub not reachable (%s) -- using the app's own tick detection", exc)
         return None
+
+
+def _z(value) -> str:
+    return datetime.fromisoformat(str(value).replace("Z", "+00:00")).astimezone(timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ")
+
+
+def fetch_system_ticks(base_url: str, addresses: List[int], days: int = 14) -> Optional[List[tuple]]:
+    """When each tick reached these systems: [(system address, tick, last_before,
+    first_after, status)] -- first_after is the first report with the tick's values.
+    None when the hub isn't reachable or answers wrongly."""
+    ids = [a for a in addresses if isinstance(a, int)][:50]
+    if not base_url or not ids:
+        return None
+    try:
+        resp = requests.get(f"{base_url.rstrip('/')}/api/system-ticks",
+                            params={"ids": ",".join(map(str, ids)), "days": days},
+                            headers={"User-Agent": USER_AGENT}, timeout=_TIMEOUT)
+        resp.raise_for_status()
+        rows = resp.json()
+        if not isinstance(rows, list) or len(rows) > len(ids) * (days + 2):
+            raise ValueError("not a system tick list")
+        wanted = set(ids)
+        return [(r["system"], _z(r["tick"]), _z(r["last_before"]), _z(r["first_after"]), str(r["status"]))
+                for r in rows if r.get("system") in wanted]
+    except Exception as exc:
+        log.info("EDDataHub system ticks not available (%s)", exc)
+        return None

@@ -19,8 +19,8 @@ from typing import Callable, List, Optional
 
 from edc.core.bgs_points import bucket_points, ceiling, total_points
 
-# A system can take up to 12 hours after the detected tick to update (SINC BGS
-# experiment protocol, vanderaj/edbgs-science; seen at VE-Q and Ekono 2026-10).
+# A system can take up to 22 hours after the tick to update (EDDataHub's
+# measurement; the SINC BGS protocol said 12).
 PROPAGATION_HOURS = 22   # EDDataHub measured up to 22 h (edc.core.system_ticks.PROPAGATION)
 
 
@@ -43,7 +43,8 @@ def _states(active: Optional[str], pending: Optional[str]) -> str:
 def build_rows(ticks: List[str], readings: List[tuple], effort_for: Callable[[str, str], dict],
                now: Optional[str] = None, visits: Optional[List[tuple]] = None,
                faction_readings: Optional[dict] = None, faction: str = "",
-               population: Optional[int] = None, inferred: Optional[dict] = None) -> List[dict]:
+               population: Optional[int] = None, inferred: Optional[dict] = None,
+               reached: Optional[dict] = None) -> List[dict]:
     """ticks: tick times oldest first (...Z); readings: (observed_at, influence,
     active_states, pending_states) oldest first; effort_for(start, end) -> the
     activity dict for that window. Newest window first; the last one is still
@@ -56,6 +57,9 @@ def build_rows(ticks: List[str], readings: List[tuple], effort_for: Callable[[st
     than `faction` gaining over the tick means someone worked for it.
     inferred = {tick time: system tick} for ticks that came from the system's
     own readings (edc.core.system_ticks.merge_ticks), not a global source."""
+    # reached = {tick time: first reading of this system with that tick's values}, from
+    # EDDataHub (/api/system-ticks): readings from then on are settled; else allow 22 h
+    settled = lambda t: (reached or {}).get(t) or _settled(t)
     rows = []
     bounds = list(ticks) + [None]
     visits = visits or []
@@ -107,12 +111,12 @@ def build_rows(ticks: List[str], readings: List[tuple], effort_for: Callable[[st
         # the row's numbers are provisional until a later reading confirms them.
         # A tick inferred from the system's own readings sits AT the reading that shows
         # the change, so that reading is post-tick by definition, not provisional.
-        rows[-1]["provisional"] = bool((during and start not in (inferred or {}) and during[0] < _settled(start))
+        rows[-1]["provisional"] = bool((during and start not in (inferred or {}) and during[0] < settled(start))
                                        or (after and end is not None and end not in (inferred or {})
-                                           and after[0] < _settled(end)))
+                                           and after[0] < settled(end)))
         # Once propagation has had its 22 h, influence should hold until the next tick;
         # differing settled readings mean an update tick.edcd.io didn't list.
-        inside = {round(r[1], 4) for r in readings if r[0] >= _settled(start) and (end is None or r[0] < end)}
+        inside = {round(r[1], 4) for r in readings if r[0] >= settled(start) and (end is None or r[0] < end)}
         rows[-1]["unlisted_update"] = len(inside) > 1
         st = (inferred or {}).get(start)
         rows[-1]["inferred_from"] = (st["after"], st["by"]) if st else None

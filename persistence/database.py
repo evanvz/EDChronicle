@@ -480,6 +480,16 @@ class Database:
             # a tick from our EDDN detector stays unconfirmed until a system's own
             # readings show a change it explains (edc.core.system_ticks.confirm_ticks)
             "ALTER TABLE bgs_ticks ADD COLUMN confirmed INTEGER",
+            # EDDataHub's placement of each tick per system (/api/system-ticks):
+            # first_after = the first report with the tick's values
+            """CREATE TABLE IF NOT EXISTS hub_system_ticks (
+                system_address INTEGER NOT NULL,
+                tick_at        TEXT    NOT NULL,
+                last_before    TEXT,
+                first_after    TEXT,
+                status         TEXT,
+                PRIMARY KEY (system_address, tick_at)
+            )""",
             # Jumps/dockings in BGS test systems: any commander's (source 'eddn') and
             # our own (source 'journal', same event timestamps as our EDDN uploads),
             # so the Experiment Log can count other visitors per tick window.

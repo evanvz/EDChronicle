@@ -913,6 +913,14 @@ class _BgsTickCheckWorker(QObject):
                     repo.record_bgs_tick(result)
                 for t in hub_ticks or []:
                     repo.record_bgs_tick(t, source="hub")
+                if self.hub_ok:
+                    # when each tick reached the BGS experiment systems (Experiment Log)
+                    from edc.core.eddatahub_client import fetch_system_ticks
+                    names = repo.get_experiment_systems()
+                    addrs = list(repo.get_system_addresses_for_names(names).values()) if names else []
+                    placed = fetch_system_ticks(self._hub_url, addrs)
+                    if placed:
+                        repo.save_hub_system_ticks(placed)
                 # a tick nobody listed but several monitored systems' own readings show --
                 # not needed while EDDataHub (24/7, whole EDDN archive) supplies the ticks
                 found = None if self.hub_ok else promote_missed_ticks(repo)
