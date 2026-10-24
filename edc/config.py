@@ -49,6 +49,8 @@ class AppConfig:
     push_to_talk_key: str = "f9"
     always_on_top: bool = False
     eddn_contribute_enabled: bool = True
+    # the squadron's EDDataHub service (BGS ticks); "" turns it off
+    eddatahub_url: str = "http://172.16.10.197:8080"
     market_search_radius_ly: int = 100
     last_market_prune_date: Optional[str] = None
     search_indexes_ensured: bool = False
@@ -202,6 +204,7 @@ class ConfigStore:
                 push_to_talk_key=str(data.get("push_to_talk_key", "f9") or "f9"),
                 always_on_top=bool(data.get("always_on_top", False)),
                 eddn_contribute_enabled=bool(data.get("eddn_contribute_enabled", True)),
+                eddatahub_url=str(data.get("eddatahub_url", "http://172.16.10.197:8080") or ""),
                 market_search_radius_ly=int(data.get("market_search_radius_ly", 100) or 100),
                 last_market_prune_date=data.get("last_market_prune_date"),
                 search_indexes_ensured=bool(data.get("search_indexes_ensured", False)),
@@ -246,6 +249,7 @@ class ConfigStore:
                         "push_to_talk_key": str(getattr(cfg, "push_to_talk_key", "f9") or "f9"),
                         "always_on_top": bool(getattr(cfg, "always_on_top", False)),
                         "eddn_contribute_enabled": bool(getattr(cfg, "eddn_contribute_enabled", True)),
+                        "eddatahub_url": str(getattr(cfg, "eddatahub_url", "") or ""),
                         "market_search_radius_ly": int(getattr(cfg, "market_search_radius_ly", 100) or 100),
                         "last_market_prune_date": getattr(cfg, "last_market_prune_date", None),
                         "search_indexes_ensured": bool(getattr(cfg, "search_indexes_ensured", False)),

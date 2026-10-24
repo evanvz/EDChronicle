@@ -219,7 +219,8 @@ def tick_label(info: Optional[dict]) -> str:
         return (f"Last tick: between {short(info['at'])} and {short(info['upper'])} UTC — seen in several "
                 f"systems' own influence changes (tick.edcd.io didn't list it); activity in that range may "
                 f"count for either tick")
-    how = {"eddn": "our EDDN detector, ±1 h", "edcd": "tick.edcd.io"}.get(info.get("source"), "tick.edcd.io")
+    how = {"eddn": "our EDDN detector, ±1 h", "edcd": "tick.edcd.io", "hub": "EDDataHub"}.get(
+        info.get("source"), "tick.edcd.io")
     if info.get("confirmed") is False:
         how += "; unconfirmed until a system's readings show it"
     return f"Last tick: {short(info['at'])} UTC ({how})"

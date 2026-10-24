@@ -2915,7 +2915,8 @@ class Repository:
     def record_bgs_tick(self, tick_iso: str, source: str = "edcd", upper: Optional[str] = None) -> None:
         """Stores a detected tick, normalised to %Y-%m-%dT%H:%M:%SZ (tick.edcd.io
         sends +00:00; activity timestamps use Z, and these are compared as strings).
-        Sources: 'edcd' tick.edcd.io; 'eddn' our EDDN burst detector; 'systems' a tick
+        Sources: 'edcd' tick.edcd.io; 'hub' EDDataHub (our LAN service: tick.edcd.io or
+        inferred from its EDDN archive); 'eddn' our EDDN burst detector; 'systems' a tick
         several systems' own readings show that nobody listed, known only as the range
         tick_at..upper (edc.core.system_ticks.promote_missed_ticks)."""
         dt = datetime.fromisoformat(tick_iso.replace("Z", "+00:00")).astimezone(timezone.utc)
@@ -2941,9 +2942,10 @@ class Repository:
         if near is None:
             self.db.execute("INSERT OR IGNORE INTO bgs_ticks (tick_at, source, upper, confirmed) VALUES (?, ?, ?, ?)",
                             (at, source, upper, 0 if source == "eddn" else 1))
-        elif source == "edcd" and near[1] in ("eddn", "systems"):
-            self.db.execute("UPDATE bgs_ticks SET tick_at = ?, source = 'edcd', upper = NULL, confirmed = 1 "
-                            "WHERE tick_at = ?", (at, near[0]))
+        elif source in ("edcd", "hub") and near[1] in ("eddn", "systems"):
+            # tick.edcd.io's or EDDataHub's time replaces our detected/inferred ones
+            self.db.execute("UPDATE bgs_ticks SET tick_at = ?, source = ?, upper = NULL, confirmed = 1 "
+                            "WHERE tick_at = ?", (at, source, near[0]))
 
     def get_tick_info(self, limit: int = 2) -> list[dict]:
         """The newest ticks with where they came from, newest first:

@@ -882,12 +882,17 @@ class _BgsTickCheckWorker(QObject):
     pattern as _EddnFlushWorker / _on_market_flush_tick."""
     finished = pyqtSignal(object)  # Optional[str]
 
-    def __init__(self, db_path=None):
+    def __init__(self, db_path=None, hub_url: str = ""):
         super().__init__()
         self._db_path = db_path
+        self._hub_url = hub_url
+        self.hub_ok = False      # EDDataHub answered this round: it's the tick source
 
     def run(self):
         result = fetch_latest_tick()
+        from edc.core.eddatahub_client import fetch_ticks
+        hub_ticks = fetch_ticks(self._hub_url)
+        self.hub_ok = hub_ticks is not None
         if self._db_path:
             # tick history for the BGS Experiment Log -- own connection (cross-thread rule)
             from datetime import datetime, timedelta, timezone
@@ -906,9 +911,12 @@ class _BgsTickCheckWorker(QObject):
                                                     (today + timedelta(days=1)).isoformat()):
                             repo.record_bgs_tick(t)
                     repo.record_bgs_tick(result)
-                # a tick nobody listed but several monitored systems' own readings show
-                found = promote_missed_ticks(repo)
-                if not found:
+                for t in hub_ticks or []:
+                    repo.record_bgs_tick(t, source="hub")
+                # a tick nobody listed but several monitored systems' own readings show --
+                # not needed while EDDataHub (24/7, whole EDDN archive) supplies the ticks
+                found = None if self.hub_ok else promote_missed_ticks(repo)
+                if not found and not self.hub_ok:
                     # app closed over a tick: read a few systems now, not at the daily refresh
                     from edc.core.edsm_faction_lookup import fetch_system_factions
                     from edc.core.system_ticks import sample_for_missed_tick
@@ -2686,6 +2694,12 @@ class MainWindow(QMainWindow):
         # ED Servers -- unlike the three above (inferred passively from our
         # own error logs), server status needs a real periodic check; see
         # server_status.py's module docstring for why.
+        self._hub_active = False
+        self._hub_label = QLabel("● EDDataHub")
+        self._hub_label.setStyleSheet("color: #888888; font-size: 10px;")   # grey until the first tick check
+        self._hub_label.setToolTip("EDDataHub: not checked yet")
+        self.statusBar().addPermanentWidget(self._hub_label)
+
         self._server_status_label = QLabel("● ED Servers")
         self._server_status_label.setStyleSheet("color: #888888; font-size: 10px;")  # grey until first check completes
         self.statusBar().addPermanentWidget(self._server_status_label)
@@ -6773,6 +6787,8 @@ class MainWindow(QMainWindow):
 
     def _on_service_health_tick(self) -> None:
         for name, lbl in self._service_health_labels.items():
+            if name == "BGS Tick" and getattr(self, "_hub_active", False):
+                continue    # greyed while EDDataHub supplies the ticks (_set_hub_status)
             if service_health.status(name) == "issue":
                 lbl.setStyleSheet("color: #FF6B6B; font-size: 10px;")  # red -- matches this app's existing "problem" color convention
                 lbl.setToolTip(service_health.detail(name))
@@ -6847,15 +6863,33 @@ class MainWindow(QMainWindow):
     def _on_bgs_tick_check_tick(self) -> None:
         if self._bgs_tick_thread and self._bgs_tick_thread.isRunning():
             return  # previous check still running -- next timer firing will catch up
-        self._bgs_tick_worker = _BgsTickCheckWorker(self.repo.db.db_path)
+        self._bgs_tick_worker = _BgsTickCheckWorker(self.repo.db.db_path,
+                                                    str(getattr(self.cfg, "eddatahub_url", "") or ""))
         if self._bgs_tick_thread is not None:
             self._bgs_tick_thread.wait()  # old-thread teardown race -- see _start_spansh_enrich's docstring
         self._bgs_tick_thread = QThread()
         self._bgs_tick_worker.moveToThread(self._bgs_tick_thread)
         self._bgs_tick_thread.started.connect(self._bgs_tick_worker.run)
+        self._bgs_tick_worker.finished.connect(lambda _t, w=self._bgs_tick_worker: self._set_hub_status(w.hub_ok))
         self._bgs_tick_worker.finished.connect(self._on_bgs_tick_check_finished)
         self._bgs_tick_worker.finished.connect(self._bgs_tick_thread.quit, Qt.ConnectionType.DirectConnection)
         self._bgs_tick_thread.start()
+
+    def _set_hub_status(self, ok: bool) -> None:
+        """Status bar: EDDataHub green while it supplies the ticks, and the app's own
+        "BGS Tick" detection greyed out then; grey hub and live own detection when not."""
+        self._hub_active = ok
+        if ok:
+            self._hub_label.setStyleSheet("color: #6BCB77; font-size: 10px;")
+            self._hub_label.setToolTip("EDDataHub connected: BGS ticks come from it")
+            lbl = self._service_health_labels.get("BGS Tick")
+            if lbl is not None:
+                lbl.setStyleSheet("color: #555555; font-size: 10px;")
+                lbl.setToolTip("Own tick detection standing by: EDDataHub supplies the ticks")
+        else:
+            self._hub_label.setStyleSheet("color: #888888; font-size: 10px;")
+            self._hub_label.setToolTip("EDDataHub not reachable: BGS ticks from the app's own EDDN detection")
+            self._on_service_health_tick()
 
     def _on_bgs_tick_check_finished(self, tick_iso) -> None:
         if tick_iso and getattr(self, "_eddn_worker", None) is not None:
@@ -6864,7 +6898,11 @@ class MainWindow(QMainWindow):
         self.player_faction_panel.maybe_refresh_for_tick(tick_iso)
 
     def _on_eddn_tick_detected(self, tick_iso: str) -> None:
-        """Our own EDDN tick detector fired: store it like a tick.edcd.io tick."""
+        """Our own EDDN tick detector fired: store it like a tick.edcd.io tick --
+        unless EDDataHub is supplying the ticks (then it's only logged)."""
+        if getattr(self, "_hub_active", False):
+            log.info("Own EDDN tick detection fired at %s; ignored, EDDataHub supplies the ticks", tick_iso)
+            return
         log.info("BGS tick detected from EDDN at %s", tick_iso)
         try:
             self.repo.record_bgs_tick(tick_iso, source="eddn")
