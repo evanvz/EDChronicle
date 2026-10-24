@@ -27,7 +27,7 @@ def test_no_device_name_means_os_default():
 
 
 def test_windows_default_microphone(tmp_path):
-    QApplication.instance() or QApplication([])
+    app = QApplication.instance() or QApplication([])  # noqa: F841 -- must outlive the panel
     from edc.audio.voice_commands import WINDOWS_DEFAULT_MIC, _pick_capture_device
     from edc.ui.panels.voice_commands_panel import VoiceCommandsPanel
     fake = mock.Mock()
@@ -38,4 +38,5 @@ def test_windows_default_microphone(tmp_path):
     panel = VoiceCommandsPanel(cfg)
     assert panel._mic_combo.itemText(0).startswith("Windows default")
     panel._mic_combo.setCurrentIndex(0)
+    panel._on_mic_changed()     # no change signal if the saved headset isn't plugged in (index 0 already)
     assert panel.input_device() == WINDOWS_DEFAULT_MIC
