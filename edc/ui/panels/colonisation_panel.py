@@ -1554,7 +1554,7 @@ class ColonisationPanel(QWidget):
                 self._candidates_table.setCellWidget(row, 3, info_btn)
 
         if lookup_failed:
-            self._candidates_status_label.setText("Lookup failed — EDSM unreachable.")
+            self._candidates_status_label.setText("Lookup failed — EDSM and Spansh unreachable.")
         elif center_populated is None and not candidates:
             self._candidates_status_label.setText(f"{system_name} not found in EDSM.")
         elif not candidates:

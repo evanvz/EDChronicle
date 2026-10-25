@@ -89,7 +89,8 @@ def test_find_nearby_empty_result_on_no_candidates():
 
 
 def test_find_nearby_network_failure_reports_lookup_failed():
-    with patch("edc.core.colonisation_eligibility.requests.get", side_effect=Exception("network error")):
+    with patch("edc.core.colonisation_eligibility.requests.get", side_effect=Exception("network error")), \
+         patch("edc.core.colonisation_eligibility.requests.post", side_effect=Exception("network error")):
         result = find_nearby_colonisation_candidates("Sol")
     assert result["candidates"] == []
     assert result["center_populated"] is None
@@ -144,7 +145,8 @@ def test_check_eligibility_system_not_found():
 
 
 def test_check_eligibility_network_failure():
-    with patch("edc.core.colonisation_eligibility.requests.get", side_effect=Exception("network error")):
+    with patch("edc.core.colonisation_eligibility.requests.get", side_effect=Exception("network error")), \
+         patch("edc.core.colonisation_eligibility.requests.post", side_effect=Exception("network error")):
         result = check_system_eligibility("Target System")
     assert result["eligible"] is None
     assert "unreachable" in result["reason"].lower()
@@ -157,7 +159,8 @@ def test_query_sphere_dict_response_is_not_found_not_none():
 
 
 def test_query_sphere_exception_is_real_failure():
-    with patch("edc.core.colonisation_eligibility.requests.get", side_effect=Exception("network error")):
+    with patch("edc.core.colonisation_eligibility.requests.get", side_effect=Exception("network error")), \
+         patch("edc.core.colonisation_eligibility.requests.post", side_effect=Exception("network error")):
         result = _query_sphere("Sol", 15.0)
     assert result is None
 
@@ -224,3 +227,20 @@ def test_check_eligibility_no_populated_neighbor_but_within_chain_radius():
         result = check_system_eligibility("Target System", own_colony_names=["My Colony"])
     assert result["eligible"] is True
     assert "My Colony" in result["reason"]
+
+
+def test_query_sphere_falls_back_to_spansh_when_edsm_fails():
+    spansh = {"results": [{"name": "Sol", "distance": 0.0, "population": 100},
+                          {"name": "Empty One", "distance": 5.0, "population": 0}]}
+    with patch("edc.core.colonisation_eligibility.requests.get", side_effect=Exception("503")), \
+         patch("edc.core.colonisation_eligibility.requests.post", return_value=_FakeResponse(spansh)):
+        result = find_nearby_colonisation_candidates("Sol")
+    assert [c["name"] for c in result["candidates"]] == ["Empty One"]
+    assert result["center_populated"] is True
+    assert result["lookup_failed"] is False
+
+
+def test_query_sphere_spansh_400_is_not_found():
+    with patch("edc.core.colonisation_eligibility.requests.get", side_effect=Exception("503")), \
+         patch("edc.core.colonisation_eligibility.requests.post", return_value=_FakeResponse({"error": "Invalid request"}, 400)):
+        assert _query_sphere("Totally Made Up System Name", 15.0) == []

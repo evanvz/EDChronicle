@@ -69,12 +69,39 @@ def _query_sphere(system_name: str, radius_ly: float) -> Optional[List[Dict[str,
         data = resp.json()
     except Exception:
         log.exception("EDSM sphere-systems lookup failed for %r", system_name)
-        return None
+        return _spansh_sphere(system_name, radius_ly)
     if isinstance(data, list):
         return data
     if isinstance(data, dict):
         return []
     return None
+
+
+def _spansh_sphere(system_name: str, radius_ly: float) -> Optional[List[Dict[str, Any]]]:
+    """_query_sphere's fallback: the same sphere from Spansh's system search, in EDSM's
+    shape ("information" {} = unpopulated). EDSM's sphere-systems endpoint 503'd from
+    2026-10-23 while its other endpoints kept working. Spansh answers 400 for an
+    unknown reference system -> [] (not found), like EDSM's {}."""
+    try:
+        resp = requests.post(
+            _SPANSH_SEARCH_URL,
+            json={"filters": {"distance": {"min": "0", "max": str(radius_ly)}},
+                  "reference_system": system_name,
+                  "sort": [{"distance": {"direction": "asc"}}],
+                  "size": 500, "page": 0},   # ponytail: one page (Spansh max 500), page on if a sphere ever has more
+            headers={"User-Agent": _USER_AGENT},
+            timeout=_TIMEOUT,
+        )
+        if resp.status_code == 400:
+            return []
+        resp.raise_for_status()
+        results = resp.json()["results"]
+    except Exception:
+        log.warning("Spansh sphere fallback failed for %r", system_name, exc_info=True)
+        return None
+    return [{"name": r.get("name"), "distance": r.get("distance"),
+             "information": {"population": r["population"]} if r.get("population") else {}}
+            for r in results if isinstance(r, dict)]
 
 
 def _is_unpopulated(entry: Dict[str, Any]) -> bool:
@@ -183,7 +210,7 @@ def check_system_eligibility(system_name: str, own_colony_names: Optional[List[s
     distinct from a real ineligibility verdict."""
     data = _query_sphere(system_name, _DEFAULT_RADIUS_LY)
     if data is None:
-        return {"eligible": None, "reason": "Lookup failed -- EDSM unreachable.", "nearest_populated_ly": None}
+        return {"eligible": None, "reason": "Lookup failed -- EDSM and Spansh unreachable.", "nearest_populated_ly": None}
     if not data:
         return {"eligible": None, "reason": "System not found in EDSM.", "nearest_populated_ly": None}
 
