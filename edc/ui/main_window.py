@@ -882,6 +882,60 @@ class _WalCheckpointWorker(QObject):
         self.finished.emit()
 
 
+class _HubMarketCatchUpWorker(QObject):
+    """Once at startup: the markets EDDN carried while the app was closed, from
+    EDDataHub's raw archive, through the same EddnMarketCache path a live message
+    takes. Own Database: this runs on its own thread."""
+    finished = pyqtSignal()
+
+    def __init__(self, db_path, hub_url: str, before: str):
+        super().__init__()
+        self._db_path = db_path
+        self._hub_url = hub_url
+        self._before = before      # app start: newer rows came from the live feed
+        self._cancel = False
+
+    def cancel(self):
+        self._cancel = True
+
+    def run(self):
+        from persistence.database import Database
+        from persistence.repository import Repository
+        from datetime import datetime, timedelta, timezone
+        from edc.core.eddatahub_client import fetch_markets
+
+        db = Database(self._db_path)
+        try:
+            repo = Repository(db)
+            cache = EddnMarketCache(repo)
+            newest = repo.get_newest_market_update(self._before)
+            start = datetime.now(timezone.utc) - timedelta(days=7)
+            if newest:
+                start = max(start, datetime.fromisoformat(newest.replace("Z", "+00:00")) - timedelta(minutes=10))
+            since = start.strftime("%Y-%m-%dT%H:%M:%SZ")
+            pending = [0]
+
+            def write():
+                buffers = cache.pop_buffers()
+                _retry_once_if_locked(db, lambda: write_buffers(repo, *buffers), "Market catch-up")
+
+            def take(msg):
+                cache.on_commodity_message(msg)
+                pending[0] += 1
+                if pending[0] % 500 == 0:
+                    write()
+
+            got = fetch_markets(self._hub_url, since, take, lambda: self._cancel)
+            write()
+            if got is not None:
+                log.info("Market catch-up from EDDataHub: %d stations updated since %s", got, since)
+        except Exception:
+            log.exception("Market catch-up from EDDataHub failed")
+        finally:
+            db.close()
+        self.finished.emit()
+
+
 class _BgsTickCheckWorker(QObject):
     """One-shot background check against tick.edcd.io -- a fresh instance
     is created per QTimer firing (see _on_bgs_tick_check_tick), same
@@ -3573,6 +3627,17 @@ class MainWindow(QMainWindow):
         self._market_flush_timer.start()
         self._wal_checkpoint_timer.start()
         log.info("EDDN PowerPlay listener started")
+        hub_url = str(getattr(self.cfg, "eddatahub_url", "") or "")
+        if hub_url:
+            from datetime import datetime, timezone
+            self._market_catchup_worker = _HubMarketCatchUpWorker(
+                self.repo.db.db_path, hub_url, datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
+            self._market_catchup_thread = QThread()
+            self._market_catchup_worker.moveToThread(self._market_catchup_thread)
+            self._market_catchup_thread.started.connect(self._market_catchup_worker.run)
+            self._market_catchup_worker.finished.connect(self._market_catchup_thread.quit,
+                                                         Qt.ConnectionType.DirectConnection)
+            self._market_catchup_thread.start()
 
     def _stop_eddn_listener(self):
         if self._eddn_worker:

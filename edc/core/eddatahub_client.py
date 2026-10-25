@@ -10,6 +10,7 @@ app's tick source; the app's own EDDN detection is the fallback. Read-only:
 nothing of ours is sent to it."""
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
@@ -109,6 +110,31 @@ def fetch_system_factions(base_url: str, addresses: List[int]) -> Optional[dict]
     except Exception as exc:
         log.info("EDDataHub system factions not available (%s) -- using EDSM", exc)
         return None
+
+
+def fetch_markets(base_url: str, since: str, on_message, cancelled=lambda: False) -> Optional[int]:
+    """The newest market (EDDN commodity/3 message body) of every station the hub
+    received since `since` (it reads at most 7 days back), each passed to
+    on_message as it streams in. The count, or None when the hub isn't reachable."""
+    if not base_url:
+        return None
+    count = 0
+    try:
+        with requests.get(f"{base_url.rstrip('/')}/api/markets", params={"since": since},
+                          headers={"User-Agent": USER_AGENT}, stream=True, timeout=(_TIMEOUT, 120)) as resp:
+            resp.raise_for_status()
+            for line in resp.iter_lines():
+                if cancelled():
+                    break
+                msg = json.loads(line) if line else None
+                if isinstance(msg, dict) and isinstance(msg.get("marketId"), int) \
+                        and isinstance(msg.get("commodities"), list):
+                    on_message(msg)
+                    count += 1
+        return count
+    except Exception as exc:
+        log.info("EDDataHub markets not available (%s)", exc)
+        return None if count == 0 else count
 
 
 def fetch_system_ticks(base_url: str, addresses: List[int], days: int = 14) -> Optional[List[tuple]]:

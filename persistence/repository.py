@@ -1546,10 +1546,19 @@ class Repository:
                 stock          = excluded.stock,
                 stock_bracket  = excluded.stock_bracket,
                 last_updated   = excluded.last_updated
+            WHERE net.market_prices.last_updated IS NULL
+               OR excluded.last_updated >= net.market_prices.last_updated
             """,
             records,
         )
         self.db.conn.commit()
+
+    def get_newest_market_update(self, before: str) -> Optional[str]:
+        """The newest market price time stored before `before` -- where EDDataHub's
+        market catch-up starts."""
+        row = self.db.conn.execute(
+            "SELECT MAX(last_updated) FROM net.market_prices WHERE last_updated < ?", (before,)).fetchone()
+        return row[0] if row else None
 
     def save_fleet_carrier_materials_batch(self, records: list[tuple]):
         """
