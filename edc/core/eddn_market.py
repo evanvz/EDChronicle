@@ -36,13 +36,16 @@ def _normalize_ts(ts: Any) -> str:
     milliseconds ('2026-08-26T18:03:12.123Z'); mixing that with the
     millisecond-less cutoff format makes string comparison subtly wrong on
     the boundary second ('.' sorts before 'Z'). Falls back to now(UTC) for
-    empty/invalid input, matching the previous default behaviour."""
+    empty/invalid input, matching the previous default behaviour. A future time
+    is clamped to now: EDDN is unauthenticated, and newer-wins upserts would let
+    one far-future upload freeze a row against every real update."""
     if isinstance(ts, str) and ts:
         try:
             dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-        except ValueError:
+            dt = min(dt.astimezone(timezone.utc), datetime.now(timezone.utc))
+        except (ValueError, TypeError):
             return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 

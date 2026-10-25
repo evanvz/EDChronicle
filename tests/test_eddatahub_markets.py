@@ -54,3 +54,10 @@ def test_catch_up_writes_missed_markets_and_keeps_newer_ones(tmp_path):
     rows = db.conn.execute("SELECT market_id, sell_price FROM net.market_prices ORDER BY 1").fetchall()
     assert [tuple(r) for r in rows] == [(1, 100), (2, 900)]     # 2's older hub reading lost to the newer one
     db.close()
+
+
+def test_far_future_timestamp_cannot_freeze_a_market():
+    from datetime import datetime, timezone
+    from edc.core.eddn_market import _normalize_ts
+    assert _normalize_ts("2099-01-01T00:00:00Z") <= datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    assert _normalize_ts("2026-10-25T08:00:00.123Z") == "2026-10-25T08:00:00Z"
