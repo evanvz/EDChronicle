@@ -2945,6 +2945,7 @@ class MainWindow(QMainWindow):
             fdev_powerplay=self.fdev_powerplay, faction_expansion_pin_store=self.faction_expansion_pin_store,
         )
         self.player_faction_panel.bgs_limits_getter = lambda: bgs_limits(self.cfg)
+        self.player_faction_panel.eddatahub_url = getattr(self.cfg, "eddatahub_url", "") or ""
         self.player_faction_panel.pledged_power_getter = lambda: (getattr(self.state, "pp_power", None) or "").strip()
         self.player_faction_panel.pp_activities = self.pp_activities
         self.player_faction_panel.edsm_powerplay = self.edsm_powerplay

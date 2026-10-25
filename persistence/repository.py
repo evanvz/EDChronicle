@@ -742,8 +742,8 @@ class Repository:
             # relevant are never emitted, and EDSM has no Conflicts data at
             # all, so neither may clear. UPDATE only: never creates a row, and
             # rows holding only system-profile columns (conflicts NULL) are
-            # left alone.
-            if source == "journal" and factions:
+            # left alone. EDDataHub's answer is a whole system report too.
+            if source in ("journal", "hub") and factions:
                 self.db.execute(
                     """
                     UPDATE net.system_bgs_status
@@ -1408,6 +1408,16 @@ class Repository:
             (faction_name,),
         ).fetchall()
         return {r["system_name"].strip().lower() for r in rows if r["system_name"]}
+
+    def get_known_system_addresses(self, faction_name: str) -> dict[str, int]:
+        """{lowercased system name: address} for get_known_system_names's systems."""
+        rows = self.db.conn.execute(
+            "SELECT DISTINCT s.system_name, s.system_address FROM faction_snapshots fs "
+            "JOIN systems s ON s.system_address = fs.system_address "
+            "WHERE fs.faction_name = ? AND s.system_name IS NOT NULL",
+            (faction_name,),
+        ).fetchall()
+        return {r[0].strip().lower(): r[1] for r in rows if r[0]}
 
     def get_faction_system_names_missing_coords(self, faction_name: str, limit: int = 10) -> list[str]:
         """

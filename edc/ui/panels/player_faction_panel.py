@@ -600,10 +600,14 @@ class _FactionRefreshWorker(QObject):
     progress = pyqtSignal(int, int, str)  # current, total, system_name
     finished = pyqtSignal(int, int, int)  # systems_refreshed, systems_failed, systems_retreated
 
-    def __init__(self, db_path, system_names: List[str], squadron_faction_name: Optional[str] = None):
+    def __init__(self, db_path, system_names: List[str], squadron_faction_name: Optional[str] = None,
+                 hub_url: str = ""):
         super().__init__()
         self._db_path = db_path
         self._system_names = system_names
+        # EDDataHub (config eddatahub_url): every system it has in a few requests,
+        # EDSM only for the rest
+        self._hub_url = hub_url
         # When set, a system where EDSM no longer lists this faction at all
         # gets auto-dismissed — EDSM can't tell us about NEW systems the
         # faction has expanded into (no bulk "list every system for this
@@ -637,6 +641,18 @@ class _FactionRefreshWorker(QObject):
                 log.exception("Failed to load known system coords for full refresh")
                 has_coords = set()
 
+            hub = {}
+            if self._hub_url and self._squadron_faction_name:
+                from edc.core.eddatahub_client import fetch_system_factions as fetch_hub_factions
+                try:
+                    addresses = repo.get_known_system_addresses(self._squadron_faction_name)
+                    by_address = fetch_hub_factions(
+                        self._hub_url, [addresses[n] for n in self._system_names if n in addresses]) or {}
+                    hub = {n: by_address[a] for n, a in addresses.items() if a in by_address}
+                    log.info("Faction refresh: %d of %d systems from EDDataHub", len(hub), total)
+                except Exception:
+                    log.exception("EDDataHub faction refresh failed -- using EDSM")
+
             for i, system_name in enumerate(self._system_names, start=1):
                 if self._cancel:
                     break
@@ -652,7 +668,10 @@ class _FactionRefreshWorker(QObject):
                 # restart. One system's failure now just counts as failed
                 # and the loop moves on.
                 try:
-                    result, error = fetch_system_factions(system_name)
+                    result = hub.get(system_name)
+                    source = "hub" if result else "edsm"
+                    if not result:
+                        result, error = fetch_system_factions(system_name)
                     if not result:
                         failed += 1
                         time.sleep(0.3)
@@ -674,7 +693,7 @@ class _FactionRefreshWorker(QObject):
                             data_timestamp = faction.pop("LastUpdate", None)
                             repo.save_faction_snapshot(
                                 result["system_address"], faction, snapshot_date, is_controlling,
-                                data_timestamp, "edsm",
+                                data_timestamp, source,
                             )
                             name = (faction.get("Name") or "").strip().lower()
                             if name:
@@ -691,10 +710,14 @@ class _FactionRefreshWorker(QObject):
                     # save_system_bgs_status no-ops internally if there's
                     # nothing relevant (no war, no multi-state faction).
                     try:
-                        conflicts = derive_conflicts_from_factions_states(result["factions"])
+                        if source == "hub":
+                            conflicts, read_at = result["conflicts"], result["updated"]
+                        else:
+                            conflicts = derive_conflicts_from_factions_states(result["factions"])
+                            read_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
                         repo.save_system_bgs_status(
                             result["system_address"], result["system_name"], conflicts, result["factions"],
-                            datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "edsm",
+                            read_at, source,
                         )
                     except Exception:
                         log.exception("Failed to save EDSM-derived BGS status for %r", system_name)
@@ -713,7 +736,9 @@ class _FactionRefreshWorker(QObject):
                 except Exception:
                     log.exception("Failed refreshing system %r during full EDSM refresh", system_name)
                     failed += 1
-                time.sleep(0.3)
+                    source = "edsm"
+                if source == "edsm":
+                    time.sleep(0.3)     # EDSM's rate limit; the hub has none
         except Exception:
             log.exception("Full EDSM refresh aborted unexpectedly")
         finally:
@@ -743,6 +768,7 @@ class PlayerFactionPanel(QWidget):
         self._bgs_experiment_dialog = None
         self._bgs_tasks_dialog = None
         self.pp_watch_view = None   # PowerPlay window's Watch List tab, set by main_window
+        self.eddatahub_url = ""     # set by MainWindow (config eddatahub_url)
         # Set by MainWindow: callable returning the Boost limits dict
         # (edc.core.bgs_tasks.bgs_limits(cfg)); None falls back to defaults.
         self.bgs_limits_getter = None
@@ -2181,7 +2207,8 @@ class PlayerFactionPanel(QWidget):
         self._cancel_refresh_btn.setVisible(True)
         self._refresh_status_label.setText(f"Refreshing 0 / {len(system_names)}…")
 
-        self._refresh_all_worker = _FactionRefreshWorker(self._repo.db.db_path, system_names, self._faction_name)
+        self._refresh_all_worker = _FactionRefreshWorker(self._repo.db.db_path, system_names, self._faction_name,
+                                                         self.eddatahub_url)
         if self._refresh_all_thread is not None:
             self._refresh_all_thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
         self._refresh_all_thread = QThread()
