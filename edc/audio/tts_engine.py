@@ -31,6 +31,9 @@ from pathlib import Path
 from PyQt6.QtCore import QThread, QObject, pyqtSlot
 
 log = logging.getLogger(__name__)
+# Kokoro's phonemizer logs "words count mismatch" on most short phrases -- harmless
+# (64 lines in one 19 h log, 2026-10-25)
+logging.getLogger("phonemizer").setLevel(logging.ERROR)
 
 # Covers both miniaudio decode and sounddevice playback — neither is safe for
 # concurrent use across threads (miniaudio releases GIL, PortAudio has a single

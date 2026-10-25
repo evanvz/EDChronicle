@@ -535,6 +535,29 @@ class _CsvImportWorker(QObject):
         self.finished.emit(imported, fallback_used, not_found, cancelled_at, blocked_rows)
 
 
+class _LocalStationsWorker(QObject):
+    """find_faction_stations_in_system() off the UI thread: 2-4 s of CPU in the
+    running app while the game was on (UI froze 2 s at a time, 2026-10-24)."""
+    finished = pyqtSignal(object, str, str)   # (stations list, system name, faction name)
+
+    def __init__(self, db_path, system_name: str, faction_name: str):
+        super().__init__()
+        self._db_path, self._system_name, self._faction_name = db_path, system_name, faction_name
+
+    def run(self):
+        from persistence.database import Database
+        from persistence.repository import Repository
+        stations = []
+        db = Database(self._db_path)
+        try:
+            stations = Repository(db).find_faction_stations_in_system(self._system_name, self._faction_name)
+        except Exception:
+            log.exception("Failed to load faction-controlled stations")
+        finally:
+            db.close()
+        self.finished.emit(stations, self._system_name, self._faction_name)
+
+
 class _OverviewLoadWorker(QObject):
     """Loads get_player_faction_overview() off the UI thread. It's ~95ms
     alone, but measured 526-584ms in the running app (waiting on EDDN
@@ -1536,11 +1559,30 @@ class PlayerFactionPanel(QWidget):
             self._clear_stations_grid()
             return
 
-        try:
-            stations = self._repo.find_faction_stations_in_system(system_name, faction_name)
-        except Exception:
-            log.exception("Failed to load faction-controlled stations")
-            stations = []
+        thread = getattr(self, "_local_st_thread", None)
+        if thread is not None and thread.isRunning():
+            self._local_st_pending = (faction_name, state)    # run again once it finishes
+            return
+        self._local_st_worker = _LocalStationsWorker(self._repo.db.db_path, system_name, faction_name)
+        if thread is not None:
+            thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
+        self._local_st_thread = QThread()
+        self._local_st_worker.moveToThread(self._local_st_thread)
+        self._local_st_thread.started.connect(self._local_st_worker.run)
+        self._local_st_worker.finished.connect(self._on_local_stations_loaded)
+        self._local_st_worker.finished.connect(self._local_st_thread.quit, Qt.ConnectionType.DirectConnection)
+        self._local_st_thread.finished.connect(self._on_local_stations_thread_finished)
+        self._local_st_thread.start()
+
+    def _on_local_stations_thread_finished(self) -> None:
+        pending, self._local_st_pending = getattr(self, "_local_st_pending", None), None
+        if pending:
+            self._refresh_faction_stations(*pending)
+
+    def _on_local_stations_loaded(self, stations, system_name: str, faction_name: str) -> None:
+        current = getattr(self._last_state, "system", None) if self._last_state else None
+        if system_name != (current or system_name) or getattr(self, "_local_st_pending", None):
+            return      # left the system, or a newer lookup follows
         # Kept so the later EDSM pass can merge into this instead of
         # replacing it outright — EDSM's static catalog can be stale/
         # incomplete for a system (confirmed live: a freshly-expanded

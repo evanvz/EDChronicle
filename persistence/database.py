@@ -551,6 +551,10 @@ class Database:
             "ALTER TABLE net.station_info ADD COLUMN dist_from_star_ls REAL",
             "ALTER TABLE net.station_info ADD COLUMN station_government TEXT",
             "ALTER TABLE net.station_info ADD COLUMN station_allegiance TEXT",
+            # the faction-station lookups (Player Faction stations card, nearest station
+            # for fines/bonds) scanned all ~157k rows; they ran on the UI thread
+            "CREATE INDEX IF NOT EXISTS net.idx_station_info_system ON station_info(system_name)",
+            "CREATE INDEX IF NOT EXISTS net.idx_station_info_faction ON station_info(LOWER(station_faction))",
             """CREATE TABLE IF NOT EXISTS net.fleet_carrier_materials (
                 market_id       INTEGER NOT NULL,
                 material_symbol TEXT    NOT NULL,

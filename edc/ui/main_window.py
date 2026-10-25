@@ -540,6 +540,12 @@ class _UiStallWatchdog:
         self._timer.start()
         import gc
         gc.callbacks.append(self._gc_timer)
+        # Full collections walked the app's big long-lived caches (EDDN PowerPlay
+        # ~55k systems, tick detector ~28k): 242 of them in 19 h, ~0.4 s each, up to
+        # 1 s, every thread paused (2026-10-24/25). Run them 5x less often; the
+        # startup data is also frozen out of them (_on_startup_history_scan_finished).
+        g0, g1, _g2 = gc.get_threshold()
+        gc.set_threshold(g0, g1, 50)
         self._gc_start = 0.0
         threading.Thread(target=self._watch, name="ui-stall-watchdog", daemon=True).start()
 
@@ -3500,6 +3506,11 @@ class MainWindow(QMainWindow):
         visited_megaships = result.get("visited_megaships")
         if visited_megaships:
             self.megaship_tracker.merge_seen(visited_megaships)
+
+        # startup data is loaded and stays: keep it out of every later full collection
+        import gc
+        gc.collect()
+        gc.freeze()
 
         self._refresh_hud()
 

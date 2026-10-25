@@ -156,3 +156,17 @@ def test_status_buckets_ignore_a_faction_wide_war_state():
     assert _active_state_names({"faction_state": "War", "active_states": None}) == []           # Ekono
     assert _active_state_names({"faction_state": "War", "active_states": '[{"State": "War"}]'}) == ["War"]
     assert _active_state_names({"faction_state": "Boom", "active_states": None}) == ["Boom"]
+
+
+def test_local_station_lookup_runs_in_its_own_worker(tmp_path):
+    """The Player Faction stations card queried on the UI thread (2-4 s of CPU,
+    2 s freezes while playing, 2026-10-24); the worker uses its own connection."""
+    from persistence.database import Database
+    from persistence.schema import SCHEMA_SQL
+    from edc.ui.panels.player_faction_panel import _LocalStationsWorker
+    db = Database(tmp_path / "t.db"); db.executescript(SCHEMA_SQL); db.run_migrations(); db.close()
+    out = []
+    w = _LocalStationsWorker(tmp_path / "t.db", "Ekono", "Elite United Worlds")
+    w.finished.connect(lambda st, sysn, fac: out.append((st, sysn, fac)))
+    w.run()
+    assert out == [([], "Ekono", "Elite United Worlds")]
