@@ -53,6 +53,9 @@ class AppConfig:
     # Opt-in: empty by default, so a public install never trusts whatever answers on
     # a LAN address (it would replace and silence the app's own tick detection).
     eddatahub_url: str = ""
+    # EDDataHub's raw EDDN pass-through, e.g. tcp://172.16.10.197:9500 -- read EDDN
+    # through the squadron's server instead of the EDDN relay; EDDN direct when silent
+    eddn_relay_url: str = ""
     market_search_radius_ly: int = 100
     last_market_prune_date: Optional[str] = None
     search_indexes_ensured: bool = False
@@ -207,6 +210,7 @@ class ConfigStore:
                 always_on_top=bool(data.get("always_on_top", False)),
                 eddn_contribute_enabled=bool(data.get("eddn_contribute_enabled", True)),
                 eddatahub_url=str(data.get("eddatahub_url", "") or ""),
+                eddn_relay_url=str(data.get("eddn_relay_url", "") or ""),
                 market_search_radius_ly=int(data.get("market_search_radius_ly", 100) or 100),
                 last_market_prune_date=data.get("last_market_prune_date"),
                 search_indexes_ensured=bool(data.get("search_indexes_ensured", False)),
@@ -252,6 +256,7 @@ class ConfigStore:
                         "always_on_top": bool(getattr(cfg, "always_on_top", False)),
                         "eddn_contribute_enabled": bool(getattr(cfg, "eddn_contribute_enabled", True)),
                         "eddatahub_url": str(getattr(cfg, "eddatahub_url", "") or ""),
+                        "eddn_relay_url": str(getattr(cfg, "eddn_relay_url", "") or ""),
                         "market_search_radius_ly": int(getattr(cfg, "market_search_radius_ly", 100) or 100),
                         "last_market_prune_date": getattr(cfg, "last_market_prune_date", None),
                         "search_indexes_ensured": bool(getattr(cfg, "search_indexes_ensured", False)),

@@ -3534,7 +3534,8 @@ class MainWindow(QMainWindow):
         except Exception:
             log.exception("Failed to load squadron faction name for EDDN watch list")
 
-        self._eddn_worker = EddnPowerPlayWorker(watched_factions=watched_factions)
+        self._eddn_worker = EddnPowerPlayWorker(watched_factions=watched_factions,
+                                                relay_url=getattr(self.cfg, "eddn_relay_url", "") or "")
         self._eddn_thread = QThread()
         self._eddn_worker.moveToThread(self._eddn_thread)
         self._eddn_thread.started.connect(self._eddn_worker.run)
@@ -3557,6 +3558,7 @@ class MainWindow(QMainWindow):
         self._eddn_worker.faction_names_seen.connect(self.eddn_market_cache.on_faction_names_seen)
         self._eddn_worker.system_visit_seen.connect(self.eddn_market_cache.on_system_visit_seen)
         self._eddn_worker.tick_detected.connect(self._on_eddn_tick_detected)
+        self._eddn_worker.feed_source.connect(self._on_eddn_feed_source)
         # the detector's readings survive restarts (else it's blind for hours after one)
         self._eddn_worker.tick_detector.state_path = self._game_version_path.parent / "tick_detector_state.json.gz"
         try:
@@ -6803,6 +6805,10 @@ class MainWindow(QMainWindow):
     def _on_coords_backfill_finished(self, backfilled: int) -> None:
         if backfilled:
             log.info("Coords backfill sweep: filled in %d missing system(s)", backfilled)
+
+    def _on_eddn_feed_source(self, src: str) -> None:
+        # a bound method, not a lambda: queued onto the UI thread
+        self._service_health_labels["EDDN"].setText("● EDDN via EDDataHub" if src == "hub" else "● EDDN")
 
     def _on_service_health_tick(self) -> None:
         for name, lbl in self._service_health_labels.items():
