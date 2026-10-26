@@ -341,3 +341,17 @@ def test_powerplay_card_has_progress_bar_and_short_guide():
 def test_rgba_helper_keeps_the_colour():
     from edc.ui.panels.bgs_tasks_dialog import _rgba
     assert _rgba("#FFB347", 0.7) == "rgba(255, 179, 71, 178)"
+
+
+def test_reinforcement_collects_at_nearest_strongholds_any_range():
+    """Sealed Contracts come from Strongholds; HIP 114709 -> Lagar (35.3 ly) was
+    accepted, so no 30 ly limit."""
+    from edc.core.bgs_tasks import commodity_info, commodity_lines, supporting_systems
+    repo, edsm = _support_fixture()
+    found = supporting_systems(repo, "Aisling Duval", "Tucanae", edsm, strongholds=True)
+    assert [(n, round(d, 1)) for n, _s, d in found] == [("HIP 114709", 28.1), ("HIP 109203", 67.8)]
+    info = commodity_info("Reinforcement", "Aisling Duval", strongholds=found)
+    assert info["supporting"][0][0] == "HIP 114709"
+    lines = commodity_lines("Reinforcement", "Aisling Duval", strongholds=found)
+    assert "Collect at one of your Strongholds: HIP 114709 (28.1 ly), HIP 109203 (67.8 ly)" in lines
+    assert commodity_info("Acquisition", "Aisling Duval", strongholds=found)["supporting"] is None
