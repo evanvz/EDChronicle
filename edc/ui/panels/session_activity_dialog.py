@@ -175,8 +175,27 @@ class SessionActivityDialog(QDialog):
         except Exception:
             log.exception("Failed to load session merits")
             merits = {}
-        self._report = report
+        self._add_merit_systems(report, merits)
+        self._report, self._merits = report, merits
         self._render_report(report, merits)
+
+    def _add_merit_systems(self, report: dict, merits: dict) -> None:
+        """Reinforcement merits count as squad work: a system where you only
+        earned merits joins the report when your power controls it (other
+        merits-only systems -- acquisition, undermining -- stay out)."""
+        repo = self._panel._repo
+        names = list({s for systems in merits.values() for s in systems})
+        try:
+            addrs = repo.get_system_addresses_for_names(names) if names else {}
+            for date_str, systems in merits.items():
+                for name, powers in systems.items():
+                    if name in report.get(date_str, {}) or name not in addrs:
+                        continue
+                    snap = repo.get_system_powerplay_snapshot(addrs[name]) or {}
+                    if snap.get("pp_controlling_power") in powers:
+                        report.setdefault(date_str, {})[name] = {}
+        except Exception:
+            log.exception("Failed to add reinforcement merit systems")
 
     def _bgs_points_row(self, system_name: str, faction_name: str):
         """Squad faction only: SINC bucket points for the whole tick in this system
@@ -203,7 +222,7 @@ class SessionActivityDialog(QDialog):
         """One system's activity this tick in BGS-Tally's Discord format, for the
         user to paste (nothing is posted)."""
         from PyQt6.QtWidgets import QApplication
-        QApplication.clipboard().setText(bgs_tally_text(self._report, system_name))
+        QApplication.clipboard().setText(bgs_tally_text(self._report, system_name, self._merits))
 
     @staticmethod
     def _faction_color(faction_name: str) -> str:
@@ -342,8 +361,8 @@ class SessionActivityDialog(QDialog):
         if not report:
             return
 
-        # Merits only ride along on systems with BGS activity -- a system
-        # where you only earned merits isn't BGS work.
+        # Merits ride along on systems with BGS activity; merits-only systems
+        # are here only when your power controls them (_add_merit_systems).
         for date_str in sorted(report.keys(), reverse=True):  # most recent day first
             day_hdr = QLabel(self._format_day_header(date_str))
             day_hdr.setStyleSheet(_HDR_STYLE + " font-size:15px;")

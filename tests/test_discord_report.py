@@ -100,3 +100,37 @@ def test_each_system_card_copies_its_own_system(tmp_path):
     buttons[1].click()                          # second card = Sol (cards are sorted by system)
     copied = QApplication.clipboard().text()
     assert copied == bgs_tally_text(report, "Sol") and "Ekono" not in copied
+
+
+def test_merits_line_for_report_systems_only():
+    report = {"2026-10-26": {"Ys": {}, "Ekono": {"EUW": _entry(inf=2)}}}
+    merits = {"2026-10-26": {"Ys": {"Aisling Duval": 4100}, "Sol": {"Aisling Duval": 999}},
+              "2026-10-25": {"Ys": {"Aisling Duval": 100}}}
+    text = bgs_tally_text(report, merits=merits)
+    assert f"{E}33;1mAisling Duval{E}0m {E}36mMerits{E}0m {E}32m4.2K{E}0m" in text
+    assert "Sol" not in text and "EUW" in text
+    assert bgs_tally_text(report, "Ys") == ""     # no merits passed: nothing for a merits-only system
+
+
+def test_merits_only_system_shows_when_your_power_controls_it(tmp_path):
+    from types import SimpleNamespace
+    from unittest.mock import patch
+    from PyQt6.QtWidgets import QApplication
+    from edc.ui.panels.session_activity_dialog import SessionActivityDialog
+    from persistence.database import Database
+    from persistence.repository import Repository
+    from persistence.schema import SCHEMA_SQL
+    app = QApplication.instance() or QApplication([])
+    db = Database(tmp_path / "t.db"); db.executescript(SCHEMA_SQL); db.run_migrations()
+    repo = Repository(db)
+    for addr, name, ctrl in ((1, "Ys", "Aisling Duval"), (2, "Tucanae", None)):
+        db.execute("INSERT INTO systems (system_address, system_name, pp_controlling_power, pp_data_timestamp) "
+                   "VALUES (?, ?, ?, '2026-10-26T10:00:00Z')", (addr, name, ctrl))
+    merits = {"2026-10-26": {"Ys": {"Aisling Duval": 4100}, "Tucanae": {"Aisling Duval": 900}}}
+    dlg = SessionActivityDialog(SimpleNamespace(_repo=repo, _faction_name="EUW", _latest_known_tick=None))
+    with patch.object(repo, "get_session_activity_report", return_value={}), \
+         patch.object(repo, "get_session_merits", return_value=merits):
+        dlg.refresh()
+    assert list(dlg._report["2026-10-26"]) == ["Ys"]     # acquisition-only Tucanae stays out
+    dlg._copy_for_discord("Ys")
+    assert "Merits" in QApplication.clipboard().text()

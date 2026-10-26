@@ -70,14 +70,26 @@ def _faction_line(name: str, t: dict) -> str:
     return f"{_c(name, 'yellow', bold=True)} {items}\n" if items else ""
 
 
-def bgs_tally_text(report: dict, system: str = None) -> str:
+def bgs_tally_text(report: dict, system: str = None, merits: dict = None) -> str:
     """Repository.get_session_activity_report() output as Discord text, for one
-    system (all days of the tick window summed) or, without `system`, all of them."""
+    system (all days of the tick window summed) or, without `system`, all of them.
+    merits ({date: {system: {power: merits}}}, Repository.get_session_merits) adds
+    a merits line per power for the report's systems."""
+    merged = _merge_days(report)
+    in_report = {s for systems in report.values() for s in systems}
+    pp: dict = {}
+    for systems in (merits or {}).values():
+        for name, powers in systems.items():
+            if name in in_report:
+                for power, n in powers.items():
+                    pp.setdefault(name, {})[power] = pp.get(name, {}).get(power, 0) + n
     text = ""
-    for name, factions in sorted(_merge_days(report).items()):
+    for name in sorted(set(merged) | set(pp)):
         if system is not None and name != system:
             continue
-        lines = "".join(_faction_line(f, t) for f, t in sorted(factions.items()))
+        lines = "".join(f"{_c(p, 'yellow', bold=True)} {_c('Merits', 'cyan')} {_c(human_format(n), 'green')} \n"
+                        for p, n in sorted(pp.get(name, {}).items()) if n)
+        lines += "".join(_faction_line(f, t) for f, t in sorted(merged.get(name, {}).items()))
         if lines:
             text += f"```ansi\n{_c(name, 'white', bold=True)}\n{lines}```"
     return text.replace("'", "")  # as BGS-Tally does
