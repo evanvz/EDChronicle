@@ -149,3 +149,20 @@ def test_late_first_reading_means_split_unknown(tmp_path):
     bt._add_control_chip(view, repo, 77, 0, NOW)
     assert "decay or attack?" in view["chips"][0]["text"]
     assert bt.undermining_alerts(repo, "2026-10-07T00:00:00Z", {77: "squad system"}, NOW) == []
+
+
+def test_attack_chip_is_amber_while_reinforcement_is_ahead(tmp_path):
+    """Ys, 2026-10-26: +40,908 attack + 7,785 decay vs 50,278 reinforced is
+    still 1,585 ahead -- not red."""
+    repo = _repo(tmp_path)
+    repo.db.execute("INSERT INTO systems (system_address, system_name) VALUES (77, 'Ys')")
+    repo.record_pp_control(77, "2026-10-03T10:00:00Z", "Exploited", 0, 7785, 0.3, "eddn")
+    repo.record_pp_control(77, "2026-10-07T12:00:00Z", "Exploited", 50278, 48693, 0.3, "eddn")
+    view = {"chips": []}
+    bt._add_control_chip(view, repo, 77, 0, NOW)
+    assert view["chips"][0]["color"] == "#FFB347"
+    assert view["chips"][0]["text"].endswith("ahead by 1,585")
+    repo.record_pp_control(77, "2026-10-07T13:00:00Z", "Exploited", 50278, 60000, 0.3, "eddn")
+    view = {"chips": []}
+    bt._add_control_chip(view, repo, 77, 0, NOW)
+    assert view["chips"][0]["color"] == "#FF6B6B"

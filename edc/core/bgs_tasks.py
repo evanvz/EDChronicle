@@ -1355,6 +1355,8 @@ def _add_control_chip(view: dict, repo, addr: int, merits_week: int, now: Option
     r, decay, attack = cs["reinforcement"], cs["decay"], cs["attack"]
     if cs["status"] == "attack":
         text, color = f"Undermined +{attack:,} this cycle (+{decay:,} decay) vs reinforced {r:,}", "#FF6B6B"
+        if r >= cs["undermining"]:
+            text, color = text + f" · ahead by {r - cs['undermining']:,}", "#FFB347"
     elif cs["status"] == "decay":
         text, color = f"Reinforced {r:,} vs decay \u2248{decay:,} \u00b7 {decay - r:,} to break even", "#FFB347"
     elif cs["status"] == "unknown":
