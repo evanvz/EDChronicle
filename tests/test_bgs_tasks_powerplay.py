@@ -73,7 +73,7 @@ def test_pledged_card_shows_mode_merits_and_top_activities_bonus_first():
     assert view["hud"] == "PowerPlay — Acquisition: Unoccupied (no power yet) — 78.9% · 340 merits this week"
     assert view["guide"] == ("Acquisition — BGS-safe: Transport Aisling Media Materials (collect at a Power "
                              "Contact in a supporting system in range (your Fortified within 20 ly / Stronghold "
-                             "within 30 ly), deliver to the Power Contact here), "
+                             "within 30 ly), deliver to the Power Contact here; only this commodity counts here), "
                              "Bounty Hunting (cash vouchers elsewhere), Power Kills, Holoscreen Hacking")
     assert set(table.calls) == {("acquisition", "Unoccupied")}  # full + short guide both read it
 
@@ -334,7 +334,7 @@ def test_powerplay_card_has_progress_bar_and_short_guide():
     view = build_task_view(_task("powerplay"), {}, None, [], pp, LIMITS, pledged="Aisling Duval",
                            merits=554, pp_activities=table)
     assert view["bars"][0]["label"] == "Acquired" and view["bars"][0]["text"].startswith("83.5% — 16.5% to go")
-    assert view["guide_short"] == "Transport Aisling Media Materials · Holoscreen Hacking"
+    assert view["guide_short"] == "Transport Aisling Media Materials only · Holoscreen Hacking"
     assert any(c["text"] == "554 merits this week (≈138 CP)" for c in view["chips"])
 
 

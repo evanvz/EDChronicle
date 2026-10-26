@@ -208,7 +208,7 @@ def transport_text(mode: str, pledged: str) -> str:
     if not commodities or not route:
         return "Transport Powerplay Commodities"
     index, how = route
-    return f"Transport {commodities[index]} ({how})"
+    return f"Transport {commodities[index]} ({how}; only this commodity counts here)"
 
 
 # Merits per hand-in vary a lot by target system (16 t -> 4,065 at ICZ
@@ -867,7 +867,7 @@ def _powerplay_guide_short(mode: str, pp_state: str, pledged: str, pp_activities
         if a == "Transport Powerplay Commodities":
             commodities = POWERPLAY_COMMODITIES.get(_key(pledged))
             route = _COMMODITY_ROUTE.get(mode)
-            a = f"Transport {commodities[route[0]]}" if commodities and route else a
+            a = f"Transport {commodities[route[0]]} only" if commodities and route else a
         names.append(a)
     return " · ".join(names[:3]) if names else mode
 
