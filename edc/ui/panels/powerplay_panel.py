@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 
-from edc.core.bgs_tasks import powerplay_week_start
+from edc.core.bgs_tasks import _hours_ago, powerplay_week_start
 from edc.core.pp_week import merge
 from edc.ui import formatting as fmt
 from edc.ui.style import CARD_STYLE, HDR_STYLE, TAB_STYLE
@@ -48,6 +48,8 @@ class PowerplayPanel(QWidget):
         self._pp_hub = []
         self._pp_local = []
         self._pp_week_ctrl = False
+        self._pp_readings = []
+        self._pp_banner = None      # banner values from the journal state, see _draw_banner
         self._pp_fetch = HubPowerplayFetch(self)
         self._pp_fetch.done.connect(self._on_pp_hub)
 
@@ -280,7 +282,7 @@ class PowerplayPanel(QWidget):
 
     def build_pp_conflict_banner_html(
         self, pledged, ctrl, pp_state, control_progress,
-        reinforcement, undermining, powers,
+        reinforcement, undermining, powers, source: str = "",
     ) -> str:
         ctrl_txt      = fmt.text(ctrl, default="Unknown")
         state_txt     = fmt.text(pp_state, default="Active")
@@ -350,7 +352,9 @@ class PowerplayPanel(QWidget):
             f'margin-top:4px;">{state_txt}</div>'
             f'<div style="color:#FFB347;font-size:12px;font-weight:700;'
             f'margin-top:4px;">{progress_txt}</div>'
-            '</td>'
+            + (f'<div style="color:#9aa4b0;font-size:11px;margin-top:4px;">'
+               f'{html.escape(source)}</div>' if source else '')
+            + '</td>'
 
             # ── Right: Reinforcement ───────────────────────────────────
             # Mirrors Undermining's #1a0808 with the red/blue channels
@@ -390,13 +394,37 @@ class PowerplayPanel(QWidget):
             return
         self._pp_hub = data[self._pp_week_for]
         self._show_pp_week(merge(self._pp_local, self._pp_hub))
+        self._draw_banner()
 
     def _show_pp_week(self, readings: list) -> None:
+        self._pp_readings = readings
         self.pp_week_chart.set_data(readings, self._pp_week_start, datetime.now(timezone.utc))
         show = self._pp_week_ctrl and bool(readings)
         self.pp_week_chart.setVisible(show)
         self.pp_week_caption.setText(self.pp_week_chart.caption())
         self.pp_week_caption.setVisible(show)
+
+    _SOURCE_NAMES = {"hub": "EDDataHub", "eddn": "EDDN", "journal": "your visit"}
+
+    def _draw_banner(self) -> None:
+        """The banner from the newest reading this cycle (EDDataHub, then the app's
+        own EDDN/journal history), labelled with its source and age; the journal
+        state's own values when there is none."""
+        if not self._pp_banner:
+            return
+        pledged, ctrl, pp_state, progress, reinforce, undermine, powers = self._pp_banner
+        source = ""
+        latest = self._pp_readings[-1] if self._pp_readings and self._pp_week_ctrl else None
+        if latest:
+            pp_state = latest["pp_state"] or pp_state
+            progress = latest["control"] if latest["control"] is not None else progress
+            reinforce = latest["reinforcement"] if latest["reinforcement"] is not None else reinforce
+            undermine = latest["undermining"] if latest["undermining"] is not None else undermine
+            source = (f"{self._SOURCE_NAMES.get(latest['source'], latest['source'])} · "
+                      f"{_hours_ago(latest['observed_at'])}")
+        self.pp_conflict_banner.setText(self.build_pp_conflict_banner_html(
+            pledged=pledged, ctrl=ctrl, pp_state=pp_state, control_progress=progress,
+            reinforcement=reinforce, undermining=undermine, powers=powers, source=source))
 
     def add_tab(self, widget, title: str) -> None:
         self._tabs.addTab(widget, title)
@@ -413,6 +441,14 @@ class PowerplayPanel(QWidget):
         undermine = getattr(state, "system_powerplay_undermining", None)
         progress  = getattr(state, "system_powerplay_control_progress", None)
 
+        try:
+            self._refresh_pp_week(getattr(state, "system_address", None), ctrl)
+        except Exception:
+            log.exception("PowerPlay week chart refresh failed")
+            self._pp_readings = []
+            self.pp_week_chart.setVisible(False)
+            self.pp_week_caption.setVisible(False)
+
         # Banner
         try:
             has_banner = bool(
@@ -423,26 +459,15 @@ class PowerplayPanel(QWidget):
                 or isinstance(undermine, int)
             )
             if has_banner:
-                self.pp_conflict_banner.setText(
-                    self.build_pp_conflict_banner_html(
-                        pledged=pledged, ctrl=ctrl, pp_state=pp_state,
-                        control_progress=progress, reinforcement=reinforce,
-                        undermining=undermine, powers=powers,
-                    )
-                )
+                self._pp_banner = (pledged, ctrl, pp_state, progress, reinforce, undermine, powers)
+                self._draw_banner()
                 self.pp_conflict_banner.setVisible(True)
             else:
+                self._pp_banner = None
                 self.pp_conflict_banner.setText("")
                 self.pp_conflict_banner.setVisible(False)
         except Exception:
             self.pp_conflict_banner.setVisible(False)
-
-        try:
-            self._refresh_pp_week(getattr(state, "system_address", None), ctrl)
-        except Exception:
-            log.exception("PowerPlay week chart refresh failed")
-            self.pp_week_chart.setVisible(False)
-            self.pp_week_caption.setVisible(False)
 
         # Summary
         sysn = getattr(state, "system", None) or "Unknown system"

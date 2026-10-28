@@ -93,3 +93,22 @@ def test_weekly_reset_starts_a_new_window_in_the_same_system(qapp, pp_panel, mon
     assert pp_panel._pp_week_start == new_start and pp_panel._pp_hub == []
     assert asked == [([77], new_start)]
     assert pp_panel.pp_week_chart.isHidden()               # last week's readings are gone
+
+
+def test_banner_uses_newest_reading_hub_first(qapp, pp_panel):
+    """The journal state says R 10 from your visit; a newer EDDataHub report
+    (R 7,872) replaces it and the banner names its source."""
+    record_two_readings(pp_panel._repo, 77)
+    pp_panel.refresh(_state(77))
+    assert "10" in pp_panel.pp_conflict_banner.text() and "your visit" in pp_panel.pp_conflict_banner.text()
+    hub = {"observed_at": _z(datetime.now(timezone.utc) - timedelta(minutes=1)), "pp_state": "Exploited",
+           "reinforcement": 7872, "undermining": 8541, "control": 0.29, "source": "hub"}
+    pp_panel._on_pp_hub({77: [hub]})
+    text = pp_panel.pp_conflict_banner.text()
+    assert "7,872" in text and "8,541" in text and "EDDataHub" in text
+
+
+def test_banner_falls_back_to_state_without_readings(qapp, pp_panel):
+    pp_panel.refresh(_state(77))
+    text = pp_panel.pp_conflict_banner.text()
+    assert "10" in text and "EDDataHub" not in text and "your visit" not in text
