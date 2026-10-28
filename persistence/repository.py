@@ -32,6 +32,7 @@ from edc.core.bgs_conflicts import has_raid_opportunity_state, is_multistate_fac
 # backup-size cost to keeping it a bit longer (requested 2026-08-27, see
 # docs/superpowers/specs/2026-08-27-db-split-design.md).
 _MARKET_DATA_MAX_AGE_DAYS = 21
+_HUB_MAX_RADIUS_LY = 1000  # the hub answers 400 above this
 
 
 def _market_data_cutoff() -> str:
@@ -189,7 +190,7 @@ class Repository:
         """EDDataHub market search rows in local-result shape, or None to fall
         back to the local query. [] is a real answer. Null pads/faction are
         filled from our own net.station_info."""
-        if not self.hub_url:
+        if not self.hub_url or radius_ly > _HUB_MAX_RADIUS_LY:
             return None
         rows: list[dict] = []
         for i in range(0, len(commodity_names), 200):

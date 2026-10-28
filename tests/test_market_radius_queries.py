@@ -265,6 +265,16 @@ def test_hub_none_falls_back_to_local(repo, hub):
     assert [r["market_id"] for r in results] == [1001]
 
 
+def test_wide_radius_stays_local(repo, hub):
+    _seed_coords(repo, "Sol", 0.0, 0.0, 0.0)
+    _seed_market_row(repo, 1001, "gold", "Sol", sell_price=9000)
+    hub["ret"] = []
+
+    results = repo.search_market_prices("gold", 0.0, 0.0, 0.0, 1500.0)
+    assert hub["calls"] == []
+    assert [r["market_id"] for r in results] == [1001]
+
+
 def test_no_hub_url_never_calls_hub(repo, hub, monkeypatch):
     monkeypatch.setattr(Repository, "hub_url", "")
     repo.search_market_prices("gold", 0.0, 0.0, 0.0, 50.0)
