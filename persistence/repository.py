@@ -23,6 +23,7 @@ def clean_mission_type(raw) -> Optional[str]:
     cleaned = cleaned.replace("_", " ")
     cleaned = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", cleaned)
     return " ".join(cleaned.split()) or None
+from edc.core.eddatahub_client import fetch_market_search
 from edc.core.station_pads import effective_pad_size
 from edc.core.bgs_conflicts import has_raid_opportunity_state, is_multistate_faction
 
@@ -175,8 +176,50 @@ _READINGS = (
 
 
 class Repository:
+    # Set once at startup; class-level so worker-thread Repository instances see it.
+    hub_url: str = ""
+
     def __init__(self, db: Database):
         self.db = db
+
+    def _hub_market_rows(
+        self, commodity_names: list[str], x: float, y: float, z: float, radius_ly: float,
+        exclude_market_id: Optional[int],
+    ) -> Optional[list[dict]]:
+        """EDDataHub market search rows in local-result shape, or None to fall
+        back to the local query. [] is a real answer. Null pads/faction are
+        filled from our own net.station_info."""
+        if not self.hub_url:
+            return None
+        rows: list[dict] = []
+        for i in range(0, len(commodity_names), 200):
+            chunk = fetch_market_search(
+                self.hub_url, commodity_names[i:i + 200], x, y, z, radius_ly, exclude_market_id
+            )
+            if chunk is None:
+                return None
+            rows.extend(chunk)
+        ids = list({r["market_id"] for r in rows})
+        local = {}
+        for i in range(0, len(ids), 900):
+            part = ids[i:i + 900]
+            for si in self.db.conn.execute(
+                "SELECT market_id, pads_small, pads_medium, pads_large, station_faction "
+                f"FROM net.station_info WHERE market_id IN ({','.join('?' for _ in part)})",
+                part,
+            ):
+                local[si["market_id"]] = si
+        for r in rows:
+            si = local.get(r["market_id"])
+            if si:
+                for k in ("pads_small", "pads_medium", "pads_large", "station_faction"):
+                    if r.get(k) is None:
+                        r[k] = si[k]
+            pad = effective_pad_size(r["station_type"], r["pads_small"], r["pads_medium"], r["pads_large"])
+            r["pad_known"] = pad != "?"
+            r["pad_size"] = pad
+            r["commodity_name"] = r.pop("commodity")
+        return rows
 
     def save_system(
         self,
@@ -2289,6 +2332,10 @@ class Repository:
         (~36k systems within a 200ly search). Bound-parameter count here
         is now fixed regardless of table size.
         """
+        hub_rows = self._hub_market_rows([commodity_name], x, y, z, radius_ly, exclude_market_id)
+        if hub_rows is not None:
+            hub_rows.sort(key=lambda r: (not r["pad_known"], -r["sell_price"]))
+            return hub_rows
         rows = self.db.conn.execute(
             """
             SELECT m.market_id, m.station_name, m.station_type, m.system_name,
@@ -2353,6 +2400,15 @@ class Repository:
         """
         if not commodity_names:
             return {}
+
+        hub_rows = self._hub_market_rows(commodity_names, x, y, z, radius_ly, exclude_market_id)
+        if hub_rows is not None:
+            grouped: dict[str, list[dict]] = {name: [] for name in commodity_names}
+            for r in hub_rows:
+                grouped[r["commodity_name"]].append(r)
+            for results in grouped.values():
+                results.sort(key=lambda r: (not r["pad_known"], -r["sell_price"]))
+            return grouped
 
         commodity_placeholders = ",".join("?" for _ in commodity_names)
         rows = self.db.conn.execute(
