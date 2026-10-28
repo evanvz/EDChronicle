@@ -4,6 +4,8 @@
 
 import html
 import logging
+from datetime import datetime, timezone
+
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -17,11 +19,15 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 
+from edc.core.bgs_tasks import powerplay_week_start
+from edc.core.pp_week import merge
 from edc.ui import formatting as fmt
 from edc.ui.style import CARD_STYLE, HDR_STYLE, TAB_STYLE
 from edc.ui.panels.powerplay_finder_panel import PowerplayFinderPanel
 from edc.ui.panels.powerplay_system_status_panel import PowerplaySystemStatusPanel
 from edc.ui.panels.player_faction_panel import derive_bgs_action
+from edc.ui.pp_week_chart import PPWeekChart
+from edc.ui.pp_week_worker import HubPowerplayFetch
 
 log = logging.getLogger(__name__)
 
@@ -35,6 +41,15 @@ class PowerplayPanel(QWidget):
 
     def __init__(self, parent=None, repo=None, edsm_powerplay=None, eddn_powerplay=None, fdev_powerplay=None):
         super().__init__(parent)
+        self._repo = repo
+        self.eddatahub_url = ""
+        self._pp_week_for = None
+        self._pp_week_start = ""
+        self._pp_hub = []
+        self._pp_local = []
+        self._pp_week_ctrl = False
+        self._pp_fetch = HubPowerplayFetch(self)
+        self._pp_fetch.done.connect(self._on_pp_hub)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -107,6 +122,14 @@ class PowerplayPanel(QWidget):
         self.pp_conflict_banner.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.pp_conflict_banner.setStyleSheet("background: transparent; border: none;")
         pp_frame_l.addWidget(self.pp_conflict_banner)
+
+        self.pp_week_chart = PPWeekChart()
+        self.pp_week_chart.setVisible(False)
+        pp_frame_l.addWidget(self.pp_week_chart)
+        self.pp_week_caption = QLabel("")
+        self.pp_week_caption.setVisible(False)
+        self.pp_week_caption.setStyleSheet("background:transparent; border:none; color:#888888; font-size:11px;")
+        pp_frame_l.addWidget(self.pp_week_caption)
 
         layout.addWidget(pp_frame)
 
@@ -347,6 +370,33 @@ class PowerplayPanel(QWidget):
             '</tr></table></div>'
         )
 
+    def _refresh_pp_week(self, addr, ctrl) -> None:
+        self._pp_week_ctrl = bool(ctrl) and ctrl != "Unoccupied"
+        if self._repo is None or addr is None:
+            self._pp_week_for = None
+            self._show_pp_week([])
+            return
+        new_system = addr != self._pp_week_for
+        if new_system:
+            self._pp_week_for, self._pp_week_start, self._pp_hub = addr, powerplay_week_start(), []
+        self._pp_local = self._repo.get_pp_control_since(addr, self._pp_week_start)
+        self._show_pp_week(merge(self._pp_local, self._pp_hub))
+        if new_system:
+            self._pp_fetch.start(self.eddatahub_url, [addr], self._pp_week_start)
+
+    def _on_pp_hub(self, data: dict) -> None:
+        if self._pp_week_for not in data:
+            return
+        self._pp_hub = data[self._pp_week_for]
+        self._show_pp_week(merge(self._pp_local, self._pp_hub))
+
+    def _show_pp_week(self, readings: list) -> None:
+        self.pp_week_chart.set_data(readings, self._pp_week_start, datetime.now(timezone.utc))
+        show = self._pp_week_ctrl and bool(readings)
+        self.pp_week_chart.setVisible(show)
+        self.pp_week_caption.setText(self.pp_week_chart.caption())
+        self.pp_week_caption.setVisible(show)
+
     def add_tab(self, widget, title: str) -> None:
         self._tabs.addTab(widget, title)
 
@@ -385,6 +435,8 @@ class PowerplayPanel(QWidget):
                 self.pp_conflict_banner.setVisible(False)
         except Exception:
             self.pp_conflict_banner.setVisible(False)
+
+        self._refresh_pp_week(getattr(state, "system_address", None), ctrl)
 
         # Summary
         sysn = getattr(state, "system", None) or "Unknown system"

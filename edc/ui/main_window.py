@@ -2964,6 +2964,7 @@ class MainWindow(QMainWindow):
             edsm_powerplay=self.edsm_powerplay, eddn_powerplay=self.eddn_powerplay,
             fdev_powerplay=self.fdev_powerplay,
         )
+        self.powerplay_panel.eddatahub_url = getattr(self.cfg, "eddatahub_url", "") or ""
 
         # Engineering tab
         self.engineering_panel = EngineeringPanel(
