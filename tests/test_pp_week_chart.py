@@ -65,3 +65,31 @@ def test_late_hub_answer_for_old_system_is_ignored(qapp, pp_panel):
                "reinforcement": 99, "undermining": 99, "control": 0.5, "source": "hub"}
     pp_panel._on_pp_hub({77: [reading]})
     assert pp_panel._pp_week_for == 88 and pp_panel.pp_week_chart._readings == local_readings_for_88
+
+
+def test_failing_week_read_hides_chart_and_refresh_continues(qapp, pp_panel, monkeypatch):
+    record_two_readings(pp_panel._repo, 77)
+    pp_panel.refresh(_state(77))
+
+    def boom(*a):
+        raise RuntimeError("db gone")
+    monkeypatch.setattr(pp_panel._repo, "get_pp_control_since", boom)
+    pp_panel.pp_summary.setText("")
+    pp_panel.refresh(_state(77))
+    assert pp_panel.pp_week_chart.isHidden()
+    assert "System: Ys" in pp_panel.pp_summary.text()
+
+
+def test_weekly_reset_starts_a_new_window_in_the_same_system(qapp, pp_panel, monkeypatch):
+    import edc.ui.panels.powerplay_panel as ppm
+    record_two_readings(pp_panel._repo, 77)
+    pp_panel.refresh(_state(77))
+    pp_panel._pp_hub = pp_panel._repo.get_pp_control_since(77, powerplay_week_start())
+    asked = []
+    monkeypatch.setattr(pp_panel._pp_fetch, "start", lambda url, ids, since: asked.append((ids, since)))
+    new_start = _z(datetime.now(timezone.utc))
+    monkeypatch.setattr(ppm, "powerplay_week_start", lambda *a: new_start)
+    pp_panel.refresh(_state(77))
+    assert pp_panel._pp_week_start == new_start and pp_panel._pp_hub == []
+    assert asked == [([77], new_start)]
+    assert pp_panel.pp_week_chart.isHidden()               # last week's readings are gone

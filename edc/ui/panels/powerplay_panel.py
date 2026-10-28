@@ -35,8 +35,8 @@ log = logging.getLogger(__name__)
 class PowerplayPanel(QWidget):
     """
     Owns all widgets and refresh logic for the PowerPlay tab.
-    Receives state via refresh(state). Knows nothing about
-    main_window, repo, or any other panel.
+    Receives state via refresh(state). Reads PowerPlay week readings from
+    repo; knows nothing about main_window or any other panel.
     """
 
     def __init__(self, parent=None, repo=None, edsm_powerplay=None, eddn_powerplay=None, fdev_powerplay=None):
@@ -376,9 +376,10 @@ class PowerplayPanel(QWidget):
             self._pp_week_for = None
             self._show_pp_week([])
             return
-        new_system = addr != self._pp_week_for
+        week_start = powerplay_week_start()
+        new_system = addr != self._pp_week_for or week_start != self._pp_week_start
         if new_system:
-            self._pp_week_for, self._pp_week_start, self._pp_hub = addr, powerplay_week_start(), []
+            self._pp_week_for, self._pp_week_start, self._pp_hub = addr, week_start, []
         self._pp_local = self._repo.get_pp_control_since(addr, self._pp_week_start)
         self._show_pp_week(merge(self._pp_local, self._pp_hub))
         if new_system:
@@ -436,7 +437,12 @@ class PowerplayPanel(QWidget):
         except Exception:
             self.pp_conflict_banner.setVisible(False)
 
-        self._refresh_pp_week(getattr(state, "system_address", None), ctrl)
+        try:
+            self._refresh_pp_week(getattr(state, "system_address", None), ctrl)
+        except Exception:
+            log.exception("PowerPlay week chart refresh failed")
+            self.pp_week_chart.setVisible(False)
+            self.pp_week_caption.setVisible(False)
 
         # Summary
         sysn = getattr(state, "system", None) or "Unknown system"
