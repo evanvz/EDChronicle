@@ -284,8 +284,9 @@ class PowerplayPanel(QWidget):
         self, pledged, ctrl, pp_state, control_progress,
         reinforcement, undermining, powers, source: str = "",
     ) -> str:
-        ctrl_txt      = fmt.text(ctrl, default="Unknown")
-        state_txt     = fmt.text(pp_state, default="Active")
+        # RichText: state and power names can come from EDDN/EDDataHub (unauthenticated)
+        ctrl_txt      = html.escape(fmt.text(ctrl, default="Unknown"))
+        state_txt     = html.escape(fmt.text(pp_state, default="Active"))
         progress_txt  = (
             f"{control_progress * 100:.1f}%"
             if isinstance(control_progress, (int, float)) else "—"
@@ -306,10 +307,10 @@ class PowerplayPanel(QWidget):
         for p in other_powers[:4]:
             if pledged_txt and p == pledged_txt:
                 power_lines.append(
-                    f'<span style="color:#7CFC98;font-weight:700;">{p} ★</span>'
+                    f'<span style="color:#7CFC98;font-weight:700;">{html.escape(p)} ★</span>'
                 )
             else:
-                power_lines.append(f'<span style="color:#cc8866;">{p}</span>')
+                power_lines.append(f'<span style="color:#cc8866;">{html.escape(p)}</span>')
         powers_html = "<br>".join(power_lines) if power_lines else ""
 
         # State name color — acquisition = amber, reinforcement = blue family

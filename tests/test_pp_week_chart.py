@@ -112,3 +112,12 @@ def test_banner_falls_back_to_state_without_readings(qapp, pp_panel):
     pp_panel.refresh(_state(77))
     text = pp_panel.pp_conflict_banner.text()
     assert "10" in text and "EDDataHub" not in text and "your visit" not in text
+
+
+def test_banner_escapes_untrusted_state(qapp, pp_panel):
+    hub = {"observed_at": _z(datetime.now(timezone.utc)), "pp_state": "<img src=x>",
+           "reinforcement": 1, "undermining": 1, "control": 0.1, "source": "hub"}
+    pp_panel.refresh(_state(77))
+    pp_panel._on_pp_hub({77: [hub]})
+    text = pp_panel.pp_conflict_banner.text()
+    assert "<img" not in text and "&lt;img src=x&gt;" in text

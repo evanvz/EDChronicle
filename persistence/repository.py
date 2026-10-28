@@ -3319,8 +3319,12 @@ class Repository:
     def record_pp_control(self, system_address: int, observed_at: str, pp_state, reinforcement,
                           undermining, control, source: str) -> bool:
         """Stores a reinforcement/undermining reading when it's newer than and
-        differs from the latest stored one."""
+        differs from the latest stored one. EDDN is unauthenticated: a reading
+        more than 10 min in the future is dropped (as EDDataHub does), or it
+        would stay the "newest" all week."""
         if not observed_at or not (isinstance(reinforcement, int) or isinstance(undermining, int)):
+            return False
+        if observed_at > (datetime.now(timezone.utc) + timedelta(minutes=10)).strftime("%Y-%m-%dT%H:%M:%SZ"):
             return False
         last = self.db.conn.execute(
             "SELECT observed_at, pp_state, reinforcement, undermining FROM pp_control_history "

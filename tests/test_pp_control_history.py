@@ -7,7 +7,7 @@ from persistence.repository import Repository
 from persistence.schema import SCHEMA_SQL
 
 EKONO = 3205949786483
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 NOW = datetime(2026, 10, 7, 12, tzinfo=timezone.utc)   # cycle started Thu 2026-10-01
 NEXT = datetime(2026, 10, 8, 13, tzinfo=timezone.utc)   # after the 10-08 reset
 W = {EKONO: "PowerPlay task"}
@@ -166,3 +166,12 @@ def test_attack_chip_is_amber_while_reinforcement_is_ahead(tmp_path):
     view = {"chips": []}
     bt._add_control_chip(view, repo, 77, 0, NOW)
     assert view["chips"][0]["color"] == "#FF6B6B"
+
+
+def test_future_reading_is_dropped(tmp_path):
+    """EDDN is unauthenticated: a reading far in the future would stay newest all week."""
+    repo = _repo(tmp_path)
+    future = (datetime.now(timezone.utc) + timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    assert repo.record_pp_control(77, future, "Exploited", 1, 1, 0.3, "eddn") is False
+    soon = (datetime.now(timezone.utc) + timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    assert repo.record_pp_control(77, soon, "Exploited", 1, 1, 0.3, "eddn") is True
