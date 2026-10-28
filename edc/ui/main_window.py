@@ -3591,7 +3591,8 @@ class MainWindow(QMainWindow):
             log.exception("Failed to load squadron faction name for EDDN watch list")
 
         self._eddn_worker = EddnPowerPlayWorker(watched_factions=watched_factions,
-                                                relay_url=getattr(self.cfg, "eddn_relay_url", "") or "")
+                                                relay_url=getattr(self.cfg, "eddn_relay_url", "") or "",
+                                                direct=bool(getattr(self.cfg, "eddn_direct_fallback", False)))
         self._eddn_thread = QThread()
         self._eddn_worker.moveToThread(self._eddn_thread)
         self._eddn_thread.started.connect(self._eddn_worker.run)
@@ -6875,12 +6876,20 @@ class MainWindow(QMainWindow):
 
     def _on_eddn_feed_source(self, src: str) -> None:
         # a bound method, not a lambda: queued onto the UI thread
-        self._service_health_labels["EDDN"].setText("● EDDN via EDDataHub" if src == "hub" else "● EDDN")
+        self._eddn_off = src == "off"
+        self._service_health_labels["EDDN"].setText(
+            {"hub": "● EDDN via EDDataHub", "off": "● EDDN off"}.get(src, "● EDDN"))
+        if self._eddn_off:
+            self._service_health_labels["EDDN"].setStyleSheet("color: #555555; font-size: 10px;")
+            self._service_health_labels["EDDN"].setToolTip(
+                "Not listening: no EDDataHub relay (eddn_relay_url) and direct EDDN is off (eddn_direct_fallback)")
 
     def _on_service_health_tick(self) -> None:
         for name, lbl in self._service_health_labels.items():
             if name == "BGS Tick" and getattr(self, "_hub_active", False):
                 continue    # greyed while EDDataHub supplies the ticks (_set_hub_status)
+            if name == "EDDN" and getattr(self, "_eddn_off", False):
+                continue    # greyed: not listening (_on_eddn_feed_source)
             if service_health.status(name) == "issue":
                 lbl.setStyleSheet("color: #FF6B6B; font-size: 10px;")  # red -- matches this app's existing "problem" color convention
                 lbl.setToolTip(service_health.detail(name))

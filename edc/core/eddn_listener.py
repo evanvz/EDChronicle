@@ -175,13 +175,17 @@ class EddnPowerPlayWorker(QObject):
     # A BGS tick spotted in the feed (many systems' influence changing at once),
     # our second tick source next to tick.edcd.io -- see edc.core.tick_detector.
     tick_detected = pyqtSignal(str)
-    feed_source = pyqtSignal(str)      # "hub" (EDDataHub pass-through) or "direct" (EDDN relay)
+    feed_source = pyqtSignal(str)      # "hub" (EDDataHub pass-through), "direct" (EDDN relay) or "off"
     finished = pyqtSignal()
 
-    def __init__(self, watched_factions=None, relay_url: str = ""):
+    def __init__(self, watched_factions=None, relay_url: str = "", direct: bool = False):
         super().__init__()
         self._stop = False
         self.relay_url = relay_url
+        # Connecting to the EDDN relay itself is opt-in (config eddn_direct_fallback):
+        # EDDN is limiting non-server listeners (Artie, 2026-10), so by default the
+        # app only reads EDDataHub's pass-through, and nothing without one.
+        self.direct = direct
         # Fixed at construction (squadron-aligned faction rarely changes) —
         # a set of faction names to watch for in EDDN's Factions array, so
         # we can build presence data for systems the player never personally
@@ -239,8 +243,13 @@ class EddnPowerPlayWorker(QObject):
         ctx = zmq.Context()
         hub = self.relay_url
         hub_retry_at = 0.0
-        while not self._stop:
-            use_hub = bool(hub) and time.monotonic() >= hub_retry_at
+        silent_logged = False
+        if not hub and not self.direct:
+            log.info("EDDN listener off: no EDDataHub relay (eddn_relay_url) and direct EDDN is off "
+                     "(eddn_direct_fallback)")
+            self.feed_source.emit("off")
+        while not self._stop and (hub or self.direct):
+            use_hub = bool(hub) and (not self.direct or time.monotonic() >= hub_retry_at)
             url = hub if use_hub else _RELAY_URL
             sub = ctx.socket(zmq.SUB)
             try:
@@ -251,11 +260,14 @@ class EddnPowerPlayWorker(QObject):
                 got = self._pump(sub, stale_s=_HUB_SILENT_S if use_hub else _STALE_CONNECTION_TIMEOUT_S,
                                  source="hub" if use_hub else "direct",
                                  max_s=_HUB_RETRY_S if hub and not use_hub else None)
-                if use_hub and not got:
+                if use_hub and not got and self.direct:
                     log.warning("EDDataHub's EDDN feed silent -- listening to EDDN directly, retrying in %ds",
                                 _HUB_RETRY_S)
                     hub_retry_at = time.monotonic() + _HUB_RETRY_S
                     continue
+                if use_hub and not got and not silent_logged:
+                    log.warning("EDDataHub's EDDN feed silent -- direct EDDN is off, waiting for the hub")
+                silent_logged = use_hub and not got
             except Exception:
                 log.exception("EDDN listener error — reconnecting in %ss", _RECONNECT_DELAY_S)
             finally:

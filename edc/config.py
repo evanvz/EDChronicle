@@ -56,6 +56,7 @@ class AppConfig:
     # EDDataHub's raw EDDN pass-through, e.g. tcp://172.16.10.197:9500 -- read EDDN
     # through the squadron's server instead of the EDDN relay; EDDN direct when silent
     eddn_relay_url: str = ""
+    eddn_direct_fallback: bool = False   # connect to EDDN itself when EDDataHub's relay is silent / not set
     market_search_radius_ly: int = 100
     last_market_prune_date: Optional[str] = None
     search_indexes_ensured: bool = False
@@ -211,6 +212,7 @@ class ConfigStore:
                 eddn_contribute_enabled=bool(data.get("eddn_contribute_enabled", True)),
                 eddatahub_url=str(data.get("eddatahub_url", "") or ""),
                 eddn_relay_url=str(data.get("eddn_relay_url", "") or ""),
+                eddn_direct_fallback=bool(data.get("eddn_direct_fallback", False)),
                 market_search_radius_ly=int(data.get("market_search_radius_ly", 100) or 100),
                 last_market_prune_date=data.get("last_market_prune_date"),
                 search_indexes_ensured=bool(data.get("search_indexes_ensured", False)),
@@ -257,6 +259,7 @@ class ConfigStore:
                         "eddn_contribute_enabled": bool(getattr(cfg, "eddn_contribute_enabled", True)),
                         "eddatahub_url": str(getattr(cfg, "eddatahub_url", "") or ""),
                         "eddn_relay_url": str(getattr(cfg, "eddn_relay_url", "") or ""),
+                        "eddn_direct_fallback": bool(getattr(cfg, "eddn_direct_fallback", False)),
                         "market_search_radius_ly": int(getattr(cfg, "market_search_radius_ly", 100) or 100),
                         "last_market_prune_date": getattr(cfg, "last_market_prune_date", None),
                         "search_indexes_ensured": bool(getattr(cfg, "search_indexes_ensured", False)),
