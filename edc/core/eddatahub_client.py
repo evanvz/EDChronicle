@@ -112,6 +112,38 @@ def fetch_system_factions(base_url: str, addresses: List[int]) -> Optional[dict]
         return None
 
 
+def fetch_system_powerplay(base_url: str, addresses: List[int], since: str) -> Optional[dict]:
+    """{system address: [reading, ...]} oldest first, every requested address a key ([] when
+    the hub has no rows). A reading is {observed_at, pp_state, reinforcement, undermining,
+    control, source: "hub"}. None when the hub isn't reachable or answers wrongly."""
+    ids = [a for a in addresses if isinstance(a, int)]
+    if not base_url or not ids:
+        return None
+    out = {a: [] for a in ids}
+    try:
+        for i in range(0, len(ids), 100):
+            chunk = ids[i:i + 100]
+            resp = requests.get(f"{base_url.rstrip('/')}/api/system-powerplay",
+                                params={"ids": ",".join(map(str, chunk)), "since": since},
+                                headers={"User-Agent": USER_AGENT}, timeout=_TIMEOUT)
+            resp.raise_for_status()
+            rows = resp.json()
+            if not isinstance(rows, list):
+                raise ValueError("not a system powerplay list")
+            wanted = set(chunk)
+            for r in rows:
+                if not isinstance(r, dict) or r.get("system") not in wanted:
+                    continue
+                out[r["system"]].append({"observed_at": _z(r["time"]), "pp_state": r.get("state"),
+                                         "reinforcement": r.get("reinforcement"),
+                                         "undermining": r.get("undermining"),
+                                         "control": r.get("control"), "source": "hub"})
+        return out
+    except Exception as exc:
+        log.info("EDDataHub system powerplay not available (%s)", exc)
+        return None
+
+
 def fetch_markets(base_url: str, since: str, on_message, cancelled=lambda: False) -> Optional[int]:
     """The newest market (EDDN commodity/3 message body) of every station the hub
     received since `since` (it reads at most 7 days back), each passed to
