@@ -146,7 +146,8 @@ class PowerPlayWatchPanel(QWidget):
         return merge(self._local.get(addr, []), self._hub.get(addr, []))
 
     def _on_hub(self, data: dict) -> None:
-        self._hub = data
+        if data:
+            self._hub = data
         self._fill()
 
     def _distances(self) -> dict:
@@ -210,17 +211,18 @@ class PowerPlayWatchPanel(QWidget):
             return
         days = daily(self._readings(r["address"]), self._week_start, datetime.now(timezone.utc))
         self._day_table.setRowCount(len(days))
+        first_u = next((i for i, d in enumerate(days) if d["u"] is not None), None)
         for i, d in enumerate(days):
-            since = f"change since {d['day'] - timedelta(days=d['spans'])}" if d["spans"] > 1 else ""
             cells = [QTableWidgetItem(f"{d['day']:%a %d %b}")]
-            for key in ("u", "r"):
-                v = d[key]
+            for key, spans in (("u", d["spans"]), ("r", d["spans_r"])):
+                v, back = d[key], d["day"] - timedelta(days=spans)
+                since = "" if spans == 1 else f"change since {back}" if back >= days[0]["day"] else                     "change since the reset" + (" — includes the weekly decay set at the reset" if key == "u" else "")
                 item = QTableWidgetItem("—" if v is None else f"{v:,}" + ("*" if since else ""))
                 if v is not None and since:
                     item.setToolTip(since)
+                elif key == "u" and i == first_u:
+                    item.setToolTip("includes the weekly decay set at the reset")
                 cells.append(item)
-            if i == 0:
-                cells[1].setToolTip("includes the weekly decay set at the reset")
             cells.append(QTableWidgetItem("—" if d["control"] is None else f"{d['control'] * 100:.1f}%"))
             cells.append(QTableWidgetItem(d["state"] or "—"))
             for c, item in enumerate(cells):

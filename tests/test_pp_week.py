@@ -37,6 +37,18 @@ def test_daily_none_undermining_stays_none():
     assert days[2]["u"] == 20 and days[2]["spans"] == 2
 
 
+def test_daily_first_reading_after_reset_day_spans_back_to_reset():
+    days = daily([rd("2026-10-24T10:00:00Z", 25000), rd("2026-10-25T10:00:00Z", 25100)], WS, NOW)
+    assert (days[2]["u"], days[2]["spans"]) == (25000, 3)           # Sat measured from the Thu reset
+    assert (days[3]["u"], days[3]["spans"]) == (100, 1)
+
+
+def test_daily_spans_tracked_per_key():
+    days = daily([rd("2026-10-22T10:00:00Z", 100, 10), rd("2026-10-23T10:00:00Z", None, 20),
+                  rd("2026-10-24T10:00:00Z", 150, 30)], WS, NOW)
+    assert (days[2]["u"], days[2]["spans"], days[2]["r"], days[2]["spans_r"]) == (50, 2, 10, 1)
+
+
 def test_last_24h():
     rs = [rd("2026-10-25T08:00:00Z", 300), rd("2026-10-26T10:00:00Z", 420)]
     assert last_24h(rs, WS, NOW) == (120, "up")

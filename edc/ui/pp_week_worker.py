@@ -12,7 +12,7 @@ from edc.core.eddatahub_client import fetch_system_powerplay
 
 log = logging.getLogger(__name__)
 
-_CACHE: dict = {}      # id64 -> (fetched_monotonic, readings)
+_CACHE: dict = {}      # id64 -> (fetched_monotonic, since, readings)
 _MAX_AGE_S = 600
 
 
@@ -44,12 +44,13 @@ class HubPowerplayFetch(QObject):
         if self._thread is not None and self._thread.isRunning():
             return
         now = time.monotonic()
-        if all(i in _CACHE and now - _CACHE[i][0] < _MAX_AGE_S for i in ids):
-            self.done.emit({i: _CACHE[i][1] for i in ids})
+        if all(i in _CACHE and now - _CACHE[i][0] < _MAX_AGE_S and _CACHE[i][1] == since for i in ids):
+            self.done.emit({i: _CACHE[i][2] for i in ids})
             return
         if not hub_url:
             self.done.emit({})
             return
+        self._since = since
         self._worker = _Worker(hub_url, list(ids), since)
         self._thread = QThread()
         self._worker.moveToThread(self._thread)
@@ -64,5 +65,5 @@ class HubPowerplayFetch(QObject):
             return
         now = time.monotonic()
         for i, readings in data.items():
-            _CACHE[i] = (now, readings)
+            _CACHE[i] = (now, self._since, readings)
         self.done.emit(data)

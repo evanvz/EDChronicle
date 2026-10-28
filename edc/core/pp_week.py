@@ -22,7 +22,9 @@ def merge(local: list, hub: list) -> list:
 
 def daily(readings: list, week_start: str, now: datetime) -> list:
     """One dict per UTC date from the reset to now. u/r are the day's gain over
-    the previous day that has a reading (0 at the reset); spans = days back to it."""
+    the previous day that has a reading (0 at the reset); spans/spans_r = days back
+    to it for u/r (spans follows r when u is None), counting the reset day itself
+    when there is no earlier reading."""
     last = {}
     for r in sorted(readings, key=lambda r: r["observed_at"]):
         if r["observed_at"] >= week_start:
@@ -32,15 +34,18 @@ def daily(readings: list, week_start: str, now: datetime) -> list:
     d = first
     while d <= now.date():
         r = last.get(d)
-        row = {"day": d, "u": None, "r": None, "control": None, "state": None, "spans": 1}
+        row = {"day": d, "u": None, "r": None, "control": None, "state": None, "spans": 1, "spans_r": 1}
         if r:
             row["control"], row["state"] = r["control"], r["pp_state"]
             for key, name in (("undermining", "u"), ("reinforcement", "r")):
                 v = r[key]
                 if v is not None:
                     row[name] = v - base[key][0]
+                    sp = (d - base[key][1]).days if base[key][1] else (d - first).days + 1
+                    if name == "r":
+                        row["spans_r"] = sp
                     if name == "u" or row["u"] is None:
-                        row["spans"] = (d - base[key][1]).days if base[key][1] else 1
+                        row["spans"] = sp
                     base[key] = (v, d)
         out.append(row)
         d += timedelta(days=1)
