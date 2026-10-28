@@ -12,10 +12,11 @@ def rd(t, u, r=0, src="eddn"):
             "control": 0.3, "source": src}
 
 
-def test_merge_dedupes_keeping_local():
+def test_merge_dedupes_keeping_hub():
     a = rd("2026-10-23T10:00:00Z", 5, src="journal")
-    assert merge([a], [rd("2026-10-23T10:00:00Z", 5, src="hub"), rd("2026-10-24T10:00:00Z", 9, src="hub")]) \
-        == [a, rd("2026-10-24T10:00:00Z", 9, src="hub")]
+    h = rd("2026-10-23T10:00:00Z", 5, src="hub")
+    assert merge([a, rd("2026-10-25T10:00:00Z", 7)], [h, rd("2026-10-24T10:00:00Z", 9, src="hub")]) \
+        == [h, rd("2026-10-24T10:00:00Z", 9, src="hub"), rd("2026-10-25T10:00:00Z", 7)]
 
 
 def test_daily_reset_day_from_zero_gap_day_none_and_span():

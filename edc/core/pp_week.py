@@ -10,9 +10,10 @@ def _t(s: str) -> datetime:
 
 
 def merge(local: list, hub: list) -> list:
-    """Sorted by time; equal (time, R, U) readings appear once, local kept."""
+    """Sorted by time; equal (time, R, U) readings appear once, the EDDataHub copy
+    kept (the hub is the primary source; the app's EDDN feed comes through it)."""
     seen, out = set(), []
-    for r in [*local, *hub]:
+    for r in [*hub, *local]:
         k = (r["observed_at"], r["reinforcement"], r["undermining"])
         if k not in seen:
             seen.add(k)
