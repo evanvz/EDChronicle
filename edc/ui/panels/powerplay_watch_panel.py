@@ -7,6 +7,7 @@ which already holds the repo, BGS tick, pledge and live state."""
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta, timezone
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
@@ -15,12 +16,15 @@ from PyQt6.QtWidgets import (
     QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
-from edc.core.bgs_tasks import _hours_ago, distance_text, pp_watch, watch_rows
+from edc.core.bgs_tasks import _hours_ago, distance_text, powerplay_week_start, pp_watch, watch_rows
+from edc.core.pp_week import daily, last_24h, merge
+from edc.ui.pp_week_worker import HubPowerplayFetch
 from edc.ui.style import HDR_STYLE, TABLE_STYLE, bulk_table_fill
 
 log = logging.getLogger(__name__)
 
-_COLUMNS = ["System", "Why watched", "State", "Reinforced", "Decay", "Attack", "Since tick", "Data", "Distance"]
+_COLUMNS = ["System", "Why watched", "State", "Reinforced", "Decay", "Attack", "Since tick", "U 24 h", "Data", "Distance"]
+_DAY_COLUMNS = ["Day", "U", "R", "Progress", "State"]
 _RED, _AMBER, _GREEN, _DIM = "#FF6B6B", "#FFB347", "#6BCB77", "#777777"
 _STATUS_COLOR = {"attack": _RED, "unknown": _AMBER, "decay": _AMBER, "holding": _GREEN, None: _DIM}
 
@@ -37,10 +41,17 @@ class _NumItem(QTableWidgetItem):
 
 
 class PowerPlayWatchPanel(QWidget):
+    _col = staticmethod(_COLUMNS.index)
+
     def __init__(self, panel, parent=None):
         super().__init__(parent)
         self._panel = panel
         self._rows = []
+        self._local = {}
+        self._hub = {}
+        self._week_start = powerplay_week_start()
+        self._fetch = HubPowerplayFetch(self)
+        self._fetch.done.connect(self._on_hub)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 6, 8, 8)
@@ -77,7 +88,17 @@ class PowerPlayWatchPanel(QWidget):
         h.setSortIndicator(-1, Qt.SortOrder.AscendingOrder)   # keep watch_rows' order until a header is clicked
         self._table.cellClicked.connect(self._copy_system)
         self._table.itemSelectionChanged.connect(self._update_add_button)
+        self._table.itemSelectionChanged.connect(self._fill_days)
         layout.addWidget(self._table, 1)
+
+        self._day_table = QTableWidget(0, len(_DAY_COLUMNS))
+        self._day_table.setHorizontalHeaderLabels(_DAY_COLUMNS)
+        self._day_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._day_table.verticalHeader().setVisible(False)
+        self._day_table.setStyleSheet(TABLE_STYLE)
+        self._day_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self._day_table.hide()
+        layout.addWidget(self._day_table)
 
         foot = QHBoxLayout()
         hint = QLabel("Click a row to copy the system name. Red = real undermining this cycle (grew after the "
@@ -103,6 +124,9 @@ class PowerPlayWatchPanel(QWidget):
         try:
             watch = pp_watch(repo, pledged, getattr(self._panel, "edsm_powerplay", None))
             self._rows = watch_rows(repo, since, watch)
+            self._week_start = powerplay_week_start()
+            self._local = {r["address"]: repo.get_pp_control_since(r["address"], self._week_start)
+                           for r in self._rows}
         except Exception:
             log.exception("Failed to build PowerPlay watch list")
             self._rows = []
@@ -115,6 +139,14 @@ class PowerPlayWatchPanel(QWidget):
             f"{unknown} undermined, decay or attack unclear · "
             f"{no_data} with no reading since the Thursday reset"
             + ("" if pledged else " · not pledged: only PowerPlay task systems are watched"))
+        self._fill()
+        self._fetch.start(self._panel.eddatahub_url, list(self._local), self._week_start)
+
+    def _readings(self, addr: int) -> list:
+        return merge(self._local.get(addr, []), self._hub.get(addr, []))
+
+    def _on_hub(self, data: dict) -> None:
+        self._hub = data
         self._fill()
 
     def _distances(self) -> dict:
@@ -132,12 +164,14 @@ class PowerPlayWatchPanel(QWidget):
         rows = [r for r in self._rows
                 if r["status"] in ("attack", "unknown") or not self._only_attacked.isChecked()]
         dist = self._distances() if rows else {}
+        now = datetime.now(timezone.utc)
         self._table.setSortingEnabled(False)
         self._table.setRowCount(len(rows))
         with bulk_table_fill(self._table):
             for i, r in enumerate(rows):
                 color = _STATUS_COLOR[r["status"]]
                 data = r["observed_at"] and f"{_hours_ago(r['observed_at'])} ({r['source']})"
+                day = last_24h(self._readings(r["address"]), self._week_start, now)
                 cells = [
                     QTableWidgetItem(r["name"]),
                     QTableWidgetItem(r["why"]),
@@ -149,20 +183,48 @@ class PowerPlayWatchPanel(QWidget):
                              ("—" if not r["attack"] else f"+{r['attack']:,}"), r["attack"]),
                     _NumItem("?" if r["gained"] is None and r["status"] else
                              ("—" if not r["gained"] else f"+{r['gained']:,}"), r["gained"]),
+                    _NumItem("—" if day is None else {"up": f"+{day[0]:,} ↑", "down": f"−{-day[0]:,} ↓",
+                                                      "flat": "0 ↔"}[day[1]], day and day[0]),
                     QTableWidgetItem(data or "no data yet"),
                     QTableWidgetItem(dist.get(r["name"], "")),
                 ]
                 for c, item in enumerate(cells):
-                    if c in (3, 4, 5, 6):
+                    if c in (3, 4, 5, 6, 7):
                         item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                     if c in (0, 5) or (c == 4 and r["status"] in ("decay", "unknown")):
                         item.setForeground(QColor(color))
+                    if c == 7 and day and day[1] == "up":
+                        item.setForeground(QColor(_RED))
                     item.setData(Qt.ItemDataRole.UserRole, r)
                     self._table.setItem(i, c, item)
         self._table.setSortingEnabled(True)
         if not rows:
             self._status.setText(self._status.text() + " — nothing under attack right now")
         self._update_add_button()
+        self._fill_days()
+
+    def _fill_days(self) -> None:
+        r = self._selected()
+        self._day_table.setVisible(bool(r))
+        if not r:
+            return
+        days = daily(self._readings(r["address"]), self._week_start, datetime.now(timezone.utc))
+        self._day_table.setRowCount(len(days))
+        for i, d in enumerate(days):
+            since = f"change since {d['day'] - timedelta(days=d['spans'])}" if d["spans"] > 1 else ""
+            cells = [QTableWidgetItem(f"{d['day']:%a %d %b}")]
+            for key in ("u", "r"):
+                v = d[key]
+                item = QTableWidgetItem("—" if v is None else f"{v:,}" + ("*" if since else ""))
+                if v is not None and since:
+                    item.setToolTip(since)
+                cells.append(item)
+            if i == 0:
+                cells[1].setToolTip("includes the weekly decay set at the reset")
+            cells.append(QTableWidgetItem("—" if d["control"] is None else f"{d['control'] * 100:.1f}%"))
+            cells.append(QTableWidgetItem(d["state"] or "—"))
+            for c, item in enumerate(cells):
+                self._day_table.setItem(i, c, item)
 
     def _selected(self):
         items = self._table.selectedItems()
