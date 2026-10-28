@@ -3353,6 +3353,14 @@ class Repository:
             (system_address, since),
         ).fetchone()
 
+    def get_pp_control_since(self, system_address: int, since: str) -> list:
+        """Readings at or after `since`, oldest first, as dicts."""
+        return [dict(r) for r in self.db.conn.execute(
+            "SELECT observed_at, pp_state, reinforcement, undermining, control, source FROM pp_control_history "
+            "WHERE system_address = ? AND observed_at >= ? ORDER BY observed_at",
+            (system_address, since),
+        ).fetchall()]
+
     def get_system_names_for_addresses(self, addresses: list) -> dict:
         if not addresses:
             return {}
