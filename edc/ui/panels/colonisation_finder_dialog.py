@@ -174,6 +174,7 @@ class ColonisationFinderDialog(QDialog):
         """App shutdown: a QThread destroyed while running is a Qt fatal."""
         for thread, _ in self._threads:
             thread.quit()
+        for thread, _ in self._threads:
             thread.wait(10000)
 
     # ── search ─────────────────────────────────────────────────────────
@@ -201,7 +202,7 @@ class ColonisationFinderDialog(QDialog):
             if xyz is None:
                 return "Unknown system — jump there or pick a known one"
             ids = _load_squad_ids(db_path) if near else []
-            rows = fetch_colonisation_search(url, xyz[0], xyz[1], xyz[2], radius, port, eco, ids,
+            rows = fetch_colonisation_search(url, xyz[0], xyz[1], xyz[2], radius, port, eco, ids[:200],
                                              near_ly if near else None)
             return rows if rows is not None else "EDDataHub not reachable"
 
@@ -215,6 +216,9 @@ class ColonisationFinderDialog(QDialog):
             self._status.setText(result or "Search failed")
             return
         self._status.setText(f"{len(result)} claimable system(s)")
+        self._detail_id = None
+        self._spansh.setText("")
+        self._bodies.setRowCount(0)
         self._table.setSortingEnabled(False)  # sorting while filling scrambles the row indexes
         self._table.setRowCount(len(result))
         for r, row in enumerate(result):

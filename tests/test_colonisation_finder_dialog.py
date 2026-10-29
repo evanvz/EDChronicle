@@ -105,3 +105,20 @@ def test_second_detail_fetch_does_not_block(monkeypatch):
     assert time.time() - t0 < 1
     gate.set()
     dlg.stop()
+
+
+def test_squad_ids_capped_at_200(monkeypatch):
+    calls = []
+    dlg = _dialog(monkeypatch, calls=calls)
+    monkeypatch.setattr(mod, "_load_squad_ids", lambda db_path: list(range(300)))
+    dlg._near_chk.setChecked(True)
+    _search(dlg)
+    assert calls[0][7] == list(range(200))
+
+
+def test_new_search_clears_old_detail(monkeypatch):
+    dlg = _dialog(monkeypatch)
+    dlg._spansh.setText("Spansh: free")
+    dlg._bodies.setRowCount(3)
+    _search(dlg)
+    assert dlg._spansh.text() == "" and dlg._bodies.rowCount() == 0
