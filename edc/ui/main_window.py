@@ -5190,7 +5190,7 @@ class MainWindow(QMainWindow):
             self._voice_cmd_worker.stop()
         if self._voice_cmd_thread:
             self._voice_cmd_thread.quit()
-            self._voice_cmd_thread.wait(2000)
+            self._voice_cmd_thread.wait(10000)   # dropping a still-running QThread is a Qt fatal
         self._voice_cmd_worker = None
         self._voice_cmd_thread = None
         log.info("Voice commands stopped")

@@ -51,13 +51,13 @@ class WatcherController:
             self.watcher.stop()
         if self.thread:
             self.thread.quit()
-            self.thread.wait(1500)
+            self.thread.wait(10000)   # dropping a still-running QThread is a Qt fatal
 
         if self.status_watcher:
             self.status_watcher.stop()
         if self.status_thread:
             self.status_thread.quit()
-            self.status_thread.wait(1500)
+            self.status_thread.wait(10000)
 
         self.thread = None
         self.watcher = None
