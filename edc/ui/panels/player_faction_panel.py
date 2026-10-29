@@ -124,6 +124,23 @@ def _parse_states(raw) -> List[str]:
     ]
 
 
+def _days_fought(readings, ticks) -> Optional[Tuple[int, bool]]:
+    """(ticks since the current war was first seen, up to the last reading; True if it may have
+    started earlier: at our first reading, or 2+ ticks unseen before it). None when not at war now.
+    readings: [(observed_at, influence, active_states, ...)] oldest first; ticks: ISO strings (same format)."""
+    start, early, last_off = None, False, None
+    for i, r in enumerate(readings):
+        if {s.lower() for s in _parse_states(r[2])} & {"war", "civilwar"}:
+            if start is None:
+                start = r[0]
+                early = i == 0 or sum(1 for t in ticks if last_off < t <= start) >= 2
+        else:
+            start, early, last_off = None, False, r[0]
+    if start is None:
+        return None
+    return sum(1 for t in ticks if start < t <= readings[-1][0]), early
+
+
 def _utc_today() -> date:
     """Snapshot dates and data timestamps are UTC (journal/EDDN event time);
     the local date runs a day ahead for UTC+ players near local midnight."""
@@ -2415,6 +2432,16 @@ class _FactionHistoryDialog(QDialog):
 
         parts = []
         if bgs_status is not None:
+            try:
+                ticks = self._panel._repo.get_bgs_ticks()
+                for c in bgs_status["conflicts"]:
+                    fought = _days_fought(self._panel._repo.get_influence_readings(
+                        self._system_address, c.get("faction1")), ticks)
+                    if fought and c.get("war_type") != "election":
+                        won = sum(w for w in (c.get("won_days1"), c.get("won_days2")) if isinstance(w, int))
+                        c["day"], c["day_early"] = max(fought[0], won), fought[1]
+            except Exception:
+                log.exception("Failed to count war days for system %s", self._system_address)
             conflicts_txt = _conflicts_text(bgs_status["conflicts"])
             if conflicts_txt:
                 parts.append(f"⚔ {conflicts_txt}")

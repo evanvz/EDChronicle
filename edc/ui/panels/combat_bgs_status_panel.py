@@ -121,6 +121,8 @@ def _conflicts_text(conflicts: List[dict]) -> str:
         stake1, stake2 = c.get("stake1"), c.get("stake2")
         if stake1 or stake2:
             text += f", stakes: {stake1 or 'none'} vs {stake2 or 'none'}"
+        if "day" in c:   # set by the BGS History window from its own readings
+            text += f" · {'≥' if c.get('day_early') else ''}{c['day']} of 7 days fought"
         parts.append(text)
     return " | ".join(parts)
 

@@ -65,3 +65,16 @@ def test_history_window_shows_only_factions_present_now(tmp_path):
     assert "Wadj Wen" not in dlg._forecast_label.text()
     assert [dlg._table.item(r, 1).text() for r in range(dlg._table.rowCount())] == ["Elite United Worlds"]
     repo.db.close()
+
+
+def test_days_fought_counts_ticks_since_war_first_seen():
+    """Delta Indi, 2026-10-29: War first seen 26 Oct 21:30, ticks 27 + 28 Oct -> 2 days fought (2-0)."""
+    from edc.ui.panels.player_faction_panel import _days_fought
+    war = '[{"State": "War"}]'
+    readings = [("2026-10-25T19:17:09Z", 0.34, None, None), ("2026-10-26T19:02:33Z", 0.37, None, None),
+                ("2026-10-26T21:30:34Z", 0.37, war, None), ("2026-10-28T23:24:57Z", 0.37, war, None)]
+    ticks = ["2026-10-26T09:11:45Z", "2026-10-26T16:11:05Z", "2026-10-27T16:57:46Z", "2026-10-28T17:47:20Z"]
+    assert _days_fought(readings, ticks) == (2, False)
+    assert _days_fought(readings[2:], ticks) == (2, True)                  # war in our first reading
+    assert _days_fought(readings[:1] + readings[2:], ticks) == (2, True)   # 2+ ticks unseen before it
+    assert _days_fought(readings[:2], ticks) is None                       # not at war now
