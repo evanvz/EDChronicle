@@ -185,3 +185,10 @@ def test_faction_states_text_drops_war_the_war_line_shows_and_labels_expansion()
                  "recovering_states": [{"State": "Expansion"}]}]
     assert _faction_states_text(factions, war) == (
         "AWAC: Expansion (faction-wide, pending) | C: War, Expansion (faction-wide), Expansion (faction-wide, recovering)")
+
+
+def test_conflicts_text_can_leave_stakes_out():
+    """The BGS History window shows the stakes on their own line."""
+    conflicts = [{"war_type": "war", "faction1": "A", "won_days1": 2, "faction2": "B", "won_days2": 1,
+                  "stake1": "Hahn Hub", "stake2": ""}]
+    assert _conflicts_text(conflicts, stakes=False) == "War: A (2) vs B (1)"

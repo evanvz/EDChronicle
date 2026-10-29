@@ -107,7 +107,7 @@ def _won_days_text(won_days) -> str:
     return str(won_days) if isinstance(won_days, int) else "?"
 
 
-def _conflicts_text(conflicts: List[dict]) -> str:
+def _conflicts_text(conflicts: List[dict], stakes: bool = True) -> str:
     conflicts = _combat_conflicts(conflicts)
     if not conflicts:
         return ""
@@ -119,7 +119,7 @@ def _conflicts_text(conflicts: List[dict]) -> str:
             f"vs {c.get('faction2')} ({_won_days_text(c.get('won_days2'))})"
         )
         stake1, stake2 = c.get("stake1"), c.get("stake2")
-        if stake1 or stake2:
+        if stakes and (stake1 or stake2):
             text += f", stakes: {stake1 or 'none'} vs {stake2 or 'none'}"
         parts.append(text)
     return " | ".join(parts)
