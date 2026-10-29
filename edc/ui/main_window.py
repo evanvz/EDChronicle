@@ -2965,7 +2965,6 @@ class MainWindow(QMainWindow):
             fdev_powerplay=self.fdev_powerplay,
         )
         self.powerplay_panel.eddatahub_url = getattr(self.cfg, "eddatahub_url", "") or ""
-        Repository.hub_url = getattr(self.cfg, "eddatahub_url", "") or ""
 
         # Engineering tab
         self.engineering_panel = EngineeringPanel(

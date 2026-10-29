@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 import logging
-import time
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
@@ -142,35 +141,6 @@ def fetch_system_powerplay(base_url: str, addresses: List[int], since: str) -> O
         return out
     except Exception as exc:
         log.info("EDDataHub system powerplay not available (%s)", exc)
-        return None
-
-
-_SEARCH_TIMEOUT = 3
-_SEARCH_SKIP_S = 60
-_skip_until = 0.0
-
-
-def fetch_market_search(base_url: str, commodities: List[str], x: float, y: float, z: float,
-                        radius: float, exclude_market_id: Optional[int] = None) -> Optional[List[dict]]:
-    """The hub's market-search rows (see /api/market-search). None on any failure or while
-    skipping the hub for _SEARCH_SKIP_S after a failure."""
-    global _skip_until
-    if not base_url or time.monotonic() < _skip_until:
-        return None
-    params = {"commodity": ",".join(commodities), "x": x, "y": y, "z": z, "radius": radius}
-    if exclude_market_id is not None:
-        params["exclude"] = exclude_market_id
-    try:
-        resp = requests.get(f"{base_url.rstrip('/')}/api/market-search", params=params,
-                            headers={"User-Agent": USER_AGENT}, timeout=_SEARCH_TIMEOUT)
-        resp.raise_for_status()
-        rows = resp.json()
-        if not isinstance(rows, list):
-            raise ValueError("not a market search list")
-        return rows
-    except Exception as exc:
-        _skip_until = time.monotonic() + _SEARCH_SKIP_S
-        log.warning("EDDataHub market search failed (%s) -- skipping the hub for %d s", exc, _SEARCH_SKIP_S)
         return None
 
 
