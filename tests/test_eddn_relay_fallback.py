@@ -93,3 +93,15 @@ def test_no_hub_and_direct_off_says_off():
     w.tick_detector.save = lambda: None
     w.run()
     assert seen == ["off"]
+
+
+def test_hub_silence_limit_is_short_only_when_direct_can_take_over():
+    """2026-10-29: EDDN trickled for 2 h; with direct off the app dropped and re-joined the hub
+    every 35 s for nothing (201 reconnects) and could miss messages in each 5 s gap."""
+    for direct, want in ((False, eddn_listener._STALE_CONNECTION_TIMEOUT_S), (True, eddn_listener._HUB_SILENT_S)):
+        w = EddnPowerPlayWorker(relay_url="tcp://127.0.0.1:59507", direct=direct)
+        seen = []
+        w._pump = lambda sub, stale_s=None, **kw: (seen.append(stale_s), setattr(w, "_stop", True))[-1] or True
+        w.tick_detector.save = lambda: None
+        w.run()
+        assert seen == [want]

@@ -48,8 +48,8 @@ _RECONNECT_DELAY_S = 5
 _STALE_CONNECTION_TIMEOUT_S = 300
 # EDDataHub's LAN pass-through (config eddn_relay_url): the squadron's server reads
 # EDDN once and passes every raw message on, so this app isn't another listener on
-# the EDDN relay (which is limiting non-server listeners, 2026-10). Silent this long:
-# fall back to EDDN directly, and try the hub again after _HUB_RETRY_S.
+# the EDDN relay (which is limiting non-server listeners, 2026-10). Silent this long
+# (direct EDDN on only): fall back to EDDN directly, and try the hub again after _HUB_RETRY_S.
 _HUB_SILENT_S = 30
 _HUB_RETRY_S = 600
 
@@ -257,7 +257,9 @@ class EddnPowerPlayWorker(QObject):
                 sub.setsockopt(zmq.RCVTIMEO, _RECV_TIMEOUT_MS)
                 sub.connect(url)
                 log.info("EDDN listener connected to %s", url)
-                got = self._pump(sub, stale_s=_HUB_SILENT_S if use_hub else _STALE_CONNECTION_TIMEOUT_S,
+                # short hub limit only to fall back fast; with direct off a reconnect gains nothing
+                # and drops what arrives in its gap (EDDN trickle 2026-10-29: 201 reconnects in 2 h)
+                got = self._pump(sub, stale_s=_HUB_SILENT_S if use_hub and self.direct else _STALE_CONNECTION_TIMEOUT_S,
                                  source="hub" if use_hub else "direct",
                                  max_s=_HUB_RETRY_S if hub and not use_hub else None)
                 if use_hub and not got and self.direct:
