@@ -1069,6 +1069,8 @@ class ColonisationPanel(QWidget):
         self._colonisation_candidates_system: Optional[str] = None
         self._detail_dialogs: dict = {}
         self._raven_dialog: Optional["_RavenColonialDialog"] = None
+        self._finder_dialog = None
+        self._eddatahub_url = ""
         self._known_sites: list = []
 
         root = QVBoxLayout(self)
@@ -1165,6 +1167,11 @@ class ColonisationPanel(QWidget):
         )
         raven_btn.clicked.connect(self._open_raven_dialog)
         add_row.addWidget(raven_btn)
+        self._find_btn = QPushButton("Find Systems…")
+        self._find_btn.setStyleSheet(_BTN_STYLE)
+        self._find_btn.clicked.connect(self._open_finder_dialog)
+        add_row.addWidget(self._find_btn)
+        self.eddatahub_url = ""
         colon_l.addLayout(add_row)
 
         self._depot_table = QTableWidget()
@@ -1517,6 +1524,30 @@ class ColonisationPanel(QWidget):
         dlg.show()
         dlg.raise_()
         dlg.activateWindow()
+
+    @property
+    def eddatahub_url(self) -> str:
+        return self._eddatahub_url
+
+    @eddatahub_url.setter
+    def eddatahub_url(self, url: str) -> None:
+        self._eddatahub_url = url or ""
+        self._find_btn.setEnabled(bool(self._eddatahub_url))
+        self._find_btn.setToolTip(
+            "Find claimable systems ranked by port types and economies (EDDataHub)." if self._eddatahub_url
+            else "Needs EDDataHub (Settings → EDDataHub URL)"
+        )
+
+    def _open_finder_dialog(self) -> None:
+        if not self._eddatahub_url:
+            return
+        from edc.ui.panels.colonisation_finder_dialog import ColonisationFinderDialog
+        if self._finder_dialog is None:
+            self._finder_dialog = ColonisationFinderDialog(self, self._eddatahub_url)
+        self._finder_dialog.hub_url = self._eddatahub_url
+        self._finder_dialog.show()
+        self._finder_dialog.raise_()
+        self._finder_dialog.activateWindow()
 
     def _open_raven_dialog(self) -> None:
         if self._raven_dialog is None:

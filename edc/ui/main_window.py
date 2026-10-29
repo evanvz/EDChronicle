@@ -3020,6 +3020,7 @@ class MainWindow(QMainWindow):
             self.repo, ship_pad_table=self.ship_pad_sizes, commodity_categories=self.commodity_categories,
             raven_pin_store=self.raven_colonial_pin_store,
         )
+        self.colonisation_panel.eddatahub_url = getattr(self.cfg, "eddatahub_url", "") or ""
         self.colonisation_panel.buy_search_requested.connect(self._on_squadron_buy_search_requested)
         self.colonisation_panel.eligibility_check_requested.connect(self._on_check_colonisation_eligibility_clicked)
 
