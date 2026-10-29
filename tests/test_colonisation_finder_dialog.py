@@ -2,12 +2,13 @@ import time
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QWidget
 
 _app = QApplication.instance() or QApplication([])  # keep a reference: a dropped QApplication crashes pytest
 
 from edc.ui.panels import colonisation_finder_dialog as mod  # noqa: E402
 
+_keep = []  # fake panels must outlive their dialogs
 ROWS = [
     {"id64": 1, "name": "Alpha", "distance_ly": 20.0, "to_squad_ly": 12.5, "score": 25, "port_types": ["Orbital"],
      "economies": ["HighTech"], "body_count": 4, "dump_date": "2026-10-20"},
@@ -18,7 +19,10 @@ ROWS = [
 
 def _dialog(monkeypatch, search_result=ROWS, calls=None):
     state = SimpleNamespace(system="Sol", system_x=0.0, system_y=0.0, system_z=0.0)
-    panel = SimpleNamespace(_last_state=state, _repo=SimpleNamespace(db=SimpleNamespace(db_path=":memory:")))
+    panel = QWidget()
+    panel._last_state = state
+    panel._repo = SimpleNamespace(db=SimpleNamespace(db_path=":memory:"))
+    _keep.append(panel)
 
     def fake_search(*args, **kw):
         if calls is not None:
@@ -29,7 +33,9 @@ def _dialog(monkeypatch, search_result=ROWS, calls=None):
     monkeypatch.setattr(mod, "_load_squad_ids", lambda db_path: [111, 222])
     monkeypatch.setattr(mod, "fetch_colonisation_system", lambda url, id64: None)
     monkeypatch.setattr(mod, "_spansh_claimed", lambda name: None)
-    return mod.ColonisationFinderDialog(panel, "http://hub")
+    d = mod.ColonisationFinderDialog(panel, "http://hub")
+    _keep.append(d)
+    return d
 
 
 def _search(dlg):
@@ -38,7 +44,7 @@ def _search(dlg):
     while not dlg._search_btn.isEnabled() and time.time() < deadline:
         _app.processEvents()
     _app.processEvents()
-    dlg._threads["search"][0].wait()
+    dlg.stop()
 
 
 def test_results_render_sorted_and_unknown_ports(monkeypatch):
@@ -85,3 +91,17 @@ def test_button_disabled_without_hub_url():
     assert "Needs EDDataHub" in panel._find_btn.toolTip()
     panel.eddatahub_url = "http://hub"
     assert panel._find_btn.isEnabled()
+
+
+def test_second_detail_fetch_does_not_block(monkeypatch):
+    import threading
+    dlg = _dialog(monkeypatch)
+    _search(dlg)
+    gate = threading.Event()
+    monkeypatch.setattr(mod, "fetch_colonisation_system", lambda url, id64: gate.wait(5) and {})
+    t0 = time.time()
+    dlg._table.selectRow(0)
+    dlg._table.selectRow(1)
+    assert time.time() - t0 < 1
+    gate.set()
+    dlg.stop()

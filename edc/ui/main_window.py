@@ -4223,6 +4223,7 @@ class MainWindow(QMainWindow):
         self.stop_watching()
         self._stop_voice_commands()
         self._stop_eddn_listener()
+        self.colonisation_panel.stop_finder_dialog()
         self._stop_background_threads(self)
         super().closeEvent(event)
 

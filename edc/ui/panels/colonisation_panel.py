@@ -1549,6 +1549,10 @@ class ColonisationPanel(QWidget):
         self._finder_dialog.raise_()
         self._finder_dialog.activateWindow()
 
+    def stop_finder_dialog(self) -> None:
+        if self._finder_dialog is not None:
+            self._finder_dialog.stop()
+
     def _open_raven_dialog(self) -> None:
         if self._raven_dialog is None:
             self._raven_dialog = _RavenColonialDialog(self)

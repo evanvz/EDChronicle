@@ -75,13 +75,13 @@ def _num(text: str, value) -> QTableWidgetItem:
 
 class ColonisationFinderDialog(QDialog):
     def __init__(self, panel, hub_url: str):
-        super().__init__(None)
+        super().__init__(panel)
         self.setStyleSheet("QDialog { background:#080f18; color:#c8c8c8; }")
         self.setWindowTitle("Colonisation — Find Systems")
         self.resize(980, 640)
         self._panel = panel
         self.hub_url = hub_url
-        self._threads: dict = {}  # key -> (QThread, _Worker); kept so threads outlive their function
+        self._threads: list = []  # (QThread, _Worker) pairs, kept referenced until finished
         self._detail_id: Optional[int] = None
 
         state = getattr(panel, "_last_state", None)
@@ -160,17 +160,21 @@ class ColonisationFinderDialog(QDialog):
         root.addWidget(self._bodies, 2)
 
     # ── threading ──────────────────────────────────────────────────────
-    def _start(self, key: str, fn: Callable, slot: Callable) -> None:
-        old = self._threads.get(key)
-        if old is not None:
-            old[0].wait()  # direct-connected quit means this returns promptly
+    def _start(self, fn: Callable, slot: Callable) -> None:
+        self._threads = [p for p in self._threads if not p[0].isFinished()]  # never wait on the GUI thread
         thread, worker = QThread(), _Worker(fn)
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
         worker.finished.connect(slot)
         worker.finished.connect(thread.quit, Qt.ConnectionType.DirectConnection)
-        self._threads[key] = (thread, worker)
+        self._threads.append((thread, worker))
         thread.start()
+
+    def stop(self) -> None:
+        """App shutdown: a QThread destroyed while running is a Qt fatal."""
+        for thread, _ in self._threads:
+            thread.quit()
+            thread.wait(10000)
 
     # ── search ─────────────────────────────────────────────────────────
     def _on_search(self) -> None:
@@ -203,7 +207,7 @@ class ColonisationFinderDialog(QDialog):
 
         self._search_btn.setEnabled(False)
         self._status.setText("Searching…")
-        self._start("search", work, self._on_search_done)
+        self._start(work, self._on_search_done)
 
     def _on_search_done(self, result) -> None:
         self._search_btn.setEnabled(True)
@@ -220,7 +224,7 @@ class ColonisationFinderDialog(QDialog):
             squad = row.get("to_squad_ly")
             items = [
                 first,
-                _num(f"{row['distance_ly']:.1f}", row.get("distance_ly")),
+                _num("" if row.get("distance_ly") is None else f"{row['distance_ly']:.1f}", row.get("distance_ly")),
                 _num("" if squad is None else f"{squad:.1f}", squad),
                 _num(str(row.get("score", 0)), row.get("score", 0)),
                 QTableWidgetItem(ports),
@@ -257,7 +261,7 @@ class ColonisationFinderDialog(QDialog):
         def work():
             return id64, fetch_colonisation_system(url, id64), _spansh_claimed(name)
 
-        self._start("detail", work, self._on_detail_done)
+        self._start(work, self._on_detail_done)
 
     def _on_detail_done(self, result) -> None:
         if result is None or result[0] != self._detail_id:
