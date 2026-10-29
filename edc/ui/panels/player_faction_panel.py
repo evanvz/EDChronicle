@@ -351,7 +351,7 @@ def _format_forecast(prediction: Optional[Dict[str, Any]]) -> Tuple[str, str]:
 
     days_ret = prediction.get("days_in_retreat_range")
     if days_ret is not None:
-        return (f"⬇ Retreat risk ({days_ret}/~5d in window)", "#FF6B6B")
+        return (f"⬇ Retreat risk ({days_ret}/~5d in window)", "#FF4FD8")   # magenta: not the war red
 
     trend = prediction.get("trend")
     if trend == "up":
