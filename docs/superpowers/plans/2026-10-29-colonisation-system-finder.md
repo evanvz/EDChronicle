@@ -37,7 +37,7 @@
   - radius cap 200 ly;
   - `limit` default 100, maximum 500;
   - `near` at most 200 id64s;
-  - claimable means `to_populated_ly <= 15`.
+  - **Only claimable systems are stored:** `to_populated_ly <= 15`. This is Evan's option B (2026-10-29). Region 1,566,939 systems × 250 B ≈ 390 MB was over the gate, while the claimable subset is about 130 MB (an estimate). There's a monthly full re-read to catch systems that become claimable.
 
 ## Review Focus
 
@@ -167,10 +167,10 @@ def test_summary_and_empty_system():
 - Produces:
   - `parse_line(line: str) -> dict | None`. It strips the trailing `,`; `[`, `]` and bad JSON give None.
   - `load(conn, lines: Iterable[str], kind: str) -> dict` returning `{"lines", "kept", "removed", "bad"}`.
-  - `run(conn, full: bool = False) -> dict`, which picks the URL and streams it with `urllib` and `gzip`, like `region.py`.
+  - `run(conn, full: bool = False) -> dict`, which picks the URL and streams it with `urllib` and `gzip`, like `region.py`. It does a full read when `full`, or when the last `'full'` row in `colonisation_runs` is over 30 days old, or when there isn't one (`FULL_EVERY = timedelta(days=30)`, as in `region.py`).
 
 **`load` rules:**
-- Keep a system when its `id64` is in `region_systems` (load the id set once) **and** `population` is 0 or missing.
+- Keep a system when its `id64` is in `region_systems` (load the id set once), `population` is 0 or missing, **and** `to_populated_ly <= 15`. A stored system that is now further than 15 ly (its populated neighbour emptied) is deleted and counted as `removed`.
 - If a system's `id64` is in the set and `population > 0`, delete its row and count it as `removed`.
 - `to_populated_ly` is the distance to the nearest populated system. Get those from the `POPULATED` query in `region.py`; reuse it, don't copy it. Use a 15 ly grid bucket lookup, not an all-pairs scan. *ponytail note: a cell grid, which is enough for about 30k populated systems.*
 - Upsert in chunks of 5,000 systems with one transaction per chunk. Replace a system's bodies on each upsert.
@@ -180,7 +180,8 @@ def test_summary_and_empty_system():
   - `test_load_keeps_only_unpopulated_region_systems`: three lines are in the region with population 0, 5 and 0, plus one id outside the region. The result is `kept == 2`, and rows exist only for the two.
   - `test_populated_later_is_removed`: load once with population 0, then again with population 10. The row is gone, `removed == 1`, and its bodies are deleted too.
   - `test_truncated_line_counts_bad_and_continues`: a line cut mid-JSON before a good line gives `bad == 1, kept == 1`.
-  - `test_to_populated_distance`: a system 10 ly from the populated system gets `to_populated_ly == pytest.approx(10, abs=0.01)`.
+  - `test_to_populated_distance`: a system 10 ly from the populated system gets `to_populated_ly == pytest.approx(10, abs=0.01)`. A system 20 ly away isn't stored.
+  - `test_run_goes_full_after_30_days`: with no `'full'` run, or one 31 days old, `run` picks the full URL. With one 2 days old, it picks the 7-day URL. Monkeypatch the stream.
   - `test_empty_system_stored_with_zero_score`: a system with only a barycentre is stored with `score == 0, body_count == 0`.
 - [ ] **Step 2: Run** `pytest tests/test_colonisation.py -q`. Expect FAIL.
 - [ ] **Step 3: Implement** the migration, `colonisation.py`, the CLI and the units.
@@ -195,17 +196,16 @@ def test_summary_and_empty_system():
 - Test: `C:\Dev\EDDataHub\tests\test_colonisation.py`, `tests/test_web.py`
 
 **Interfaces:**
-- `search(conn, x, y, z, radius, port_types: list[str], economies: list[str], near: list[int], near_max: float | None, claimable_only: bool = True, limit: int = 100) -> list[dict]`.
+- `search(conn, x, y, z, radius, port_types: list[str], economies: list[str], near: list[int], near_max: float | None, limit: int = 100) -> list[dict]`.
   - Row keys: `id64, name, x, y, z, distance_ly, to_squad_ly (None when no near), to_populated_ly, port_types, economies, score, body_count, dump_date`.
   - Sort: score descending, then distance ascending.
   - Filters:
     - a bounding box plus the true distance;
     - `port_types @> %s` and `economies @> %s`;
-    - `to_populated_ly <= 15` when `claimable_only`.
   - `near` positions come from `region_systems`. `to_squad_ly` is the minimum distance to them, computed in SQL or Python over the at most `limit × 3` rows already returned (*my call*). When `near_max` is set, rows beyond it are dropped before the limit.
 - `system(conn, id64: int) -> dict | None` returns the system row plus `bodies: [{name, sub_type, landable, distance_ls, port_types, economies}]`, sorted by distance.
 - Routes:
-  - `GET /api/colonisation-search?x&y&z&radius&port_type=…&economy=…&near=id,id&near_max&claimable=0|1&limit`
+  - `GET /api/colonisation-search?x&y&z&radius&port_type=…&economy=…&near=id,id&near_max&limit`
   - `GET /api/colonisation-system?id64=`
 - Errors:
   - 400 for a bad number, `radius <= 0`, more than 200 `near` ids, or a bad `id64`;
@@ -217,7 +217,6 @@ def test_summary_and_empty_system():
   - `test_search_ranks_by_score_then_distance`
   - `test_search_filters_port_type_and_economy`
   - `test_search_near_squad_distance_and_limit`
-  - `test_search_claimable_only`
   - `test_system_returns_bodies_sorted`
   - In `test_web.py`:
     - `test_colonisation_search_bad_radius_is_400`: `radius=abc` and `radius=0` give 400;

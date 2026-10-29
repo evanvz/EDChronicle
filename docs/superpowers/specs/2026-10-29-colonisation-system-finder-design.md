@@ -71,7 +71,8 @@ This replaces the parked "EDDataHub system dump" task (memory `project-eddatahub
 3. **Refresh.**
    - Weekly from `galaxy_7days.json.gz`: upsert the systems it contains, then recompute their scores.
    - **The first import must be a full read** of `galaxy.json.gz`, because the weekly file only covers recently updated systems.
-   - After that, a full re-read only when asked: a CLI command, not a timer. 118 GB is heavy, and systems rarely gain bodies.
+   - After that, a full re-read **monthly**, so systems that become claimable as new colonies appear are picked up.
+   - **Only claimable systems are stored** (within 15 ly of a populated system). This was Evan's choice, option B, on 2026-10-29: the region holds 1,566,939 systems, about 390 MB, which was over the memory gate; the claimable subset is about 130 MB (an estimate). Bodies average 5.8 per unpopulated system, and 36.7% of systems have none recorded (7-day sample).
    - Systems that become populated drop out of results; the weekly file shows their population.
 4. **Precompute.** At import time each system gets:
    - the set of port types its bodies allow;
