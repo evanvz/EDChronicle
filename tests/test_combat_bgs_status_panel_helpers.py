@@ -174,9 +174,3 @@ def test_merge_results_drops_empty_bgs_rows_but_keeps_with_res_data():
     assert [r["system_name"] for r in merged] == ["OnlyCleared"]
     assert merged[0]["conflicts"] == []
     assert merged[0]["tiers"] == ["High"]
-
-
-def test_conflicts_text_shows_days_fought():
-    conflicts = [{"war_type": "war", "faction1": "A", "won_days1": 2, "faction2": "B", "won_days2": 0,
-                  "day": 3, "day_early": True}]
-    assert _conflicts_text(conflicts) == "War: A (2) vs B (0) · ≥3 of 7 days fought"

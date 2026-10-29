@@ -2347,6 +2347,13 @@ class _FactionHistoryDialog(QDialog):
         self._bgs_status_label.setVisible(False)
         layout.addWidget(self._bgs_status_label)
 
+        self._war_days_label = QLabel("")
+        self._war_days_label.setStyleSheet(
+            "background:transparent; border:none; padding:0 4px 4px 4px; color:#FFB347;"
+        )
+        self._war_days_label.setVisible(False)
+        layout.addWidget(self._war_days_label)
+
         self._chart = InfluenceChart()
         layout.addWidget(self._chart)
 
@@ -2430,16 +2437,18 @@ class _FactionHistoryDialog(QDialog):
         tracked_active = {s.lower() for s in _parse_states(latest_tracked.get("active_states"))} if latest_tracked else set()
         state_suggests_war = bool(tracked_active & {"war", "civilwar"})   # FactionState is faction-wide
 
-        parts = []
+        parts, days = [], []
         if bgs_status is not None:
+            wars = [c for c in bgs_status["conflicts"] if c.get("war_type") != "election"]
             try:
                 ticks = self._panel._repo.get_bgs_ticks()
-                for c in bgs_status["conflicts"]:
+                for c in wars:
                     fought = _days_fought(self._panel._repo.get_influence_readings(
                         self._system_address, c.get("faction1")), ticks)
-                    if fought and c.get("war_type") != "election":
+                    if fought:
                         won = sum(w for w in (c.get("won_days1"), c.get("won_days2")) if isinstance(w, int))
-                        c["day"], c["day_early"] = max(fought[0], won), fought[1]
+                        names = f"{c.get('faction1')} vs {c.get('faction2')}: " if len(wars) > 1 else ""
+                        days.append(f"⏱ {names}{'≥' if fought[1] else ''}{max(fought[0], won)} of 7 days fought")
             except Exception:
                 log.exception("Failed to count war days for system %s", self._system_address)
             conflicts_txt = _conflicts_text(bgs_status["conflicts"])
@@ -2467,6 +2476,8 @@ class _FactionHistoryDialog(QDialog):
             self._bgs_status_label.setVisible(True)
         else:
             self._bgs_status_label.setVisible(False)
+        self._war_days_label.setText(" | ".join(days))
+        self._war_days_label.setVisible(bool(days))
 
         by_faction: Dict[str, list] = {}
         for h in history:
