@@ -192,14 +192,9 @@ class Repository:
         filled from our own net.station_info."""
         if not self.hub_url or radius_ly > _HUB_MAX_RADIUS_LY:
             return None
-        rows: list[dict] = []
-        for i in range(0, len(commodity_names), 200):
-            chunk = fetch_market_search(
-                self.hub_url, commodity_names[i:i + 200], x, y, z, radius_ly, exclude_market_id
-            )
-            if chunk is None:
-                return None
-            rows.extend(chunk)
+        rows = fetch_market_search(self.hub_url, commodity_names, x, y, z, radius_ly, exclude_market_id)
+        if rows is None:
+            return None
         ids = list({r["market_id"] for r in rows})
         local = {}
         for i in range(0, len(ids), 900):
@@ -2402,15 +2397,8 @@ class Repository:
         if not commodity_names:
             return {}
 
-        hub_rows = self._hub_market_rows(commodity_names, x, y, z, radius_ly, exclude_market_id)
-        if hub_rows is not None:
-            grouped: dict[str, list[dict]] = {name: [] for name in commodity_names}
-            for r in hub_rows:
-                grouped[r["commodity_name"]].append(r)
-            for results in grouped.values():
-                results.sort(key=lambda r: (not r["pad_known"], -r["sell_price"]))
-            return grouped
-
+        # Stays local: ~32 commodities per call are too many for EDDataHub's spinning disk
+        # within the 3 s hub timeout (measured 2026-10-29); single searches go to the hub.
         commodity_placeholders = ",".join("?" for _ in commodity_names)
         rows = self.db.conn.execute(
             f"""

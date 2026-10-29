@@ -295,29 +295,11 @@ def test_hub_rows_fill_pads_from_local_station_info(repo, hub):
     assert results[1]["pad_known"] is False
 
 
-def test_multi_groups_hub_rows_by_commodity(repo, hub):
-    repo.save_station_info(3003, "Pad Place", "Hubville", "Outpost", 0, 0, 2, "2026-08-12T00:00:00Z")
-    hub["ret"] = [
-        _hub_row(4004, "gold", 9000, station_type=None),
-        _hub_row(3003, "gold", 5000, station_type=None),
-        _hub_row(3003, "silver", 100, station_type=None),
-    ]
-
-    by = repo.search_market_prices_multi(["gold", "silver", "tin"], 0.0, 0.0, 0.0, 50.0)
-    assert [r["market_id"] for r in by["gold"]] == [3003, 4004]
-    assert [r["market_id"] for r in by["silver"]] == [3003]
-    assert by["tin"] == []
-    assert by["gold"][0]["commodity_name"] == "gold"
-
-
-def test_multi_chunks_over_200_and_falls_back_if_any_chunk_fails(repo, hub, monkeypatch):
+def test_multi_stays_local(repo, hub):
     _seed_coords(repo, "Sol", 0.0, 0.0, 0.0)
     _seed_market_row(repo, 1001, "gold", "Sol", sell_price=9000)
-    names = ["gold"] + [f"c{i}" for i in range(250)]
-    answers = iter([[], None])
-    monkeypatch.setattr(
-        "persistence.repository.fetch_market_search", lambda *a, **k: next(answers)
-    )
+    hub["ret"] = [_hub_row(4004, "gold", 9999)]
 
-    by = repo.search_market_prices_multi(names, 0.0, 0.0, 0.0, 50.0)
-    assert [r["market_id"] for r in by["gold"]] == [1001]
+    by = repo.search_market_prices_multi(["gold", "silver"], 0.0, 0.0, 0.0, 50.0)
+    assert hub["calls"] == []
+    assert [r["market_id"] for r in by["gold"]] == [1001] and by["silver"] == []
