@@ -174,3 +174,14 @@ def test_merge_results_drops_empty_bgs_rows_but_keeps_with_res_data():
     assert [r["system_name"] for r in merged] == ["OnlyCleared"]
     assert merged[0]["conflicts"] == []
     assert merged[0]["tiers"] == ["High"]
+
+
+def test_faction_states_text_drops_war_the_war_line_shows_and_labels_expansion():
+    """Delta Indi, 2026-10-29: AWAC War repeated the war line, and its Expansion (pending)
+    shows in all 17 of its systems -- faction-wide, not this system's."""
+    war = [{"war_type": "war", "faction1": "EUW", "faction2": "AWAC"}]
+    factions = [{"name": "AWAC", "active_states": [{"State": "War"}], "pending_states": [{"State": "Expansion"}]},
+                {"name": "C", "active_states": [{"State": "War"}, {"State": "Expansion"}],
+                 "recovering_states": [{"State": "Expansion"}]}]
+    assert _faction_states_text(factions, war) == (
+        "AWAC: Expansion (faction-wide, pending) | C: War, Expansion (faction-wide), Expansion (faction-wide, recovering)")

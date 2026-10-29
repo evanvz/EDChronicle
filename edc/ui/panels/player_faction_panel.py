@@ -2454,7 +2454,7 @@ class _FactionHistoryDialog(QDialog):
             conflicts_txt = _conflicts_text(bgs_status["conflicts"])
             if conflicts_txt:
                 parts.append(f"⚔ {conflicts_txt}")
-            states_txt = _faction_states_text(bgs_status["faction_states"])
+            states_txt = _faction_states_text(bgs_status["faction_states"], bgs_status["conflicts"])
             if states_txt:
                 parts.append(states_txt)
 

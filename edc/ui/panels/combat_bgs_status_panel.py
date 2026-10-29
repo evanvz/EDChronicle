@@ -125,19 +125,26 @@ def _conflicts_text(conflicts: List[dict]) -> str:
     return " | ".join(parts)
 
 
-def _faction_states_text(faction_states: List[dict]) -> str:
+def _faction_states_text(faction_states: List[dict], conflicts: List[dict] = ()) -> str:
+    """Factions' states; a War/Civil War the conflicts text already shows is left out.
+    Expansion is faction-wide (Delta Indi 2026-10-29: AWAC's pending Expansion in all 17
+    of its systems), so it is labelled as not this system's own."""
     if not faction_states:
         return ""
+    at_war = {n for c in _combat_conflicts(conflicts) for n in (c.get("faction1"), c.get("faction2"))}
     parts = []
     for f in faction_states:
         state_bits = []
         for s in (f.get("active_states") or []):
             if isinstance(s, dict) and s.get("State"):
-                state_bits.append(s["State"])
+                if f.get("name") in at_war and s["State"] in ("War", "CivilWar"):
+                    continue
+                state_bits.append("Expansion (faction-wide)" if s["State"] == "Expansion" else s["State"])
         for bucket, label in (("pending_states", "pending"), ("recovering_states", "recovering")):
             for s in (f.get(bucket) or []):
                 if isinstance(s, dict) and s.get("State"):
-                    state_bits.append(f"{s['State']} ({label})")
+                    wide = "faction-wide, " if s["State"] == "Expansion" else ""
+                    state_bits.append(f"{s['State']} ({wide}{label})")
         if state_bits:
             parts.append(f"{f.get('name')}: {', '.join(state_bits)}")
     return " | ".join(parts)
@@ -306,7 +313,7 @@ class CombatBgsStatusPanel(QWidget):
                 QTableWidgetItem(row["system_name"]),
                 QTableWidgetItem(f"{row['distance_ly']:.1f} ly"),
                 QTableWidgetItem(_conflicts_text(row["conflicts"])),
-                QTableWidgetItem(_faction_states_text(row["faction_states"])),
+                QTableWidgetItem(_faction_states_text(row["faction_states"], row["conflicts"])),
                 QTableWidgetItem(", ".join(row["tiers"])),
             ]
             # A QTableWidget::item stylesheet border (tried first) silently
