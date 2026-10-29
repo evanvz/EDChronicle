@@ -1203,7 +1203,7 @@ class MarketPanel(QWidget):
         results, enemy_excluded = self._filter_enemy_pp(results)
         results = self._filter_faction_only(results)
 
-        verb = "buying" if buy_mode else "selling"
+        verb = "selling" if buy_mode else "buying"   # what the stations do: you buy where they sell
         near_label = self._last_near_label or self._system
         excluded_note = f" ({enemy_excluded} enemy-PowerPlay system{'s' if enemy_excluded != 1 else ''} excluded)" if enemy_excluded else ""
         self._status_label.setText(
