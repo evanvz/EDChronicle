@@ -144,6 +144,52 @@ def fetch_system_powerplay(base_url: str, addresses: List[int], since: str) -> O
         return None
 
 
+def fetch_colonisation_search(base_url: str, x: float, y: float, z: float, radius: float,
+                              port_types: List[str], economies: List[str], near: List[int],
+                              near_max: Optional[float], limit: int = 100) -> Optional[List[dict]]:
+    """Claimable systems around (x, y, z) from the hub, best first. None when the hub isn't
+    reachable or answers wrongly."""
+    if not base_url:
+        return None
+    params = {"x": x, "y": y, "z": z, "radius": radius, "limit": limit}
+    if port_types:
+        params["port_type"] = list(port_types)
+    if economies:
+        params["economy"] = list(economies)
+    if near:
+        params["near"] = ",".join(map(str, near))
+        if near_max is not None:
+            params["near_max"] = near_max
+    try:
+        resp = requests.get(f"{base_url.rstrip('/')}/api/colonisation-search", params=params,
+                            headers={"User-Agent": USER_AGENT}, timeout=_TIMEOUT)
+        resp.raise_for_status()
+        rows = resp.json()
+        if not isinstance(rows, list):
+            raise ValueError("not a colonisation search list")
+        return rows
+    except Exception as exc:
+        log.info("EDDataHub colonisation search not available (%s)", exc)
+        return None
+
+
+def fetch_colonisation_system(base_url: str, id64: int) -> Optional[dict]:
+    """One claimable system with its bodies. None when unknown or the hub isn't reachable."""
+    if not base_url:
+        return None
+    try:
+        resp = requests.get(f"{base_url.rstrip('/')}/api/colonisation-system", params={"id64": id64},
+                            headers={"User-Agent": USER_AGENT}, timeout=_TIMEOUT)
+        resp.raise_for_status()
+        row = resp.json()
+        if not isinstance(row, dict):
+            raise ValueError("not a colonisation system object")
+        return row
+    except Exception as exc:
+        log.info("EDDataHub colonisation system not available (%s)", exc)
+        return None
+
+
 def fetch_markets(base_url: str, since: str, on_message, cancelled=lambda: False) -> Optional[int]:
     """The newest market (EDDN commodity/3 message body) of every station the hub
     received since `since` (it reads at most 7 days back), each passed to
