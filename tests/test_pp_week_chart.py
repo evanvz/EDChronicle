@@ -26,9 +26,12 @@ def _state(addr):
 
 
 def record_two_readings(repo, addr):
+    # both inside this PowerPlay week: now-50min fell before the Thursday 07:00 UTC reset
+    # for 50 minutes every week, and the chart (this week only) then had one reading
     now = datetime.now(timezone.utc)
-    repo.record_pp_control(addr, _z(now - timedelta(minutes=50)), "Exploited", 5, 2, 0.3, "journal")
-    repo.record_pp_control(addr, _z(now - timedelta(minutes=10)), "Exploited", 10, 5, 0.3, "journal")
+    start = datetime.fromisoformat(powerplay_week_start(now).replace("Z", "+00:00"))
+    for n, (r, u) in ((1, (5, 2)), (2, (10, 5))):
+        repo.record_pp_control(addr, _z(start + (now - start) * n / 3), "Exploited", r, u, 0.3, "journal")
 
 
 @pytest.fixture
