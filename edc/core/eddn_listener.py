@@ -33,7 +33,7 @@ _CODEXENTRY_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/codexentry/"
 # this subcategory is exobiology species (Canonn codex ref, 2026-10-17).
 _SPECIES_SUBCATEGORY = "$Codex_SubCategory_Organic_Structures;"
 _RELEVANT_EVENTS = {"FSDJump", "Location", "CarrierJump", "Docked", "CodexEntry", "Scan"}
-_RECV_TIMEOUT_MS = 5000
+_RECV_TIMEOUT_MS = 1000   # also how fast stop() is seen: closing waits on this thread
 _RECONNECT_DELAY_S = 5
 
 # A ZMQ SUB socket has no built-in way to detect a peer that's silently
@@ -274,8 +274,9 @@ class EddnPowerPlayWorker(QObject):
                 log.exception("EDDN listener error — reconnecting in %ss", _RECONNECT_DELAY_S)
             finally:
                 sub.close(linger=0)
-            if not self._stop:
-                time.sleep(_RECONNECT_DELAY_S)
+            pause_until = time.monotonic() + _RECONNECT_DELAY_S
+            while not self._stop and time.monotonic() < pause_until:
+                time.sleep(0.1)
         self.tick_detector.save()
         ctx.term()
         self.finished.emit()

@@ -3646,7 +3646,8 @@ class MainWindow(QMainWindow):
             self._eddn_worker.stop()
         if self._eddn_thread:
             self._eddn_thread.quit()
-            self._eddn_thread.wait(2000)
+            # 2 s once ran out (2026-10-29): the listener's exit save alone takes ~0.6 s
+            self._eddn_thread.wait(10000)
         self._eddn_worker = None
         self._eddn_thread = None
         self._eddn_save_timer.stop()

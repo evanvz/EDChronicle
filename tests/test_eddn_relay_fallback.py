@@ -105,3 +105,19 @@ def test_hub_silence_limit_is_short_only_when_direct_can_take_over():
         w.tick_detector.save = lambda: None
         w.run()
         assert seen == [want]
+
+
+def test_stop_ends_the_listener_quickly(monkeypatch):
+    """2026-10-29 11:07: closing waited 2 s for the listener, then deleted its still-running
+    QThread (Qt fatal). A 5 s recv timeout or the 5 s reconnect pause outlasted that wait."""
+    for stale in (0, 300):   # 0: sits in the reconnect pause; 300: blocks in recv
+        monkeypatch.setattr(eddn_listener, "_STALE_CONNECTION_TIMEOUT_S", stale)
+        w = EddnPowerPlayWorker(relay_url="tcp://127.0.0.1:59508")   # nothing listens: silent
+        w.tick_detector.save = lambda: None
+        t = threading.Thread(target=w.run, daemon=True)
+        t.start()
+        time.sleep(0.5)
+        stopped = time.monotonic()
+        w.stop()
+        t.join(5)
+        assert not t.is_alive() and time.monotonic() - stopped < 1.5
