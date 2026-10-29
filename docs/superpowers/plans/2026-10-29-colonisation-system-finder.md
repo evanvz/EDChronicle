@@ -245,7 +245,7 @@ def test_summary_and_empty_system():
 
 **Files:**
 - Modify: `C:\Dev\EDChronicle\edc\core\eddatahub_client.py`
-- Test: `C:\Dev\EDChronicle\tests\test_eddatahub_client.py` (create it if absent, mocking `requests.get` as the existing tests do)
+- Test: `C:\Dev\EDChronicle\tests\test_eddatahub_colonisation.py` (new; mock `requests.get` the way `tests/test_eddatahub_pp_week.py` does)
 
 **Interfaces:**
 - `fetch_colonisation_search(base_url: str, x: float, y: float, z: float, radius: float, port_types: List[str], economies: List[str], near: List[int], near_max: Optional[float], limit: int = 100) -> Optional[List[dict]]`
