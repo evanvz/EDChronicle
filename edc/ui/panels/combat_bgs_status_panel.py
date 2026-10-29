@@ -16,10 +16,11 @@ from PyQt6.QtCore import Qt, QObject, QThread, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QSpinBox,
-    QTableWidget, QTableWidgetItem, QHeaderView, QComboBox,
+    QTableWidget, QTableWidgetItem, QHeaderView, QComboBox, QLineEdit,
 )
 
 from edc.ui import formatting as fmt
+from edc.ui.panels.market_panel import _NumericTableWidgetItem
 from edc.ui.style import LABEL_STYLE as _LABEL_STYLE
 
 log = logging.getLogger(__name__)
@@ -207,6 +208,12 @@ class CombatBgsStatusPanel(QWidget):
         row.addWidget(status_label)
         row.addWidget(self._status_filter)
         row.addWidget(self._search_btn)
+        self._system_filter = QLineEdit()
+        self._system_filter.setPlaceholderText("Filter by system…")
+        self._system_filter.setClearButtonEnabled(True)
+        self._system_filter.setStyleSheet("background:#0a1520; color:#c8c8c8; border:1px solid #1e3a5a;")
+        self._system_filter.textChanged.connect(self._render_results)
+        row.addWidget(self._system_filter, 1)
         row.addStretch(1)
         root.addLayout(row)
 
@@ -286,10 +293,13 @@ class CombatBgsStatusPanel(QWidget):
         without re-querying -- the full faction-state data per system is
         already in memory, so switching the dropdown is instant."""
         label, matcher = _STATUS_FILTERS[self._status_filter.currentIndex()]
-        rows = [r for r in self._last_rows if matcher(r)]
+        needle = self._system_filter.text().strip().lower()
+        rows = [r for r in self._last_rows if matcher(r) and needle in r["system_name"].lower()]
 
         if self._last_rows:
             suffix = "" if label == "All" else f" matching '{label}'"
+            if needle:
+                suffix += f" named '*{self._system_filter.text().strip()}*'"
             self._status_label.setText(
                 f"Found {len(rows)} system{'s' if len(rows) != 1 else ''}{suffix} "
                 f"(of {len(self._last_rows)} with active War/CivilWar, Civil Unrest, "
@@ -297,6 +307,7 @@ class CombatBgsStatusPanel(QWidget):
                 f"within {self._range_spin.value()} ly of {self._system}."
             )
 
+        self._table.setSortingEnabled(False)   # sorting while filling scrambles the row indexes
         self._table.setRowCount(len(rows))
         for r, row in enumerate(rows):
             relevant_names = {n for n in (self._squadron_faction, self._pp_power) if n}
@@ -311,7 +322,7 @@ class CombatBgsStatusPanel(QWidget):
 
             items = [
                 QTableWidgetItem(row["system_name"]),
-                QTableWidgetItem(f"{row['distance_ly']:.1f} ly"),
+                _NumericTableWidgetItem(f"{row['distance_ly']:.1f} ly", row["distance_ly"]),
                 QTableWidgetItem(_conflicts_text(row["conflicts"])),
                 QTableWidgetItem(_faction_states_text(row["faction_states"], row["conflicts"])),
                 QTableWidgetItem(", ".join(row["tiers"])),
@@ -338,3 +349,4 @@ class CombatBgsStatusPanel(QWidget):
             if is_raid_opportunity:
                 tooltip += " — Civil Unrest/Infrastructure Failure: settlements here likely lightly defended"
             self._table.item(r, 0).setToolTip(tooltip)
+        self._table.setSortingEnabled(True)
