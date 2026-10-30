@@ -167,3 +167,16 @@ def test_detail_lists_squad_claim_stations_first(monkeypatch):
     dlg._on_detail_done((7, {"bodies": [], "claim_from": [{"name": "A", "ly": 3.0}],
                              "claim_stations": [{"system": "Base", "station": "Dock A", "ly": 6.04}]}, None))
     assert dlg._spansh.text() == "Spansh: unknown    Squad claim stations: Base / Dock A (6.0 ly)    Claim from: A (3.0 ly)"
+
+
+def test_design_button_opens_design_dialog(monkeypatch):
+    from edc.ui.panels import colonisation_design_dialog as dmod
+    opened = []
+    monkeypatch.setattr(dmod, "fetch_colonisation_system", lambda url, id64, faction=None: None)
+    dlg = _dialog(monkeypatch)
+    _search(dlg)
+    dlg._table.selectRow(0)
+    dlg._design_btn.click()
+    assert isinstance(dlg._design, dmod.ColonisationDesignDialog) and dlg._design.id64 == 1
+    dlg.stop()
+    dlg._design.close()

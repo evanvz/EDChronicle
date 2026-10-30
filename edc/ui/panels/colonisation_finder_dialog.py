@@ -157,6 +157,8 @@ class ColonisationFinderDialog(QDialog):
         self._design_btn = QPushButton("Design…")
         self._design_btn.setStyleSheet(_BTN_STYLE)
         self._design_btn.setEnabled(False)
+        self._design_btn.clicked.connect(self._open_design)
+        self._design = None
         detail_row = QHBoxLayout()
         detail_row.addWidget(self._spansh, 1)
         detail_row.addWidget(self._design_btn)
@@ -190,6 +192,8 @@ class ColonisationFinderDialog(QDialog):
             thread.quit()
         for thread, _ in self._threads:
             thread.wait(10000)
+        if self._design is not None:
+            self._design.stop()
 
     # ── search ─────────────────────────────────────────────────────────
     def _on_search(self) -> None:
@@ -275,6 +279,17 @@ class ColonisationFinderDialog(QDialog):
     def _on_cell_clicked(self, row: int, col: int) -> None:
         if col == 0:
             QApplication.clipboard().setText(self._table.item(row, 0).text())
+
+    def _open_design(self) -> None:
+        rows = self._table.selectionModel().selectedRows()
+        if not rows:
+            return
+        from edc.ui.panels.colonisation_design_dialog import ColonisationDesignDialog
+        item = self._table.item(rows[0].row(), 0)
+        if self._design is not None:
+            self._design.close()
+        self._design = ColonisationDesignDialog(self, self.hub_url, item.data(Qt.ItemDataRole.UserRole), item.text())
+        self._design.show()
 
     def _on_selection_changed(self) -> None:
         rows = self._table.selectionModel().selectedRows()
