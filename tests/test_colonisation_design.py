@@ -95,3 +95,8 @@ def test_missing_distance_is_unknown_not_zero():
     sys = {**TUC, "bodies": [{**b, "distance_ls": None} if b["name"].endswith(" 5") else b for b in TUC["bodies"]]}
     p = plan_system(sys, "Tucanae Sector PY-R b4-1 5", False)
     assert p["poor"] is None and any("distance unknown" in w for w in p["warnings"])
+
+
+def test_nameless_cluster_root_does_not_raise():
+    s = {**TUC, "bodies": [dict(b, name=None) if b["body_id"] == 7 else b for b in TUC["bodies"]]}
+    assert plan_system(s, f"{SYS} 4", False)["poor"] is None

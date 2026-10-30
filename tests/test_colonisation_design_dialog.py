@@ -139,3 +139,9 @@ def test_finder_stop_leaves_no_running_thread_with_design_open(monkeypatch):
     gate.set()
     f.stop()
     assert not _running(f._design) and not [t for t, _ in f._threads if t.isRunning()]
+
+
+def test_nameless_body_gets_fallback_label_and_combo_enables(monkeypatch):
+    s = {**TUC, "bodies": [dict(b, name=None) if b["body_id"] == 7 else b for b in TUC["bodies"]]}
+    d = _dialog(monkeypatch, s)
+    assert d._combo.isEnabled() and "Body 7" in [d._combo.itemText(i).strip() for i in range(d._combo.count())]

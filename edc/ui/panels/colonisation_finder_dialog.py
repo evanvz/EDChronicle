@@ -290,6 +290,7 @@ class ColonisationFinderDialog(QDialog):
         if self._design is None:
             self._design = ColonisationDesignDialog(self, self.hub_url, id64, name)
         else:
+            self._design.hub_url = self.hub_url
             self._design.load(id64, name)
         self._design.show()
         self._design.raise_()

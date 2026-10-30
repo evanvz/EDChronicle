@@ -145,13 +145,14 @@ class ColonisationDesignDialog(QDialog):
             groups.setdefault(b.get("cluster"), []).append(b)
 
         def label(b, indent):
-            return ("      " if indent else "") + (b["name"].removeprefix(sysname).strip() or b["name"])
+            name = b.get("name") or f"Body {b.get('body_id')}"
+            return ("      " if indent else "") + (name.removeprefix(sysname).strip() or name)
 
         for cl, members in groups.items():
             root_b = roots.get(cl)
             ordered = ([root_b] if root_b in members else []) + [b for b in members if b is not root_b]
             for b in ordered:
-                self._combo.addItem(label(b, cl is not None and b is not root_b), b["name"])
+                self._combo.addItem(label(b, cl is not None and b is not root_b), b.get("name"))
         self._combo.setEnabled(True)
         self._replan()
 

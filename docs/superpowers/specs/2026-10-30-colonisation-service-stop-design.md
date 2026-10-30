@@ -118,8 +118,8 @@ Once a body is picked:
   force one full Spansh run (≈53 min) so every row gets the new fields, instead of waiting up to 30 days.
 - **Fixtures:** the three named systems' records are read from the hub DB/dump read-only (claude_ro, or
   `zcat` of the server's dump) and trimmed to fixture JSON in the hub tests.
-- **Clusters:** walk `parents` skipping `Null`/barycentre entries; a body's cluster root is its nearest Planet
-  ancestor, else the body itself if it is a Planet. A Planet orbiting a star directly roots its own cluster (may have
+- **Clusters:** walk `parents` skipping `Null`/barycentre entries; a body's cluster root is its top-level Planet
+  ancestor (the planet nearest the star, so moons of moons join their planet's cluster), else the body itself if it is a Planet. A Planet orbiting a star directly roots its own cluster (may have
   zero moons). Stars and belts are not cluster roots; a star's belt counts as "rings" for the star only.
 - **Missing inputs:** high metal content = `subType` "High metal content world". If radius, gravity or temperature is
   missing, `ground_slots` is null (shown "?"), contributes 0 to the score, and the reason says "slots unknown".

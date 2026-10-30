@@ -180,3 +180,17 @@ def test_design_button_opens_design_dialog(monkeypatch):
     assert isinstance(dlg._design, dmod.ColonisationDesignDialog) and dlg._design.id64 == 1
     dlg.stop()
     dlg._design.close()
+
+
+def test_reused_design_dialog_gets_current_hub_url(monkeypatch):
+    from edc.ui.panels import colonisation_design_dialog as dmod
+    monkeypatch.setattr(dmod, "fetch_colonisation_system", lambda url, id64, faction=None: None)
+    dlg = _dialog(monkeypatch)
+    _search(dlg)
+    dlg._table.selectRow(0)
+    dlg._design_btn.click()
+    dlg.hub_url = "http://new-hub"
+    dlg._design_btn.click()
+    assert dlg._design.hub_url == "http://new-hub"
+    dlg.stop()
+    dlg._design.close()

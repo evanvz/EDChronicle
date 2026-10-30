@@ -104,7 +104,7 @@ def plan_system(system: dict, primary_body: str, group: bool) -> dict:
     reason = system.get("service_reason") or ""
     root = next((b for b in bodies if b.get("body_id") == p["cluster"]), p)
     best = reason.split(":")[0].split(" at ")[0]
-    if ":" in reason and not best.endswith(" " + _short(root["name"], sysname)):
+    if ":" in reason and not best.endswith(" " + _short(root.get("name") or f"Body {root.get('body_id')}", sysname)):
         notes.append(f"Hub's best cluster is {best}")
     out["note"] = "; ".join(notes) or None
     return out
