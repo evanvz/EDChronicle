@@ -25,13 +25,12 @@ _ECONOMIES = ["Agriculture", "Extraction", "HighTech", "Industrial", "Military",
               "Tourism"]
 
 
-def _load_squad_ids(db_path) -> list:
+def _load_squad_faction(db_path) -> Optional[str]:
     from persistence.database import Database
     from persistence.repository import Repository
     db = Database(db_path)
     try:
-        overview = Repository(db).get_player_faction_overview() or {}
-        return [s["system_address"] for s in overview.get("systems", []) if s.get("system_address")]
+        return (Repository(db).get_player_faction_overview() or {}).get("faction_name")
     finally:
         db.close()
 
@@ -99,10 +98,12 @@ class ColonisationFinderDialog(QDialog):
         self._port.addItems(["Any"] + _PORT_TYPES)
         self._economy = QComboBox()
         self._economy.addItems(["Any"] + _ECONOMIES)
-        self._near_chk = QCheckBox("Near squad")
+        self._near_chk = QCheckBox("Near squad station")
+        self._near_chk.setToolTip("Only systems a station of your squad's faction can claim: the new colony's\n"
+                                  "controlling faction is the one controlling the station the claim is bought at")
         self._near_ly = QSpinBox()
-        self._near_ly.setRange(1, 200)
-        self._near_ly.setValue(30)
+        self._near_ly.setRange(1, 15)  # the claim range
+        self._near_ly.setValue(15)
         self._near_ly.setSuffix(" ly")
         self._search_btn = QPushButton("Search")
         self._search_btn.setStyleSheet(_BTN_STYLE)
@@ -128,7 +129,8 @@ class ColonisationFinderDialog(QDialog):
         self._table = QTableWidget(0, 9)
         self._table.setHorizontalHeaderLabels(
             ["System", "Dist (ly)", "To squad (ly)", "Score", "Port types", "Economies", "Bodies", "Data age", "Claim from"])
-        self._table.horizontalHeaderItem(8).setToolTip("Nearest populated system within 15 ly: claim from a station there")
+        self._table.horizontalHeaderItem(8).setToolTip("Nearest populated system within 15 ly: claim from a station there.\n"
+            "With Near squad station: the nearest squad station that sells claims")
         self._table.horizontalHeaderItem(3).setToolTip(
             "Score = 10 × port types + economies (rules: Update 3 body economies)")
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -204,8 +206,10 @@ class ColonisationFinderDialog(QDialog):
             xyz = here or _load_coords(db_path, name)
             if xyz is None:
                 return "Unknown system — jump there or pick a known one"
-            ids = _load_squad_ids(db_path) if near else []
-            rows = fetch_colonisation_search(url, xyz[0], xyz[1], xyz[2], radius, port, eco, ids[:200],
+            faction = _load_squad_faction(db_path) if near else None
+            if near and not faction:
+                return "No squad faction known yet"
+            rows = fetch_colonisation_search(url, xyz[0], xyz[1], xyz[2], radius, port, eco, faction,
                                              near_ly if near else None)
             return rows if rows is not None else "EDDataHub not reachable"
 
@@ -230,6 +234,7 @@ class ColonisationFinderDialog(QDialog):
             first.setData(Qt.ItemDataRole.UserRole, row["id64"])
             squad = row.get("to_squad_ly")
             claim = row.get("claim_from")
+            station = row.get("claim_station")
             items = [
                 first,
                 _num("" if row.get("distance_ly") is None else f"{row['distance_ly']:.1f}", row.get("distance_ly")),
@@ -239,7 +244,8 @@ class ColonisationFinderDialog(QDialog):
                 QTableWidgetItem(", ".join(row.get("economies") or [])),
                 _num(str(row.get("body_count", 0)), row.get("body_count", 0)),
                 QTableWidgetItem(_age_days(row.get("dump_date"))),
-                QTableWidgetItem(f"{claim['name']} ({claim['ly']:.1f} ly)" if claim else ""),
+                QTableWidgetItem(f"{station['system']} / {station['station']} ({station['ly']:.1f} ly)" if station
+                                 else f"{claim['name']} ({claim['ly']:.1f} ly)" if claim else ""),
             ]
             for c, item in enumerate(items):
                 self._table.setItem(r, c, item)
@@ -266,9 +272,12 @@ class ColonisationFinderDialog(QDialog):
         self._spansh.setText("Spansh: checking…")
         self._bodies.setRowCount(0)
         url = self.hub_url
+        db_path = self._panel._repo.db.db_path
+        near = self._near_chk.isChecked()
 
         def work():
-            return id64, fetch_colonisation_system(url, id64), _spansh_claimed(name)
+            faction = _load_squad_faction(db_path) if near else None
+            return id64, fetch_colonisation_system(url, id64, faction), _spansh_claimed(name)
 
         self._start(work, self._on_detail_done)
 
@@ -277,7 +286,10 @@ class ColonisationFinderDialog(QDialog):
             return
         _, system, claimed = result
         claim = ", ".join(f"{c['name']} ({c['ly']:.1f} ly)" for c in (system or {}).get("claim_from") or [])
+        stations = ", ".join(f"{s['system']} / {s['station']} ({s['ly']:.1f} ly)"
+                             for s in (system or {}).get("claim_stations") or [])
         self._spansh.setText("Spansh: " + {True: "claimed", False: "free", None: "unknown"}[claimed]
+                             + (f"    Squad claim stations: {stations}" if stations else "")
                              + (f"    Claim from: {claim}" if claim else ""))
         bodies = (system or {}).get("bodies") or []
         self._bodies.setRowCount(len(bodies))

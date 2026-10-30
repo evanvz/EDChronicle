@@ -13,6 +13,9 @@ ROWS = [
     {"id64": 1, "name": "Alpha", "distance_ly": 20.0, "to_squad_ly": 12.5, "score": 25, "port_types": ["Orbital"],
      "economies": ["HighTech"], "body_count": 4, "dump_date": "2026-10-20",
      "claim_from": {"name": "Ross 690", "ly": 4.21}},
+    {"id64": 3, "name": "Gamma", "distance_ly": 30.0, "to_squad_ly": 6.0, "score": 1, "port_types": [],
+     "economies": [], "body_count": 0, "dump_date": None, "claim_from": {"name": "Ross 690", "ly": 4.21},
+     "claim_station": {"system": "Base", "station": "Dock A", "ly": 6.04}},
     {"id64": 2, "name": "Beta", "distance_ly": 9.5, "to_squad_ly": None, "score": 5, "port_types": [],
      "economies": [], "body_count": 0, "dump_date": None},
 ]
@@ -31,8 +34,8 @@ def _dialog(monkeypatch, search_result=ROWS, calls=None):
         return search_result
 
     monkeypatch.setattr(mod, "fetch_colonisation_search", fake_search)
-    monkeypatch.setattr(mod, "_load_squad_ids", lambda db_path: [111, 222])
-    monkeypatch.setattr(mod, "fetch_colonisation_system", lambda url, id64: None)
+    monkeypatch.setattr(mod, "_load_squad_faction", lambda db_path: "Elite United Worlds")
+    monkeypatch.setattr(mod, "fetch_colonisation_system", lambda url, id64, faction=None: None)
     monkeypatch.setattr(mod, "_spansh_claimed", lambda name: None)
     d = mod.ColonisationFinderDialog(panel, "http://hub")
     _keep.append(d)
@@ -52,9 +55,10 @@ def test_results_render_sorted_and_unknown_ports(monkeypatch):
     dlg = _dialog(monkeypatch)
     _search(dlg)
     t = dlg._table
-    assert t.rowCount() == 2
+    assert t.rowCount() == 3
     t.sortByColumn(1, mod.Qt.SortOrder.AscendingOrder)
     assert t.item(0, 0).text() == "Beta"
+    assert t.item(2, 8).text() == "Base / Dock A (6.0 ly)"
     assert t.item(0, 4).text() == "unknown"
     assert t.item(1, 4).text() == "Orbital"
     assert t.item(1, 7).text().endswith(" d")
@@ -67,8 +71,8 @@ def test_filter_box_hides_other_systems(monkeypatch):
     dlg = _dialog(monkeypatch)
     _search(dlg)
     dlg._filter.setText("alp")
-    hidden = [dlg._table.item(r, 0).text() for r in range(2) if dlg._table.isRowHidden(r)]
-    assert hidden == ["Beta"]
+    hidden = [dlg._table.item(r, 0).text() for r in range(3) if dlg._table.isRowHidden(r)]
+    assert sorted(hidden) == ["Beta", "Gamma"]
 
 
 def test_hub_unreachable_shows_message_and_reenables_search(monkeypatch):
@@ -78,13 +82,13 @@ def test_hub_unreachable_shows_message_and_reenables_search(monkeypatch):
     assert dlg._search_btn.isEnabled()
 
 
-def test_near_squad_sends_squad_ids(monkeypatch):
+def test_near_squad_station_sends_faction_and_claim_range(monkeypatch):
     calls = []
     dlg = _dialog(monkeypatch, calls=calls)
     dlg._near_chk.setChecked(True)
     _search(dlg)
-    assert calls[0][7] == [111, 222]
-    assert calls[0][8] == 30
+    assert calls[0][7] == "Elite United Worlds"
+    assert calls[0][8] == 15
 
 
 def test_button_disabled_without_hub_url():
@@ -101,7 +105,7 @@ def test_second_detail_fetch_does_not_block(monkeypatch):
     dlg = _dialog(monkeypatch)
     _search(dlg)
     gate = threading.Event()
-    monkeypatch.setattr(mod, "fetch_colonisation_system", lambda url, id64: gate.wait(5) and {})
+    monkeypatch.setattr(mod, "fetch_colonisation_system", lambda url, id64, faction=None: gate.wait(5) and {})
     t0 = time.time()
     dlg._table.selectRow(0)
     dlg._table.selectRow(1)
@@ -110,13 +114,13 @@ def test_second_detail_fetch_does_not_block(monkeypatch):
     dlg.stop()
 
 
-def test_squad_ids_capped_at_200(monkeypatch):
+def test_near_squad_station_without_faction_says_so(monkeypatch):
     calls = []
     dlg = _dialog(monkeypatch, calls=calls)
-    monkeypatch.setattr(mod, "_load_squad_ids", lambda db_path: list(range(300)))
+    monkeypatch.setattr(mod, "_load_squad_faction", lambda db_path: None)
     dlg._near_chk.setChecked(True)
     _search(dlg)
-    assert calls[0][7] == list(range(200))
+    assert calls == [] and dlg._status.text() == "No squad faction known yet"
 
 
 def test_new_search_clears_old_detail(monkeypatch):
@@ -132,3 +136,11 @@ def test_detail_lists_where_to_claim_from(monkeypatch):
     dlg._detail_id = 7
     dlg._on_detail_done((7, {"bodies": [], "claim_from": [{"name": "A", "ly": 3.0}, {"name": "B", "ly": 9.84}]}, False))
     assert dlg._spansh.text() == "Spansh: free    Claim from: A (3.0 ly), B (9.8 ly)"
+
+
+def test_detail_lists_squad_claim_stations_first(monkeypatch):
+    dlg = _dialog(monkeypatch)
+    dlg._detail_id = 7
+    dlg._on_detail_done((7, {"bodies": [], "claim_from": [{"name": "A", "ly": 3.0}],
+                             "claim_stations": [{"system": "Base", "station": "Dock A", "ly": 6.04}]}, None))
+    assert dlg._spansh.text() == "Spansh: unknown    Squad claim stations: Base / Dock A (6.0 ly)    Claim from: A (3.0 ly)"

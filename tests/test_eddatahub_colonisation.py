@@ -30,17 +30,17 @@ def calls(monkeypatch):
 
 def test_search_builds_params(calls):
     got = c.fetch_colonisation_search("http://hub/", 1.0, 2.0, 3.0, 20, ["Coriolis", "Outpost"], ["Agri"],
-                                      [5, 6], 12.5, 50)
+                                      "Elite United Worlds", 12.5, 50)
     assert got == [{"id64": 1}]
     url, params, headers, timeout = calls[0]
     assert url == "http://hub/api/colonisation-search"
     assert params == {"x": 1.0, "y": 2.0, "z": 3.0, "radius": 20, "limit": 50,
-                      "port_type": ["Coriolis", "Outpost"], "economy": ["Agri"], "near": "5,6", "near_max": 12.5}
+                      "port_type": ["Coriolis", "Outpost"], "economy": ["Agri"], "faction": "Elite United Worlds", "near_max": 12.5}
     assert headers == {"User-Agent": c.USER_AGENT} and timeout == c._TIMEOUT
 
 
 def test_search_omits_empty_params(calls):
-    c.fetch_colonisation_search("http://hub", 0, 0, 0, 10, [], [], [], None)
+    c.fetch_colonisation_search("http://hub", 0, 0, 0, 10, [], [], None, None)
     assert set(calls[0][1]) == {"x", "y", "z", "radius", "limit"}
 
 
@@ -48,13 +48,13 @@ def test_search_timeout_is_none(monkeypatch):
     def boom(*a, **k):
         raise requests.Timeout()
     monkeypatch.setattr(c.requests, "get", boom)
-    assert c.fetch_colonisation_search("http://hub", 0, 0, 0, 10, [], [], [], None) is None
+    assert c.fetch_colonisation_search("http://hub", 0, 0, 0, 10, [], [], None, None) is None
     assert c.fetch_colonisation_system("http://hub", 1) is None
 
 
 def test_search_non_list_is_none(monkeypatch):
     monkeypatch.setattr(c.requests, "get", lambda *a, **k: Resp({"error": "x"}))
-    assert c.fetch_colonisation_search("http://hub", 0, 0, 0, 10, [], [], [], None) is None
+    assert c.fetch_colonisation_search("http://hub", 0, 0, 0, 10, [], [], None, None) is None
 
 
 def test_system_dict_and_shapes(monkeypatch):
@@ -64,3 +64,9 @@ def test_system_dict_and_shapes(monkeypatch):
     assert c.fetch_colonisation_system("http://hub", 1) is None
     monkeypatch.setattr(c.requests, "get", lambda *a, **k: Resp({}, 404))
     assert c.fetch_colonisation_system("http://hub", 1) is None
+
+
+def test_system_sends_faction_only_when_set(calls):
+    c.fetch_colonisation_system("http://hub", 1)
+    c.fetch_colonisation_system("http://hub", 1, "Us")
+    assert [p for _, p, _, _ in calls] == [{"id64": 1}, {"id64": 1, "faction": "Us"}]

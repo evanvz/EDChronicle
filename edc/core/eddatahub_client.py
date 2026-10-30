@@ -145,10 +145,10 @@ def fetch_system_powerplay(base_url: str, addresses: List[int], since: str) -> O
 
 
 def fetch_colonisation_search(base_url: str, x: float, y: float, z: float, radius: float,
-                              port_types: List[str], economies: List[str], near: List[int],
+                              port_types: List[str], economies: List[str], faction: Optional[str],
                               near_max: Optional[float], limit: int = 100) -> Optional[List[dict]]:
-    """Claimable systems around (x, y, z) from the hub, best first. None when the hub isn't
-    reachable or answers wrongly."""
+    """Claimable systems around (x, y, z) from the hub, best first; with faction, only those within
+    near_max ly of a station it controls that sells claims. None when the hub isn't reachable or answers wrongly."""
     if not base_url:
         return None
     params = {"x": x, "y": y, "z": z, "radius": radius, "limit": limit}
@@ -156,8 +156,8 @@ def fetch_colonisation_search(base_url: str, x: float, y: float, z: float, radiu
         params["port_type"] = list(port_types)
     if economies:
         params["economy"] = list(economies)
-    if near:
-        params["near"] = ",".join(map(str, near))
+    if faction:
+        params["faction"] = faction
         if near_max is not None:
             params["near_max"] = near_max
     try:
@@ -173,12 +173,13 @@ def fetch_colonisation_search(base_url: str, x: float, y: float, z: float, radiu
         return None
 
 
-def fetch_colonisation_system(base_url: str, id64: int) -> Optional[dict]:
-    """One claimable system with its bodies. None when unknown or the hub isn't reachable."""
+def fetch_colonisation_system(base_url: str, id64: int, faction: Optional[str] = None) -> Optional[dict]:
+    """One claimable system with its bodies, and with faction its claim stations within 15 ly. None when unknown
+    or the hub isn't reachable."""
     if not base_url:
         return None
     try:
-        resp = requests.get(f"{base_url.rstrip('/')}/api/colonisation-system", params={"id64": id64},
+        resp = requests.get(f"{base_url.rstrip('/')}/api/colonisation-system", params={"id64": id64, **({"faction": faction} if faction else {})},
                             headers={"User-Agent": USER_AGENT}, timeout=_TIMEOUT)
         resp.raise_for_status()
         row = resp.json()
