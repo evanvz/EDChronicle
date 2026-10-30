@@ -126,12 +126,15 @@ class ColonisationFinderDialog(QDialog):
         self._filter.textChanged.connect(self._apply_filter)
         root.addWidget(self._filter)
 
-        self._table = QTableWidget(0, 9)
+        self._table = QTableWidget(0, 10)
         self._table.setHorizontalHeaderLabels(
-            ["System", "Dist (ly)", "To squad (ly)", "Score", "Port types", "Economies", "Bodies", "Data age", "Claim from"])
-        self._table.horizontalHeaderItem(8).setToolTip("Nearest populated system within 15 ly: claim from a station there.\n"
+            ["System", "Dist (ly)", "To squad (ly)", "Service stop", "Score", "Port types", "Economies", "Bodies", "Data age", "Claim from"])
+        self._table.horizontalHeaderItem(9).setToolTip("Nearest populated system within 15 ly: claim from a station there.\n"
             "With Near squad station: the nearest squad station that sells claims")
         self._table.horizontalHeaderItem(3).setToolTip(
+            "Service stop: how good a home system for players (services, full market, growth). "
+            "Hover a cell for why.")
+        self._table.horizontalHeaderItem(4).setToolTip(
             "Score = 10 × port types + economies (rules: Update 3 body economies)")
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -151,7 +154,13 @@ class ColonisationFinderDialog(QDialog):
         self._spansh = QLabel("")
         self._spansh.setStyleSheet("color:#c8c8c8; font-size:12px;")
         self._spansh.setWordWrap(True)  # the claim-from list can name 20+ systems
-        root.addWidget(self._spansh)
+        self._design_btn = QPushButton("Design…")
+        self._design_btn.setStyleSheet(_BTN_STYLE)
+        self._design_btn.setEnabled(False)
+        detail_row = QHBoxLayout()
+        detail_row.addWidget(self._spansh, 1)
+        detail_row.addWidget(self._design_btn)
+        root.addLayout(detail_row)
 
         self._bodies = QTableWidget(0, 6)
         self._bodies.setHorizontalHeaderLabels(["Body", "Type", "Landable", "Dist (ls)", "Port types", "Economies"])
@@ -224,6 +233,7 @@ class ColonisationFinderDialog(QDialog):
             return
         self._status.setText(f"{len(result)} claimable system(s)")
         self._detail_id = None
+        self._design_btn.setEnabled(False)
         self._spansh.setText("")
         self._bodies.setRowCount(0)
         self._table.setSortingEnabled(False)  # sorting while filling scrambles the row indexes
@@ -235,10 +245,14 @@ class ColonisationFinderDialog(QDialog):
             squad = row.get("to_squad_ly")
             claim = row.get("claim_from")
             station = row.get("claim_station")
+            svc = row.get("service_score")
+            svc_item = _NumericTableWidgetItem("" if svc is None else str(svc), float("-inf") if svc is None else svc)
+            svc_item.setToolTip(row.get("service_reason") or "")
             items = [
                 first,
                 _num("" if row.get("distance_ly") is None else f"{row['distance_ly']:.1f}", row.get("distance_ly")),
                 _num("" if squad is None else f"{squad:.1f}", squad),
+                svc_item,
                 _num(str(row.get("score", 0)), row.get("score", 0)),
                 QTableWidgetItem(ports),
                 QTableWidgetItem(", ".join(row.get("economies") or [])),
@@ -264,6 +278,7 @@ class ColonisationFinderDialog(QDialog):
 
     def _on_selection_changed(self) -> None:
         rows = self._table.selectionModel().selectedRows()
+        self._design_btn.setEnabled(bool(rows))
         if not rows:
             return
         item = self._table.item(rows[0].row(), 0)

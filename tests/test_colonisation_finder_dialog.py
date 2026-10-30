@@ -12,7 +12,8 @@ _keep = []  # fake panels must outlive their dialogs
 ROWS = [
     {"id64": 1, "name": "Alpha", "distance_ly": 20.0, "to_squad_ly": 12.5, "score": 25, "port_types": ["Orbital"],
      "economies": ["HighTech"], "body_count": 4, "dump_date": "2026-10-20",
-     "claim_from": {"name": "Ross 690", "ly": 4.21}},
+     "claim_from": {"name": "Ross 690", "ly": 4.21},
+     "service_score": 40, "service_reason": "Gas giant 3 at 898 ls: x"},
     {"id64": 3, "name": "Gamma", "distance_ly": 30.0, "to_squad_ly": 6.0, "score": 1, "port_types": [],
      "economies": [], "body_count": 0, "dump_date": None, "claim_from": {"name": "Ross 690", "ly": 4.21},
      "claim_station": {"system": "Base", "station": "Dock A", "ly": 6.04}},
@@ -58,13 +59,35 @@ def test_results_render_sorted_and_unknown_ports(monkeypatch):
     assert t.rowCount() == 3
     t.sortByColumn(1, mod.Qt.SortOrder.AscendingOrder)
     assert t.item(0, 0).text() == "Beta"
-    assert t.item(2, 8).text() == "Base / Dock A (6.0 ly)"
-    assert t.item(0, 4).text() == "unknown"
-    assert t.item(1, 4).text() == "Orbital"
-    assert t.item(1, 7).text().endswith(" d")
-    assert t.item(0, 7).text() == ""
+    assert t.item(2, 9).text() == "Base / Dock A (6.0 ly)"
+    assert t.item(0, 5).text() == "unknown"
+    assert t.item(1, 5).text() == "Orbital"
+    assert t.item(1, 8).text().endswith(" d")
     assert t.item(0, 8).text() == ""
-    assert t.item(1, 8).text() == "Ross 690 (4.2 ly)"
+    assert t.item(0, 9).text() == ""
+    assert t.item(1, 9).text() == "Ross 690 (4.2 ly)"
+
+
+def test_service_stop_column_and_missing_sorts_last(monkeypatch):
+    dlg = _dialog(monkeypatch)
+    _search(dlg)
+    t = dlg._table
+    assert t.horizontalHeaderItem(3).text() == "Service stop"
+    assert t.item(0, 0).text() == "Alpha"
+    assert t.item(0, 3).text() == "40"
+    assert t.item(0, 3).toolTip() == "Gas giant 3 at 898 ls: x"
+    assert t.item(1, 3).text() == "" and t.item(2, 3).text() == ""
+
+
+def test_design_button_enabled_only_with_selection(monkeypatch):
+    dlg = _dialog(monkeypatch)
+    assert not dlg._design_btn.isEnabled()
+    _search(dlg)
+    assert not dlg._design_btn.isEnabled()
+    dlg._table.selectRow(0)
+    assert dlg._design_btn.isEnabled()
+    dlg._on_search_done(ROWS)
+    assert not dlg._design_btn.isEnabled()
 
 
 def test_filter_box_hides_other_systems(monkeypatch):
