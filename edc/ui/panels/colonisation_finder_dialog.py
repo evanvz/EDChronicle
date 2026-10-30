@@ -286,10 +286,13 @@ class ColonisationFinderDialog(QDialog):
             return
         from edc.ui.panels.colonisation_design_dialog import ColonisationDesignDialog
         item = self._table.item(rows[0].row(), 0)
-        if self._design is not None:
-            self._design.close()
-        self._design = ColonisationDesignDialog(self, self.hub_url, item.data(Qt.ItemDataRole.UserRole), item.text())
+        id64, name = item.data(Qt.ItemDataRole.UserRole), item.text()
+        if self._design is None:
+            self._design = ColonisationDesignDialog(self, self.hub_url, id64, name)
+        else:
+            self._design.load(id64, name)
         self._design.show()
+        self._design.raise_()
 
     def _on_selection_changed(self) -> None:
         rows = self._table.selectionModel().selectedRows()

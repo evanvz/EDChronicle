@@ -76,3 +76,66 @@ def test_combo_groups_cluster_root_before_moons(monkeypatch):
 def test_hub_unreachable(monkeypatch):
     d = _dialog(monkeypatch, None)
     assert d._banner.text() == "EDDataHub not reachable" and not d._combo.isEnabled()
+
+
+def _blocked(monkeypatch, gate):
+    monkeypatch.setattr(mod, "fetch_colonisation_system",
+                        lambda url, id64, faction=None: gate.wait(5) and TUC)
+
+
+def _running(d):
+    return [t for t, _ in d._threads if t.isRunning()]
+
+
+def test_close_during_fetch_does_not_block(monkeypatch):
+    import threading
+    gate = threading.Event()
+    _blocked(monkeypatch, gate)
+    parent = QWidget()
+    _keep.append(parent)
+    d = mod.ColonisationDesignDialog(parent, "http://hub", 1, SYS)
+    _keep.append(d)
+    d.show()
+    t0 = time.time()
+    d.close()
+    assert time.time() - t0 < 1
+    gate.set()
+    d.stop()
+    assert not _running(d)
+
+
+def test_late_result_for_previous_system_is_ignored(monkeypatch):
+    import threading
+    gate = threading.Event()
+    _blocked(monkeypatch, gate)
+    parent = QWidget()
+    _keep.append(parent)
+    d = mod.ColonisationDesignDialog(parent, "http://hub", 1, "A")
+    _keep.append(d)
+    monkeypatch.setattr(mod, "fetch_colonisation_system", lambda url, id64, faction=None: {"name": "B", "bodies": []})
+    d.load(2, "B")
+    deadline = time.time() + 5
+    while d._system is None and time.time() < deadline:
+        _app.processEvents()
+    gate.set()
+    d.stop()
+    _app.processEvents()
+    assert d.id64 == 2 and d._system["name"] == "B"
+
+
+def test_finder_stop_leaves_no_running_thread_with_design_open(monkeypatch):
+    import threading
+    from tests.test_colonisation_finder_dialog import _dialog as fdialog, _search
+    gate = threading.Event()
+    _blocked(monkeypatch, gate)
+    f = fdialog(monkeypatch)
+    _search(f)
+    f._table.selectRow(0)
+    f._design_btn.click()
+    d1 = f._design
+    f._table.selectRow(1)
+    f._design_btn.click()
+    assert f._design is d1 and d1.id64 == f._table.item(1, 0).data(mod.Qt.ItemDataRole.UserRole)
+    gate.set()
+    f.stop()
+    assert not _running(f._design) and not [t for t, _ in f._threads if t.isRunning()]

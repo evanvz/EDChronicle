@@ -14,9 +14,11 @@ from edc.core.eddatahub_client import fetch_colonisation_system
 from edc.ui.panels.colonisation_finder_dialog import _INPUT_STYLE, _TABLE_STYLE, _Worker
 
 _HINT = "Find the flag in the system map's Architect View"
-_FOOTER = ("Sources (community-reported, not official): CMDR Dubior's Advanced ED Colonization Guide (ref. 2026-08-11); "
-           "Colonization 101 (CMDR PhoenixBlue0); DaftMav Service Unlocks flowchart.\n"
+_FOOTER = ("Sources (community-reported, not official): CMDR Dubior's Advanced ED Colonization Guide (ref. 2026-08-11, read 2026-10-30); "
+           "Colonization 101 (CMDR PhoenixBlue0, read 2026-10-30); DaftMav Service Unlocks flowchart (read 2026-10-30).\n"
            "Controlling faction = the faction controlling the station you buy the claim at.")
+_GREY = "color:#9aa4b0; font-size:13px;"
+_RED = "color:#ff6b6b; font-weight:bold; font-size:13px;"
 _LABEL = "color:#c8c8c8; font-size:12px;"
 
 
@@ -83,10 +85,23 @@ class ColonisationDesignDialog(QDialog):
         footer.setStyleSheet("color:#7a8694; font-size:11px;")
         root.addWidget(footer)
 
+        self.load(id64, name)
+
+    def load(self, id64: int, name: str) -> None:
+        """Point the window at a system; a still-running fetch for the previous one is ignored when it lands."""
+        self.id64, self._system = id64, None
+        self.setWindowTitle(f"Colonisation — Design: {name}")
+        while self._combo.count() > 1:
+            self._combo.removeItem(1)
+        self._combo.setCurrentIndex(0)
+        self._combo.setEnabled(False)
+        self._table.setRowCount(0)
+        self._warnings.setText("")
         self._banner.setText("Loading…")
-        self._banner.setStyleSheet("color:#9aa4b0; font-size:13px;")
+        self._banner.setStyleSheet(_GREY)
         self._banner.setVisible(True)
-        self._start(lambda: fetch_colonisation_system(hub_url, id64), self._on_loaded)
+        url = self.hub_url
+        self._start(lambda: (id64, fetch_colonisation_system(url, id64)), self._on_loaded)
 
     # ── threading (same pattern as the finder) ─────────────────────────
     def _start(self, fn: Callable, slot: Callable) -> None:
@@ -100,21 +115,25 @@ class ColonisationDesignDialog(QDialog):
         thread.start()
 
     def stop(self) -> None:
-        """A QThread destroyed while running is a Qt fatal."""
+        """App shutdown only (blocks): a QThread destroyed while running is a Qt fatal."""
         for thread, _ in self._threads:
             thread.quit()
         for thread, _ in self._threads:
             thread.wait(10000)
 
     def closeEvent(self, event) -> None:
-        self.stop()
+        for thread, _ in self._threads:  # never wait on the GUI thread; the threads stay referenced until finished
+            thread.quit()
         super().closeEvent(event)
 
     # ── data ───────────────────────────────────────────────────────────
-    def _on_loaded(self, system) -> None:
+    def _on_loaded(self, result) -> None:
+        if result is None or result[0] != self.id64:
+            return
+        system = result[1]
         if not system:
             self._banner.setText("EDDataHub not reachable")
-            self._banner.setStyleSheet("color:#ff6b6b; font-weight:bold; font-size:13px;")
+            self._banner.setStyleSheet(_RED)
             return
         self._system = system
         self._banner.setVisible(False)
@@ -145,10 +164,11 @@ class ColonisationDesignDialog(QDialog):
         if primary is None:
             has_details = plan_system(self._system, "", False)["poor"] != "Hub has no body details yet"
             self._banner.setText("" if has_details else "Hub has no body details yet")
+            self._banner.setStyleSheet(_RED)
             self._banner.setVisible(not has_details)
             return
         plan = plan_system(self._system, primary, self._group.isChecked())
-        self._banner.setStyleSheet("color:#ff6b6b; font-weight:bold; font-size:13px;")
+        self._banner.setStyleSheet(_RED)
         if plan["poor"]:
             self._banner.setText(f"Poor pick: {plan['poor']}" if plan["poor"] != "Hub has no body details yet"
                                  else plan["poor"])
