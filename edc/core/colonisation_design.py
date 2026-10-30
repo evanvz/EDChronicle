@@ -22,6 +22,7 @@ _NAMES = {"HighTech": "High Tech"}
 
 
 def _clash(econ: set) -> bool:
+    # Twin of EDDataHub eddatahub/service_stop.py `cannibalises`: change both together
     # Dubior "Mixed Economy Setups": Industrial and High Tech clash with any other economy (covers Refinery + Industrial)
     return len(econ) > 1 and bool(econ & {"Industrial", "HighTech"})
 
@@ -37,21 +38,27 @@ def _short(name: str, system: str) -> str:
 def plan_system(system: dict, primary_body: str, group: bool) -> dict:
     out = {"poor": None, "steps": [], "warnings": [], "note": None}
     bodies = system.get("bodies") or []
-    if not bodies or any("cluster" not in b or "ground_slots" not in b for b in bodies):
+    # keys missing (old hub) or all None (migration 020 deployed, system not re-imported yet)
+    if (not bodies or any("cluster" not in b or "ground_slots" not in b for b in bodies)
+            or system.get("service_score") is None or all(b["cluster"] is None for b in bodies)):
         return {**out, "poor": "Hub has no body details yet"}
     p = next((b for b in bodies if b["name"] == primary_body), None)
     if p is None:
         return {**out, "poor": f"Primary body not in this system: {primary_body}"}
     if p["cluster"] is None:
         return {**out, "poor": "Primary slot on a star or belt: no planet cluster for hubs and settlements"}
-    if (p.get("distance_ls") or 0) > POOR["max_ls"]:
+    if p.get("distance_ls") is not None and p["distance_ls"] > POOR["max_ls"]:
         return {**out, "poor": f"Primary body too far out: {p['distance_ls']:,.0f} ls (limit {POOR['max_ls']:,} ls)"}
     cluster = [b for b in bodies if b["cluster"] == p["cluster"] and b is not p]
     moons = [b for b in cluster if b.get("landable") and (b["ground_slots"] or 0) >= POOR["min_slots"]]
     if not moons:
+        if any(b.get("landable") and b["ground_slots"] is None for b in cluster):
+            return {**out, "poor": "Ground slots unknown for this cluster: scan the bodies"}
         return {**out, "poor": "No landable moon with known ground slots in this cluster"}
 
     steps, warnings, notes = out["steps"], out["warnings"], []
+    if p.get("distance_ls") is None:
+        warnings.append("Primary body distance unknown: far-out check skipped")
     main = set(p.get("economies") or []) - {"Terraforming"}
     if _clash(main):
         warnings.append(f"Main port natural economies {_econ_text(main)} clash (Dubior): expect a thinner market")
@@ -67,12 +74,13 @@ def plan_system(system: dict, primary_body: str, group: bool) -> dict:
              _BASICS + ["Universal Cartographics", "Vista Genomics"], _T3)
     else:
         step("Primary: Coriolis", p["name"], _BASICS, _CORIOLIS)
-        # 2. Same orbit, strong link (DaftMav); Relay is a High Tech build, so Comms keeps the market (Evan)
-        step("Comms or Relay installation", p["name"], ["Universal Cartographics", "Vista Genomics", "Security"],
-             "Same orbit as the primary; prefer Comms, Relay adds High Tech")
+        # 2. Same orbit, strong link (DaftMav); not Relay: it adds High Tech to the main port (Evan, market first)
+        step("Comms installation", p["name"], ["Universal Cartographics", "Vista Genomics", "Security"],
+             "Same orbit as the primary; not a Relay, it adds High Tech to the main port")
     # 3. Surface port on the primary body when it has ground slots (Dubior): more population and market
-    if p.get("landable") and (p["ground_slots"] or 0) > 0:
-        step("Surface port on the primary body", p["name"], ["Population", "Market supply"], "Primary port built")
+    if p.get("landable") and p["ground_slots"] != 0:
+        step("Surface port on the primary body", p["name"], ["Population", "Market supply"],
+             "Primary port built" + ("; ground slots unknown, check in Architect View" if p["ground_slots"] is None else ""))
     # 4. Mining Installation, then Industrial Hub on a moon (DaftMav): shipyard at surface ports, development level
     mine = min(moons, key=lambda b: "Extraction" not in (b.get("economies") or []))
     step("Mining Installation + Industrial Hub", mine["name"], ["Shipyard at surface ports", "Development level"],

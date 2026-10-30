@@ -37,14 +37,14 @@ def test_star_primary_is_poor():
 def test_solo_plan_on_gas_giant_3():
     p = plan_system(TUC, "Tucanae Sector PY-R b4-1 3", False)
     assert p["poor"] is None
-    assert [s["title"] for s in p["steps"]][:2] == ["Primary: Coriolis", "Comms or Relay installation"]
+    assert [s["title"] for s in p["steps"]][:2] == ["Primary: Coriolis", "Comms installation"]
     assert "Universal Cartographics" in p["steps"][1]["unlocks"] and "Vista Genomics" in p["steps"][1]["unlocks"]
 
 
 def test_group_plan_skips_comms_step():
     p = plan_system(TUC, "Tucanae Sector PY-R b4-1 3", True)
     assert p["steps"][0]["title"] == "Primary: Ocellus"          # rings on body 3
-    assert all(s["title"] != "Comms or Relay installation" for s in p["steps"])
+    assert all(s["title"] != "Comms installation" for s in p["steps"])
 
 
 def test_high_tech_goes_to_other_cluster():
@@ -73,3 +73,25 @@ def test_note_when_hub_best_cluster_differs():
 
 def test_planet_without_moons_is_poor():
     assert plan_system(TUC, "Tucanae Sector PY-R b4-1 1", False)["poor"].startswith("No landable moon")
+
+
+def test_not_reimported_yet_says_no_details():
+    sys = {**TUC, "service_score": None, "bodies": [{**b, "cluster": None, "ground_slots": None} for b in TUC["bodies"]]}
+    assert plan_system(sys, "Tucanae Sector PY-R b4-1 3", False)["poor"] == "Hub has no body details yet"
+
+
+def test_unknown_moon_slots_is_not_a_verdict():
+    sys = {**TUC, "bodies": [{**b, "ground_slots": None} if b["cluster"] == 7 and b["landable"] else b for b in TUC["bodies"]]}
+    assert plan_system(sys, "Tucanae Sector PY-R b4-1 3", False)["poor"].startswith("Ground slots unknown")
+
+
+def test_landable_primary_with_unknown_slots_keeps_surface_step():
+    sys = {**TUC, "bodies": [{**b, "ground_slots": None} if b["name"].endswith(" 3 a") else b for b in TUC["bodies"]]}
+    s = next(s for s in plan_system(sys, "Tucanae Sector PY-R b4-1 3 a", False)["steps"] if s["title"].startswith("Surface port"))
+    assert "slots unknown" in s["needs"]
+
+
+def test_missing_distance_is_unknown_not_zero():
+    sys = {**TUC, "bodies": [{**b, "distance_ls": None} if b["name"].endswith(" 5") else b for b in TUC["bodies"]]}
+    p = plan_system(sys, "Tucanae Sector PY-R b4-1 5", False)
+    assert p["poor"] is None and any("distance unknown" in w for w in p["warnings"])
