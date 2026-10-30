@@ -125,9 +125,10 @@ class ColonisationFinderDialog(QDialog):
         self._filter.textChanged.connect(self._apply_filter)
         root.addWidget(self._filter)
 
-        self._table = QTableWidget(0, 8)
+        self._table = QTableWidget(0, 9)
         self._table.setHorizontalHeaderLabels(
-            ["System", "Dist (ly)", "To squad (ly)", "Score", "Port types", "Economies", "Bodies", "Data age"])
+            ["System", "Dist (ly)", "To squad (ly)", "Score", "Port types", "Economies", "Bodies", "Data age", "Claim from"])
+        self._table.horizontalHeaderItem(8).setToolTip("Nearest populated system within 15 ly: claim from a station there")
         self._table.horizontalHeaderItem(3).setToolTip(
             "Score = 10 × port types + economies (rules: Update 3 body economies)")
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -147,6 +148,7 @@ class ColonisationFinderDialog(QDialog):
 
         self._spansh = QLabel("")
         self._spansh.setStyleSheet("color:#c8c8c8; font-size:12px;")
+        self._spansh.setWordWrap(True)  # the claim-from list can name 20+ systems
         root.addWidget(self._spansh)
 
         self._bodies = QTableWidget(0, 6)
@@ -227,6 +229,7 @@ class ColonisationFinderDialog(QDialog):
             first = QTableWidgetItem(row["name"])
             first.setData(Qt.ItemDataRole.UserRole, row["id64"])
             squad = row.get("to_squad_ly")
+            claim = row.get("claim_from")
             items = [
                 first,
                 _num("" if row.get("distance_ly") is None else f"{row['distance_ly']:.1f}", row.get("distance_ly")),
@@ -236,6 +239,7 @@ class ColonisationFinderDialog(QDialog):
                 QTableWidgetItem(", ".join(row.get("economies") or [])),
                 _num(str(row.get("body_count", 0)), row.get("body_count", 0)),
                 QTableWidgetItem(_age_days(row.get("dump_date"))),
+                QTableWidgetItem(f"{claim['name']} ({claim['ly']:.1f} ly)" if claim else ""),
             ]
             for c, item in enumerate(items):
                 self._table.setItem(r, c, item)
@@ -272,7 +276,9 @@ class ColonisationFinderDialog(QDialog):
         if result is None or result[0] != self._detail_id:
             return
         _, system, claimed = result
-        self._spansh.setText("Spansh: " + {True: "claimed", False: "free", None: "unknown"}[claimed])
+        claim = ", ".join(f"{c['name']} ({c['ly']:.1f} ly)" for c in (system or {}).get("claim_from") or [])
+        self._spansh.setText("Spansh: " + {True: "claimed", False: "free", None: "unknown"}[claimed]
+                             + (f"    Claim from: {claim}" if claim else ""))
         bodies = (system or {}).get("bodies") or []
         self._bodies.setRowCount(len(bodies))
         for r, b in enumerate(bodies):

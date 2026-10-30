@@ -11,7 +11,8 @@ from edc.ui.panels import colonisation_finder_dialog as mod  # noqa: E402
 _keep = []  # fake panels must outlive their dialogs
 ROWS = [
     {"id64": 1, "name": "Alpha", "distance_ly": 20.0, "to_squad_ly": 12.5, "score": 25, "port_types": ["Orbital"],
-     "economies": ["HighTech"], "body_count": 4, "dump_date": "2026-10-20"},
+     "economies": ["HighTech"], "body_count": 4, "dump_date": "2026-10-20",
+     "claim_from": {"name": "Ross 690", "ly": 4.21}},
     {"id64": 2, "name": "Beta", "distance_ly": 9.5, "to_squad_ly": None, "score": 5, "port_types": [],
      "economies": [], "body_count": 0, "dump_date": None},
 ]
@@ -58,6 +59,8 @@ def test_results_render_sorted_and_unknown_ports(monkeypatch):
     assert t.item(1, 4).text() == "Orbital"
     assert t.item(1, 7).text().endswith(" d")
     assert t.item(0, 7).text() == ""
+    assert t.item(0, 8).text() == ""
+    assert t.item(1, 8).text() == "Ross 690 (4.2 ly)"
 
 
 def test_filter_box_hides_other_systems(monkeypatch):
@@ -122,3 +125,10 @@ def test_new_search_clears_old_detail(monkeypatch):
     dlg._bodies.setRowCount(3)
     _search(dlg)
     assert dlg._spansh.text() == "" and dlg._bodies.rowCount() == 0
+
+
+def test_detail_lists_where_to_claim_from(monkeypatch):
+    dlg = _dialog(monkeypatch)
+    dlg._detail_id = 7
+    dlg._on_detail_done((7, {"bodies": [], "claim_from": [{"name": "A", "ly": 3.0}, {"name": "B", "ly": 9.84}]}, False))
+    assert dlg._spansh.text() == "Spansh: free    Claim from: A (3.0 ly), B (9.8 ly)"
