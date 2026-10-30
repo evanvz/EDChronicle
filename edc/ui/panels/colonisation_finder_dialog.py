@@ -138,6 +138,7 @@ class ColonisationFinderDialog(QDialog):
         self._table.setAlternatingRowColors(True)
         self._table.setStyleSheet(_TABLE_STYLE)
         self._table.setSortingEnabled(True)
+        self._table.sortItems(3, Qt.SortOrder.DescendingOrder)  # default indicator is System, would reorder the hub's ranking
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self._table.horizontalHeader().setStretchLastSection(True)
         self._table.cellClicked.connect(self._on_cell_clicked)
