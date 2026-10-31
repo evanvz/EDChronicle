@@ -24,7 +24,7 @@ def test_stall_log_includes_other_threads_and_cpu(caplog):
 
     worker = threading.Thread(target=busy_worker, name="busy-worker", daemon=True)
     worker.start()
-    time.sleep(2.8)  # UI thread blocked: no heartbeat
+    time.sleep(5.5)  # UI thread blocked: no heartbeat (report at 2 s, re-sample at 4 s+)
     stop.set()
     worker.join()
     app.processEvents()
@@ -34,6 +34,8 @@ def test_stall_log_includes_other_threads_and_cpu(caplog):
     assert stall, "no stall logged"
     assert "thread busy-worker" in stall[0] and "busy_worker" in stall[0]
     assert "process CPU" in stall[0]
+    again = [r.getMessage() for r in caplog.records if "still stalled" in r.getMessage()]
+    assert again and "test_stall_log_includes_other_threads_and_cpu" in again[0]   # the blocked UI frame, re-sampled
     gc.callbacks.remove(wd._gc_timer)
     gc.collect()  # callback removed cleanly; collections still work
     wd._timer.stop()

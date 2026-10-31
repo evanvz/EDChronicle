@@ -563,6 +563,7 @@ class _UiStallWatchdog:
     def _watch(self):
         import traceback
         reported_for = None
+        sampled_at = 0.0
         cpu_at_beat = time.process_time()
         # Windows Modern Standby (screen off) suspends the whole process in bursts; the UI
         # heartbeat then looks stalled though nothing here is stuck (2026-10-10/11: 1,353 of
@@ -585,6 +586,7 @@ class _UiStallWatchdog:
             stalled = time.monotonic() - beat
             if stalled >= self.STALL_S and reported_for != beat and beat != paused_beat:
                 reported_for = beat
+                sampled_at = time.monotonic()
                 frames = self._sys._current_frames()
                 names = {t.ident: t.name for t in threading.enumerate()}
                 frame = frames.get(self._main_ident)
@@ -600,6 +602,12 @@ class _UiStallWatchdog:
                 log.warning("UI thread unresponsive for %.1fs%s, process CPU %.1fs since last beat — currently at:\n%s"
                             "Other threads:\n%s",
                             stalled, self._describe(), time.process_time() - cpu_at_beat, stack, others)
+            elif reported_for == beat and time.monotonic() - sampled_at >= 2.0:
+                # one sample at 2 s can't say where a 10 s stall went: the UI's stack every 2 s while it lasts
+                sampled_at = time.monotonic()
+                frame = self._sys._current_frames().get(self._main_ident)
+                log.warning("UI thread still stalled at %.1fs — now at:\n%s", stalled,
+                            "".join(traceback.format_stack(frame)[-5:]) if frame else "(no frame)")
             elif reported_for is not None and reported_for != beat:
                 log.warning("UI thread recovered after a %.1fs stall", beat - reported_for)
                 reported_for = None
