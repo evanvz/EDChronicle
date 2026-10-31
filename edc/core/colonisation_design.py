@@ -95,12 +95,13 @@ def plan_system(system: dict, primary_body: str, group: bool) -> dict:
         step("Civilian Planetary Outpost on the primary body", p["name"], ["Population", "Market supply"],
              "Primary port built" + ("; ground slots unknown, check in Architect View" if p["ground_slots"] is None else ""),
              t2=1)
-    # 4. Mining Installation, then Industrial Hub on a moon (wiki: the hub requires a Mining Installation)
+    # 4. Mining Installation (orbital), then Industrial Hub on a moon (wiki: the hub requires a Mining Installation in the system)
     # Update 3.3: an Industrial Hub's shipyard/outfitting reach only Tier 1 surface ports it strong-links to (same body)
     mine = min(moons, key=lambda b: "Extraction" not in (b.get("economies") or []))
     step("Mining Installation + Industrial Hub", mine["name"],
          ["Development level", "Shipyard and outfitting at a Tier 1 surface port on the same body"],
-         "Mining Installation first", "Industrial", t3=1, gain="+1 T2 then -1 T2, +1 T3")
+         "Mining Installation first (orbital, any slot in system)", "Industrial", t3=1,
+         gain="+1 T2 then -1 T2, +1 T3")
     # 5. High Tech Hub on a different cluster so the main port keeps its top two (Evan, market before outfitting)
     ht_clusters = {b["cluster"] for b in bodies if b["cluster"] not in (None, p["cluster"])
                    and "HighTech" in (b.get("economies") or [])}
