@@ -146,12 +146,13 @@ def fetch_system_powerplay(base_url: str, addresses: List[int], since: str) -> O
 
 def fetch_colonisation_search(base_url: str, x: float, y: float, z: float, radius: float,
                               port_types: List[str], economies: List[str], faction: Optional[str],
-                              near_max: Optional[float], limit: int = 100) -> Optional[List[dict]]:
+                              near_max: Optional[float], limit: int = 100, min_planets: int = 0) -> Optional[List[dict]]:
     """Claimable systems around (x, y, z) from the hub, best first; with faction, only those within
-    near_max ly of a station it controls that sells claims. None when the hub isn't reachable or answers wrongly."""
+    near_max ly of a station it controls that sells claims; min_planets drops systems with fewer planets and moons.
+    None when the hub isn't reachable or answers wrongly."""
     if not base_url:
         return None
-    params = {"x": x, "y": y, "z": z, "radius": radius, "limit": limit}
+    params = {"x": x, "y": y, "z": z, "radius": radius, "limit": limit, "min_planets": min_planets}
     if port_types:
         params["port_type"] = list(port_types)
     if economies:

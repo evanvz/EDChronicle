@@ -128,13 +128,20 @@ class ColonisationFinderDialog(QDialog):
         self._near_ly.setRange(1, 15)  # the claim range
         self._near_ly.setValue(15)
         self._near_ly.setSuffix(" ly")
+        self._min_planets = QSpinBox()
+        self._min_planets.setRange(0, 100)
+        self._min_planets.setValue(10)  # hub data 2026-10-31: under 10 planets+moons, at most 1% score 60+ as a service stop
+        self._min_planets.setPrefix("≥ ")
+        self._min_planets.setSuffix(" planets")
+        self._min_planets.setToolTip("Minimum planets and moons (stars not counted). Under 10 almost never makes a\n"
+                                     "good service stop; 15+ gives the random primary slot more chances to land well")
         self._search_btn = QPushButton("Search")
         self._search_btn.setStyleSheet(_BTN_STYLE)
         self._search_btn.clicked.connect(self._on_search)
-        for w in (self._radius, self._port, self._economy, self._near_ly):
+        for w in (self._radius, self._port, self._economy, self._near_ly, self._min_planets):
             w.setStyleSheet(_INPUT_STYLE)
         row.addWidget(self._centre, 1)
-        for w in (self._radius, self._port, self._economy, self._near_chk, self._near_ly, self._search_btn):
+        for w in (self._radius, self._min_planets, self._port, self._economy, self._near_chk, self._near_ly, self._search_btn):
             row.addWidget(w)
         root.addLayout(row)
 
@@ -244,6 +251,7 @@ class ColonisationFinderDialog(QDialog):
         near = self._near_chk.isChecked()
         near_ly = float(self._near_ly.value())
         radius = float(self._radius.value())
+        min_planets = self._min_planets.value()
         url = self.hub_url
 
         def work():
@@ -254,7 +262,7 @@ class ColonisationFinderDialog(QDialog):
             if near and not faction:
                 return "No squad faction known yet"
             rows = fetch_colonisation_search(url, xyz[0], xyz[1], xyz[2], radius, port, eco, faction,
-                                             near_ly if near else None)
+                                             near_ly if near else None, min_planets=min_planets)
             return rows if rows is not None else "EDDataHub not reachable"
 
         self._search_btn.setEnabled(False)

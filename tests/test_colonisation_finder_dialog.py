@@ -220,3 +220,13 @@ def test_marking_from_design_updates_the_row(monkeypatch):
     dlg._on_marked(2, None)
     row = next(r for r in range(3) if dlg._table.item(r, 0).text() == "Beta")
     assert dlg._table.item(row, mod._MARK_COL).text() == "" and not dlg._table.isRowHidden(row)
+
+
+def test_min_planets_defaults_to_10_and_is_sent(monkeypatch):
+    seen = []
+    dlg = _dialog(monkeypatch)
+    monkeypatch.setattr(mod, "fetch_colonisation_search", lambda *a, **kw: seen.append(kw) or ROWS)
+    assert dlg._min_planets.value() == 10
+    dlg._min_planets.setValue(15)
+    _search(dlg)
+    assert seen == [{"min_planets": 15}]
