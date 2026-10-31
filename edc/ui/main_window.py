@@ -922,7 +922,9 @@ class _HubMarketCatchUpWorker(QObject):
             def take(msg):
                 cache.on_commodity_message(msg)
                 pending[0] += 1
-                if pending[0] % 500 == 0:
+                # small transactions: a 500-station one held the write lock ~19 s and froze the UI thread's
+                # own writes (save_system_bgs_status on FSDJump, log 2026-10-31 14:06)
+                if pending[0] % 25 == 0:
                     write()
 
             got = fetch_markets(self._hub_url, since, take, lambda: self._cancel)
