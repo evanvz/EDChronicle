@@ -230,3 +230,12 @@ def test_min_planets_defaults_to_10_and_is_sent(monkeypatch):
     dlg._min_planets.setValue(15)
     _search(dlg)
     assert seen == [{"min_planets": 15}]
+
+
+def test_second_search_fills_fast(monkeypatch):
+    rows = [dict(ROWS[0], id64=i, name=f"S{i}") for i in range(100)]
+    dlg = _dialog(monkeypatch, rows)
+    dlg._on_search_done(rows)
+    t = time.perf_counter()
+    dlg._on_search_done(rows)            # replacing the old items one by one took ~10 s
+    assert time.perf_counter() - t < 1.0 and dlg._table.rowCount() == 100

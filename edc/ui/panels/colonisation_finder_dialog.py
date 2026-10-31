@@ -280,6 +280,7 @@ class ColonisationFinderDialog(QDialog):
         self._spansh.setText("")
         self._bodies.setRowCount(0)
         self._table.setSortingEnabled(False)  # sorting while filling scrambles the row indexes
+        self._table.setRowCount(0)  # replacing the previous search's items one by one took ~10 s for 100 rows
         self._table.setRowCount(len(result))
         for r, row in enumerate(result):
             ports = ", ".join(row.get("port_types") or []) if row.get("body_count") else "unknown"
