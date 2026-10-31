@@ -6,8 +6,8 @@
 (C:\\Dev\\EDDataHub). It works out BGS ticks from its full EDDN archive
 (tick.edcd.io when that has them, otherwise inferred -- calibrated to the same
 placements as the feed for 94.4% of changes), so while it's reachable it is the
-app's tick source; the app's own EDDN detection is the fallback. Read-only:
-nothing of ours is sent to it."""
+app's tick source; the app's own EDDN detection is the fallback. Read-only,
+except the colonisation marks the user sets in the System Design window."""
 from __future__ import annotations
 
 import json
@@ -189,6 +189,23 @@ def fetch_colonisation_system(base_url: str, id64: int, faction: Optional[str] =
     except Exception as exc:
         log.info("EDDataHub colonisation system not available (%s)", exc)
         return None
+
+
+def put_colonisation_mark(base_url: str, id64: int, verdict: Optional[str], primary_body: Optional[str],
+                          note: Optional[str], cmdr: Optional[str]) -> bool:
+    """Store the squad's good/bad verdict on a claimable system (verdict None clears it). False when the hub refuses
+    or isn't reachable."""
+    if not base_url:
+        return False
+    try:
+        resp = requests.put(f"{base_url.rstrip('/')}/api/colonisation-mark",
+                            json={"id64": id64, "verdict": verdict, "primary_body": primary_body, "note": note, "cmdr": cmdr},
+                            headers={"User-Agent": USER_AGENT}, timeout=_TIMEOUT)
+        resp.raise_for_status()
+        return True
+    except Exception as exc:
+        log.info("EDDataHub colonisation mark not stored (%s)", exc)
+        return False
 
 
 def fetch_markets(base_url: str, since: str, on_message, cancelled=lambda: False) -> Optional[int]:

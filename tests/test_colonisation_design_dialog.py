@@ -145,3 +145,45 @@ def test_nameless_body_gets_fallback_label_and_combo_enables(monkeypatch):
     s = {**TUC, "bodies": [dict(b, name=None) if b["body_id"] == 7 else b for b in TUC["bodies"]]}
     d = _dialog(monkeypatch, s)
     assert d._combo.isEnabled() and "Body 7" in [d._combo.itemText(i).strip() for i in range(d._combo.count())]
+
+
+def _wait_saved(d):
+    deadline = time.time() + 5
+    while d._mark_lbl.text() == "Saving…" and time.time() < deadline:
+        _app.processEvents()
+    d.stop()
+
+
+def test_mark_bad_sends_primary_body_note_and_cmdr(monkeypatch):
+    sent, marked = [], []
+    monkeypatch.setattr(mod, "put_colonisation_mark", lambda *a: sent.append(a) or True)
+    d = _dialog(monkeypatch, {**TUC})
+    d.parent()._panel = SimpleNamespace(_last_state=SimpleNamespace(commander="Evan"))
+    d.on_marked = lambda id64, mark: marked.append((id64, mark))
+    d._mark_btns["bad"].click()
+    assert not sent and d._mark_lbl.text().startswith("Pick the primary slot body first")
+    _pick(d, f"{SYS} 1")                                     # planet without moons: poor pick, bad button highlighted
+    assert "#ff6b6b" in d._mark_btns["bad"].styleSheet()
+    d._note.setText(" no moons ")
+    d._mark_btns["bad"].click()
+    _wait_saved(d)
+    assert sent == [("http://hub", 1, "bad", f"{SYS} 1", "no moons", "Evan")]
+    assert marked[0][0] == 1 and marked[0][1]["verdict"] == "bad"
+    assert d._mark_lbl.text() == f"Marked bad by Evan, primary {SYS} 1: no moons"
+
+
+def test_clear_mark_sends_nulls_and_hub_refusal_says_so(monkeypatch):
+    sent = []
+    monkeypatch.setattr(mod, "put_colonisation_mark", lambda *a: sent.append(a) or False)
+    d = _dialog(monkeypatch, {**TUC})
+    d._mark_btns[None].click()
+    _wait_saved(d)
+    assert sent == [("http://hub", 1, None, None, None, None)]
+    assert d._mark_lbl.text().startswith("Hub did not store the mark")
+
+
+def test_existing_mark_shows_and_preselects_primary(monkeypatch):
+    d = _dialog(monkeypatch, {**TUC, "mark": {"verdict": "good", "primary_body": f"{SYS} 3", "note": "ok", "cmdr": "Evan",
+                                              "marked_at": "2026-10-31T10:00:00+00:00"}})
+    assert d._combo.currentData() == f"{SYS} 3" and d._table.rowCount() > 0
+    assert d._note.text() == "ok" and d._mark_lbl.text() == f"Marked good by Evan 2026-10-31, primary {SYS} 3: ok"

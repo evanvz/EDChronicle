@@ -70,3 +70,18 @@ def test_system_sends_faction_only_when_set(calls):
     c.fetch_colonisation_system("http://hub", 1)
     c.fetch_colonisation_system("http://hub", 1, "Us")
     assert [p for _, p, _, _ in calls] == [{"id64": 1}, {"id64": 1, "faction": "Us"}]
+
+
+def test_put_colonisation_mark_sends_json_and_reports_refusal(monkeypatch):
+    seen, status = [], [202]
+
+    def fake(url, json=None, headers=None, timeout=None):
+        seen.append((url, json))
+        return Resp({"ok": True}, status[0])
+    monkeypatch.setattr(c.requests, "put", fake)
+    assert c.put_colonisation_mark("http://hub/", 7, "bad", "S 3", "no moons", "Evan") is True
+    assert seen == [("http://hub/api/colonisation-mark",
+                     {"id64": 7, "verdict": "bad", "primary_body": "S 3", "note": "no moons", "cmdr": "Evan"})]
+    status[0] = 404                                         # hub not updated yet
+    assert c.put_colonisation_mark("http://hub", 7, None, None, None, None) is False
+    assert c.put_colonisation_mark("", 7, "bad", None, None, None) is False

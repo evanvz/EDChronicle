@@ -6,12 +6,13 @@ from typing import Callable, Optional
 
 from PyQt6.QtCore import Qt, QThread
 from PyQt6.QtWidgets import (
-    QComboBox, QDialog, QHBoxLayout, QHeaderView, QLabel, QRadioButton, QTableWidget, QTableWidgetItem, QVBoxLayout,
+    QComboBox, QDialog, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QPushButton, QRadioButton, QTableWidget,
+    QTableWidgetItem, QVBoxLayout,
 )
 
 from edc.core.colonisation_design import plan_system
-from edc.core.eddatahub_client import fetch_colonisation_system
-from edc.ui.panels.colonisation_finder_dialog import _INPUT_STYLE, _TABLE_STYLE, _Worker
+from edc.core.eddatahub_client import fetch_colonisation_system, put_colonisation_mark
+from edc.ui.panels.colonisation_finder_dialog import _BTN_STYLE, _INPUT_STYLE, _TABLE_STYLE, _Worker, mark_text
 
 _HINT = "Find the flag in the system map's Architect View"
 _FOOTER = ("Sources (community-reported, not official): CMDR Dubior's Advanced ED Colonization Guide (ref. 2026-08-11, read 2026-10-30); "
@@ -82,6 +83,28 @@ class ColonisationDesignDialog(QDialog):
         self._warnings.setStyleSheet("color:#e0b040; font-size:12px;")
         root.addWidget(self._warnings)
 
+        # Squad verdict, stored on the hub with the primary body picked above (finder hides "bad" systems)
+        mark_row = QHBoxLayout()
+        self._note = QLineEdit()
+        self._note.setPlaceholderText("Note (e.g. primary on gas giant 3, no moons)")
+        self._note.setMaxLength(200)
+        self._note.setStyleSheet(_INPUT_STYLE)
+        self._mark_btns = {}
+        for verdict, text in (("good", "Mark good"), ("bad", "Mark bad"), (None, "Clear mark")):
+            b = QPushButton(text)
+            b.setStyleSheet(_BTN_STYLE)
+            b.setEnabled(False)
+            b.clicked.connect(lambda _, v=verdict: self._save_mark(v))
+            self._mark_btns[verdict] = b
+        mark_row.addWidget(self._note, 1)
+        for b in self._mark_btns.values():
+            mark_row.addWidget(b)
+        root.addLayout(mark_row)
+        self._mark_lbl = QLabel("")
+        self._mark_lbl.setStyleSheet(_LABEL)
+        root.addWidget(self._mark_lbl)
+        self.on_marked: Optional[Callable] = None  # (id64, mark or None), set by the finder to update its row
+
         footer = QLabel(_FOOTER)
         footer.setWordWrap(True)
         footer.setStyleSheet("color:#7a8694; font-size:11px;")
@@ -99,6 +122,10 @@ class ColonisationDesignDialog(QDialog):
         self._combo.setEnabled(False)
         self._table.setRowCount(0)
         self._warnings.setText("")
+        self._note.clear()
+        self._mark_lbl.setText("")
+        for b in self._mark_btns.values():
+            b.setEnabled(False)
         self._banner.setText("Loading…")
         self._banner.setStyleSheet(_GREY)
         self._banner.setVisible(True)
@@ -138,6 +165,8 @@ class ColonisationDesignDialog(QDialog):
             self._banner.setStyleSheet(_RED)
             return
         self._system = system
+        for b in self._mark_btns.values():
+            b.setEnabled(True)
         self._banner.setVisible(False)
         bodies = sorted(system.get("bodies") or [], key=lambda b: b.get("distance_ls") or 0)
         sysname = system.get("name") or ""
@@ -156,6 +185,7 @@ class ColonisationDesignDialog(QDialog):
             for b in ordered:
                 self._combo.addItem(label(b, cl is not None and b is not root_b), b.get("name"))
         self._combo.setEnabled(True)
+        self._show_mark(system.get("mark"))
         self._replan()
 
     def _replan(self, *_) -> None:
@@ -172,6 +202,7 @@ class ColonisationDesignDialog(QDialog):
             return
         plan = plan_system(self._system, primary, self._group.isChecked())
         self._banner.setStyleSheet(_RED)
+        self._mark_btns["bad"].setStyleSheet(_BTN_STYLE + ("QPushButton { border:2px solid #ff6b6b; }" if plan["poor"] else ""))
         if plan["poor"]:
             self._banner.setText(f"Poor pick: {plan['poor']}" if plan["poor"] != "Hub has no body details yet"
                                  else plan["poor"])
@@ -185,3 +216,42 @@ class ColonisationDesignDialog(QDialog):
         self._table.resizeRowsToContents()
         lines = list(plan["warnings"]) + ([plan["note"]] if plan["note"] else [])
         self._warnings.setText("\n".join(lines))
+
+    # ── squad mark ─────────────────────────────────────────────────────
+    def _show_mark(self, mark: Optional[dict]) -> None:
+        self._note.setText((mark or {}).get("note") or "")
+        self._mark_lbl.setText(mark_text(mark))
+        body = (mark or {}).get("primary_body")
+        i = self._combo.findData(body) if body else -1
+        if i > 0 and self._combo.currentIndex() <= 0:
+            self._combo.setCurrentIndex(i)
+
+    def _save_mark(self, verdict: Optional[str]) -> None:
+        primary = self._combo.currentData()
+        if verdict and primary is None:
+            self._mark_lbl.setText("Pick the primary slot body first: the mark records it")
+            return
+        id64, url, note = self.id64, self.hub_url, self._note.text().strip() or None
+        state = getattr(getattr(self.parent(), "_panel", None), "_last_state", None)
+        cmdr = getattr(state, "commander", None)
+        mark = {"verdict": verdict, "primary_body": primary, "note": note, "cmdr": cmdr} if verdict else None
+        for b in self._mark_btns.values():
+            b.setEnabled(False)
+        self._mark_lbl.setText("Saving…")
+        self._start(lambda: (id64, mark, put_colonisation_mark(url, id64, verdict, primary if verdict else None,
+                                                               note if verdict else None, cmdr)), self._on_mark_saved)
+
+    def _on_mark_saved(self, result) -> None:
+        if result is None or result[0] != self.id64:
+            return
+        id64, mark, ok = result
+        for b in self._mark_btns.values():
+            b.setEnabled(True)
+        if not ok:
+            self._mark_lbl.setText("Hub did not store the mark (not reachable, or not updated yet)")
+            return
+        if self._system is not None:
+            self._system["mark"] = mark
+        self._mark_lbl.setText(mark_text(mark))
+        if self.on_marked:
+            self.on_marked(id64, mark)

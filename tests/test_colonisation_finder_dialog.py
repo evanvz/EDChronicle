@@ -194,3 +194,29 @@ def test_reused_design_dialog_gets_current_hub_url(monkeypatch):
     assert dlg._design.hub_url == "http://new-hub"
     dlg.stop()
     dlg._design.close()
+
+
+def test_bad_marks_hidden_unless_show_rejected_and_good_sorts_first(monkeypatch):
+    rows = [dict(ROWS[0], mark={"verdict": "bad", "cmdr": "Evan", "primary_body": "Alpha 3", "note": "no moons",
+                                "marked_at": "2026-10-31T10:00:00+00:00"}),
+            dict(ROWS[1], mark=None), dict(ROWS[2], mark={"verdict": "good"})]
+    dlg = _dialog(monkeypatch, rows)
+    _search(dlg)
+    t = dlg._table
+    assert [t.item(r, 0).text() for r in range(3)] == ["Beta", "Gamma", "Alpha"]   # good first, hub order kept, bad last
+    assert t.item(0, mod._MARK_COL).text() == "✓ good"
+    assert t.item(2, mod._MARK_COL).toolTip() == "Marked bad by Evan 2026-10-31, primary Alpha 3: no moons"
+    assert t.isRowHidden(2) and not t.isRowHidden(0)
+    dlg._rejected.setChecked(True)
+    assert not t.isRowHidden(2)
+
+
+def test_marking_from_design_updates_the_row(monkeypatch):
+    dlg = _dialog(monkeypatch)
+    _search(dlg)
+    dlg._on_marked(2, {"verdict": "bad"})
+    row = next(r for r in range(3) if dlg._table.item(r, 0).text() == "Beta")
+    assert dlg._table.item(row, mod._MARK_COL).text() == "✗ bad" and dlg._table.isRowHidden(row)
+    dlg._on_marked(2, None)
+    row = next(r for r in range(3) if dlg._table.item(r, 0).text() == "Beta")
+    assert dlg._table.item(row, mod._MARK_COL).text() == "" and not dlg._table.isRowHidden(row)

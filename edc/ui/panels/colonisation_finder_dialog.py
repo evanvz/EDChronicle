@@ -72,6 +72,29 @@ def _num(text: str, value) -> QTableWidgetItem:
     return _NumericTableWidgetItem(text, value if value is not None else float("inf"))
 
 
+_MARK_COL = 10
+_MARK_RANK = {"good": 1, None: 0, "bad": -1}  # sort key: good first, bad last, hub ranking kept within each (stable sort)
+
+
+def mark_text(mark: Optional[dict]) -> str:
+    """One line for the squad's verdict on a system, '' when unmarked."""
+    if not mark:
+        return ""
+    who = f" by {mark['cmdr']}" if mark.get("cmdr") else ""
+    when = f" {str(mark['marked_at'])[:10]}" if mark.get("marked_at") else ""
+    body = f", primary {mark['primary_body']}" if mark.get("primary_body") else ""
+    note = f": {mark['note']}" if mark.get("note") else ""
+    return f"Marked {mark['verdict']}{who}{when}{body}{note}"
+
+
+def _mark_item(mark: Optional[dict]) -> QTableWidgetItem:
+    verdict = (mark or {}).get("verdict")
+    item = _NumericTableWidgetItem({"good": "✓ good", "bad": "✗ bad"}.get(verdict, ""), _MARK_RANK.get(verdict, 0))
+    item.setToolTip(mark_text(mark))
+    item.setData(Qt.ItemDataRole.UserRole, verdict)
+    return item
+
+
 class ColonisationFinderDialog(QDialog):
     def __init__(self, panel, hub_url: str):
         super().__init__(panel)
@@ -124,11 +147,19 @@ class ColonisationFinderDialog(QDialog):
         self._filter.setClearButtonEnabled(True)
         self._filter.setStyleSheet(_INPUT_STYLE)
         self._filter.textChanged.connect(self._apply_filter)
-        root.addWidget(self._filter)
+        self._rejected = QCheckBox("Show rejected")
+        self._rejected.setToolTip("Show systems the squad marked bad in the System Design window")
+        self._rejected.toggled.connect(self._apply_filter)
+        filter_row = QHBoxLayout()
+        filter_row.addWidget(self._filter, 1)
+        filter_row.addWidget(self._rejected)
+        root.addLayout(filter_row)
 
-        self._table = QTableWidget(0, 10)
+        self._table = QTableWidget(0, 11)
         self._table.setHorizontalHeaderLabels(
-            ["System", "Dist (ly)", "To squad (ly)", "Service stop", "Score", "Port types", "Economies", "Bodies", "Data age", "Claim from"])
+            ["System", "Dist (ly)", "To squad (ly)", "Service stop", "Score", "Port types", "Economies", "Bodies", "Data age", "Claim from",
+             "Mark"])
+        self._table.horizontalHeaderItem(_MARK_COL).setToolTip("Squad verdict from the System Design window; hover for who and why")
         self._table.horizontalHeaderItem(9).setToolTip("Nearest populated system within 15 ly: claim from a station there.\n"
             "With Near squad station: the nearest squad station that sells claims")
         self._table.horizontalHeaderItem(3).setToolTip(
@@ -144,7 +175,7 @@ class ColonisationFinderDialog(QDialog):
         self._table.setAlternatingRowColors(True)
         self._table.setStyleSheet(_TABLE_STYLE)
         self._table.setSortingEnabled(True)
-        self._table.sortItems(3, Qt.SortOrder.DescendingOrder)  # default indicator is System, would reorder the hub's ranking
+        self._table.sortItems(_MARK_COL, Qt.SortOrder.DescendingOrder)  # good first; ties keep the hub's ranking
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self._table.horizontalHeader().setStretchLastSection(True)
         self._table.cellClicked.connect(self._on_cell_clicked)
@@ -264,6 +295,7 @@ class ColonisationFinderDialog(QDialog):
                 QTableWidgetItem(_age_days(row.get("dump_date"))),
                 QTableWidgetItem(f"{station['system']} / {station['station']} ({station['ly']:.1f} ly)" if station
                                  else f"{claim['name']} ({claim['ly']:.1f} ly)" if claim else ""),
+                _mark_item(row.get("mark")),
             ]
             for c, item in enumerate(items):
                 self._table.setItem(r, c, item)
@@ -272,8 +304,19 @@ class ColonisationFinderDialog(QDialog):
 
     def _apply_filter(self) -> None:
         needle = self._filter.text().strip().lower()
+        show_bad = self._rejected.isChecked()
         for r in range(self._table.rowCount()):
-            self._table.setRowHidden(r, needle not in self._table.item(r, 0).text().lower())
+            bad = self._table.item(r, _MARK_COL).data(Qt.ItemDataRole.UserRole) == "bad"
+            self._table.setRowHidden(r, needle not in self._table.item(r, 0).text().lower() or (bad and not show_bad))
+
+    def _on_marked(self, id64: int, mark: Optional[dict]) -> None:
+        for r in range(self._table.rowCount()):
+            if self._table.item(r, 0).data(Qt.ItemDataRole.UserRole) == id64:
+                self._table.setSortingEnabled(False)
+                self._table.setItem(r, _MARK_COL, _mark_item(mark))
+                self._table.setSortingEnabled(True)
+                break
+        self._apply_filter()
 
     # ── selection ──────────────────────────────────────────────────────
     def _on_cell_clicked(self, row: int, col: int) -> None:
@@ -289,6 +332,7 @@ class ColonisationFinderDialog(QDialog):
         id64, name = item.data(Qt.ItemDataRole.UserRole), item.text()
         if self._design is None:
             self._design = ColonisationDesignDialog(self, self.hub_url, id64, name)
+            self._design.on_marked = self._on_marked
         else:
             self._design.hub_url = self.hub_url
             self._design.load(id64, name)
