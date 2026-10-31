@@ -16,6 +16,8 @@ from edc.ui.panels.colonisation_finder_dialog import _INPUT_STYLE, _TABLE_STYLE,
 _HINT = "Find the flag in the system map's Architect View"
 _FOOTER = ("Sources (community-reported, not official): CMDR Dubior's Advanced ED Colonization Guide (ref. 2026-08-11, read 2026-10-30); "
            "Colonization 101 (CMDR PhoenixBlue0, read 2026-10-30); DaftMav Service Unlocks flowchart (read 2026-10-30).\n"
+           "Official: Frontier Trailblazers Update 3.3 notes, service activation (read 2026-10-31). Construction points: "
+           "ED wiki System Colonisation (rev. 2026-10-26), gaborauth ED Colonisation Planner (read 2026-10-31).\n"
            "Controlling faction = the faction controlling the station you buy the claim at.")
 _GREY = "color:#9aa4b0; font-size:13px;"
 _RED = "color:#ff6b6b; font-weight:bold; font-size:13px;"
@@ -64,8 +66,8 @@ class ColonisationDesignDialog(QDialog):
         self._banner.setVisible(False)
         root.addWidget(self._banner)
 
-        self._table = QTableWidget(0, 4)
-        self._table.setHorizontalHeaderLabels(["Step", "Body", "Unlocks", "Needs"])
+        self._table = QTableWidget(0, 5)
+        self._table.setHorizontalHeaderLabels(["Step", "Body", "Unlocks", "Needs", "Points"])
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.verticalHeader().setVisible(False)
         self._table.setAlternatingRowColors(True)
@@ -178,7 +180,7 @@ class ColonisationDesignDialog(QDialog):
         self._banner.setVisible(False)
         self._table.setRowCount(len(plan["steps"]))
         for r, s in enumerate(plan["steps"]):
-            for c, text in enumerate([s["title"], s["body"], ", ".join(s["unlocks"]), s["needs"] or ""]):
+            for c, text in enumerate([s["title"], s["body"], ", ".join(s["unlocks"]), s["needs"] or "", s["points"]]):
                 self._table.setItem(r, c, QTableWidgetItem(text))
         self._table.resizeRowsToContents()
         lines = list(plan["warnings"]) + ([plan["note"]] if plan["note"] else [])

@@ -87,8 +87,20 @@ def test_unknown_moon_slots_is_not_a_verdict():
 
 def test_landable_primary_with_unknown_slots_keeps_surface_step():
     sys = {**TUC, "bodies": [{**b, "ground_slots": None} if b["name"].endswith(" 3 a") else b for b in TUC["bodies"]]}
-    s = next(s for s in plan_system(sys, "Tucanae Sector PY-R b4-1 3 a", False)["steps"] if s["title"].startswith("Surface port"))
+    s = next(s for s in plan_system(sys, "Tucanae Sector PY-R b4-1 3 a", False)["steps"] if s["title"].startswith("Civilian Planetary"))
     assert "slots unknown" in s["needs"]
+
+
+def test_solo_points_run_without_shortfall():
+    p = plan_system(TUC, "Tucanae Sector PY-R b4-1 3", False)
+    assert [s["points"].split("; then ")[1] for s in p["steps"]] == ["T2 0, T3 1", "T2 1, T3 1", "T2 1, T3 2", "T2 0, T3 3",
+                                                                   "T2 1, T3 3"]
+    assert not any("more T2 point" in w for w in p["warnings"])
+
+
+def test_group_without_tier1_warns_t2_shortfall():
+    p = plan_system(TUC, "Tucanae Sector PY-R b4-1 3", True)
+    assert any(w.startswith("High Tech Hub needs 1 more T2 point") for w in p["warnings"])
 
 
 def test_missing_distance_is_unknown_not_zero():
