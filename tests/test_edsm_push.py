@@ -116,6 +116,13 @@ def test_check_key(monkeypatch):
     assert not check_key("B0B", "k")
 
 
+def test_check_key_sends_software_version(monkeypatch):
+    sent = {}
+    monkeypatch.setattr(ep.requests, "post", lambda url, **kw: sent.update(kw["data"]) or _Resp({"msgnum": 100}))
+    check_key("B0B", "k")
+    assert sent["fromSoftwareVersion"] == ep.APP_VERSION   # EDSM 204 without it
+
+
 def test_key_never_logged(monkeypatch, caplog):
     caplog.set_level(logging.DEBUG)
     p, _, status = _make(monkeypatch, [_Resp(status=500)] * 3 + [_Resp({"msgnum": 201})])

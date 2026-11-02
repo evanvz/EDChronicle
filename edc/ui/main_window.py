@@ -3416,7 +3416,10 @@ class MainWindow(QMainWindow):
 
         _add_header("Tools")
         _add_panel(self.voice_commands_panel, "Voice Cmds")
-        _add_panel(tab_settings, "Settings")
+        settings_scroll = QScrollArea()
+        settings_scroll.setWidgetResizable(True)
+        settings_scroll.setWidget(tab_settings)
+        _add_panel(settings_scroll, "Settings")
         _add_panel(tab_log, "Log")
 
         btn_browse.clicked.connect(self._browse_journal_dir)
@@ -5324,6 +5327,10 @@ class MainWindow(QMainWindow):
         if saved is None and self.db.execute(
                 "SELECT 1 FROM push_credentials WHERE service = ?", (service,)).fetchone():
             self._push_label(service).setText("Saved key can't be read on this PC, enter it again")
+        elif saved:
+            self._push_label(service).setText(f"Key saved for CMDR {saved[0]}")
+            (self.raven_key_edit if service == RAVEN else self.edsm_key_edit).setPlaceholderText(
+                "••••••••••••  saved — paste a new key to replace")
         enabled = self.cfg.raven_push_enabled if service == RAVEN else self.cfg.edsm_push_enabled
         if not (enabled and saved):
             return

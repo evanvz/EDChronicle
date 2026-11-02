@@ -17,7 +17,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 import requests
 
-from edc.version import USER_AGENT
+from edc.version import APP_VERSION, USER_AGENT
 
 log = logging.getLogger(__name__)
 
@@ -54,9 +54,12 @@ def check_key(commander_name: str, key: str) -> bool:
     """True when EDSM accepts the commander/key pair. Synchronous."""
     try:
         resp = requests.post(_URL, data={"commanderName": commander_name, "apiKey": key,
-                                         "fromSoftware": "EDChronicle", "message": "[]"},
+                                         "fromSoftware": "EDChronicle", "fromSoftwareVersion": APP_VERSION,
+                                         "message": "[]"},
                              headers={"User-Agent": USER_AGENT}, timeout=_TIMEOUT)
-        return resp.json()["msgnum"] // 100 == 1
+        reply = resp.json()
+        log.info("EDSM key check: %s %s", reply.get("msgnum"), reply.get("msg"))
+        return reply["msgnum"] // 100 == 1
     except (requests.RequestException, ValueError, KeyError, TypeError) as exc:
         log.warning("EDSM key check failed: %s", type(exc).__name__)
         return False
