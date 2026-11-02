@@ -35,6 +35,7 @@ from PyQt6.QtWidgets import (
     QFrame,
     QAbstractScrollArea,
     QSizePolicy,
+    QGroupBox,
 )
 from PyQt6.QtCore import QThread, QObject, pyqtSignal, Qt, QTimer, QSettings, QPropertyAnimation, QEasingCurve, QSize, QEvent
 from PyQt6.QtGui import QTextCursor, QColor, QIcon, QKeySequence
@@ -72,6 +73,11 @@ from edc.core.game_version import note_game_version
 from edc.core.journal_shape_watch import JournalShapeWatch
 from edc.core.eddn_publisher import EddnPublisher, _commodity_symbol, build_commodity_message
 from edc.core.canonn_client import CanonnClient, SystemPoi
+from edc.core.push_credentials import EDSM, RAVEN, load_key, save_key
+from edc.core import raven_colonial_push, edsm_push
+from edc.core.raven_colonial_push import RavenColonialPusher
+from edc.core.edsm_push import EdsmPusher, with_transient
+from edc.version import APP_VERSION
 from edc.core.engineering_blueprints import EngineeringBlueprintTable
 from edc.core.experimental_effects import ExperimentalEffectsTable
 from edc.core.engineering_wishlist import EngineeringWishlist
@@ -1116,6 +1122,18 @@ class _CanonnRefreshWorker(QObject):
         self.finished.emit(poi, poi_error, challenge, challenge_error)
 
 
+class _PushKeyCheckWorker(QObject):
+    finished = pyqtSignal(str, bool, str, object)
+    # service, save, key, check result (Raven: commander name or None; EDSM: bool)
+
+    def __init__(self, service: str, save: bool, key: str, check):
+        super().__init__()
+        self._service, self._save, self._key, self._check = service, save, key, check
+
+    def run(self):
+        self.finished.emit(self._service, self._save, self._key, self._check())
+
+
 def _allies_of(win) -> frozenset:
     """Lower-cased allied power names for the current pledge (getattr-safe
     so handler tests can pass a minimal fake window)."""
@@ -1124,6 +1142,8 @@ def _allies_of(win) -> frozenset:
 
 
 class MainWindow(QMainWindow):
+    # Raven Colonial / EDSM sender status, raised on the senders' threads
+    _push_status = pyqtSignal(str, str)
     _NEW_SYSTEM_ALERT_INTERVAL_S = 600  # ~80-330 ms per check on a 780-system faction, so at most every 10 minutes
 
     def refresh_from_state(self):
@@ -2607,6 +2627,13 @@ class MainWindow(QMainWindow):
         self.eddn_publisher = EddnPublisher()
         self.eddn_publisher.start()
 
+        # Opt-in Raven Colonial / EDSM senders, started once the Sharing settings exist
+        self._raven_pusher: RavenColonialPusher | None = None
+        self._edsm_pusher: EdsmPusher | None = None
+        self._push_names: dict = {}
+        self._game_build = ("", "")
+        self._push_checks: dict = {}   # service -> (QThread, worker), kept for the app lifetime
+
         self.canonn_client = CanonnClient()
         self._canonn_poi: SystemPoi | None = None
         self._canonn_challenge: dict | None = None
@@ -3160,6 +3187,50 @@ class MainWindow(QMainWindow):
         self.eddn_contribute_check.toggled.connect(self._on_eddn_contribute_toggled)
         st.addWidget(self.eddn_contribute_check)
 
+        # --- Sharing: Raven Colonial / EDSM ---
+        sharing = QGroupBox("Sharing")
+        sh = QVBoxLayout(sharing)
+        self.raven_push_check = QCheckBox("Send build progress and my deliveries to Raven Colonial")
+        self.raven_push_check.setChecked(bool(getattr(self.cfg, "raven_push_enabled", False)))
+        self.raven_push_check.toggled.connect(lambda c: self._on_push_toggled(RAVEN, c))
+        sh.addWidget(self.raven_push_check)
+        raven_row = QHBoxLayout()
+        self.raven_key_edit = QLineEdit()
+        self.raven_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.raven_key_edit.setPlaceholderText("API key from ravencolonial.com/user")
+        raven_row.addWidget(self.raven_key_edit, 1)
+        for text, save in (("Save", True), ("Test", False)):
+            btn = QPushButton(text)
+            btn.clicked.connect(lambda _c, s=save: self._on_push_key_check(RAVEN, s))
+            raven_row.addWidget(btn)
+        sh.addLayout(raven_row)
+        self.raven_status_label = QLabel()
+        sh.addWidget(self.raven_status_label)
+
+        self.edsm_push_check = QCheckBox("Send my journal to EDSM (like the EDMC EDSM plugin)")
+        self.edsm_push_check.setChecked(bool(getattr(self.cfg, "edsm_push_enabled", False)))
+        self.edsm_push_check.toggled.connect(lambda c: self._on_push_toggled(EDSM, c))
+        sh.addWidget(self.edsm_push_check)
+        edsm_row = QHBoxLayout()
+        self.edsm_name_edit = QLineEdit(getattr(self.cfg, "edsm_commander_name", "") or "")
+        self.edsm_name_edit.setPlaceholderText("EDSM commander name")
+        edsm_row.addWidget(self.edsm_name_edit)
+        self.edsm_key_edit = QLineEdit()
+        self.edsm_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.edsm_key_edit.setPlaceholderText("API key from edsm.net/settings/api")
+        edsm_row.addWidget(self.edsm_key_edit, 1)
+        for text, save in (("Save", True), ("Test", False)):
+            btn = QPushButton(text)
+            btn.clicked.connect(lambda _c, s=save: self._on_push_key_check(EDSM, s))
+            edsm_row.addWidget(btn)
+        sh.addLayout(edsm_row)
+        self.edsm_status_label = QLabel()
+        sh.addWidget(self.edsm_status_label)
+        st.addWidget(sharing)
+        self._push_status.connect(lambda service, msg: self._push_label(service).setText(msg))
+        self._restart_pusher(RAVEN)
+        self._restart_pusher(EDSM)
+
         # --- Market search radius ---
         market_row = QHBoxLayout()
         market_label = QLabel("Market search radius:")
@@ -3672,6 +3743,9 @@ class MainWindow(QMainWindow):
             self.eddn_publisher.stop()
         except Exception:
             log.exception("Failed to stop EDDN publisher")
+        for pusher in (self._raven_pusher, self._edsm_pusher):
+            if pusher:
+                pusher.stop()
         # Wait for any in-flight background flush to finish before the
         # synchronous flush below, so the two never write to the DB
         # concurrently (separate connections → SQLite lock contention).
@@ -4325,6 +4399,9 @@ class MainWindow(QMainWindow):
 
         self.eddn_publisher.observe(evt)
         if name in ("Fileheader", "LoadGame"):
+            self._game_build = (evt.get("gameversion") or "", evt.get("build") or "")
+            if self._edsm_pusher:
+                self._edsm_pusher.set_game(*self._game_build)
             previous = note_game_version(self._game_version_path, evt.get("gameversion"))
             if previous:
                 log.info("Elite Dangerous updated: %s -> %s", previous, evt.get("gameversion"))
@@ -4358,6 +4435,7 @@ class MainWindow(QMainWindow):
             if name == "FSSBodySignals":
                 self.eddn_publisher.maybe_publish_fssbodysignals(evt, self.state.system, star_pos, self.state.system_address)
             self.eddn_publisher.batch_signals(evt, self.state.system, star_pos, self.state.system_address)
+        self._push_third_party(evt)
 
         if name in (
             "Bounty",
@@ -5218,6 +5296,90 @@ class MainWindow(QMainWindow):
     def _on_eddn_contribute_toggled(self, checked: bool):
         self.cfg.eddn_contribute_enabled = bool(checked)
         self.cfg_store.save(self.cfg)
+
+    def _push_label(self, service: str) -> QLabel:
+        return self.raven_status_label if service == RAVEN else self.edsm_status_label
+
+    def _push_third_party(self, evt: dict):
+        """Live journal events to Raven Colonial / EDSM, only for the commander the key belongs to."""
+        if self._replaying:
+            return
+        cmdr = self.state.commander
+        if (self.cfg.raven_push_enabled and self._raven_pusher and cmdr == self._push_names.get(RAVEN)
+                and evt.get("event") in ("ColonisationConstructionDepot", "ColonisationContribution")):
+            self._raven_pusher.submit(evt, self.state.system_address)
+        if self.cfg.edsm_push_enabled and self._edsm_pusher and cmdr == self._push_names.get(EDSM):
+            coords = (self.state.system_x, self.state.system_y, self.state.system_z)
+            self._edsm_pusher.submit(with_transient(evt, self.state.system, coords,
+                                                    self.state.station_name, self.state.ship_id))
+
+    def _restart_pusher(self, service: str):
+        attr = "_raven_pusher" if service == RAVEN else "_edsm_pusher"
+        old = getattr(self, attr)
+        if old:
+            old.stop()
+        setattr(self, attr, None)
+        saved = load_key(self.db, service)
+        if saved is None and self.db.execute(
+                "SELECT 1 FROM push_credentials WHERE service = ?", (service,)).fetchone():
+            self._push_label(service).setText("Saved key can't be read on this PC, enter it again")
+        enabled = self.cfg.raven_push_enabled if service == RAVEN else self.cfg.edsm_push_enabled
+        if not (enabled and saved):
+            return
+        name, key = saved
+        self._push_names[service] = name
+        on_status = lambda msg: self._push_status.emit(service, msg)
+        if service == RAVEN:
+            pusher = RavenColonialPusher(key, name, on_status)
+        else:
+            pusher = EdsmPusher(self.cfg.edsm_commander_name, key, "EDChronicle", APP_VERSION, on_status)
+            pusher.set_game(*self._game_build)
+        pusher.start()
+        setattr(self, attr, pusher)
+
+    def _on_push_toggled(self, service: str, checked: bool):
+        setattr(self.cfg, "raven_push_enabled" if service == RAVEN else "edsm_push_enabled", bool(checked))
+        self.cfg_store.save(self.cfg)
+        self._restart_pusher(service)
+
+    def _on_push_key_check(self, service: str, save: bool):
+        """Save/Test: the key check is network-only on a worker; the DB write stays on the UI thread."""
+        running = self._push_checks.get(service)
+        if running and running[0].isRunning():
+            return
+        key = (self.raven_key_edit if service == RAVEN else self.edsm_key_edit).text().strip()
+        if not key:
+            return
+        if service == RAVEN:
+            check = lambda: raven_colonial_push.check_key(key)
+        else:
+            cmdr = self.edsm_name_edit.text().strip()
+            check = lambda: edsm_push.check_key(cmdr, key)
+        self._push_label(service).setText("Checking key…")
+        worker = _PushKeyCheckWorker(service, save, key, check)
+        thread = QThread()
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.finished.connect(self._on_push_key_checked)
+        worker.finished.connect(thread.quit, Qt.ConnectionType.DirectConnection)
+        self._push_checks[service] = (thread, worker)
+        thread.start()
+
+    def _on_push_key_checked(self, service: str, save: bool, key: str, result):
+        if not result:
+            self._push_label(service).setText("Key not accepted")
+            return
+        name = result if service == RAVEN else self.state.commander
+        if not save:
+            self._push_label(service).setText(f"Key OK for CMDR {name}")
+            return
+        if service == EDSM:
+            self.cfg.edsm_commander_name = self.edsm_name_edit.text().strip()
+            self.cfg_store.save(self.cfg)
+        save_key(self.db, service, name, key)
+        (self.raven_key_edit if service == RAVEN else self.edsm_key_edit).clear()
+        self._push_label(service).setText(f"Linked to CMDR {name}")
+        self._restart_pusher(service)
 
     def _on_market_radius_changed(self, value: int):
         self.cfg.market_search_radius_ly = int(value)

@@ -49,6 +49,9 @@ class AppConfig:
     push_to_talk_key: str = "f9"
     always_on_top: bool = False
     eddn_contribute_enabled: bool = True
+    raven_push_enabled: bool = False
+    edsm_push_enabled: bool = False
+    edsm_commander_name: str = ""
     # the squadron's EDDataHub service (BGS ticks), e.g. http://172.16.10.197:8080.
     # Opt-in: empty by default, so a public install never trusts whatever answers on
     # a LAN address (it would replace and silence the app's own tick detection).
@@ -210,6 +213,9 @@ class ConfigStore:
                 push_to_talk_key=str(data.get("push_to_talk_key", "f9") or "f9"),
                 always_on_top=bool(data.get("always_on_top", False)),
                 eddn_contribute_enabled=bool(data.get("eddn_contribute_enabled", True)),
+                raven_push_enabled=bool(data.get("raven_push_enabled", False)),
+                edsm_push_enabled=bool(data.get("edsm_push_enabled", False)),
+                edsm_commander_name=str(data.get("edsm_commander_name", "") or ""),
                 eddatahub_url=str(data.get("eddatahub_url", "") or ""),
                 eddn_relay_url=str(data.get("eddn_relay_url", "") or ""),
                 eddn_direct_fallback=bool(data.get("eddn_direct_fallback", False)),
@@ -257,6 +263,9 @@ class ConfigStore:
                         "push_to_talk_key": str(getattr(cfg, "push_to_talk_key", "f9") or "f9"),
                         "always_on_top": bool(getattr(cfg, "always_on_top", False)),
                         "eddn_contribute_enabled": bool(getattr(cfg, "eddn_contribute_enabled", True)),
+                        "raven_push_enabled": bool(getattr(cfg, "raven_push_enabled", False)),
+                        "edsm_push_enabled": bool(getattr(cfg, "edsm_push_enabled", False)),
+                        "edsm_commander_name": str(getattr(cfg, "edsm_commander_name", "") or ""),
                         "eddatahub_url": str(getattr(cfg, "eddatahub_url", "") or ""),
                         "eddn_relay_url": str(getattr(cfg, "eddn_relay_url", "") or ""),
                         "eddn_direct_fallback": bool(getattr(cfg, "eddn_direct_fallback", False)),
