@@ -126,3 +126,17 @@ def test_key_never_logged(monkeypatch, caplog):
     p._handle({"event": "Scan"}, GAME)
     check_key("B0B", "secret-k")
     assert "secret-k" not in caplog.text and not any("secret-k" in s for s in status)
+
+
+def test_stop_without_wait_returns_while_request_blocked(monkeypatch):
+    import threading
+    import time
+    entered, release = threading.Event(), threading.Event()
+    monkeypatch.setattr(ep.requests, "get", lambda url, **kw: entered.set() or release.wait(10) and _Resp([]))
+    p = EdsmPusher("B0B", "k", "EDChronicle", "1.0", lambda msg: None)
+    p.start()
+    assert entered.wait(5)
+    t0 = time.monotonic()
+    p.stop(wait=False)
+    assert time.monotonic() - t0 < 0.5
+    release.set()

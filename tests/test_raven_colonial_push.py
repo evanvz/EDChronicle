@@ -160,3 +160,19 @@ def test_writes_send_rcc_key_header(env):
     p._handle(DEPOT, 1)
     p._handle(CONTRIB, 1)
     assert [kw["headers"]["rcc-key"] for _, kw in posts] == ["secret-k", "secret-k"]
+
+
+def test_stop_without_wait_returns_while_request_blocked(monkeypatch):
+    import threading
+    import time
+    entered, release = threading.Event(), threading.Event()
+    monkeypatch.setattr(rc, "get_project_for_station",
+                        lambda sa, mid: entered.set() or release.wait(10) and None)
+    p = RavenColonialPusher("k", "B0B R0GERS", lambda msg: None)
+    p.start()
+    p.submit(DEPOT, 1)
+    assert entered.wait(5)
+    t0 = time.monotonic()
+    p.stop(wait=False)
+    assert time.monotonic() - t0 < 0.5
+    release.set()

@@ -66,3 +66,25 @@ def test_raven_ignores_other_events():
     MainWindow._push_third_party(fake_self, {"event": "FSDJump"})
     fake_self._raven_pusher.submit.assert_not_called()
     fake_self._edsm_pusher.submit.assert_called_once()
+
+
+def test_edsm_save_refused_without_commander():
+    label = MagicMock()
+    fake_self = SimpleNamespace(state=SimpleNamespace(commander=None), _push_checks={}, db=MagicMock(),
+                                edsm_key_edit=SimpleNamespace(text=lambda: "k"), _push_label=lambda s: label)
+    MainWindow._on_push_key_check(fake_self, EDSM, True)
+    label.setText.assert_called_once_with("Start the game first so the commander is known")
+    assert fake_self._push_checks == {}
+    fake_self.db.execute.assert_not_called()
+
+
+def test_restart_pusher_does_not_wait_for_old_sender(monkeypatch):
+    import edc.ui.main_window as mw
+    monkeypatch.setattr(mw, "load_key", lambda db, service: None)
+    old = MagicMock()
+    db = MagicMock()
+    db.execute.return_value.fetchone.return_value = None
+    fake_self = SimpleNamespace(_edsm_pusher=old, db=db, cfg=AppConfig(), _push_label=lambda s: MagicMock())
+    MainWindow._restart_pusher(fake_self, EDSM)
+    old.stop.assert_called_once_with(wait=False)
+    assert fake_self._edsm_pusher is None

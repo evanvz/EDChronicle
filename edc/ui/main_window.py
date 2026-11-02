@@ -5317,7 +5317,7 @@ class MainWindow(QMainWindow):
         attr = "_raven_pusher" if service == RAVEN else "_edsm_pusher"
         old = getattr(self, attr)
         if old:
-            old.stop()
+            old.stop(wait=False)   # a send can sit in a 15 s request; never block the UI thread
         setattr(self, attr, None)
         saved = load_key(self.db, service)
         if saved is None and self.db.execute(
@@ -5349,6 +5349,9 @@ class MainWindow(QMainWindow):
             return
         key = (self.raven_key_edit if service == RAVEN else self.edsm_key_edit).text().strip()
         if not key:
+            return
+        if service == EDSM and save and not self.state.commander:
+            self._push_label(service).setText("Start the game first so the commander is known")
             return
         if service == RAVEN:
             check = lambda: raven_colonial_push.check_key(key)

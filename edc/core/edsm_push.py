@@ -84,9 +84,9 @@ class EdsmPusher:
         self._thread = threading.Thread(target=self._worker_loop, name="EdsmPusher", daemon=True)
         self._thread.start()
 
-    def stop(self) -> None:
+    def stop(self, wait: bool = True) -> None:
         self._stop.set()
-        if self._thread and self._thread is not threading.current_thread():
+        if wait and self._thread and self._thread is not threading.current_thread():
             self._thread.join(timeout=5)
 
     def set_game(self, gameversion: str, gamebuild: str) -> None:

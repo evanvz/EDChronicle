@@ -83,9 +83,9 @@ class RavenColonialPusher:
         self._thread = threading.Thread(target=self._worker_loop, name="RavenColonialPusher", daemon=True)
         self._thread.start()
 
-    def stop(self) -> None:
+    def stop(self, wait: bool = True) -> None:
         self._stop.set()
-        if self._thread and self._thread is not threading.current_thread():
+        if wait and self._thread and self._thread is not threading.current_thread():
             self._thread.join(timeout=5)
 
     def submit(self, evt: Dict[str, Any], system_address: int) -> None:
