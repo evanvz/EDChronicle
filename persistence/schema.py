@@ -108,6 +108,12 @@ CREATE TABLE IF NOT EXISTS dismissed_faction_systems (
     system_address INTEGER NOT NULL,
     PRIMARY KEY (faction_name, system_address)
 );
+
+CREATE TABLE IF NOT EXISTS push_credentials (
+    service TEXT PRIMARY KEY,
+    name    TEXT NOT NULL,
+    secret  BLOB NOT NULL
+);
 """
 
 # Tables sourced from EDDN/Spansh -- disposable, rebuildable, never backed
