@@ -68,6 +68,14 @@ def test_raven_ignores_other_events():
     fake_self._edsm_pusher.submit.assert_called_once()
 
 
+def test_status_not_sent_to_edsm():
+    fake_self = _fake_self()
+    MainWindow._push_third_party(fake_self, {"event": "Status"})
+    fake_self._edsm_pusher.submit.assert_not_called()
+    MainWindow._push_third_party(fake_self, {"event": "FSDJump"})
+    fake_self._edsm_pusher.submit.assert_called_once()
+
+
 def test_edsm_save_refused_without_commander():
     label = MagicMock()
     fake_self = SimpleNamespace(state=SimpleNamespace(commander=None), _push_checks={}, db=MagicMock(),

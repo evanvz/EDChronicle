@@ -5308,7 +5308,8 @@ class MainWindow(QMainWindow):
         if (self.cfg.raven_push_enabled and self._raven_pusher and cmdr == self._push_names.get(RAVEN)
                 and evt.get("event") in ("ColonisationConstructionDepot", "ColonisationContribution")):
             self._raven_pusher.submit(evt, self.state.system_address)
-        if self.cfg.edsm_push_enabled and self._edsm_pusher and cmdr == self._push_names.get(EDSM):
+        if (self.cfg.edsm_push_enabled and self._edsm_pusher and cmdr == self._push_names.get(EDSM)
+                and evt.get("event") != "Status"):
             coords = (self.state.system_x, self.state.system_y, self.state.system_z)
             self._edsm_pusher.submit(with_transient(evt, self.state.system, coords,
                                                     self.state.station_name, self.state.ship_id))

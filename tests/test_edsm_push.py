@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import datetime
 
 import requests
 
@@ -24,6 +25,7 @@ class _Resp:
 
 def _make(monkeypatch, replies=None, discards=("Music",)):
     posts, status = [], []
+    monkeypatch.setattr(ep, "_now", lambda: datetime(2026, 11, 2, 18, 6))
     queued = list(replies or [])
     monkeypatch.setattr(ep.requests, "get", lambda url, **kw: _Resp(list(discards)))
     monkeypatch.setattr(ep.requests, "post",
@@ -64,14 +66,14 @@ def test_batch_posts_form_fields(monkeypatch):
     assert set(posts[0]) == {"commanderName", "apiKey", "fromSoftware", "fromSoftwareVersion",
                              "fromGameVersion", "fromGameBuild", "message"}
     assert isinstance(json.loads(posts[0]["message"]), list)
-    assert status[-1] == "EDSM: sent 1 events"
+    assert status[-1] == "18:06 EDSM: sent 1 events"
 
 
-def test_msgnum_5xx_keeps_pending(monkeypatch):
+def test_msgnum_5xx_clears_pending(monkeypatch):
     p, posts, _ = _make(monkeypatch, [_Resp({"msgnum": 500})])
     p._handle({"event": "FSDJump"}, GAME)
     p._handle({"event": "Scan"}, GAME)
-    assert _names(posts[1]) == ["FSDJump", "Scan"]
+    assert _names(posts[1]) == ["Scan"]
 
 
 def test_msgnum_2xx_drops(monkeypatch):
@@ -100,11 +102,11 @@ def test_docked_tracking_suppresses_cargo(monkeypatch):
 
 
 def test_stop_flushes_pending_once(monkeypatch):
-    p, posts, _ = _make(monkeypatch, [_Resp({"msgnum": 500})])
+    p, posts, _ = _make(monkeypatch, [_Resp(status=500)] * 3)
     p._handle({"event": "FSDJump"}, GAME)
     p._stop.set()
     p._worker_loop()
-    assert len(posts) == 2 and _names(posts[1]) == ["FSDJump"]
+    assert len(posts) == 4 and _names(posts[3]) == ["FSDJump"]
 
 
 def test_check_key(monkeypatch):

@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 
 import pytest
 import requests
@@ -25,6 +26,7 @@ def env(monkeypatch):
     monkeypatch.setattr(rc, "get_project_for_station",
                         lambda sa, mid: {"buildId": "b-1", "commodities": {"aluminium": 999, "steel": 0}})
     monkeypatch.setattr(rc.requests, "post", lambda url, **kw: posts.append((url, kw)) or _Resp())
+    monkeypatch.setattr(rc, "_now", lambda: datetime(2026, 11, 2, 18, 6))
     p = RavenColonialPusher("secret-k", "B0B R0GERS", status.append)
     return p, posts, status
 
@@ -84,6 +86,43 @@ def test_missing_build_lookup_retried_after_ttl(env, monkeypatch):
     now[0] += 2
     p._handle(DEPOT, 1)
     assert len(lookups) == 2 and len(posts) == 1
+
+
+def test_contribution_ignores_miss_cache(env, monkeypatch):
+    p, posts, status = env
+    lookups = []
+    proj = {"buildId": "b-1", "commodities": {}}
+
+    def lookup(sa, mid):
+        lookups.append(1)
+        return None if len(lookups) == 1 else proj
+    monkeypatch.setattr(rc, "get_project_for_station", lookup)
+    monkeypatch.setattr(rc, "_clock", lambda: 1000.0)
+    p._handle(DEPOT, 1)
+    p._handle(CONTRIB, 1)
+    assert len(lookups) == 2 and posts[0][0].endswith("/contribute/B0B%20R0GERS")
+
+
+def test_failed_contribution_retried_once(env, monkeypatch):
+    p, _, status = env
+    calls = []
+
+    def boom(url, **kw):
+        calls.append(url)
+        raise requests.ConnectionError("down")
+    monkeypatch.setattr(rc.requests, "post", boom)
+    p._handle(CONTRIB, 1)
+    while not p._queue.empty():
+        p._handle(*p._queue.get_nowait())
+    assert len(calls) == 2 and status[-1] == "Raven Colonial: send failed"
+
+
+def test_success_status(env):
+    p, _, status = env
+    p._handle(CONTRIB, 1)
+    assert status[-1] == "18:06 Delivered 1218 units (2 commodities)"
+    p._handle(DEPOT, 1)
+    assert status[-1] == "18:06 Build progress sent"
 
 
 def _key_resp(monkeypatch, status=200, body=None, record=None):

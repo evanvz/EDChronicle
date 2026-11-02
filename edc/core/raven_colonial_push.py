@@ -11,6 +11,7 @@ import logging
 import queue
 import threading
 import time
+from datetime import datetime
 from typing import Any, Callable, Dict, Optional
 from urllib.parse import quote
 
@@ -24,6 +25,7 @@ log = logging.getLogger(__name__)
 _QUEUE_MAX = 200
 _TIMEOUT = 15
 _MISS_TTL = 600   # seconds before a missing build is looked up again
+_now = datetime.now   # local time for status lines
 _clock = time.monotonic
 _EVENTS = ("ColonisationConstructionDepot", "ColonisationContribution")
 
@@ -88,11 +90,11 @@ class RavenColonialPusher:
         if wait and self._thread and self._thread is not threading.current_thread():
             self._thread.join(timeout=5)
 
-    def submit(self, evt: Dict[str, Any], system_address: int) -> None:
+    def submit(self, evt: Dict[str, Any], system_address: int, retried: bool = False) -> None:
         if evt.get("event") not in _EVENTS:
             return
         try:
-            self._queue.put_nowait((evt, system_address))
+            self._queue.put_nowait((evt, system_address, retried))
         except queue.Full:
             log.warning("Raven Colonial queue full — dropping %s", evt.get("event"))
 
@@ -104,11 +106,12 @@ class RavenColonialPusher:
                 continue
             self._handle(*item)
 
-    def _handle(self, evt: Dict[str, Any], system_address: int) -> None:
+    def _handle(self, evt: Dict[str, Any], system_address: int, retried: bool = False) -> None:
+        contrib = evt["event"] == "ColonisationContribution"
         try:
             cache_key = (system_address, evt.get("MarketID"))
             project = self._builds.get(cache_key)
-            if project is None and self._misses.get(cache_key, 0) <= _clock():
+            if project is None and (contrib or self._misses.get(cache_key, 0) <= _clock()):
                 project = get_project_for_station(*cache_key)
                 if project is None:
                     self._misses[cache_key] = _clock() + _MISS_TTL
@@ -118,18 +121,24 @@ class RavenColonialPusher:
                 self._on_status("Build not on Raven Colonial")
                 return
             build_id = project["buildId"]
-            if evt["event"] == "ColonisationConstructionDepot":
+            if not contrib:
                 current = needs(evt)
                 if current == self._last_needs.setdefault(build_id, project.get("commodities") or {}):
                     return
                 if self._post(f"/api/project/{build_id}", needs_payload(evt, build_id)):
                     self._last_needs[build_id] = current
-            else:
-                self._post(f"/api/project/{build_id}/contribute/{quote(self._cmdr)}", contribution_payload(evt))
+                    self._on_status(f"{_now():%H:%M} Build progress sent")
+                return
+            body = contribution_payload(evt)
+            if self._post(f"/api/project/{build_id}/contribute/{quote(self._cmdr)}", body):
+                self._on_status(f"{_now():%H:%M} Delivered {sum(body.values())} units ({len(body)} commodities)")
+                return
         except Exception as exc:
             # exception text may echo request details; log the type only
             log.warning("Raven Colonial send failed: %s", type(exc).__name__)
             self._on_status("Raven Colonial: send failed")
+        if contrib and not retried:
+            self.submit(evt, system_address, retried=True)
 
     def _post(self, path: str, body: Dict[str, Any]) -> bool:
         resp = requests.post(f"{_BASE_URL}{path}", json=body, timeout=_TIMEOUT,

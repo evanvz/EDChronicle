@@ -12,6 +12,7 @@ import logging
 import queue
 import threading
 import time
+from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 import requests
@@ -25,6 +26,7 @@ _TIMEOUT = 15
 _DISCARD_RETRY = 60   # seconds between discard-list fetches until one arrives
 _MAX_ATTEMPTS = 3
 _URL = "https://www.edsm.net/api-journal-v1"
+_now = datetime.now   # local time for status lines
 _clock = time.time    # epoch seconds, compared with X-Rate-Limit-Reset
 LOCATION_EVENTS = ("CarrierJump", "FSDJump", "Location", "Docked")
 _SKIPPED = ("CommunityGoal", "ModuleBuy", "ModuleSell", "ModuleSwap", "ShipyardBuy", "ShipyardNew", "ShipyardSwap")
@@ -164,13 +166,12 @@ class EdsmPusher:
             except (requests.RequestException, ValueError, KeyError, TypeError) as exc:
                 log.warning("EDSM send failed: %s", type(exc).__name__)
                 continue
-            if msgnum // 100 == 5:   # saved server-side for later; keep and resend
-                return
+            # 5xx = EDSM saved the events for later processing; clear like 1xx (as EDMC does)
             if msgnum // 100 == 2:
                 log.warning("EDSM refused batch: msgnum %s", msgnum)
                 self._on_status(f"EDSM: refused ({msgnum})")
             else:
-                self._on_status(f"EDSM: sent {len(self._pending)} events")
+                self._on_status(f"{_now():%H:%M} EDSM: sent {len(self._pending)} events")
             self._pending = []
             return
         self._on_status("EDSM: send failed")

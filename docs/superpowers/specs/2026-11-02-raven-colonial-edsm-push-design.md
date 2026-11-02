@@ -56,7 +56,7 @@ Taken from EDMC's `plugins/edsm.py` (EDCD/EDMarketConnector, read 2026-11-02). E
 - `GET https://www.edsm.net/api-journal-v1/discard`: the event names EDSM doesn't want. Fetch once per session; don't send those.
 - Each event gets transient fields added: `_systemName`, `_systemCoordinates`, `_stationName`, `_shipId`.
 - Batch events and send on location-type events (`FSDJump`, `Location`, `CarrierJump`, `Docked`) and at shutdown, like EDMC's `should_send`.
-- Reply `msgnum`: 1xx = accepted; 2xx = refused, log and drop; 5xx = server trouble, keep the batch and retry later. On HTTP 429, wait until the rate-limit reset time.
+- Reply `msgnum`: 1xx = accepted; 2xx = refused, log and drop; 5xx = EDSM saved the events for later processing, clear the batch (as EDMC does). On HTTP 429, wait until the rate-limit reset time.
 - EDSM only accepts Live galaxy data (EDMC checks this). Our journals are Live.
 - The EDSM commander name can differ from the in-game name; it's its own setting.
 
