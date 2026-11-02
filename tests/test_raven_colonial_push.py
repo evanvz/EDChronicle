@@ -66,6 +66,74 @@ def test_unknown_build_skips_and_reports(env, monkeypatch):
     assert posts == [] and "Build not on Raven Colonial" in status
 
 
+def test_missing_build_lookup_retried_after_ttl(env, monkeypatch):
+    p, posts, status = env
+    now, lookups = [1000.0], []
+    proj = {"buildId": "b-1", "commodities": {"aluminium": 999, "steel": 0}}
+
+    def lookup(sa, mid):
+        lookups.append(1)
+        return None if len(lookups) == 1 else proj
+    monkeypatch.setattr(rc, "get_project_for_station", lookup)
+    monkeypatch.setattr(rc, "_clock", lambda: now[0])
+    p._handle(DEPOT, 1)
+    assert posts == [] and status == ["Build not on Raven Colonial"]
+    now[0] += 599
+    p._handle(DEPOT, 1)
+    assert len(lookups) == 1 and posts == []
+    now[0] += 2
+    p._handle(DEPOT, 1)
+    assert len(lookups) == 2 and len(posts) == 1
+
+
+def _key_resp(monkeypatch, status=200, body=None, record=None):
+    class R:
+        status_code = status
+
+        def json(self):
+            if body is None:
+                raise ValueError("no json")
+            return body
+
+    def get(url, **kw):
+        if record is not None:
+            record.append(kw)
+        return R()
+    monkeypatch.setattr(rc.requests, "get", get)
+
+
+def test_check_key_returns_display_name(monkeypatch):
+    _key_resp(monkeypatch, body={"displayName": "B0B R0GERS"})
+    assert rc.check_key("k") == "B0B R0GERS"
+
+
+def test_check_key_non_200_is_none(monkeypatch):
+    _key_resp(monkeypatch, status=401, body={"displayName": "x"})
+    assert rc.check_key("k") is None
+
+
+@pytest.mark.parametrize("body", [{}, {"displayName": ""}, ["x"], None])
+def test_check_key_bad_body_is_none(monkeypatch, body):
+    _key_resp(monkeypatch, body=body)
+    assert rc.check_key("k") is None
+
+
+def test_check_key_sends_rcc_key(monkeypatch):
+    sent = []
+    _key_resp(monkeypatch, body={"displayName": "n"}, record=sent)
+    rc.check_key("secret-k")
+    assert sent[0]["headers"]["rcc-key"] == "secret-k"
+
+
+def test_check_key_never_logged(monkeypatch, caplog):
+    def boom(url, **kw):
+        raise requests.ConnectionError(f"rcc-key={kw['headers']['rcc-key']}")
+    monkeypatch.setattr(rc.requests, "get", boom)
+    with caplog.at_level(logging.DEBUG):
+        assert rc.check_key("secret-k") is None
+    assert "secret-k" not in caplog.text
+
+
 def test_post_failure_is_logged_not_raised(env, monkeypatch):
     p, _, status = env
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import queue
 import threading
+import time
 from typing import Any, Callable, Dict, Optional
 from urllib.parse import quote
 
@@ -22,6 +23,8 @@ log = logging.getLogger(__name__)
 
 _QUEUE_MAX = 200
 _TIMEOUT = 15
+_MISS_TTL = 600   # seconds before a missing build is looked up again
+_clock = time.monotonic
 _EVENTS = ("ColonisationConstructionDepot", "ColonisationContribution")
 
 
@@ -54,8 +57,9 @@ def check_key(key: str) -> Optional[str]:
                             timeout=_TIMEOUT)
         if resp.status_code != 200:
             return None
-        return resp.text.strip().strip('"') or None
-    except requests.RequestException as exc:
+        body = resp.json()
+        return (body.get("displayName") or None) if isinstance(body, dict) else None
+    except (requests.RequestException, ValueError) as exc:
         log.warning("Raven Colonial key check failed: %s", type(exc).__name__)
         return None
 
@@ -65,7 +69,8 @@ class RavenColonialPusher:
         self._key = key
         self._cmdr = cmdr
         self._on_status = on_status
-        self._builds: Dict[Any, Optional[Dict[str, Any]]] = {}
+        self._builds: Dict[Any, Dict[str, Any]] = {}
+        self._misses: Dict[Any, float] = {}   # failed/404 lookups: retry time
         self._last_needs: Dict[str, Dict[str, int]] = {}
         self._queue: "queue.Queue[Any]" = queue.Queue(maxsize=_QUEUE_MAX)
         self._thread: Optional[threading.Thread] = None
@@ -102,9 +107,13 @@ class RavenColonialPusher:
     def _handle(self, evt: Dict[str, Any], system_address: int) -> None:
         try:
             cache_key = (system_address, evt.get("MarketID"))
-            if cache_key not in self._builds:
-                self._builds[cache_key] = get_project_for_station(*cache_key)
-            project = self._builds[cache_key]
+            project = self._builds.get(cache_key)
+            if project is None and self._misses.get(cache_key, 0) <= _clock():
+                project = get_project_for_station(*cache_key)
+                if project is None:
+                    self._misses[cache_key] = _clock() + _MISS_TTL
+                else:
+                    self._builds[cache_key] = project
             if project is None:
                 self._on_status("Build not on Raven Colonial")
                 return
