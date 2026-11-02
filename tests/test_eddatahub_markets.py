@@ -38,18 +38,22 @@ def _serve(messages, asked):
 
 
 def test_catch_up_writes_missed_markets_and_keeps_newer_ones(tmp_path):
+    from datetime import datetime, timedelta, timezone
+    from urllib.parse import quote
+    day = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(days=1)   # inside the 7-day catch-up window
+    at = lambda h, m=0: (day.replace(hour=h, minute=m, second=0)).strftime("%Y-%m-%dT%H:%M:%SZ")
     path = tmp_path / "t.db"
     db = Database(path); db.executescript(SCHEMA_SQL); db.run_migrations()
     repo = Repository(db)
-    repo.save_market_snapshot_batch([(2, "gold", "S2", "Coriolis", "Sol", 900, 0, 0, 1, 1, 0, 0, "2026-10-25T09:00:00Z")])
+    repo.save_market_snapshot_batch([(2, "gold", "S2", "Coriolis", "Sol", 900, 0, 0, 1, 1, 0, 0, at(9))])
     db.close()
     asked = []
-    srv = _serve([_market(1, 100, "2026-10-25T08:00:00Z"), _market(2, 50, "2026-10-25T07:00:00Z")], asked)
+    srv = _serve([_market(1, 100, at(8)), _market(2, 50, at(7))], asked)
     try:
-        _HubMarketCatchUpWorker(path, f"http://127.0.0.1:{srv.server_address[1]}", "2026-10-25T10:00:00Z").run()
+        _HubMarketCatchUpWorker(path, f"http://127.0.0.1:{srv.server_address[1]}", at(10)).run()
     finally:
         srv.shutdown()
-    assert "since=2026-10-25T08%3A50%3A00Z" in asked[0]          # newest stored row, less 10 min
+    assert "since=" + quote(at(8, 50)) in asked[0]          # newest stored row, less 10 min
     db = Database(path)
     rows = db.conn.execute("SELECT market_id, sell_price FROM net.market_prices ORDER BY 1").fetchall()
     assert [tuple(r) for r in rows] == [(1, 100), (2, 900)]     # 2's older hub reading lost to the newer one
