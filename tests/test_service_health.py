@@ -35,6 +35,14 @@ def test_below_threshold_stays_ok():
     assert service_health.status("EDSM") == "ok"
 
 
+def test_spansh_client_failures_trip_spansh():
+    now = 1000.0
+    for i in range(3):
+        service_health._record("edc.core.spansh_client", now + i)
+    assert service_health.status("Spansh", _now=now + 2) == "issue"
+    assert service_health.status("EDSM", _now=now + 2) == "ok"
+
+
 def test_three_failures_within_window_trips_issue():
     now = 1000.0
     service_health._record("edc.core.edsm_faction_lookup", now)

@@ -2790,7 +2790,7 @@ class MainWindow(QMainWindow):
         self.statusBar().addWidget(galnet_card, 1)
 
         self._service_health_labels: dict[str, QLabel] = {}
-        for name in ("EDSM", "EDDN", "BGS Tick"):
+        for name in ("EDSM", "Spansh", "EDDN", "BGS Tick"):
             lbl = QLabel(f"● {name}")
             lbl.setStyleSheet("color: #6BCB77; font-size: 10px;")  # green -- matches this app's existing "ok" color convention
             self.statusBar().addPermanentWidget(lbl)
