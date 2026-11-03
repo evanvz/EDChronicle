@@ -175,7 +175,7 @@ class EddnPowerPlayWorker(QObject):
     # A BGS tick spotted in the feed (many systems' influence changing at once),
     # our second tick source next to tick.edcd.io -- see edc.core.tick_detector.
     tick_detected = pyqtSignal(str)
-    feed_source = pyqtSignal(str)      # "hub" (EDDataHub pass-through), "direct" (EDDN relay) or "off"
+    feed_source = pyqtSignal(str)      # "hub" (EDDataHub pass-through), "direct" (EDDN relay), "hub_silent" or "off"
     finished = pyqtSignal()
 
     def __init__(self, watched_factions=None, relay_url: str = "", direct: bool = False):
@@ -269,6 +269,7 @@ class EddnPowerPlayWorker(QObject):
                     continue
                 if use_hub and not got and not silent_logged:
                     log.warning("EDDataHub's EDDN feed silent -- direct EDDN is off, waiting for the hub")
+                    self.feed_source.emit("hub_silent")
                 silent_logged = use_hub and not got
             except Exception:
                 log.exception("EDDN listener error — reconnecting in %ss", _RECONNECT_DELAY_S)
@@ -463,6 +464,7 @@ class EddnPowerPlayWorker(QObject):
 
             if self._watched_factions:
                 self._maybe_emit_faction_seen(msg, timestamp)
+        return got
 
     def _maybe_emit_faction_seen(self, msg: dict, timestamp: str) -> None:
         factions = msg.get("Factions")

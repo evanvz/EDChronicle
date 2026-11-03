@@ -75,6 +75,15 @@ def test_silent_hub_never_goes_direct_when_direct_is_off(monkeypatch):
         stop.set()
 
 
+def test_silent_hub_with_direct_off_says_hub_silent(monkeypatch):
+    """2026-11-03: the hub went offline, the status bar kept "EDDN via EDDataHub"."""
+    monkeypatch.setattr(eddn_listener, "_STALE_CONNECTION_TIMEOUT_S", 0.3)
+    monkeypatch.setattr(eddn_listener, "_RECV_TIMEOUT_MS", 100)
+    monkeypatch.setattr(eddn_listener, "_RECONNECT_DELAY_S", 0)
+    # nothing listens on 59509: the hub stays silent
+    assert _run_until_source(EddnPowerPlayWorker(relay_url="tcp://127.0.0.1:59509"), timeout=5) == ["hub_silent"]
+
+
 def test_no_hub_and_direct_off_does_not_listen():
     w = EddnPowerPlayWorker()
     done = []

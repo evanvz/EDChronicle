@@ -7062,13 +7062,17 @@ class MainWindow(QMainWindow):
 
     def _on_eddn_feed_source(self, src: str) -> None:
         # a bound method, not a lambda: queued onto the UI thread
-        self._eddn_off = src == "off"
+        self._eddn_off = src in ("off", "hub_silent")
         self._service_health_labels["EDDN"].setText(
-            {"hub": "● EDDN via EDDataHub", "off": "● EDDN off"}.get(src, "● EDDN"))
+            {"hub": "● EDDN via EDDataHub", "off": "● EDDN off", "hub_silent": "● EDDN (EDDataHub silent)"}.get(src, "● EDDN"))
         if self._eddn_off:
             self._service_health_labels["EDDN"].setStyleSheet("color: #555555; font-size: 10px;")
             self._service_health_labels["EDDN"].setToolTip(
+                "No EDDN data: EDDataHub's relay is silent and direct EDDN is off (eddn_direct_fallback)"
+                if src == "hub_silent" else
                 "Not listening: no EDDataHub relay (eddn_relay_url) and direct EDDN is off (eddn_direct_fallback)")
+        else:
+            self._on_service_health_tick()
 
     def _on_service_health_tick(self) -> None:
         for name, lbl in self._service_health_labels.items():
