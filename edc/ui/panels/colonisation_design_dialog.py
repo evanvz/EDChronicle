@@ -22,6 +22,9 @@ _FOOTER = ("Sources (community-reported, not official): CMDR Dubior's Advanced E
            "Controlling faction = the faction controlling the station you buy the claim at.")
 _GREY = "color:#9aa4b0; font-size:13px;"
 _RED = "color:#ff6b6b; font-weight:bold; font-size:13px;"
+_AMBER = "color:#FFB347; font-weight:bold; font-size:13px;"
+# hub service score spread, 2026-11-03: median 16, top quarter from 37
+_SCORE_BANDS = ((16, "bottom half"), (37, "middle"))
 _LABEL = "color:#c8c8c8; font-size:12px;"
 
 
@@ -208,7 +211,13 @@ class ColonisationDesignDialog(QDialog):
                                  else plan["poor"])
             self._banner.setVisible(True)
             return
-        self._banner.setVisible(False)
+        self._banner.setVisible(bool(plan["weak"]))
+        if plan["weak"]:
+            score = self._system.get("service_score")
+            band = next((b for lim, b in _SCORE_BANDS if score < lim), "top quarter") if score is not None else "unknown"
+            self._banner.setText(f"Usable, but a weak pick: {'; '.join(plan['weak'])}"
+                                 f" — hub service score {score if score is not None else '?'} ({band})")
+            self._banner.setStyleSheet(_AMBER)
         self._table.setRowCount(len(plan["steps"]))
         for r, s in enumerate(plan["steps"]):
             for c, text in enumerate([s["title"], s["body"], ", ".join(s["unlocks"]), s["needs"] or "", s["points"]]):

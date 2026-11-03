@@ -42,6 +42,15 @@ def test_picking_gas_giant_3_renders_steps_in_order(monkeypatch):
     assert not d._banner.isVisibleTo(d)
 
 
+def test_weak_pick_shows_amber_banner_with_steps(monkeypatch):
+    from tests.test_colonisation_design import _in_s_like
+    d = _dialog(monkeypatch, _in_s_like())
+    _pick(d, f"{SYS} 1")
+    assert d._banner.isVisibleTo(d) and d._banner.text().startswith("Usable, but a weak pick: 1,686 ls out")
+    assert "hub service score 16 (middle)" in d._banner.text() and "#ff6b6b" not in d._banner.styleSheet()
+    assert _titles(d)[0] == "Primary: Coriolis"
+
+
 def test_star_pick_shows_red_banner_and_no_steps(monkeypatch):
     d = _dialog(monkeypatch)
     _pick(d, SYS)

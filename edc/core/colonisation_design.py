@@ -16,6 +16,8 @@ POOR = {
     "max_ls": 4000,  # primary body farther than this from arrival: too far for a service stop (Evan: shorter is better)
     "min_slots": 1,  # a cluster moon needs at least this many known ground slots to take hubs and settlements (Dubior)
 }
+# Usable-but-weak verdict (Evan 2026-11-03): two or more of these weak points
+WEAK = {"far_ls": 1000, "few_slots": 5, "min_points": 2}
 
 # Tonnage (Dubior / 101): Coriolis ~70 kt, T3 Orbis/Ocellus ~250 kt; a primary port must finish within 4 weeks (101)
 _CORIOLIS = "about 70 kt hauled within 4 weeks"
@@ -39,7 +41,7 @@ def _short(name: str, system: str) -> str:
 
 
 def plan_system(system: dict, primary_body: str, group: bool) -> dict:
-    out = {"poor": None, "steps": [], "warnings": [], "note": None}
+    out = {"poor": None, "steps": [], "warnings": [], "note": None, "weak": []}
     bodies = system.get("bodies") or []
     # keys missing (old hub) or all None (migration 020 deployed, system not re-imported yet)
     if (not bodies or any("cluster" not in b or "ground_slots" not in b for b in bodies)
@@ -53,9 +55,10 @@ def plan_system(system: dict, primary_body: str, group: bool) -> dict:
     if p.get("distance_ls") is not None and p["distance_ls"] > POOR["max_ls"]:
         return {**out, "poor": f"Primary body too far out: {p['distance_ls']:,.0f} ls (limit {POOR['max_ls']:,} ls)"}
     cluster = [b for b in bodies if b["cluster"] == p["cluster"] and b is not p]
-    moons = [b for b in cluster if b.get("landable") and (b["ground_slots"] or 0) >= POOR["min_slots"]]
+    # the primary body's own ground slots take hubs too (IN-S b4-0 A 5: no moons, 7 slots)
+    moons = [b for b in [p] + cluster if b.get("landable") and (b["ground_slots"] or 0) >= POOR["min_slots"]]
     if not moons:
-        if any(b.get("landable") and b["ground_slots"] is None for b in cluster):
+        if any(b.get("landable") and b["ground_slots"] is None for b in [p] + cluster):
             return {**out, "poor": "Ground slots unknown for this cluster: scan the bodies"}
         return {**out, "poor": "No landable moon with known ground slots in this cluster"}
 
@@ -126,4 +129,12 @@ def plan_system(system: dict, primary_body: str, group: bool) -> dict:
     if ":" in reason and not best.endswith(" " + _short(root.get("name") or f"Body {root.get('body_id')}", sysname)):
         notes.append(f"Hub's best cluster is {best}")
     out["note"] = "; ".join(notes) or None
+
+    slots = sum(b["ground_slots"] or 0 for b in [p] + cluster)
+    weak = [f"{p['distance_ls']:,.0f} ls out"] if (p.get("distance_ls") or 0) > WEAK["far_ls"] else []
+    weak += [f"only {slots} ground slots"] if slots < WEAK["few_slots"] else []
+    weak += ["no landable moons"] if not any(b.get("landable") for b in cluster) else []
+    weak += [f"{_econ_text(main)} clash"] if _clash(main) else []
+    weak += ["no High Tech elsewhere"] if not ht else []
+    out["weak"] = weak if len(weak) >= WEAK["min_points"] else []
     return out

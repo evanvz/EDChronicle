@@ -75,6 +75,32 @@ def test_planet_without_moons_is_poor():
     assert plan_system(TUC, "Tucanae Sector PY-R b4-1 1", False)["poor"].startswith("No landable moon")
 
 
+def test_moonless_landable_primary_with_ground_slots_is_not_poor():
+    """2026-11-03 Tucanae Sector IN-S b4-0 A 5: no moons, 7 ground slots of its own (game and hub agree)."""
+    sys = {**TUC, "bodies": [{**b, "landable": True, "ground_slots": 7, "port_types": OS} if b["name"].endswith(" 1") else b
+                             for b in TUC["bodies"]]}
+    p = plan_system(sys, "Tucanae Sector PY-R b4-1 1", False)
+    assert p["poor"] is None
+    assert next(s for s in p["steps"] if s["title"].startswith("Mining"))["body"] == "Tucanae Sector PY-R b4-1 1"
+
+
+def _in_s_like():
+    """Body 1 as IN-S b4-0 A 5: far out, no moons, 7 slots of its own, Extraction + Industrial."""
+    return {**TUC, "service_score": 16, "bodies": [
+        {**b, "landable": True, "ground_slots": 7, "port_types": OS, "distance_ls": 1686,
+         "economies": ["Extraction", "Industrial"]} if b["name"].endswith(" 1") else b for b in TUC["bodies"]]}
+
+
+def test_usable_but_weak_pick_lists_reasons():
+    p = plan_system(_in_s_like(), "Tucanae Sector PY-R b4-1 1", False)
+    assert p["poor"] is None and p["steps"]
+    assert p["weak"] == ["1,686 ls out", "no landable moons", "Extraction + Industrial clash"]
+
+
+def test_strong_pick_is_not_weak():
+    assert plan_system(TUC, "Tucanae Sector PY-R b4-1 3", False)["weak"] == []   # one weak point (clash) only
+
+
 def test_not_reimported_yet_says_no_details():
     sys = {**TUC, "service_score": None, "bodies": [{**b, "cluster": None, "ground_slots": None} for b in TUC["bodies"]]}
     assert plan_system(sys, "Tucanae Sector PY-R b4-1 3", False)["poor"] == "Hub has no body details yet"
