@@ -62,8 +62,8 @@ from edc.version import USER_AGENT
 
 log = logging.getLogger(__name__)
 
-_FEED_URL = "http://hosting.zaonce.net/powerplay-data/current/StarSystemsCurrent.csv"
-_PREP_URL = "http://hosting.zaonce.net/powerplay-data/current/PreparationCurrent.csv"
+_FEED_URL = "https://hosting.zaonce.net/powerplay-data/current/StarSystemsCurrent.csv"
+_PREP_URL = "https://hosting.zaonce.net/powerplay-data/current/PreparationCurrent.csv"
 _TIMEOUT = 60
 _USER_AGENT = USER_AGENT
 
