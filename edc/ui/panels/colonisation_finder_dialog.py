@@ -168,7 +168,8 @@ class ColonisationFinderDialog(QDialog):
              "Mark"])
         self._table.horizontalHeaderItem(_MARK_COL).setToolTip("Squad verdict from the System Design window; hover for who and why")
         self._table.horizontalHeaderItem(9).setToolTip("Nearest populated system within 15 ly: claim from a station there.\n"
-            "With Near squad station: the nearest squad station that sells claims")
+            "With Near squad station: the nearest squad station that sells claims.\n"
+            "Click to copy the system name")
         self._table.horizontalHeaderItem(3).setToolTip(
             "Service stop: how good a home system for players (services, full market, growth). "
             "Hover a cell for why.")
@@ -292,6 +293,9 @@ class ColonisationFinderDialog(QDialog):
             svc = row.get("service_score")
             svc_item = _NumericTableWidgetItem("" if svc is None else str(svc), float("-inf") if svc is None else svc)
             svc_item.setToolTip(row.get("service_reason") or "")
+            claim_item = QTableWidgetItem(f"{station['system']} / {station['station']} ({station['ly']:.1f} ly)" if station
+                                          else f"{claim['name']} ({claim['ly']:.1f} ly)" if claim else "")
+            claim_item.setData(Qt.ItemDataRole.UserRole, station["system"] if station else claim["name"] if claim else None)
             items = [
                 first,
                 _num("" if row.get("distance_ly") is None else f"{row['distance_ly']:.1f}", row.get("distance_ly")),
@@ -302,8 +306,7 @@ class ColonisationFinderDialog(QDialog):
                 QTableWidgetItem(", ".join(row.get("economies") or [])),
                 _num(str(row.get("body_count", 0)), row.get("body_count", 0)),
                 QTableWidgetItem(_age_days(row.get("dump_date"))),
-                QTableWidgetItem(f"{station['system']} / {station['station']} ({station['ly']:.1f} ly)" if station
-                                 else f"{claim['name']} ({claim['ly']:.1f} ly)" if claim else ""),
+                claim_item,
                 _mark_item(row.get("mark")),
             ]
             for c, item in enumerate(items):
@@ -331,6 +334,8 @@ class ColonisationFinderDialog(QDialog):
     def _on_cell_clicked(self, row: int, col: int) -> None:
         if col == 0:
             QApplication.clipboard().setText(self._table.item(row, 0).text())
+        elif col == 9 and (name := self._table.item(row, 9).data(Qt.ItemDataRole.UserRole)):
+            QApplication.clipboard().setText(name)  # system only, for the galaxy map search
 
     def _open_design(self) -> None:
         rows = self._table.selectionModel().selectedRows()

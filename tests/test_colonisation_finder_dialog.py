@@ -239,3 +239,17 @@ def test_second_search_fills_fast(monkeypatch):
     t = time.perf_counter()
     dlg._on_search_done(rows)            # replacing the old items one by one took ~10 s
     assert time.perf_counter() - t < 1.0 and dlg._table.rowCount() == 100
+
+
+def test_claim_from_click_copies_system_name(monkeypatch):
+    dlg = _dialog(monkeypatch)
+    _search(dlg)
+    t, cb = dlg._table, mod.QApplication.clipboard()
+    rows = {t.item(r, 0).text(): r for r in range(t.rowCount())}
+    dlg._on_cell_clicked(rows["Alpha"], 9)
+    assert cb.text() == "Ross 690"
+    dlg._on_cell_clicked(rows["Gamma"], 9)
+    assert cb.text() == "Base"                      # squad station's system, not "Base / Dock A (6.0 ly)"
+    cb.setText("keep")
+    dlg._on_cell_clicked(rows["Beta"], 9)           # no claim system: clipboard untouched
+    assert cb.text() == "keep"
