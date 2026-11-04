@@ -78,25 +78,25 @@ def test_unknown_orbital_never_used():
 
 def test_service_t3_primary_no_steps():
     p = _drm("service", group=True)
-    assert p["steps"] == []
+    assert [(s["title"], s["note"]) for s in p["steps"]] == [("Primary: Ocellus", "free")]
     assert p["note"] == "Tier 3 primary: all services from the start"
 
 
 def test_service_t2_adds_comms_on_primary():
     p = _drm("service")
     assert [(s["facility"], s["body"], s["location"]) for s in p["steps"]] == [
-        ("comms_installation", DRM_PRIMARY, "orbital")]
+        ("coriolis_starport", DRM_PRIMARY, "orbital"), ("comms_installation", DRM_PRIMARY, "orbital")]
 
 
 def test_service_stop_no_link_slot_warns():
     p = _drm("service", system=_with(DRM_SYS, DRM_PRIMARY, orbital_slots=1))   # the Coriolis takes the only one
-    assert p["steps"] == []
+    assert [s["facility"] for s in p["steps"]] == ["coriolis_starport"]
     assert "no free orbital slot on the primary body for the Cartographics/Vista link" in p["warnings"]
 
 
 def test_refinery_hub_on_primary_surface():
     p = _drm("refinery")
-    keys = [(s["facility"], s["body"], s["location"]) for s in p["steps"]]
+    keys = [(s["facility"], s["body"], s["location"]) for s in p["steps"]][1:]   # after the primary
     assert keys[0] == ("comms_installation", DRM_PRIMARY, "orbital")
     assert keys[1] == ("refinery_hub", DRM_PRIMARY, "surface")
     assert keys[2][0] in ("mining_settlement_large", "mining_settlement_medium") and keys[2][1] == DRM_PRIMARY
@@ -114,11 +114,15 @@ def _check_full(p):
     for i, s in enumerate(p["steps"]):
         req = FAC[s["facility"]]["requires"]
         assert not req or any(x["facility"] in req for x in p["steps"][:i]), s
-    assert any(FAC[s["facility"]]["port"] and FAC[s["facility"]]["tier"] == 3 for s in p["steps"])
+    assert any(FAC[s["facility"]]["port"] and FAC[s["facility"]]["tier"] == 3 for s in p["steps"][1:])
+    assert p["steps"][0]["note"] == "free" and p["steps"][0]["title"].startswith("Primary: ")
+    assert all(s["haul"] == FAC[s["facility"]]["haul"] for s in p["steps"])
+    assert sum(s["haul"] for s in p["steps"]) == p["outcome"]["haul"]
 
 
 def test_full_build_dr_m_shape():
     _check_full(_drm("full"))
+    assert len(_drm("full")["steps"]) == 23   # the real DR-M b7-1 build: 23 facilities incl. the primary
     _check_full(_drm("full", group=True))
 
 
@@ -126,7 +130,7 @@ def test_full_build_places_cluster_hub():
     p = _drm("full")
     _check_full(p)
     assert any(s["facility"].endswith("_hub") for s in p["steps"])
-    assert sum(FAC[s["facility"]]["port"] and FAC[s["facility"]]["tier"] == 3 for s in p["steps"]) >= 2
+    assert sum(FAC[s["facility"]]["port"] and FAC[s["facility"]]["tier"] == 3 for s in p["steps"][1:]) >= 2
 
 
 def test_full_build_hightech_fills_surface():
@@ -154,10 +158,11 @@ def test_full_build_final_sec_warning_matches():
 
 def test_primary_free_and_not_ramped():
     p = _drm("full", group=True)
-    i = next(i for i, s in enumerate(p["steps"]) if FAC[s["facility"]]["port"])
+    assert p["steps"][0]["facility"] == "ocellus_starport"
+    assert p["steps"][0]["t3"] == FAC["ocellus_starport"]["cp_reward"]["t3"]   # free: its reward, no cost
+    i = next(i for i, s in enumerate(p["steps"]) if i and FAC[s["facility"]]["port"])
     assert FAC[p["steps"][i]["facility"]]["tier"] == 3
-    before = p["steps"][i - 1]["t3"] if i else FAC["ocellus_starport"]["cp_reward"]["t3"]
-    assert before - p["steps"][i]["t3"] == 6
+    assert p["steps"][i - 1]["t3"] - p["steps"][i]["t3"] == 6
 
 
 def test_outcome_sums():

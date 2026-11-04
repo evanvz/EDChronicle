@@ -113,6 +113,7 @@ class ColonisationDesignDialog(QDialog):
         self._slots.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self._slots.horizontalHeader().setStretchLastSection(True)
         self._slots.itemChanged.connect(self._replan)
+        self._edit_triggers = self._slots.editTriggers()  # restored after a save, which locks the grid
         root.addWidget(self._slots, 1)
         slots_row = QHBoxLayout()
         self._save_slots_btn = QPushButton("Save slots")
@@ -164,6 +165,7 @@ class ColonisationDesignDialog(QDialog):
         self._combo.setEnabled(False)
         self._table.setRowCount(0)
         self._slots.setRowCount(0)
+        self._slots.setEditTriggers(self._edit_triggers)
         self._save_slots_btn.setEnabled(False)
         self._slots_lbl.setText("")
         self._outcome.setText("")
@@ -243,7 +245,16 @@ class ColonisationDesignDialog(QDialog):
         if result is None or result[0] != self.id64 or self._system is None or not result[1]:
             return
         self._raven = result[1]
+        edited = {r["body_id"]: r for r in self._grid_slots()
+                  if (r["orbital"], r["surface"]) != self._loaded_slots.get(r["body_id"])}
         self._fill_slots()
+        self._slots.blockSignals(True)  # edits made before Raven Colonial answered stay, against the new baseline
+        for i in range(self._slots.rowCount()):
+            r = edited.get(self._slots.item(i, 0).data(Qt.ItemDataRole.UserRole)["body_id"])
+            if r:
+                self._slots.item(i, 1).setText("" if r["orbital"] is None else str(r["orbital"]))
+                self._slots.item(i, 2).setText("" if r["surface"] is None else str(r["surface"]))
+        self._slots.blockSignals(False)
         self._replan()
 
     def _fill_slots(self) -> None:
@@ -281,14 +292,21 @@ class ColonisationDesignDialog(QDialog):
         id64, url = self.id64, self.hub_url
         cmdr = getattr(getattr(getattr(self.parent(), "_panel", None), "_last_state", None), "commander", None)
         self._save_slots_btn.setEnabled(False)
+        self._slots.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._slots_lbl.setText("Saving…")
         self._start(lambda: (id64, [(r, put_colonisation_slots(url, id64, r["body_id"], r["orbital"], r["surface"], cmdr))
                                     for r in changed]), self._on_slots_saved)
 
     def _on_slots_saved(self, result) -> None:
-        if result is None or result[0] != self.id64 or self._system is None:
+        if result is None:  # the worker raised
+            self._save_slots_btn.setEnabled(True)
+            self._slots.setEditTriggers(self._edit_triggers)
+            self._slots_lbl.setText("Slots not saved (error, see the log)")
+            return
+        if result[0] != self.id64 or self._system is None:
             return
         self._save_slots_btn.setEnabled(True)
+        self._slots.setEditTriggers(self._edit_triggers)
         saved = {r["body_id"]: r for r, ok in result[1] if ok}
         for b in self._system.get("bodies") or []:
             if b.get("body_id") in saved:
@@ -338,7 +356,8 @@ class ColonisationDesignDialog(QDialog):
             p = plan_by_type(self._system, slots, primary, self._group.isChecked(), kind)
             sysname = self._system.get("name") or ""
             short = lambda n: (n or "").removeprefix(sysname).strip() or n
-            rows = [[s["title"], short(s["body"]), s["note"] or "", "", f"T2 {s['t2']}, T3 {s['t3']}"] for s in p["steps"]]
+            rows = [[s["title"], short(s["body"]), s["note"] or "", "", f"T2 {s['t2']}, T3 {s['t3']}; {s['haul']:,} t"]
+                    for s in p["steps"]]
             # per-body "slots unknown" warnings fold into one line: p["unknown"] lists the same bodies
             lines = [w for w in p["warnings"] if " slots unknown: " not in w] + ([p["note"]] if p.get("note") else [])
             lines.append(f"Slots left: {p['unused']['orbital']} orbital, {p['unused']['surface']} surface"

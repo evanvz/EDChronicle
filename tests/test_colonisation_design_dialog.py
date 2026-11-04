@@ -239,7 +239,8 @@ def test_full_build_renders_plan_and_outcome(monkeypatch):
     _kind(d, "full")
     p = plan(s, slot_table(s, None), f"{SYS} 3", False, "full")
     assert p["steps"] and _titles(d) == [st["title"] for st in p["steps"]]
-    assert d._table.item(0, 4).text() == f"T2 {p['steps'][0]['t2']}, T3 {p['steps'][0]['t3']}"
+    assert _titles(d)[0] == "Primary: Coriolis" and d._table.item(0, 2).text() == "free"
+    assert d._table.item(0, 4).text() == f"T2 {p['steps'][0]['t2']}, T3 {p['steps'][0]['t3']}; 63,001 t"
     text = d._outcome.text()
     assert "score" in text and "haul" in text and "sec" in text and d._outcome.isVisibleTo(d)
     _kind(d, None)
@@ -262,7 +263,9 @@ def test_save_slots_puts_each_changed_body(monkeypatch):
     r = next(r for r in range(d._slots.rowCount()) if d._slots.item(r, 0).text() == "4")
     d._slots.item(r, 1).setText("2")
     d._save_slots_btn.click()
+    assert d._slots.editTriggers() == mod.QTableWidget.EditTrigger.NoEditTriggers   # locked while saving
     _wait_slots(d)
+    assert d._slots.editTriggers() == d._edit_triggers
     assert sent == [("http://hub", 1, 28, 2, 0, "Evan")]
     assert d._slots.item(r, 3).text() == "entered / entered"
     d._save_slots_btn.click()
@@ -276,3 +279,68 @@ def test_no_slots_falls_back_to_template(monkeypatch):
     _kind(d, "full")
     assert _titles(d) == [st["title"] for st in mod.plan_system(s, f"{SYS} 3", False)["steps"]]
     assert "No slot counts yet: enter them to plan by type" in d._warnings.text() and not d._outcome.text()
+
+
+def _row(d, label):
+    return next(r for r in range(d._slots.rowCount()) if d._slots.item(r, 0).text() == label)
+
+
+def test_raven_refill_keeps_earlier_edit(monkeypatch):
+    sent = []
+    monkeypatch.setattr(mod, "put_colonisation_slots", lambda *a: sent.append(a) or True)
+    d = _dialog(monkeypatch, _slotted())
+    d._slots.item(_row(d, "4"), 1).setText("2")
+    d._on_raven((1, {f"{SYS} 1": (2, None), f"{SYS} 4": (5, None)}))
+    assert d._slots.item(_row(d, "1"), 3).text() == "Raven / est."
+    assert d._slots.item(_row(d, "4"), 1).text() == "2" and d._slots.item(_row(d, "4"), 3).text() == "Raven / est."
+    d._save_slots_btn.click()
+    _wait_slots(d)
+    assert sent == [("http://hub", 1, 28, 2, 0, None)]
+
+
+def test_late_raven_result_for_previous_system_is_ignored(monkeypatch):
+    import threading
+    gate = threading.Event()
+    monkeypatch.setattr(mod, "fetch_colonisation_system", lambda url, id64, faction=None: TUC)
+    monkeypatch.setattr(mod, "get_system_slots",
+                        lambda name: gate.wait(5) and ({f"{SYS} 1": (2, None)} if name == SYS else None))
+    parent = QWidget()
+    _keep.append(parent)
+    d = mod.ColonisationDesignDialog(parent, "http://hub", 1, SYS)
+    _keep.append(d)
+    deadline = time.time() + 5
+    while not d._combo.isEnabled() and time.time() < deadline:
+        _app.processEvents()
+    # system B has a body with the same name, so a misapplied result would show as "Raven"
+    monkeypatch.setattr(mod, "fetch_colonisation_system",
+                        lambda url, id64, faction=None: {"name": "B", "bodies": [{"name": f"{SYS} 1", "body_id": 5}]})
+    d.load(2, "B")
+    while (d._system is None or d._system["name"] != "B") and time.time() < deadline:
+        _app.processEvents()
+    gate.set()
+    d.stop()
+    _app.processEvents()
+    assert d.id64 == 2 and d._raven is None and d._slots.item(0, 3).text() == "? / ?"
+
+
+def test_save_refused_says_so_and_unlocks(monkeypatch):
+    monkeypatch.setattr(mod, "put_colonisation_slots", lambda *a: False)
+    d = _dialog(monkeypatch, _slotted())
+    d._slots.item(_row(d, "4"), 1).setText("2")
+    d._save_slots_btn.click()
+    _wait_slots(d)
+    assert d._slots_lbl.text().startswith("Hub did not store 1 of 1 bodies")
+    assert d._save_slots_btn.isEnabled() and d._slots.editTriggers() == d._edit_triggers
+    assert d._slots.item(_row(d, "4"), 1).text() == "2"
+
+
+def test_save_worker_error_reenables(monkeypatch):
+    def boom(*a):
+        raise RuntimeError("x")
+    monkeypatch.setattr(mod, "put_colonisation_slots", boom)
+    d = _dialog(monkeypatch, _slotted())
+    d._slots.item(_row(d, "4"), 1).setText("2")
+    d._save_slots_btn.click()
+    _wait_slots(d)
+    assert d._slots_lbl.text() == "Slots not saved (error, see the log)"
+    assert d._save_slots_btn.isEnabled() and d._slots.editTriggers() == d._edit_triggers

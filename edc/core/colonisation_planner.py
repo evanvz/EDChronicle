@@ -84,6 +84,8 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
     elif (primary_body, "orbital") in free:
         free[(primary_body, "orbital")] -= 1
     bal = [pf["cp_reward"]["t2"], pf["cp_reward"]["t3"]]
+    steps.append({"title": f"Primary: {pf['name'].removesuffix(' Starport')}", "facility": pkey, "body": primary_body,
+                  "location": "orbital", "t2": bal[0], "t3": bal[1], "note": "free", "haul": pf["haul"]})
     stats = dict(pf["effects"])
     total = {"haul": pf["haul"], "score": pf["score"]}
     built = {pkey}
@@ -111,7 +113,7 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
         total["score"] += f["score"]
         built.add(key)
         steps.append({"title": f["name"], "facility": key, "body": body, "location": loc,
-                      "t2": bal[0], "t3": bal[1], "note": note})
+                      "t2": bal[0], "t3": bal[1], "note": note, "haul": f["haul"]})
         return True
 
     if kind == "service":
