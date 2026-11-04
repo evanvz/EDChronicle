@@ -142,11 +142,22 @@ def test_full_build_lc_t_shape():
     _check_full(plan(LCT_SYS, slot_table(LCT_SYS, None), LCT_PRIMARY, False, "full"))
 
 
+def test_full_build_final_sec_warning_matches():
+    tour = _system("TR", [("1", "Earth-like world", True, 1, ["Tourism"], False, 2, 8, 8),
+                          ("1 a", "Rocky body", True, 1, ["Tourism"], False, 1, 6, 6)])
+    plans = [plan(tour, slot_table(tour, None), "TR 1", g, "full") for g in (False, True)]
+    plans += [_drm("full", group=g) for g in (False, True)]
+    plans += [plan(LCT_SYS, slot_table(LCT_SYS, None), LCT_PRIMARY, g, "full") for g in (False, True)]
+    for p in plans:
+        assert ("security below 0 after the plan" in p["warnings"]) == (p["outcome"]["stats"]["sec"] < 0)
+
+
 def test_primary_free_and_not_ramped():
     p = _drm("full", group=True)
     i = next(i for i, s in enumerate(p["steps"]) if FAC[s["facility"]]["port"])
     assert FAC[p["steps"][i]["facility"]]["tier"] == 3
-    assert p["steps"][i - 1]["t3"] - p["steps"][i]["t3"] == 6
+    before = p["steps"][i - 1]["t3"] if i else FAC["ocellus_starport"]["cp_reward"]["t3"]
+    assert before - p["steps"][i]["t3"] == 6
 
 
 def test_outcome_sums():

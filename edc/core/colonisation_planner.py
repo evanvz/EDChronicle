@@ -61,6 +61,8 @@ def _theme(bodies: list[dict]) -> str:
 
 
 def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: str) -> dict:
+    if kind not in TYPES:
+        raise ValueError(f"unknown plan kind: {kind!r}")
     fac = colonisation_facilities.load()
     bodies = {b["name"]: b for b in system.get("bodies") or []}
     steps, warnings, note = [], [], None
@@ -119,13 +121,13 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
             warnings.append("no free orbital slot on the primary body for the Cartographics/Vista link")
 
     elif kind == "refinery":
-        if not place("comms_installation", primary_body, "T2 point and link"):
-            next((b for b in bodies if place("comms_installation", b, "T2 point")), None)
+        if not place("comms_installation", primary_body, "T2 point and link")                 and not any(place("comms_installation", b, "T2 point") for b in bodies):
+            warnings.append("no free orbital slot for the Comms installation")
         if free.get((primary_body, "surface"), 0) < 1:
             warnings.append("no surface slot on the primary body: no Refinery Hub")
         elif not place("refinery_hub", primary_body):
             warnings.append("not enough T2 points for the Refinery Hub")
-        elif not (bal[0] >= 1 and place("mining_settlement_large", primary_body)):
+        elif not place("mining_settlement_large", primary_body):
             place("mining_settlement_medium", primary_body)
 
     elif kind == "full":
@@ -186,8 +188,6 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
             n = room("surface")
             if not (n and place("military_settlement_medium", n)):
                 break
-        if stats["sec"] < 0:
-            warnings.append("security below 0 after the plan")
         # Pass 7 fallback (controller ruling): a zero-cost surface facility of the theme's economy, else civilian
         cheap = {c: next((k for k, f in fac.items() if f["location"] == "surface" and not f["port"]
                           and (f["economy"] or "").lower() == themes[c].lower() and not any(f["cp_cost"].values())),
@@ -195,8 +195,11 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
         for n in order:  # Pass 7 (controller ruling): fill every slot left
             while free.get((n, "orbital"), 0) and place(_T1_ORBITAL[i % 3], n):
                 i += 1
-            while place(fam[n][0], n) or place(cheap[cluster[n]], n):
+            # fix round 3: a military settlement while sec is below 0, so the final fill can't undo Pass 6
+            while (stats["sec"] < 0 and place("military_settlement_medium", n))                     or place(fam[n][0], n) or place(cheap[cluster[n]], n):
                 pass
+        if stats["sec"] < 0:
+            warnings.append("security below 0 after the plan")
 
     if pf["tier"] == 1 and stats["tech"] < 35:
         warnings.append(f"tech level {stats['tech']} below 35: Tier 1 port shipyard/outfitting need 35 "
