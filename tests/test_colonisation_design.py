@@ -94,7 +94,21 @@ def _in_s_like():
 def test_usable_but_weak_pick_lists_reasons():
     p = plan_system(_in_s_like(), "Tucanae Sector PY-R b4-1 1", False)
     assert p["poor"] is None and p["steps"]
-    assert p["weak"] == ["1,686 ls out", "no landable moons", "Extraction + Industrial clash"]
+    assert p["weak"] == ["1,686 ls out", "no landable moons"]
+
+
+def _econ_on_3(econ):
+    return {**TUC, "bodies": [{**b, "economies": econ} if b["name"].endswith(" 3") else b for b in TUC["bodies"]]}
+
+
+def test_two_economies_no_clash_warning():
+    p = plan_system(_econ_on_3(["Extraction", "Industrial"]), "Tucanae Sector PY-R b4-1 3", False)
+    assert not any("clash" in w for w in p["warnings"]) and not any("clash" in w for w in p["weak"])
+
+
+def test_three_economies_warn():
+    p = plan_system(_econ_on_3(["Extraction", "HighTech", "Industrial"]), "Tucanae Sector PY-R b4-1 3", False)
+    assert any("clash" in w for w in p["warnings"])
 
 
 def test_strong_pick_is_not_weak():

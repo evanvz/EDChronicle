@@ -27,9 +27,8 @@ _NAMES = {"HighTech": "High Tech"}
 
 
 def _clash(econ: set) -> bool:
-    # Twin of EDDataHub eddatahub/service_stop.py `cannibalises`: change both together
-    # Dubior "Mixed Economy Setups": Industrial and High Tech clash with any other economy (covers Refinery + Industrial)
-    return len(econ) > 1 and bool(econ & {"Industrial", "HighTech"})
+    # Frontier 2025-08-21/22: top two economies not cannibalised; twin of EDDataHub service_stop.cannibalises
+    return len(econ) > 2
 
 
 def _econ_text(econ) -> str:
