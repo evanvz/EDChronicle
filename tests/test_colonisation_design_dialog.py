@@ -212,6 +212,12 @@ def _slotted():
                               if b["body_id"] in entered else dict(b) for b in TUC["bodies"]]}
 
 
+def _all_slotted():
+    """_slotted with every other body entered too: 0 orbital, its estimate on the surface."""
+    return {**_slotted(), "bodies": [b if "orbital_slots" in b else dict(b, orbital_slots=0, surface_slots=b.get("ground_slots") or 0)
+                                     for b in _slotted()["bodies"]]}
+
+
 def test_type_selector_lists_types(monkeypatch):
     from edc.core.colonisation_planner import TYPES, TYPE_NAMES
     d = _dialog(monkeypatch)
@@ -226,14 +232,14 @@ def test_slot_grid_shows_sources(monkeypatch):
     assert g.rowCount() == len(s["bodies"])
     rows = {g.item(r, 0).text(): [g.item(r, c).text() for c in (1, 2, 3)] for r in range(g.rowCount())}
     assert rows["3"] == ["3", "0", "entered / entered"]
-    assert rows["1"] == ["2", "0", "Raven / est."]
-    assert rows["2"] == ["", "0", "? / est."]
+    assert rows["1"] == ["2", "", "Raven / est. 0"]
+    assert rows["2"] == ["", "", "? / est. 0"]
     assert not g.item(0, 3).flags() & mod.Qt.ItemFlag.ItemIsEditable and g.item(0, 1).flags() & mod.Qt.ItemFlag.ItemIsEditable
 
 
 def test_full_build_renders_plan_and_outcome(monkeypatch):
     from edc.core.colonisation_planner import plan, slot_table
-    s = _slotted()
+    s = _all_slotted()
     d = _dialog(monkeypatch, s)
     _pick(d, f"{SYS} 3")
     _kind(d, "full")
@@ -268,7 +274,7 @@ def test_save_slots_puts_each_changed_body(monkeypatch):
     _wait_slots(d)
     assert d._slots.editTriggers() == d._edit_triggers
     assert sent == [("http://hub", 1, 28, 2, None, "Evan")]
-    assert d._slots.item(r, 3).text() == "entered / est."
+    assert d._slots.item(r, 3).text() == "entered / est. 0"
     d._save_slots_btn.click()
     assert len(sent) == 1
 
@@ -279,7 +285,29 @@ def test_no_slots_falls_back_to_template(monkeypatch):
     _pick(d, f"{SYS} 3")
     _kind(d, "full")
     assert _titles(d) == [st["title"] for st in mod.plan_system(s, f"{SYS} 3", False)["steps"]]
-    assert "No slot counts yet: enter them to plan by type" in d._warnings.text() and not d._outcome.text()
+    n = len(s["bodies"])
+    assert f"{n} of {n} bodies not confirmed" in d._warnings.text() and not d._outcome.text()
+
+
+def test_typed_plan_waits_for_every_slot_confirmed(monkeypatch):
+    monkeypatch.setattr(mod, "put_colonisation_slots", lambda *a: True)
+    s = _slotted()
+    d = _dialog(monkeypatch, s, raven={f"{SYS} 1": (2, 0)})
+    _pick(d, f"{SYS} 3")
+    _kind(d, "full")
+    g = d._slots
+    open_ = sum(1 for b in s["bodies"] if "orbital_slots" not in b)
+    assert _titles(d) == [st["title"] for st in mod.plan_system(s, f"{SYS} 3", False)["steps"]] and not d._outcome.text()
+    assert (f"Check every body's slots in Architect View, then Confirm and save slots to plan by type: "
+            f"{open_} of {len(s['bodies'])} bodies not confirmed") in d._warnings.text()
+    for r in range(g.rowCount()):
+        for c in (1, 2):
+            if not g.item(r, c).text():
+                g.item(r, c).setText("0")
+    assert not d._outcome.text() and f"{open_} of" in d._warnings.text()   # filled is not confirmed: Raven row too
+    d._save_slots_btn.click()
+    _wait_slots(d)
+    assert d._outcome.text() and "not confirmed" not in d._warnings.text()
 
 
 def _row(d, label):
@@ -292,14 +320,14 @@ def test_raven_refill_keeps_earlier_edit(monkeypatch):
     d = _dialog(monkeypatch, _slotted())
     d._slots.item(_row(d, "4"), 1).setText("2")
     d._on_raven((1, {f"{SYS} 1": (2, None), f"{SYS} 4": (5, None)}))
-    assert d._slots.item(_row(d, "1"), 3).text() == "Raven / est."
-    assert d._slots.item(_row(d, "4"), 1).text() == "2" and d._slots.item(_row(d, "4"), 3).text() == "Raven / est."
+    assert d._slots.item(_row(d, "1"), 3).text() == "Raven / est. 0"
+    assert d._slots.item(_row(d, "4"), 1).text() == "2" and d._slots.item(_row(d, "4"), 3).text() == "Raven / est. 0"
     d._save_slots_btn.click()
     _wait_slots(d)
-    assert sent == [("http://hub", 1, 28, 2, None, None)]
+    assert sorted(sent) == [("http://hub", 1, 5, 2, None, None), ("http://hub", 1, 28, 2, None, None)]
 
 
-def test_save_does_not_store_estimates(monkeypatch):
+def test_save_confirms_raven_not_estimates(monkeypatch):
     sent = []
     monkeypatch.setattr(mod, "put_colonisation_slots", lambda *a: sent.append(a) or True)
     d = _dialog(monkeypatch, _slotted(), raven={f"{SYS} 1": (2, 4)})
@@ -308,7 +336,7 @@ def test_save_does_not_store_estimates(monkeypatch):
     d._slots.item(_row(d, "3 a"), 1).setText("2")    # surface entered
     d._save_slots_btn.click()
     _wait_slots(d)
-    assert sorted(sent) == sorted([("http://hub", 1, 28, 2, None, None), ("http://hub", 1, 5, None, 3, None),
+    assert sorted(sent) == sorted([("http://hub", 1, 28, 2, None, None), ("http://hub", 1, 5, 2, 3, None),
                                    ("http://hub", 1, 9, 2, 2, None)])
 
 
@@ -324,7 +352,15 @@ def test_partial_save_retry_keeps_estimates_out(monkeypatch):
     d._save_slots_btn.click()
     _wait_slots(d)
     assert sent == [("http://hub", 1, 9, 2, 2, None)]
-    assert d._slots.item(_row(d, "3 a"), 1).text() == "2" and d._slots.item(_row(d, "4"), 3).text() == "entered / est."
+    assert d._slots.item(_row(d, "3 a"), 1).text() == "2" and d._slots.item(_row(d, "4"), 3).text() == "entered / est. 0"
+
+
+def test_estimate_is_a_hint_not_a_count(monkeypatch):
+    s = _slotted()
+    d = _dialog(monkeypatch, s)
+    b = next(b for b in s["bodies"] if b.get("landable") and "surface_slots" not in b and b.get("ground_slots"))
+    r = _row(d, b["name"].removeprefix(SYS).strip())
+    assert d._slots.item(r, 2).text() == "" and d._slots.item(r, 3).text().endswith(f"/ est. {b['ground_slots']}")
 
 
 def test_slot_grid_reverts_bad_input(monkeypatch):

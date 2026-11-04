@@ -29,7 +29,8 @@ _AMBER = "color:#FFB347; font-weight:bold; font-size:13px;"
 _SCORE_BANDS = ((16, "bottom half"), (38, "middle"))
 _LABEL = "color:#c8c8c8; font-size:12px;"
 _SOURCES = {"entered": "entered", "raven": "Raven", "est": "est.", None: "?"}
-_NO_SLOTS = "No slot counts yet: enter them to plan by type"
+_NO_SLOTS = ("Check every body's slots in Architect View, then Confirm and save slots to plan by type:"
+             " {} of {} bodies not confirmed")
 
 
 class ColonisationDesignDialog(QDialog):
@@ -116,7 +117,7 @@ class ColonisationDesignDialog(QDialog):
         self._edit_triggers = self._slots.editTriggers()  # restored after a save, which locks the grid
         root.addWidget(self._slots, 1)
         slots_row = QHBoxLayout()
-        self._save_slots_btn = QPushButton("Save slots")
+        self._save_slots_btn = QPushButton("Confirm and save slots")
         self._save_slots_btn.setStyleSheet(_BTN_STYLE)
         self._save_slots_btn.setEnabled(False)
         self._save_slots_btn.clicked.connect(self._save_slots)
@@ -265,6 +266,9 @@ class ColonisationDesignDialog(QDialog):
     def _fill_slots(self) -> None:
         sysname = self._system.get("name") or ""
         rows = slot_table(self._system, self._raven)
+        for r in rows:  # an estimate is a hint, not a confirmed count: the cell stays blank until entered
+            if r["surface_source"] == "est":
+                r["est"], r["surface"] = r["surface"], None
         self._loaded_slots = {r["body_id"]: (r["orbital"], r["surface"]) for r in rows}
         self._slots.blockSignals(True)
         self._slots.setRowCount(len(rows))
@@ -272,7 +276,8 @@ class ColonisationDesignDialog(QDialog):
             label = r["name"] or f"Body {r['body_id']}"
             name = QTableWidgetItem(label.removeprefix(sysname).strip() or label)
             name.setData(Qt.ItemDataRole.UserRole, r)
-            src = QTableWidgetItem(f"{_SOURCES[r['orbital_source']]} / {_SOURCES[r['surface_source']]}")
+            sur = f"est. {r['est']}" if r["surface_source"] == "est" and r.get("est") is not None else _SOURCES[r["surface_source"]]
+            src = QTableWidgetItem(f"{_SOURCES[r['orbital_source']]} / {sur}")
             for it in (name, src):
                 it.setFlags(it.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self._slots.setItem(i, 0, name)
@@ -298,14 +303,15 @@ class ColonisationDesignDialog(QDialog):
         return [{**self._slots.item(r, 0).data(Qt.ItemDataRole.UserRole), "orbital": count(r, 1), "surface": count(r, 2)}
                 for r in range(self._slots.rowCount())]
 
+    def _confirmed(self, r: dict) -> bool:
+        return (r["orbital_source"] == r["surface_source"] == "entered"
+                and (r["orbital"], r["surface"]) == self._loaded_slots.get(r["body_id"]))
+
     def _save_slots(self) -> None:
-        # a cell goes to the hub only if edited or already entered there: Raven/est. counts never become squad facts
-        changed = []
-        for r in self._grid_slots():
-            old = self._loaded_slots.get(r["body_id"])
-            if r["body_id"] is not None and (r["orbital"], r["surface"]) != old:
-                changed.append({**r, **{k: r[k] if r[k] != old[i] or r[f"{k}_source"] == "entered" else None
-                                        for i, k in enumerate(("orbital", "surface"))}})
+        # saving confirms the grid as checked: Raven counts shown in it become squad facts; estimates never fill a cell
+        changed = [r for r in self._grid_slots() if r["body_id"] is not None
+                   and ((r["orbital"], r["surface"]) != self._loaded_slots.get(r["body_id"])
+                        or any(r[k] is not None and r[f"{k}_source"] != "entered" for k in ("orbital", "surface")))]
         if not changed:
             self._slots_lbl.setText("No slot changes to save")
             return
@@ -335,9 +341,11 @@ class ColonisationDesignDialog(QDialog):
         if failed:
             self._refill()  # stored rows reload with their sources, refused edits stay
             self._slots_lbl.setText(f"Hub did not store {failed} of {len(result[1])} bodies (not reachable, or not updated yet)")
+            self._replan()
             return
         self._fill_slots()
         self._slots_lbl.setText(f"Saved slots for {len(saved)} bodies")
+        self._replan()
 
     def _replan(self, *_) -> None:
         if self._system is None:
@@ -356,13 +364,16 @@ class ColonisationDesignDialog(QDialog):
         self._banner.setStyleSheet(_RED)
         self._mark_btns["bad"].setStyleSheet(_BTN_STYLE + ("QPushButton { border:2px solid #ff6b6b; }" if plan["poor"] else ""))
         kind, slots = self._kind.currentData(), self._grid_slots()
-        typed = kind and any(r["orbital"] is not None or r["surface"] is not None for r in slots)
+        # a typed plan only once every body's counts are checked and saved: a part-known system plans the wrong build
+        unconfirmed = sum(not self._confirmed(r) for r in slots)
+        typed = kind and not unconfirmed
+        no_slots = _NO_SLOTS.format(unconfirmed, len(slots))
         if plan["poor"]:
             self._banner.setText(f"Poor pick: {plan['poor']}" if plan["poor"] != "Hub has no body details yet"
                                  else plan["poor"])
             self._banner.setVisible(True)
             if not typed:  # a typed plan with slot counts still shows, under the template's red banner
-                self._warnings.setText(_NO_SLOTS if kind else "")
+                self._warnings.setText(no_slots if kind else "")
                 return
         else:
             self._banner.setVisible(bool(plan["weak"]))
@@ -378,17 +389,15 @@ class ColonisationDesignDialog(QDialog):
             short = lambda n: (n or "").removeprefix(sysname).strip() or n
             rows = [[s["title"], short(s["body"]), s["note"] or "", "", f"T2 {s['t2']}, T3 {s['t3']}; {s['haul']:,} t"]
                     for s in p["steps"]]
-            # per-body "slots unknown" warnings fold into one line: p["unknown"] lists the same bodies
-            lines = [w for w in p["warnings"] if " slots unknown: " not in w] + ([p["note"]] if p.get("note") else [])
-            lines.append(f"Slots left: {p['unused']['orbital']} orbital, {p['unused']['surface']} surface"
-                         + (f"; counts unknown on {', '.join(map(short, p['unknown']))}" if p["unknown"] else ""))
+            lines = list(p["warnings"]) + ([p["note"]] if p.get("note") else [])
+            lines.append(f"Slots left: {p['unused']['orbital']} orbital, {p['unused']['surface']} surface")
             o = p["outcome"]
             self._outcome.setText("Projected: " + ", ".join(f"{k} {o['stats'][k]}" for k in
                                                             ("pop", "mpop", "sec", "wealth", "tech", "sol", "dev"))
                                   + f" — haul {o['haul']:,} t — score {o['score']} (Raven Colonial-style, for comparison only)")
         else:
             rows = [[s["title"], s["body"], ", ".join(s["unlocks"]), s["needs"] or "", s["points"]] for s in plan["steps"]]
-            lines = list(plan["warnings"]) + ([plan["note"]] if plan["note"] else []) + ([_NO_SLOTS] if kind else [])
+            lines = list(plan["warnings"]) + ([plan["note"]] if plan["note"] else []) + ([no_slots] if kind else [])
         self._table.setRowCount(len(rows))
         for r, row in enumerate(rows):
             for c, text in enumerate(row):
