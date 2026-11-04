@@ -25,8 +25,8 @@ _FOOTER = ("Sources (community-reported, not official): CMDR Dubior's Advanced E
 _GREY = "color:#9aa4b0; font-size:13px;"
 _RED = "color:#ff6b6b; font-weight:bold; font-size:13px;"
 _AMBER = "color:#FFB347; font-weight:bold; font-size:13px;"
-# hub service score spread, 2026-11-03: median 16, top quarter from 37
-_SCORE_BANDS = ((16, "bottom half"), (37, "middle"))
+# hub service score spread over all systems, 2026-11-04 (after the economy-rule re-score): median 16, top quarter from 38
+_SCORE_BANDS = ((16, "bottom half"), (38, "middle"))
 _LABEL = "color:#c8c8c8; font-size:12px;"
 _SOURCES = {"entered": "entered", "raven": "Raven", "est": "est.", None: "?"}
 _NO_SLOTS = "No slot counts yet: enter them to plan by type"
