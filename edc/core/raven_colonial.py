@@ -13,16 +13,14 @@ so it's personal-only (confirmed via EDCD/EDDN's schema repo).
 
 This client only reads -- see the GET-only endpoints below, confirmed live
 and cross-referenced against njthomson/SrvSurvey's own RavenColonial.cs
-client (GPL-3.0), which also pushes/writes; EDChronicle deliberately never
-pushes our data to a third-party platform, so only the two GET endpoints it
-uses are ported here.
+client (GPL-3.0), which also pushes/writes; only the three GET endpoints it
+uses are ported here. The opt-in push lives in raven_colonial_push.py.
 """
 from __future__ import annotations
 
 import logging
 import re
 from typing import Any, Dict, Optional, Tuple
-
 from urllib.parse import quote
 
 import requests
@@ -83,7 +81,7 @@ def get_system_slots(system_name: str) -> Optional[Dict[str, Tuple[Optional[int]
     """Player-entered free (orbital, surface) slot counts per body name; -1 means none/not applicable
     (None). None if the system is unknown or the request failed. Synchronous: call from a worker."""
     try:
-        resp = requests.get(f"{_BASE_URL}/api/v2/system/{quote(system_name)}",
+        resp = requests.get(f"{_BASE_URL}/api/v2/system/{quote(system_name, safe='')}",
                             headers={"User-Agent": USER_AGENT}, timeout=_TIMEOUT)
         if resp.status_code == 404:
             return None
