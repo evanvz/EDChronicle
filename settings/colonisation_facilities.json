@@ -1,0 +1,2240 @@
+{
+ "source": "Raven Colonial site bundle + ED wiki System_Colonisation",
+ "read": "2026-11-04",
+ "facilities": {
+  "coriolis_starport": {
+   "name": "Coriolis Starport",
+   "rc_types": [
+    "no_truss",
+    "dual_truss",
+    "quad_truss",
+    "no truss",
+    "coriolis"
+   ],
+   "tier": 2,
+   "location": "orbital",
+   "economy": "Colony",
+   "requires": [],
+   "cp_cost": {
+    "t2": 3,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 1
+   },
+   "port": true,
+   "haul": 63001,
+   "score": 8,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -2,
+    "wealth": 3,
+    "tech": 2,
+    "sol": 3,
+    "dev": 3
+   },
+   "wiki_differs": {
+    "effects.mpop": [
+     1,
+     0
+    ],
+    "effects.tech": [
+     2,
+     1
+    ],
+    "effects.wealth": [
+     3,
+     2
+    ],
+    "effects.dev": [
+     3,
+     2
+    ]
+   }
+  },
+  "asteroid_starport": {
+   "name": "Asteroid Starport",
+   "rc_types": [
+    "asteroid"
+   ],
+   "tier": 2,
+   "location": "orbital",
+   "economy": "Extraction",
+   "requires": [],
+   "cp_cost": {
+    "t2": 3,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 1
+   },
+   "port": true,
+   "haul": 53546,
+   "score": 8,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -1,
+    "wealth": 5,
+    "tech": 3,
+    "sol": -4,
+    "dev": 7
+   },
+   "wiki_differs": {
+    "effects.mpop": [
+     1,
+     0
+    ]
+   }
+  },
+  "dodec_starport": {
+   "name": "Dodec Starport",
+   "rc_types": [
+    "dodec",
+    "quint_truss",
+    "dec_truss"
+   ],
+   "tier": 3,
+   "location": "orbital",
+   "economy": "Colony",
+   "requires": [],
+   "cp_cost": {
+    "t2": 0,
+    "t3": 6
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 0
+   },
+   "port": true,
+   "haul": 236000,
+   "score": 15,
+   "effects": {
+    "pop": 8,
+    "mpop": 4,
+    "sec": -4,
+    "wealth": 9,
+    "tech": 8,
+    "sol": 7,
+    "dev": 10
+   },
+   "wiki_differs": {}
+  },
+  "ocellus_starport": {
+   "name": "Ocellus Starport",
+   "rc_types": [
+    "ocellus"
+   ],
+   "tier": 3,
+   "location": "orbital",
+   "economy": "Colony",
+   "requires": [],
+   "cp_cost": {
+    "t2": 0,
+    "t3": 6
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 0
+   },
+   "port": true,
+   "haul": 219135,
+   "score": 15,
+   "effects": {
+    "pop": 5,
+    "mpop": 1,
+    "sec": -3,
+    "wealth": 8,
+    "tech": 7,
+    "sol": 5,
+    "dev": 9
+   },
+   "wiki_differs": {
+    "effects.tech": [
+     7,
+     6
+    ],
+    "effects.wealth": [
+     8,
+     7
+    ],
+    "effects.dev": [
+     9,
+     8
+    ]
+   }
+  },
+  "orbis_starport": {
+   "name": "Orbis Starport",
+   "rc_types": [
+    "apollo",
+    "artemis",
+    "orbis"
+   ],
+   "tier": 3,
+   "location": "orbital",
+   "economy": "Colony",
+   "requires": [],
+   "cp_cost": {
+    "t2": 0,
+    "t3": 6
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 0
+   },
+   "port": true,
+   "haul": 214878,
+   "score": 15,
+   "effects": {
+    "pop": 5,
+    "mpop": 1,
+    "sec": -3,
+    "wealth": 8,
+    "tech": 7,
+    "sol": 5,
+    "dev": 9
+   },
+   "wiki_differs": {
+    "effects.tech": [
+     7,
+     6
+    ],
+    "effects.wealth": [
+     8,
+     7
+    ],
+    "effects.dev": [
+     9,
+     8
+    ]
+   }
+  },
+  "commercial_outpost": {
+   "name": "Commercial Outpost",
+   "rc_types": [
+    "plutus"
+   ],
+   "tier": 1,
+   "location": "orbital",
+   "economy": "Colony",
+   "requires": [],
+   "cp_cost": {
+    "t2": 0,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 1,
+    "t3": 0
+   },
+   "port": false,
+   "haul": 20480,
+   "score": 3,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -1,
+    "wealth": 3,
+    "tech": 0,
+    "sol": 5,
+    "dev": 0
+   },
+   "wiki_differs": {
+    "effects.pop": [
+     1,
+     0
+    ],
+    "effects.mpop": [
+     1,
+     0
+    ],
+    "effects.wealth": [
+     3,
+     2
+    ]
+   }
+  },
+  "industrial_outpost": {
+   "name": "Industrial Outpost",
+   "rc_types": [
+    "vulcan"
+   ],
+   "tier": 1,
+   "location": "orbital",
+   "economy": "Industrial",
+   "requires": [],
+   "cp_cost": {
+    "t2": 0,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 1,
+    "t3": 0
+   },
+   "port": false,
+   "haul": 21181,
+   "score": 3,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 3,
+    "sol": 0,
+    "dev": 3
+   },
+   "wiki_differs": {
+    "effects.pop": [
+     1,
+     0
+    ],
+    "effects.mpop": [
+     1,
+     0
+    ],
+    "effects.dev": [
+     3,
+     2
+    ]
+   }
+  },
+  "pirate_outpost": {
+   "name": "Pirate Outpost",
+   "rc_types": [
+    "dysnomia"
+   ],
+   "tier": 1,
+   "location": "orbital",
+   "economy": "Colony",
+   "requires": [],
+   "cp_cost": {
+    "t2": 0,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 1,
+    "t3": 0
+   },
+   "port": false,
+   "haul": 21797,
+   "score": 3,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -2,
+    "wealth": 3,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   },
+   "wiki_differs": {
+    "effects.pop": [
+     1,
+     0
+    ],
+    "effects.mpop": [
+     1,
+     0
+    ],
+    "effects.wealth": [
+     3,
+     2
+    ]
+   }
+  },
+  "civilian_outpost": {
+   "name": "Civilian Outpost",
+   "rc_types": [
+    "vesta"
+   ],
+   "tier": 1,
+   "location": "orbital",
+   "economy": "Colony",
+   "requires": [],
+   "cp_cost": {
+    "t2": 0,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 1,
+    "t3": 0
+   },
+   "port": false,
+   "haul": 21624,
+   "score": 3,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -1,
+    "wealth": 1,
+    "tech": 0,
+    "sol": 2,
+    "dev": 1
+   },
+   "wiki_differs": {
+    "effects.pop": [
+     1,
+     0
+    ],
+    "effects.mpop": [
+     1,
+     0
+    ],
+    "effects.sol": [
+     2,
+     1
+    ]
+   }
+  },
+  "scientific_outpost": {
+   "name": "Scientific Outpost",
+   "rc_types": [
+    "prometheus"
+   ],
+   "tier": 1,
+   "location": "orbital",
+   "economy": "Hightech",
+   "requires": [],
+   "cp_cost": {
+    "t2": 0,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 1,
+    "t3": 0
+   },
+   "port": false,
+   "haul": 20827,
+   "score": 3,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 3,
+    "sol": 0,
+    "dev": 0
+   },
+   "wiki_differs": {
+    "effects.mpop": [
+     1,
+     0
+    ]
+   }
+  },
+  "military_outpost": {
+   "name": "Military Outpost",
+   "rc_types": [
+    "nemesis"
+   ],
+   "tier": 1,
+   "location": "orbital",
+   "economy": "Military",
+   "requires": [],
+   "cp_cost": {
+    "t2": 0,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 1,
+    "t3": 0
+   },
+   "port": false,
+   "haul": 20952,
+   "score": 3,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 2,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   },
+   "wiki_differs": {
+    "effects.mpop": [
+     1,
+     0
+    ]
+   }
+  },
+  "satellite_installation": {
+   "name": "Satellite Installation",
+   "rc_types": [
+    "angelia",
+    "eirene",
+    "hermes"
+   ],
+   "tier": 1,
+   "location": "orbital",
+   "economy": null,
+   "requires": [],
+   "cp_cost": {
+    "t2": 0,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 1,
+    "t3": 0
+   },
+   "port": false,
+   "haul": 7274,
+   "score": 3,
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": 0,
+    "wealth": 1,
+    "tech": 0,
+    "sol": 2,
+    "dev": 1
+   },
+   "wiki_differs": {
+    "effects.sol": [
+     2,
+     1
+    ]
+   }
+  },
+  "comms_installation": {
+   "name": "Communication Installation",
+   "rc_types": [
+    "aletheia",
+    "pistis",
+    "soter"
+   ],
+   "tier": 1,
+   "location": "orbital",
+   "economy": null,
+   "requires": [],
+   "cp_cost": {
+    "t2": 0,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 1,
+    "t3": 0
+   },
+   "port": false,
+   "haul": 6695,
+   "score": 3,
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": 1,
+    "wealth": 0,
+    "tech": 3,
+    "sol": 0,
+    "dev": 0
+   },
+   "wiki_differs": {}
+  },
+  "space_farm": {
+   "name": "Space Farm",
+   "rc_types": [
+    "demeter"
+   ],
+   "tier": 1,
+   "location": "orbital",
+   "economy": null,
+   "requires": [],
+   "cp_cost": {
+    "t2": 0,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 1,
+    "t3": 0
+   },
+   "port": false,
+   "haul": 6709,
+   "score": 2,
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 5,
+    "dev": 1
+   },
+   "wiki_differs": {}
+  },
+  "pirate_base_installation": {
+   "name": "Pirate Base Installation",
+   "rc_types": [
+    "apate",
+    "laverna"
+   ],
+   "tier": 1,
+   "location": "orbital",
+   "economy": null,
+   "requires": [],
+   "cp_cost": {
+    "t2": 0,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 1,
+    "t3": 0
+   },
+   "port": false,
+   "haul": 14088,
+   "score": 3,
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": -4,
+    "wealth": 4,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   },
+   "wiki_differs": {
+    "effects.wealth": [
+     4,
+     3
+    ]
+   }
+  },
+  "mining_industrial_installation": {
+   "name": "Mining/Industrial Installation",
+   "rc_types": [
+    "euthenia",
+    "phorcys"
+   ],
+   "tier": 1,
+   "location": "orbital",
+   "economy": null,
+   "requires": [],
+   "cp_cost": {
+    "t2": 0,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 1,
+    "t3": 0
+   },
+   "port": false,
+   "haul": 11352,
+   "score": 2,
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": 0,
+    "wealth": 4,
+    "tech": 0,
+    "sol": -2,
+    "dev": 0
+   },
+   "wiki_differs": {
+    "effects.wealth": [
+     4,
+     3
+    ]
+   }
+  },
+  "relay_installation": {
+   "name": "Relay Installation",
+   "rc_types": [
+    "enodia",
+    "ichnaea"
+   ],
+   "tier": 1,
+   "location": "orbital",
+   "economy": null,
+   "requires": [],
+   "cp_cost": {
+    "t2": 0,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 1,
+    "t3": 0
+   },
+   "port": false,
+   "haul": 6855,
+   "score": 3,
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": 1,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 0,
+    "dev": 1
+   },
+   "wiki_differs": {}
+  },
+  "military_installation": {
+   "name": "Military Installation",
+   "rc_types": [
+    "alastor",
+    "vacuna"
+   ],
+   "tier": 2,
+   "location": "orbital",
+   "economy": null,
+   "requires": [
+    "military_settlement_small",
+    "military_settlement_medium",
+    "military_settlement_large"
+   ],
+   "cp_cost": {
+    "t2": 1,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 1
+   },
+   "port": false,
+   "haul": 10130,
+   "score": 4,
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": 7,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   },
+   "wiki_differs": {
+    "effects.sec": [
+     7,
+     6
+    ]
+   }
+  },
+  "security_installation": {
+   "name": "Security Installation",
+   "rc_types": [
+    "dicaeosyne",
+    "eunomia",
+    "nomos",
+    "poena"
+   ],
+   "tier": 2,
+   "location": "orbital",
+   "economy": null,
+   "requires": [
+    "relay_installation"
+   ],
+   "cp_cost": {
+    "t2": 1,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 1
+   },
+   "port": false,
+   "haul": 10089,
+   "score": 3,
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": 9,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 3,
+    "dev": 3
+   },
+   "wiki_differs": {
+    "effects.sec": [
+     9,
+     8
+    ],
+    "effects.dev": [
+     3,
+     2
+    ]
+   }
+  },
+  "government_installation": {
+   "name": "Government Installation",
+   "rc_types": [
+    "harmonia"
+   ],
+   "tier": 2,
+   "location": "orbital",
+   "economy": null,
+   "requires": [],
+   "cp_cost": {
+    "t2": 1,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 1
+   },
+   "port": false,
+   "haul": 10035,
+   "score": 3,
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": 2,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 7,
+    "dev": 3
+   },
+   "wiki_differs": {
+    "effects.sol": [
+     7,
+     6
+    ],
+    "effects.dev": [
+     3,
+     2
+    ]
+   }
+  },
+  "medical_installation": {
+   "name": "Medical Installation",
+   "rc_types": [
+    "asclepius",
+    "eupraxia"
+   ],
+   "tier": 2,
+   "location": "orbital",
+   "economy": null,
+   "requires": [],
+   "cp_cost": {
+    "t2": 1,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 1
+   },
+   "port": false,
+   "haul": 10081,
+   "score": 4,
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 3,
+    "sol": 5,
+    "dev": 0
+   },
+   "wiki_differs": {}
+  },
+  "research_installation": {
+   "name": "Research Installation",
+   "rc_types": [
+    "astraeus",
+    "coeus",
+    "dione",
+    "dodona"
+   ],
+   "tier": 2,
+   "location": "orbital",
+   "economy": null,
+   "requires": [
+    "bio_settlement_small",
+    "bio_settlement_medium",
+    "bio_settlement_large"
+   ],
+   "cp_cost": {
+    "t2": 1,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 1
+   },
+   "port": false,
+   "haul": 10010,
+   "score": 4,
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 8,
+    "sol": 0,
+    "dev": 3
+   },
+   "wiki_differs": {
+    "effects.dev": [
+     3,
+     2
+    ]
+   }
+  },
+  "tourist_installation": {
+   "name": "Tourist Installation",
+   "rc_types": [
+    "hedone",
+    "opora",
+    "pasithea"
+   ],
+   "tier": 2,
+   "location": "orbital",
+   "economy": null,
+   "requires": [
+    "tourist_settlement_small",
+    "tourist_settlement_medium",
+    "tourist_settlement_large"
+   ],
+   "cp_cost": {
+    "t2": 1,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 1
+   },
+   "port": false,
+   "haul": 10100,
+   "score": 3,
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": -3,
+    "wealth": 6,
+    "tech": 0,
+    "sol": 0,
+    "dev": 3
+   },
+   "wiki_differs": {
+    "effects.dev": [
+     3,
+     2
+    ]
+   }
+  },
+  "space_bar_installation": {
+   "name": "Space Bar Installation",
+   "rc_types": [
+    "bacchus",
+    "dionysus"
+   ],
+   "tier": 2,
+   "location": "orbital",
+   "economy": null,
+   "requires": [],
+   "cp_cost": {
+    "t2": 1,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 1
+   },
+   "port": false,
+   "haul": 10092,
+   "score": 4,
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": -2,
+    "wealth": 3,
+    "tech": 0,
+    "sol": 3,
+    "dev": 0
+   },
+   "wiki_differs": {
+    "effects.wealth": [
+     3,
+     2
+    ]
+   }
+  },
+  "civilian_surface_outpost": {
+   "name": "Civilian Surface Outpost",
+   "rc_types": [
+    "atropos",
+    "clotho",
+    "decima",
+    "hestia",
+    "lachesis",
+    "nona"
+   ],
+   "tier": 1,
+   "location": "surface",
+   "economy": "Colony",
+   "requires": [],
+   "cp_cost": {
+    "t2": 0,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 1,
+    "t3": 0
+   },
+   "port": false,
+   "haul": 35950,
+   "score": 4,
+   "effects": {
+    "pop": 2,
+    "mpop": 1,
+    "sec": -2,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 3,
+    "dev": 0
+   },
+   "wiki_differs": {
+    "effects.mpop": [
+     1,
+     0
+    ]
+   }
+  },
+  "industrial_surface_outpost": {
+   "name": "Industrial Surface Outpost",
+   "rc_types": [
+    "bia",
+    "hephaestus",
+    "mefitis",
+    "opis",
+    "ponos",
+    "tethys"
+   ],
+   "tier": 1,
+   "location": "surface",
+   "economy": "Industrial",
+   "requires": [],
+   "cp_cost": {
+    "t2": 0,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 1,
+    "t3": 0
+   },
+   "port": false,
+   "haul": 36443,
+   "score": 4,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -1,
+    "wealth": 3,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   },
+   "wiki_differs": {
+    "effects.mpop": [
+     1,
+     0
+    ],
+    "effects.wealth": [
+     3,
+     2
+    ]
+   }
+  },
+  "scientific_surface_outpost": {
+   "name": "Scientific Surface Outpost",
+   "rc_types": [
+    "ananke",
+    "antevorta",
+    "fauna",
+    "necessitas",
+    "porrima",
+    "providentia"
+   ],
+   "tier": 1,
+   "location": "surface",
+   "economy": "Hightech",
+   "requires": [],
+   "cp_cost": {
+    "t2": 0,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 1,
+    "t3": 0
+   },
+   "port": false,
+   "haul": 36902,
+   "score": 4,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -1,
+    "wealth": 0,
+    "tech": 5,
+    "sol": 0,
+    "dev": 1
+   },
+   "wiki_differs": {
+    "effects.mpop": [
+     1,
+     0
+    ]
+   }
+  },
+  "large_planetary_port": {
+   "name": "Large Planetary Port",
+   "rc_types": [
+    "aphrodite",
+    "hera",
+    "poseidon",
+    "zeus"
+   ],
+   "tier": 3,
+   "location": "surface",
+   "economy": "Colony",
+   "requires": [],
+   "cp_cost": {
+    "t2": 0,
+    "t3": 6
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 0
+   },
+   "port": true,
+   "haul": 215597,
+   "score": 15,
+   "effects": {
+    "pop": 10,
+    "mpop": 10,
+    "sec": -3,
+    "wealth": 5,
+    "tech": 5,
+    "sol": 7,
+    "dev": 10
+   },
+   "wiki_differs": {
+    "effects.sol": [
+     7,
+     6
+    ]
+   }
+  },
+  "agriculture_settlement_small": {
+   "name": "Agriculture Settlement: Small",
+   "rc_types": [
+    "consus"
+   ],
+   "tier": 1,
+   "location": "surface",
+   "economy": "Agriculture",
+   "requires": [],
+   "cp_cost": {
+    "t2": 0,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 1,
+    "t3": 0
+   },
+   "port": false,
+   "haul": 2834,
+   "score": 1,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 3,
+    "dev": 0
+   },
+   "wiki_differs": {
+    "effects.pop": [
+     1,
+     0
+    ],
+    "effects.mpop": [
+     1,
+     0
+    ]
+   }
+  },
+  "agriculture_settlement_medium": {
+   "name": "Agriculture Settlement: Medium",
+   "rc_types": [
+    "annona",
+    "picumnus"
+   ],
+   "tier": 1,
+   "location": "surface",
+   "economy": "Agriculture",
+   "requires": [],
+   "cp_cost": {
+    "t2": 0,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 1,
+    "t3": 0
+   },
+   "port": false,
+   "haul": 5697,
+   "score": 2,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 7,
+    "dev": 0
+   },
+   "wiki_differs": {
+    "effects.pop": [
+     1,
+     0
+    ],
+    "effects.mpop": [
+     1,
+     0
+    ],
+    "effects.sol": [
+     7,
+     6
+    ]
+   }
+  },
+  "agriculture_settlement_large": {
+   "name": "Agriculture Settlement: Large",
+   "rc_types": [
+    "ceres",
+    "fornax"
+   ],
+   "tier": 2,
+   "location": "surface",
+   "economy": "Agriculture",
+   "requires": [],
+   "cp_cost": {
+    "t2": 1,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 2
+   },
+   "port": false,
+   "haul": 8517,
+   "score": 4,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 10,
+    "dev": 0
+   },
+   "wiki_differs": {
+    "effects.pop": [
+     1,
+     0
+    ],
+    "effects.mpop": [
+     1,
+     0
+    ]
+   }
+  },
+  "mining_settlement_small": {
+   "name": "Mining Settlement: Small",
+   "rc_types": [
+    "ourea"
+   ],
+   "tier": 1,
+   "location": "surface",
+   "economy": "Extraction",
+   "requires": [],
+   "cp_cost": {
+    "t2": 0,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 1,
+    "t3": 0
+   },
+   "port": false,
+   "haul": 2837,
+   "score": 1,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 3,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   },
+   "wiki_differs": {
+    "effects.pop": [
+     1,
+     0
+    ],
+    "effects.mpop": [
+     1,
+     0
+    ],
+    "effects.wealth": [
+     3,
+     2
+    ]
+   }
+  },
+  "mining_settlement_medium": {
+   "name": "Mining Settlement: Medium",
+   "rc_types": [
+    "mantus",
+    "orcus"
+   ],
+   "tier": 1,
+   "location": "surface",
+   "economy": "Extraction",
+   "requires": [],
+   "cp_cost": {
+    "t2": 0,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 1,
+    "t3": 0
+   },
+   "port": false,
+   "haul": 5638,
+   "score": 2,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 5,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   },
+   "wiki_differs": {
+    "effects.pop": [
+     1,
+     0
+    ],
+    "effects.mpop": [
+     1,
+     0
+    ]
+   }
+  },
+  "mining_settlement_large": {
+   "name": "Mining Settlement: Large",
+   "rc_types": [
+    "aerecura",
+    "erebus"
+   ],
+   "tier": 2,
+   "location": "surface",
+   "economy": "Extraction",
+   "requires": [],
+   "cp_cost": {
+    "t2": 1,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 2
+   },
+   "port": false,
+   "haul": 8760,
+   "score": 4,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 8,
+    "tech": 2,
+    "sol": -2,
+    "dev": 0
+   },
+   "wiki_differs": {
+    "effects.pop": [
+     1,
+     0
+    ],
+    "effects.mpop": [
+     1,
+     0
+    ],
+    "effects.tech": [
+     2,
+     1
+    ],
+    "effects.wealth": [
+     8,
+     7
+    ]
+   }
+  },
+  "industrial_settlement_small": {
+   "name": "Industrial Settlement: Small",
+   "rc_types": [
+    "fontus"
+   ],
+   "tier": 1,
+   "location": "surface",
+   "economy": "Industrial",
+   "requires": [],
+   "cp_cost": {
+    "t2": 0,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 1,
+    "t3": 0
+   },
+   "port": false,
+   "haul": 2828,
+   "score": 1,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 0,
+    "dev": 3
+   },
+   "wiki_differs": {
+    "effects.pop": [
+     1,
+     0
+    ],
+    "effects.mpop": [
+     1,
+     0
+    ],
+    "effects.dev": [
+     3,
+     2
+    ]
+   }
+  },
+  "industrial_settlement_medium": {
+   "name": "Industrial Settlement: Medium",
+   "rc_types": [
+    "meteope",
+    "minthe",
+    "palici"
+   ],
+   "tier": 1,
+   "location": "surface",
+   "economy": "Industrial",
+   "requires": [],
+   "cp_cost": {
+    "t2": 0,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 1,
+    "t3": 0
+   },
+   "port": false,
+   "haul": 5656,
+   "score": 2,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 0,
+    "dev": 6
+   },
+   "wiki_differs": {
+    "effects.pop": [
+     1,
+     0
+    ],
+    "effects.mpop": [
+     1,
+     0
+    ],
+    "effects.dev": [
+     6,
+     5
+    ]
+   }
+  },
+  "industrial_settlement_large": {
+   "name": "Industrial Settlement: Large",
+   "rc_types": [
+    "gaea"
+   ],
+   "tier": 2,
+   "location": "surface",
+   "economy": "Industrial",
+   "requires": [],
+   "cp_cost": {
+    "t2": 1,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 2
+   },
+   "port": false,
+   "haul": 8481,
+   "score": 4,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 3,
+    "tech": 0,
+    "sol": 0,
+    "dev": 9
+   },
+   "wiki_differs": {
+    "effects.pop": [
+     1,
+     0
+    ],
+    "effects.mpop": [
+     1,
+     0
+    ],
+    "effects.wealth": [
+     3,
+     2
+    ],
+    "effects.dev": [
+     9,
+     8
+    ]
+   }
+  },
+  "military_settlement_small": {
+   "name": "Military Settlement: Small",
+   "rc_types": [
+    "ioke"
+   ],
+   "tier": 1,
+   "location": "surface",
+   "economy": "Military",
+   "requires": [],
+   "cp_cost": {
+    "t2": 0,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 1,
+    "t3": 0
+   },
+   "port": false,
+   "haul": 3553,
+   "score": 1,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 2,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   },
+   "wiki_differs": {
+    "effects.pop": [
+     1,
+     0
+    ],
+    "effects.mpop": [
+     1,
+     0
+    ]
+   }
+  },
+  "military_settlement_medium": {
+   "name": "Military Settlement: Medium",
+   "rc_types": [
+    "bellona",
+    "enyo",
+    "polemos"
+   ],
+   "tier": 1,
+   "location": "surface",
+   "economy": "Military",
+   "requires": [],
+   "cp_cost": {
+    "t2": 0,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 1,
+    "t3": 0
+   },
+   "port": false,
+   "haul": 5629,
+   "score": 2,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 4,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   },
+   "wiki_differs": {
+    "effects.pop": [
+     1,
+     0
+    ],
+    "effects.mpop": [
+     1,
+     0
+    ]
+   }
+  },
+  "military_settlement_large": {
+   "name": "Military Settlement: Large",
+   "rc_types": [
+    "minerva"
+   ],
+   "tier": 2,
+   "location": "surface",
+   "economy": "Military",
+   "requires": [],
+   "cp_cost": {
+    "t2": 1,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 2
+   },
+   "port": false,
+   "haul": 8554,
+   "score": 4,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 7,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 0,
+    "dev": 3
+   },
+   "wiki_differs": {
+    "effects.pop": [
+     1,
+     0
+    ],
+    "effects.mpop": [
+     1,
+     0
+    ],
+    "effects.sec": [
+     7,
+     6
+    ],
+    "effects.dev": [
+     3,
+     2
+    ]
+   }
+  },
+  "bio_settlement_small": {
+   "name": "Bio Settlement: Small",
+   "rc_types": [
+    "pheobe"
+   ],
+   "tier": 2,
+   "location": "surface",
+   "economy": "Hightech",
+   "requires": [],
+   "cp_cost": {
+    "t2": 1,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 1
+   },
+   "port": false,
+   "haul": 2897,
+   "score": 2,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 3,
+    "sol": 0,
+    "dev": 1
+   },
+   "wiki_differs": {
+    "effects.pop": [
+     1,
+     0
+    ],
+    "effects.mpop": [
+     1,
+     0
+    ]
+   }
+  },
+  "bio_settlement_medium": {
+   "name": "Bio Settlement: Medium",
+   "rc_types": [
+    "asteria",
+    "caerus"
+   ],
+   "tier": 2,
+   "location": "surface",
+   "economy": "Hightech",
+   "requires": [],
+   "cp_cost": {
+    "t2": 1,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 1
+   },
+   "port": false,
+   "haul": 5681,
+   "score": 2,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 7,
+    "sol": 0,
+    "dev": 1
+   },
+   "wiki_differs": {
+    "effects.pop": [
+     1,
+     0
+    ],
+    "effects.mpop": [
+     1,
+     0
+    ],
+    "effects.tech": [
+     7,
+     6
+    ]
+   }
+  },
+  "bio_settlement_large": {
+   "name": "Bio Settlement: Large",
+   "rc_types": [
+    "chronos"
+   ],
+   "tier": 2,
+   "location": "surface",
+   "economy": "Hightech",
+   "requires": [],
+   "cp_cost": {
+    "t2": 1,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 2
+   },
+   "port": false,
+   "haul": 8537,
+   "score": 4,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 10,
+    "sol": 0,
+    "dev": 3
+   },
+   "wiki_differs": {
+    "effects.pop": [
+     1,
+     0
+    ],
+    "effects.mpop": [
+     1,
+     0
+    ],
+    "effects.dev": [
+     3,
+     2
+    ]
+   }
+  },
+  "tourist_settlement_small": {
+   "name": "Tourist Settlement: Small",
+   "rc_types": [
+    "aergia"
+   ],
+   "tier": 2,
+   "location": "surface",
+   "economy": "Tourism",
+   "requires": [],
+   "cp_cost": {
+    "t2": 1,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 1
+   },
+   "port": false,
+   "haul": 2895,
+   "score": 1,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -1,
+    "wealth": 1,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   },
+   "wiki_differs": {
+    "effects.pop": [
+     1,
+     0
+    ],
+    "effects.mpop": [
+     1,
+     0
+    ]
+   }
+  },
+  "tourist_settlement_medium": {
+   "name": "Tourist Settlement: Medium",
+   "rc_types": [
+    "comus",
+    "gelos",
+    "comos"
+   ],
+   "tier": 2,
+   "location": "surface",
+   "economy": "Tourism",
+   "requires": [],
+   "cp_cost": {
+    "t2": 1,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 1
+   },
+   "port": false,
+   "haul": 5671,
+   "score": 2,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -1,
+    "wealth": 3,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   },
+   "wiki_differs": {
+    "effects.pop": [
+     1,
+     0
+    ],
+    "effects.mpop": [
+     1,
+     0
+    ],
+    "effects.wealth": [
+     3,
+     2
+    ]
+   }
+  },
+  "tourist_settlement_large": {
+   "name": "Tourist Settlement: Large",
+   "rc_types": [
+    "fufluns"
+   ],
+   "tier": 2,
+   "location": "surface",
+   "economy": "Tourism",
+   "requires": [],
+   "cp_cost": {
+    "t2": 1,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 2
+   },
+   "port": false,
+   "haul": 8568,
+   "score": 4,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -2,
+    "wealth": 5,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   },
+   "wiki_differs": {
+    "effects.pop": [
+     1,
+     0
+    ],
+    "effects.mpop": [
+     1,
+     0
+    ],
+    "effects.sec": [
+     -2,
+     -1
+    ]
+   }
+  },
+  "extraction_hub": {
+   "name": "Extraction Hub",
+   "rc_types": [
+    "tartarus"
+   ],
+   "tier": 2,
+   "location": "surface",
+   "economy": null,
+   "requires": [
+    "mining_settlement_small",
+    "mining_settlement_medium",
+    "mining_settlement_large"
+   ],
+   "cp_cost": {
+    "t2": 1,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 1
+   },
+   "port": false,
+   "haul": 9996,
+   "score": 5,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 10,
+    "tech": 0,
+    "sol": -4,
+    "dev": 3
+   },
+   "wiki_differs": {
+    "effects.dev": [
+     3,
+     2
+    ]
+   }
+  },
+  "civilian_hub": {
+   "name": "Civilian Hub",
+   "rc_types": [
+    "aegle"
+   ],
+   "tier": 2,
+   "location": "surface",
+   "economy": null,
+   "requires": [
+    "agriculture_settlement_small",
+    "agriculture_settlement_medium",
+    "agriculture_settlement_large"
+   ],
+   "cp_cost": {
+    "t2": 1,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 1
+   },
+   "port": false,
+   "haul": 9890,
+   "score": 5,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -3,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 3,
+    "dev": 3
+   },
+   "wiki_differs": {
+    "effects.dev": [
+     3,
+     2
+    ]
+   }
+  },
+  "exploration_hub": {
+   "name": "Exploration Hub",
+   "rc_types": [
+    "tellus_e"
+   ],
+   "tier": 2,
+   "location": "surface",
+   "economy": null,
+   "requires": [
+    "comms_installation"
+   ],
+   "cp_cost": {
+    "t2": 1,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 1
+   },
+   "port": false,
+   "haul": 9960,
+   "score": 5,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -1,
+    "wealth": 0,
+    "tech": 7,
+    "sol": 0,
+    "dev": 3
+   },
+   "wiki_differs": {
+    "effects.tech": [
+     7,
+     6
+    ],
+    "effects.dev": [
+     3,
+     2
+    ]
+   }
+  },
+  "outpost_hub": {
+   "name": "Outpost Hub",
+   "rc_types": [
+    "io"
+   ],
+   "tier": 2,
+   "location": "surface",
+   "economy": null,
+   "requires": [
+    "space_farm"
+   ],
+   "cp_cost": {
+    "t2": 1,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 1
+   },
+   "port": false,
+   "haul": 9945,
+   "score": 5,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -2,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 3,
+    "dev": 3
+   },
+   "wiki_differs": {
+    "effects.dev": [
+     3,
+     2
+    ]
+   }
+  },
+  "scientific_hub": {
+   "name": "Scientific Hub",
+   "rc_types": [
+    "athena",
+    "caelus"
+   ],
+   "tier": 2,
+   "location": "surface",
+   "economy": null,
+   "requires": [],
+   "cp_cost": {
+    "t2": 1,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 1
+   },
+   "port": false,
+   "haul": 9958,
+   "score": 5,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 10,
+    "sol": 0,
+    "dev": 0
+   },
+   "wiki_differs": {}
+  },
+  "military_hub": {
+   "name": "Military Hub",
+   "rc_types": [
+    "alala",
+    "ares"
+   ],
+   "tier": 2,
+   "location": "surface",
+   "economy": null,
+   "requires": [
+    "military_installation"
+   ],
+   "cp_cost": {
+    "t2": 1,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 1
+   },
+   "port": false,
+   "haul": 10089,
+   "score": 5,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 10,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   },
+   "wiki_differs": {}
+  },
+  "refinery_hub": {
+   "name": "Refinery Hub",
+   "rc_types": [
+    "silenus"
+   ],
+   "tier": 2,
+   "location": "surface",
+   "economy": null,
+   "requires": [],
+   "cp_cost": {
+    "t2": 1,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 1
+   },
+   "port": false,
+   "haul": 9957,
+   "score": 5,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -1,
+    "wealth": 5,
+    "tech": 3,
+    "sol": -2,
+    "dev": 7
+   },
+   "wiki_differs": {}
+  },
+  "high_tech_hub": {
+   "name": "High Tech Hub",
+   "rc_types": [
+    "janus"
+   ],
+   "tier": 2,
+   "location": "surface",
+   "economy": null,
+   "requires": [],
+   "cp_cost": {
+    "t2": 1,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 1
+   },
+   "port": false,
+   "haul": 9881,
+   "score": 5,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -2,
+    "wealth": 3,
+    "tech": 10,
+    "sol": 0,
+    "dev": 0
+   },
+   "wiki_differs": {
+    "effects.wealth": [
+     3,
+     -2
+    ]
+   }
+  },
+  "industrial_hub": {
+   "name": "Industrial Hub",
+   "rc_types": [
+    "eunostus",
+    "molae",
+    "tellus_i",
+    "tellus"
+   ],
+   "tier": 2,
+   "location": "surface",
+   "economy": null,
+   "requires": [
+    "mining_industrial_installation"
+   ],
+   "cp_cost": {
+    "t2": 1,
+    "t3": 0
+   },
+   "cp_reward": {
+    "t2": 0,
+    "t3": 1
+   },
+   "port": false,
+   "haul": 9950,
+   "score": 5,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 5,
+    "tech": 3,
+    "sol": -4,
+    "dev": 3
+   },
+   "wiki_differs": {
+    "effects.dev": [
+     3,
+     2
+    ]
+   }
+  }
+ }
+}
