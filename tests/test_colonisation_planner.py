@@ -122,6 +122,21 @@ def test_full_build_dr_m_shape():
     _check_full(_drm("full", group=True))
 
 
+def test_full_build_places_cluster_hub():
+    p = _drm("full")
+    _check_full(p)
+    assert any(s["facility"].endswith("_hub") for s in p["steps"])
+
+
+def test_full_build_hightech_fills_surface():
+    # one HighTech body, no orbital slot left after the Coriolis: no T2 for bio settlements
+    sys = _system("HT", [("1", "Rocky body", True, 1, ["HighTech"], False, 1, 6, 6)])
+    p = plan(sys, slot_table(sys, None), "HT 1", False, "full")
+    assert p["unused"]["surface"] == 0
+    assert any(s["facility"] == "scientific_surface_outpost" for s in p["steps"])
+    assert all(s["t2"] >= 0 and s["t3"] >= 0 for s in p["steps"])
+
+
 def test_full_build_lc_t_shape():
     _check_full(plan(LCT_SYS, slot_table(LCT_SYS, None), LCT_PRIMARY, False, "full"))
 

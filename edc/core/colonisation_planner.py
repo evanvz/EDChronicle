@@ -149,8 +149,16 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
                 else:
                     key, i = _T1_ORBITAL[i % 3], i + 1
                 place(key, n)
+        # Controller ruling (fix round 1): hold back 1 T2 and one slot per cluster that can take its hub
+        hubs = []
+        for c in clusters:
+            h = fac[_FAMILIES[themes[c]][2]]
+            n = next((n for n in order if cluster[n] == c and free.get((n, h["location"]), 0) > 0), None)
+            if n and (not h["requires"] or built & set(h["requires"])):
+                hubs.append((n, h["location"]))
+                free[(n, h["location"])] -= 1
         for n in order:  # Pass 3: large settlements while T2 lasts
-            while place(fam[n][1], n):
+            while bal[0] > len(hubs) and place(fam[n][1], n):
                 pass
         while True:  # Pass 4: Tier 3 ports, orbital first, then surface when no orbital slot is left
             n = room("orbital")
@@ -158,6 +166,8 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
             n = n or room("surface")
             if not (n and place(key, n)):
                 break
+        for key in hubs:
+            free[key] += 1
         for c in clusters:  # Pass 5: one cluster hub, when its requirement is met
             next((n for n in order if cluster[n] == c and place(_FAMILIES[themes[c]][2], n)), None)
         while stats["sec"] < 0:  # Pass 6: security
@@ -171,14 +181,17 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
                 break
         if stats["sec"] < 0:
             warnings.append("security below 0 after the plan")
+        # Pass 7 fallback (controller ruling): a zero-cost surface facility of the theme's economy, else civilian
+        cheap = {c: next((k for k, f in fac.items() if f["location"] == "surface" and not f["port"]
+                          and (f["economy"] or "").lower() == themes[c].lower() and not any(f["cp_cost"].values())),
+                         "civilian_surface_outpost") for c in clusters}
         for n in order:  # Pass 7 (controller ruling): fill every slot left
             while free.get((n, "orbital"), 0) and place(_T1_ORBITAL[i % 3], n):
                 i += 1
-            while place(fam[n][0], n):
+            while place(fam[n][0], n) or place(cheap[cluster[n]], n):
                 pass
 
-    # Primary tier < 3 read as the brief's "Tier 1 port" (the primary is never a Tier 1 facility)
-    if pf["tier"] < 3 and stats["tech"] < 35:
+    if pf["tier"] == 1 and stats["tech"] < 35:
         warnings.append(f"tech level {stats['tech']} below 35: Tier 1 port shipyard/outfitting need 35 "
                         "(unverified that this sum is the game's tech level)")
     unused = {loc: sum(v for (_, l), v in free.items() if l == loc) for loc in _LOCS}
