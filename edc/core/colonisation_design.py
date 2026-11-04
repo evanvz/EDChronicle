@@ -66,7 +66,7 @@ def plan_system(system: dict, primary_body: str, group: bool) -> dict:
         warnings.append("Primary body distance unknown: far-out check skipped")
     main = set(p.get("economies") or []) - {"Terraforming"}
     if _clash(main):
-        warnings.append(f"Main port natural economies {_econ_text(main)} clash (Dubior): expect a thinner market")
+        warnings.append(f"Main port natural economies {_econ_text(main)} clash (Frontier): expect a thinner market")
 
     bal = [0, 0]  # construction points T2, T3 after each step (wiki facility tables, rev. 2026-10-26)
 
@@ -80,7 +80,7 @@ def plan_system(system: dict, primary_body: str, group: bool) -> dict:
             warnings.append(f"{title} needs {-bal[0]} more T2 point(s): build a Tier 1 facility first (e.g. Satellite, Space Farm)")
             bal[0] = 0
         if adds and adds not in main and _clash(main | {adds}):
-            warnings.append(f"{title} adds {_NAMES.get(adds, adds)} next to the main port's {_econ_text(main)} (Dubior)")
+            warnings.append(f"{title} adds {_NAMES.get(adds, adds)} next to the main port's {_econ_text(main)} (Frontier)")
 
     # 1. Primary port (101): solo Coriolis; group T3, Ocellus when the body has rings, else Orbis
     # The primary is free; a Coriolis primary still grants +1 T3 (gaborauth planner, in-game checked 2026-07-30)
