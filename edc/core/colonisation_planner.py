@@ -155,7 +155,7 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
         held = [k for k, v in free.items() if k[1] == "orbital" and v > 0]
         for k in held:
             free[k] -= 1
-        # Controller ruling (fix round 1): hold back 1 T2 and one slot per cluster that can take its hub
+        # Hold back 1 T2 and one slot per cluster that can take its hub
         hubs = []
         for c in clusters:
             h = fac[_FAMILIES[themes[c]][2]]
@@ -168,7 +168,7 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
                 pass
         for k in hubs:
             free[k] += 1
-        # Pass 5 before Pass 4 (controller ruling, fix round 2): hub T3 rewards help pay for ports
+        # Pass 5 before Pass 4: hub T3 rewards help pay for ports
         for c in clusters:  # Pass 5: one cluster hub, when its requirement is met
             next((n for n in order if cluster[n] == c and place(_FAMILIES[themes[c]][2], n)), None)
         for k in held:
@@ -188,15 +188,16 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
             n = room("surface")
             if not (n and place("military_settlement_medium", n)):
                 break
-        # Pass 7 fallback (controller ruling): a zero-cost surface facility of the theme's economy, else civilian
+        # Pass 7 fallback: a zero-cost surface facility of the theme's economy, else civilian
         cheap = {c: next((k for k, f in fac.items() if f["location"] == "surface" and not f["port"]
                           and (f["economy"] or "").lower() == themes[c].lower() and not any(f["cp_cost"].values())),
                          "civilian_surface_outpost") for c in clusters}
-        for n in order:  # Pass 7 (controller ruling): fill every slot left
+        for n in order:  # Pass 7: fill every slot left
             while free.get((n, "orbital"), 0) and place(_T1_ORBITAL[i % 3], n):
                 i += 1
-            # fix round 3: a military settlement while sec is below 0, so the final fill can't undo Pass 6
-            while (stats["sec"] < 0 and place("military_settlement_medium", n))                     or place(fam[n][0], n) or place(cheap[cluster[n]], n):
+            # a military settlement while sec is below 0, so the final fill can't undo Pass 6
+            while ((stats["sec"] < 0 and place("military_settlement_medium", n))
+                   or place(fam[n][0], n) or place(cheap[cluster[n]], n)):
                 pass
         if stats["sec"] < 0:
             warnings.append("security below 0 after the plan")
