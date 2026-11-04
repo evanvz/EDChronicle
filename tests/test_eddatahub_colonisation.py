@@ -85,3 +85,22 @@ def test_put_colonisation_mark_sends_json_and_reports_refusal(monkeypatch):
     status[0] = 404                                         # hub not updated yet
     assert c.put_colonisation_mark("http://hub", 7, None, None, None, None) is False
     assert c.put_colonisation_mark("", 7, "bad", None, None, None) is False
+
+
+def test_put_slots_sends_json(monkeypatch):
+    seen = []
+
+    def fake(url, json=None, headers=None, timeout=None):
+        seen.append((url, json, headers, timeout))
+        return Resp({"ok": True}, 202)
+    monkeypatch.setattr(c.requests, "put", fake)
+    assert c.put_colonisation_slots("http://hub/", 7, 3, 1, None, "Evan") is True
+    assert seen == [("http://hub/api/colonisation-slots",
+                     {"id64": 7, "body_id": 3, "orbital": 1, "surface": None, "cmdr": "Evan"},
+                     {"User-Agent": c.USER_AGENT}, c._TIMEOUT)]
+    assert c.put_colonisation_slots("", 7, 3, 1, 1, None) is False
+
+
+def test_put_slots_false_on_error(monkeypatch):
+    monkeypatch.setattr(c.requests, "put", lambda *a, **k: Resp({}, 400))
+    assert c.put_colonisation_slots("http://hub", 7, 3, -5, 1, None) is False

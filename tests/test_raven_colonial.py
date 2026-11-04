@@ -59,3 +59,36 @@ def test_get_project_for_station_returns_json_on_success():
     with patch("edc.core.raven_colonial.requests.get", return_value=resp):
         result = raven_colonial.get_project_for_station(123, 456)
     assert result == {"buildId": "abc"}
+
+
+def _slots(payload, status=200):
+    resp = MagicMock(status_code=status)
+    resp.json.return_value = payload
+    resp.raise_for_status.return_value = None
+    with patch("edc.core.raven_colonial.requests.get", return_value=resp) as mocked:
+        return raven_colonial.get_system_slots("Sol A"), mocked
+
+
+def test_raven_slots_by_body_name():
+    got, mocked = _slots({"bodies": [{"num": 3, "name": "X 3"}], "slots": {"3": [1, 2]}})
+    assert got == {"X 3": (1, 2)}
+    args, kw = mocked.call_args
+    assert args[0] == f"{raven_colonial._BASE_URL}/api/v2/system/Sol%20A"
+    assert kw["timeout"] == raven_colonial._TIMEOUT and "User-Agent" in kw["headers"]
+
+
+def test_raven_slots_minus_one_is_none():
+    got, _ = _slots({"bodies": [{"num": 3, "name": "X 3"}], "slots": {"3": [3, -1]}})
+    assert got == {"X 3": (3, None)}
+
+
+def test_raven_slots_skip_unmatched_names():
+    got, _ = _slots({"bodies": [{"num": 3, "name": "X 3"}], "slots": {"3": [1, 2], "9": [1, 1]}})
+    assert got == {"X 3": (1, 2)}
+
+
+def test_raven_slots_404_none():
+    got, _ = _slots({}, 404)
+    assert got is None
+    with patch("edc.core.raven_colonial.requests.get", side_effect=Exception("boom")):
+        assert raven_colonial.get_system_slots("X") is None

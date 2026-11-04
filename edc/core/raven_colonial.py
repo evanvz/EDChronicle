@@ -21,9 +21,13 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
+
+from urllib.parse import quote
 
 import requests
+
+from edc.version import USER_AGENT
 
 log = logging.getLogger(__name__)
 
@@ -72,4 +76,22 @@ def get_project_for_station(system_address: int, market_id: int) -> Optional[Dic
             "Raven Colonial station lookup failed for system_address=%r market_id=%r: %s",
             system_address, market_id, exc,
         )
+        return None
+
+
+def get_system_slots(system_name: str) -> Optional[Dict[str, Tuple[Optional[int], Optional[int]]]]:
+    """Player-entered free (orbital, surface) slot counts per body name; -1 means none/not applicable
+    (None). None if the system is unknown or the request failed. Synchronous: call from a worker."""
+    try:
+        resp = requests.get(f"{_BASE_URL}/api/v2/system/{quote(system_name)}",
+                            headers={"User-Agent": USER_AGENT}, timeout=_TIMEOUT)
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        data = resp.json()
+        names = {b["num"]: b["name"] for b in data["bodies"]}
+        return {names[int(num)]: tuple(None if n == -1 else n for n in pair)
+                for num, pair in data["slots"].items() if int(num) in names}
+    except Exception as exc:
+        log.warning("Raven Colonial slots lookup failed for %r: %s", system_name, exc)
         return None

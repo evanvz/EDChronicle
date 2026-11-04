@@ -209,6 +209,22 @@ def put_colonisation_mark(base_url: str, id64: int, verdict: Optional[str], prim
         return False
 
 
+def put_colonisation_slots(base_url: str, id64: int, body_id: int, orbital: Optional[int], surface: Optional[int],
+                           cmdr: Optional[str]) -> bool:
+    """Store the squad's free orbital/surface slot counts of one body. False when the hub refuses or isn't reachable."""
+    if not base_url:
+        return False
+    try:
+        resp = requests.put(f"{base_url.rstrip('/')}/api/colonisation-slots",
+                            json={"id64": id64, "body_id": body_id, "orbital": orbital, "surface": surface, "cmdr": cmdr},
+                            headers={"User-Agent": USER_AGENT}, timeout=_TIMEOUT)
+        resp.raise_for_status()
+        return True
+    except Exception as exc:
+        log.info("EDDataHub colonisation slots not stored (%s)", exc)
+        return False
+
+
 def fetch_markets(base_url: str, since: str, on_message, cancelled=lambda: False) -> Optional[int]:
     """The newest market (EDDN commodity/3 message body) of every station the hub
     received since `since` (it reads at most 7 days back), each passed to
