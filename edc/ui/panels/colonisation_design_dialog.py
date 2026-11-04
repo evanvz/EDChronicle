@@ -11,7 +11,9 @@ from PyQt6.QtWidgets import (
 )
 
 from edc.core.colonisation_design import plan_system
-from edc.core.eddatahub_client import fetch_colonisation_system, put_colonisation_mark
+from edc.core.colonisation_planner import TYPE_NAMES, TYPES, plan as plan_by_type, slot_table
+from edc.core.eddatahub_client import fetch_colonisation_system, put_colonisation_mark, put_colonisation_slots
+from edc.core.raven_colonial import get_system_slots
 from edc.ui.panels.colonisation_finder_dialog import _BTN_STYLE, _INPUT_STYLE, _TABLE_STYLE, _Worker, mark_text
 
 _HINT = "Find the flag in the system map's Architect View"
@@ -26,6 +28,8 @@ _AMBER = "color:#FFB347; font-weight:bold; font-size:13px;"
 # hub service score spread, 2026-11-03: median 16, top quarter from 37
 _SCORE_BANDS = ((16, "bottom half"), (37, "middle"))
 _LABEL = "color:#c8c8c8; font-size:12px;"
+_SOURCES = {"entered": "entered", "raven": "Raven", "est": "est.", None: "?"}
+_NO_SLOTS = "No slot counts yet: enter them to plan by type"
 
 
 class ColonisationDesignDialog(QDialog):
@@ -33,10 +37,12 @@ class ColonisationDesignDialog(QDialog):
         super().__init__(parent)
         self.setStyleSheet("QDialog { background:#080f18; color:#c8c8c8; }")
         self.setWindowTitle(f"Colonisation — Design: {name}")
-        self.resize(900, 560)
+        self.resize(900, 820)
         self.hub_url, self.id64 = hub_url, id64
         self._threads: list = []  # (QThread, _Worker) pairs, kept referenced until finished
         self._system: Optional[dict] = None
+        self._raven: Optional[dict] = None
+        self._loaded_slots: dict = {}  # body_id: (orbital, surface) as last filled, so Save sends only changed rows
 
         root = QVBoxLayout(self)
         row = QHBoxLayout()
@@ -56,8 +62,15 @@ class ColonisationDesignDialog(QDialog):
             r.toggled.connect(self._replan)
         row.addWidget(lbl)
         row.addWidget(self._combo, 1)
+        self._kind = QComboBox()
+        self._kind.setStyleSheet(_INPUT_STYLE)
+        self._kind.addItem("Template", None)
+        for t in TYPES:
+            self._kind.addItem(TYPE_NAMES[t], t)
+        self._kind.currentIndexChanged.connect(self._replan)
         row.addWidget(self._solo)
         row.addWidget(self._group)
+        row.addWidget(self._kind)
         root.addLayout(row)
 
         self._hint = QLabel(_HINT)
@@ -81,10 +94,36 @@ class ColonisationDesignDialog(QDialog):
         self._table.horizontalHeader().setStretchLastSection(True)
         root.addWidget(self._table, 1)
 
+        self._outcome = QLabel("")
+        self._outcome.setWordWrap(True)
+        self._outcome.setStyleSheet(_LABEL)
+        root.addWidget(self._outcome)
+
         self._warnings = QLabel("")
         self._warnings.setWordWrap(True)
         self._warnings.setStyleSheet("color:#e0b040; font-size:12px;")
         root.addWidget(self._warnings)
+
+        # Free slot counts per body: entered on the hub > Raven Colonial > hub ground-slot estimate; Save writes the hub
+        self._slots = QTableWidget(0, 4)
+        self._slots.setHorizontalHeaderLabels(["Body", "Orbital", "Surface", "Source"])
+        self._slots.verticalHeader().setVisible(False)
+        self._slots.setAlternatingRowColors(True)
+        self._slots.setStyleSheet(_TABLE_STYLE)
+        self._slots.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        self._slots.horizontalHeader().setStretchLastSection(True)
+        self._slots.itemChanged.connect(self._replan)
+        root.addWidget(self._slots, 1)
+        slots_row = QHBoxLayout()
+        self._save_slots_btn = QPushButton("Save slots")
+        self._save_slots_btn.setStyleSheet(_BTN_STYLE)
+        self._save_slots_btn.setEnabled(False)
+        self._save_slots_btn.clicked.connect(self._save_slots)
+        self._slots_lbl = QLabel("")
+        self._slots_lbl.setStyleSheet(_LABEL)
+        slots_row.addWidget(self._save_slots_btn)
+        slots_row.addWidget(self._slots_lbl, 1)
+        root.addLayout(slots_row)
 
         # Squad verdict, stored on the hub with the primary body picked above (finder hides "bad" systems)
         mark_row = QHBoxLayout()
@@ -117,13 +156,17 @@ class ColonisationDesignDialog(QDialog):
 
     def load(self, id64: int, name: str) -> None:
         """Point the window at a system; a still-running fetch for the previous one is ignored when it lands."""
-        self.id64, self._system = id64, None
+        self.id64, self._system, self._raven = id64, None, None
         self.setWindowTitle(f"Colonisation — Design: {name}")
         while self._combo.count() > 1:
             self._combo.removeItem(1)
         self._combo.setCurrentIndex(0)
         self._combo.setEnabled(False)
         self._table.setRowCount(0)
+        self._slots.setRowCount(0)
+        self._save_slots_btn.setEnabled(False)
+        self._slots_lbl.setText("")
+        self._outcome.setText("")
         self._warnings.setText("")
         self._note.clear()
         self._mark_lbl.setText("")
@@ -188,8 +231,75 @@ class ColonisationDesignDialog(QDialog):
             for b in ordered:
                 self._combo.addItem(label(b, cl is not None and b is not root_b), b.get("name"))
         self._combo.setEnabled(True)
+        self._fill_slots()
+        self._save_slots_btn.setEnabled(True)
         self._show_mark(system.get("mark"))
         self._replan()
+        id64 = self.id64
+        self._start(lambda: (id64, get_system_slots(sysname)), self._on_raven)
+
+    # ── slot grid ──────────────────────────────────────────────────────
+    def _on_raven(self, result) -> None:
+        if result is None or result[0] != self.id64 or self._system is None or not result[1]:
+            return
+        self._raven = result[1]
+        self._fill_slots()
+        self._replan()
+
+    def _fill_slots(self) -> None:
+        sysname = self._system.get("name") or ""
+        rows = slot_table(self._system, self._raven)
+        self._loaded_slots = {r["body_id"]: (r["orbital"], r["surface"]) for r in rows}
+        self._slots.blockSignals(True)
+        self._slots.setRowCount(len(rows))
+        for i, r in enumerate(rows):
+            label = r["name"] or f"Body {r['body_id']}"
+            name = QTableWidgetItem(label.removeprefix(sysname).strip() or label)
+            name.setData(Qt.ItemDataRole.UserRole, r)
+            src = QTableWidgetItem(f"{_SOURCES[r['orbital_source']]} / {_SOURCES[r['surface_source']]}")
+            for it in (name, src):
+                it.setFlags(it.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self._slots.setItem(i, 0, name)
+            self._slots.setItem(i, 1, QTableWidgetItem("" if r["orbital"] is None else str(r["orbital"])))
+            self._slots.setItem(i, 2, QTableWidgetItem("" if r["surface"] is None else str(r["surface"])))
+            self._slots.setItem(i, 3, src)
+        self._slots.blockSignals(False)
+
+    def _grid_slots(self) -> list:
+        def count(r, c):
+            t = self._slots.item(r, c).text().strip()
+            return int(t) if t.isdigit() else None
+        return [{**self._slots.item(r, 0).data(Qt.ItemDataRole.UserRole), "orbital": count(r, 1), "surface": count(r, 2)}
+                for r in range(self._slots.rowCount())]
+
+    def _save_slots(self) -> None:
+        changed = [r for r in self._grid_slots() if r["body_id"] is not None
+                   and (r["orbital"], r["surface"]) != self._loaded_slots.get(r["body_id"])]
+        if not changed:
+            self._slots_lbl.setText("No slot changes to save")
+            return
+        id64, url = self.id64, self.hub_url
+        cmdr = getattr(getattr(getattr(self.parent(), "_panel", None), "_last_state", None), "commander", None)
+        self._save_slots_btn.setEnabled(False)
+        self._slots_lbl.setText("Saving…")
+        self._start(lambda: (id64, [(r, put_colonisation_slots(url, id64, r["body_id"], r["orbital"], r["surface"], cmdr))
+                                    for r in changed]), self._on_slots_saved)
+
+    def _on_slots_saved(self, result) -> None:
+        if result is None or result[0] != self.id64 or self._system is None:
+            return
+        self._save_slots_btn.setEnabled(True)
+        saved = {r["body_id"]: r for r, ok in result[1] if ok}
+        for b in self._system.get("bodies") or []:
+            if b.get("body_id") in saved:
+                b["orbital_slots"], b["surface_slots"] = saved[b["body_id"]]["orbital"], saved[b["body_id"]]["surface"]
+        failed = len(result[1]) - len(saved)
+        if failed:
+            self._loaded_slots.update({k: (r["orbital"], r["surface"]) for k, r in saved.items()})
+            self._slots_lbl.setText(f"Hub did not store {failed} of {len(result[1])} bodies (not reachable, or not updated yet)")
+            return
+        self._fill_slots()
+        self._slots_lbl.setText(f"Saved slots for {len(saved)} bodies")
 
     def _replan(self, *_) -> None:
         if self._system is None:
@@ -197,6 +307,7 @@ class ColonisationDesignDialog(QDialog):
         primary = self._combo.currentData()
         self._table.setRowCount(0)
         self._warnings.setText("")
+        self._outcome.setText("")
         if primary is None:
             has_details = plan_system(self._system, "", False)["poor"] != "Hub has no body details yet"
             self._banner.setText("" if has_details else "Hub has no body details yet")
@@ -206,24 +317,44 @@ class ColonisationDesignDialog(QDialog):
         plan = plan_system(self._system, primary, self._group.isChecked())
         self._banner.setStyleSheet(_RED)
         self._mark_btns["bad"].setStyleSheet(_BTN_STYLE + ("QPushButton { border:2px solid #ff6b6b; }" if plan["poor"] else ""))
+        kind, slots = self._kind.currentData(), self._grid_slots()
+        typed = kind and any(r["orbital"] is not None or r["surface"] is not None for r in slots)
         if plan["poor"]:
             self._banner.setText(f"Poor pick: {plan['poor']}" if plan["poor"] != "Hub has no body details yet"
                                  else plan["poor"])
             self._banner.setVisible(True)
-            return
-        self._banner.setVisible(bool(plan["weak"]))
-        if plan["weak"]:
-            score = self._system.get("service_score")
-            band = next((b for lim, b in _SCORE_BANDS if score < lim), "top quarter") if score is not None else "unknown"
-            self._banner.setText(f"Usable, but a weak pick: {'; '.join(plan['weak'])}"
-                                 f" — hub service score {score if score is not None else '?'} ({band})")
-            self._banner.setStyleSheet(_AMBER)
-        self._table.setRowCount(len(plan["steps"]))
-        for r, s in enumerate(plan["steps"]):
-            for c, text in enumerate([s["title"], s["body"], ", ".join(s["unlocks"]), s["needs"] or "", s["points"]]):
+            if not typed:  # a typed plan with slot counts still shows, under the template's red banner
+                self._warnings.setText(_NO_SLOTS if kind else "")
+                return
+        else:
+            self._banner.setVisible(bool(plan["weak"]))
+            if plan["weak"]:
+                score = self._system.get("service_score")
+                band = next((b for lim, b in _SCORE_BANDS if score < lim), "top quarter") if score is not None else "unknown"
+                self._banner.setText(f"Usable, but a weak pick: {'; '.join(plan['weak'])}"
+                                     f" — hub service score {score if score is not None else '?'} ({band})")
+                self._banner.setStyleSheet(_AMBER)
+        if typed:
+            p = plan_by_type(self._system, slots, primary, self._group.isChecked(), kind)
+            sysname = self._system.get("name") or ""
+            short = lambda n: (n or "").removeprefix(sysname).strip() or n
+            rows = [[s["title"], short(s["body"]), s["note"] or "", "", f"T2 {s['t2']}, T3 {s['t3']}"] for s in p["steps"]]
+            # per-body "slots unknown" warnings fold into one line: p["unknown"] lists the same bodies
+            lines = [w for w in p["warnings"] if " slots unknown: " not in w] + ([p["note"]] if p.get("note") else [])
+            lines.append(f"Slots left: {p['unused']['orbital']} orbital, {p['unused']['surface']} surface"
+                         + (f"; counts unknown on {', '.join(map(short, p['unknown']))}" if p["unknown"] else ""))
+            o = p["outcome"]
+            self._outcome.setText("Projected: " + ", ".join(f"{k} {o['stats'][k]}" for k in
+                                                            ("pop", "mpop", "sec", "wealth", "tech", "sol", "dev"))
+                                  + f" — haul {o['haul']:,} t — score {o['score']} (Raven Colonial-style, for comparison only)")
+        else:
+            rows = [[s["title"], s["body"], ", ".join(s["unlocks"]), s["needs"] or "", s["points"]] for s in plan["steps"]]
+            lines = list(plan["warnings"]) + ([plan["note"]] if plan["note"] else []) + ([_NO_SLOTS] if kind else [])
+        self._table.setRowCount(len(rows))
+        for r, row in enumerate(rows):
+            for c, text in enumerate(row):
                 self._table.setItem(r, c, QTableWidgetItem(text))
         self._table.resizeRowsToContents()
-        lines = list(plan["warnings"]) + ([plan["note"]] if plan["note"] else [])
         self._warnings.setText("\n".join(lines))
 
     # ── squad mark ─────────────────────────────────────────────────────

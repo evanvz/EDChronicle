@@ -11,8 +11,9 @@ from tests.test_colonisation_design import SYS, TUC  # noqa: E402
 _keep = []
 
 
-def _dialog(monkeypatch, system=TUC):
+def _dialog(monkeypatch, system=TUC, raven=None):
     monkeypatch.setattr(mod, "fetch_colonisation_system", lambda url, id64, faction=None: system)
+    monkeypatch.setattr(mod, "get_system_slots", lambda name: raven)
     parent = QWidget()
     _keep.append(parent)
     d = mod.ColonisationDesignDialog(parent, "http://hub", 1, SYS)
@@ -22,6 +23,7 @@ def _dialog(monkeypatch, system=TUC):
         _app.processEvents()
     _app.processEvents()
     d.stop()
+    _app.processEvents()  # the Raven Colonial slots result
     return d
 
 
@@ -90,6 +92,7 @@ def test_hub_unreachable(monkeypatch):
 def _blocked(monkeypatch, gate):
     monkeypatch.setattr(mod, "fetch_colonisation_system",
                         lambda url, id64, faction=None: gate.wait(5) and TUC)
+    monkeypatch.setattr(mod, "get_system_slots", lambda name: None)
 
 
 def _running(d):
@@ -196,3 +199,80 @@ def test_existing_mark_shows_and_preselects_primary(monkeypatch):
                                               "marked_at": "2026-10-31T10:00:00+00:00"}})
     assert d._combo.currentData() == f"{SYS} 3" and d._table.rowCount() > 0
     assert d._note.text() == "ok" and d._mark_lbl.text() == f"Marked good by Evan 2026-10-31, primary {SYS} 3: ok"
+
+
+def _kind(d, kind):
+    d._kind.setCurrentIndex(d._kind.findData(kind))
+
+
+def _slotted():
+    """TUC with squad-entered slots on gas giant 3 and its moons, the rest unknown."""
+    entered = {7: (3, 0), 9: (1, 2), 12: (1, 3), 15: (1, 3), 10: (0, 1)}
+    return {**TUC, "bodies": [dict(b, orbital_slots=entered[b["body_id"]][0], surface_slots=entered[b["body_id"]][1])
+                              if b["body_id"] in entered else dict(b) for b in TUC["bodies"]]}
+
+
+def test_type_selector_lists_types(monkeypatch):
+    from edc.core.colonisation_planner import TYPES, TYPE_NAMES
+    d = _dialog(monkeypatch)
+    assert [d._kind.itemText(i) for i in range(d._kind.count())] == ["Template"] + [TYPE_NAMES[t] for t in TYPES]
+    assert d._kind.currentText() == "Template" and d._kind.currentData() is None
+
+
+def test_slot_grid_shows_sources(monkeypatch):
+    s = _slotted()
+    d = _dialog(monkeypatch, s, raven={f"{SYS} 1": (2, None)})
+    g = d._slots
+    assert g.rowCount() == len(s["bodies"])
+    rows = {g.item(r, 0).text(): [g.item(r, c).text() for c in (1, 2, 3)] for r in range(g.rowCount())}
+    assert rows["3"] == ["3", "0", "entered / entered"]
+    assert rows["1"] == ["2", "0", "Raven / est."]
+    assert rows["2"] == ["", "0", "? / est."]
+    assert not g.item(0, 3).flags() & mod.Qt.ItemFlag.ItemIsEditable and g.item(0, 1).flags() & mod.Qt.ItemFlag.ItemIsEditable
+
+
+def test_full_build_renders_plan_and_outcome(monkeypatch):
+    from edc.core.colonisation_planner import plan, slot_table
+    s = _slotted()
+    d = _dialog(monkeypatch, s)
+    _pick(d, f"{SYS} 3")
+    _kind(d, "full")
+    p = plan(s, slot_table(s, None), f"{SYS} 3", False, "full")
+    assert p["steps"] and _titles(d) == [st["title"] for st in p["steps"]]
+    assert d._table.item(0, 4).text() == f"T2 {p['steps'][0]['t2']}, T3 {p['steps'][0]['t3']}"
+    text = d._outcome.text()
+    assert "score" in text and "haul" in text and "sec" in text and d._outcome.isVisibleTo(d)
+    _kind(d, None)
+    assert _titles(d)[:2] == ["Primary: Coriolis", "Comms installation"] and not d._outcome.text()
+
+
+def _wait_slots(d):
+    deadline = time.time() + 5
+    while d._slots_lbl.text() == "Saving…" and time.time() < deadline:
+        _app.processEvents()
+    d.stop()
+    _app.processEvents()
+
+
+def test_save_slots_puts_each_changed_body(monkeypatch):
+    sent = []
+    monkeypatch.setattr(mod, "put_colonisation_slots", lambda *a: sent.append(a) or True)
+    d = _dialog(monkeypatch, _slotted())
+    d.parent()._panel = SimpleNamespace(_last_state=SimpleNamespace(commander="Evan"))
+    r = next(r for r in range(d._slots.rowCount()) if d._slots.item(r, 0).text() == "4")
+    d._slots.item(r, 1).setText("2")
+    d._save_slots_btn.click()
+    _wait_slots(d)
+    assert sent == [("http://hub", 1, 28, 2, 0, "Evan")]
+    assert d._slots.item(r, 3).text() == "entered / entered"
+    d._save_slots_btn.click()
+    assert len(sent) == 1
+
+
+def test_no_slots_falls_back_to_template(monkeypatch):
+    s = {**TUC, "bodies": [dict(b, ground_slots=None) for b in TUC["bodies"]]}
+    d = _dialog(monkeypatch, s)
+    _pick(d, f"{SYS} 3")
+    _kind(d, "full")
+    assert _titles(d) == [st["title"] for st in mod.plan_system(s, f"{SYS} 3", False)["steps"]]
+    assert "No slot counts yet: enter them to plan by type" in d._warnings.text() and not d._outcome.text()
