@@ -126,6 +126,7 @@ def test_full_build_places_cluster_hub():
     p = _drm("full")
     _check_full(p)
     assert any(s["facility"].endswith("_hub") for s in p["steps"])
+    assert sum(FAC[s["facility"]]["port"] and FAC[s["facility"]]["tier"] == 3 for s in p["steps"]) >= 2
 
 
 def test_full_build_hightech_fills_surface():

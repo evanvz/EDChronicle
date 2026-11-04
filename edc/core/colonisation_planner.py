@@ -149,6 +149,10 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
                 else:
                     key, i = _T1_ORBITAL[i % 3], i + 1
                 place(key, n)
+        # Pass 2's kept orbital slot per body stays held for a Tier 3 port until Pass 4
+        held = [k for k, v in free.items() if k[1] == "orbital" and v > 0]
+        for k in held:
+            free[k] -= 1
         # Controller ruling (fix round 1): hold back 1 T2 and one slot per cluster that can take its hub
         hubs = []
         for c in clusters:
@@ -160,16 +164,19 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
         for n in order:  # Pass 3: large settlements while T2 lasts
             while bal[0] > len(hubs) and place(fam[n][1], n):
                 pass
+        for k in hubs:
+            free[k] += 1
+        # Pass 5 before Pass 4 (controller ruling, fix round 2): hub T3 rewards help pay for ports
+        for c in clusters:  # Pass 5: one cluster hub, when its requirement is met
+            next((n for n in order if cluster[n] == c and place(_FAMILIES[themes[c]][2], n)), None)
+        for k in held:
+            free[k] += 1
         while True:  # Pass 4: Tier 3 ports, orbital first, then surface when no orbital slot is left
             n = room("orbital")
             key = "dodec_starport" if n else "large_planetary_port"
             n = n or room("surface")
             if not (n and place(key, n)):
                 break
-        for key in hubs:
-            free[key] += 1
-        for c in clusters:  # Pass 5: one cluster hub, when its requirement is met
-            next((n for n in order if cluster[n] == c and place(_FAMILIES[themes[c]][2], n)), None)
         while stats["sec"] < 0:  # Pass 6: security
             n = room("orbital")
             if n and "relay_installation" not in built and place("relay_installation", n):
