@@ -145,6 +145,8 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
         if not place("comms_installation", primary_body, "T2 point and link") \
                 and not any(place("comms_installation", b, "T2 point") for b in bodies):
             warnings.append("no free orbital slot for the Comms installation")
+            # the T2 point from a Tier 1 settlement elsewhere: the primary's surface slot stays for the hub
+            any(place("mining_settlement_medium", b, "T2 point") for b in bodies if b != primary_body)
         if free.get((primary_body, "surface"), 0) < 1:
             warnings.append("no surface slot on the primary body: no Refinery Hub")
         elif not place("refinery_hub", primary_body):
@@ -187,8 +189,13 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
                 hubs.append((n, h["location"]))
                 free[(n, h["location"])] -= 1
         for n in order:  # Pass 3: large settlements while T2 lasts
-            while bal[0] > len(hubs) and place(fam[n][1], n):
-                pass
+            while bal[0] > len(hubs):
+                # no orbital slot held for a Dodec: a surface Tier 3 port as soon as T3 covers it,
+                # before the large settlements take every surface slot
+                if not held and bal[1] >= port_cost(3, ports[0] + 1) and place("large_planetary_port", n):
+                    continue
+                if not place(fam[n][1], n):
+                    break
         for k in hubs:
             free[k] += 1
         # Pass 5 before Pass 4: hub T3 rewards help pay for ports

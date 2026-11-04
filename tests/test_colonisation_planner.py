@@ -194,3 +194,26 @@ def test_outcome_sums():
     p = _drm("service", system=_with(DRM_SYS, DRM_PRIMARY, orbital_slots=1))
     c = FAC["coriolis_starport"]
     assert p["outcome"] == {"stats": c["effects"], "haul": 63001, "score": 8}
+
+
+def _py_r(kind, group=False):
+    """Tucanae Sector PY-R b4-1 as the hub serves it: surface estimates only, no orbital count known."""
+    from tests.test_colonisation_design import TUC
+    return plan(TUC, slot_table(TUC, None), "Tucanae Sector PY-R b4-1 4 d", group, kind)
+
+
+def test_refinery_takes_t2_point_from_a_surface_settlement_when_no_orbital_known():
+    p = _py_r("refinery")
+    keys = [s["facility"] for s in p["steps"]]
+    assert "refinery_hub" in keys and "comms_installation" not in keys
+    t2 = next(s for s in p["steps"] if s["facility"] == "mining_settlement_medium")
+    assert t2["body"] != "Tucanae Sector PY-R b4-1 4 d"           # the primary's one surface slot stays for the hub
+    assert keys.index("mining_settlement_medium") < keys.index("refinery_hub")
+    assert "not enough T2 points for the Refinery Hub" not in p["warnings"]
+
+
+def test_full_build_spends_t3_on_planetary_ports_when_no_orbital_known():
+    p = _py_r("full")
+    ports = [s for s in p["steps"] if s["facility"] == "large_planetary_port"]
+    assert len(ports) >= 2 and p["steps"][-1]["t3"] < 6
+    assert all(s["t2"] >= 0 and s["t3"] >= 0 for s in p["steps"]) and p["unused"]["surface"] == 0
