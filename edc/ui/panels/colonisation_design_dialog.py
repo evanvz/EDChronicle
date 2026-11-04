@@ -112,7 +112,7 @@ class ColonisationDesignDialog(QDialog):
         self._slots.setStyleSheet(_TABLE_STYLE)
         self._slots.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self._slots.horizontalHeader().setStretchLastSection(True)
-        self._slots.itemChanged.connect(self._replan)
+        self._slots.itemChanged.connect(self._on_slot_edit)
         self._edit_triggers = self._slots.editTriggers()  # restored after a save, which locks the grid
         root.addWidget(self._slots, 1)
         slots_row = QHBoxLayout()
@@ -245,17 +245,22 @@ class ColonisationDesignDialog(QDialog):
         if result is None or result[0] != self.id64 or self._system is None or not result[1]:
             return
         self._raven = result[1]
+        self._refill()
+        self._replan()
+
+    def _refill(self) -> None:
         edited = {r["body_id"]: r for r in self._grid_slots()
                   if (r["orbital"], r["surface"]) != self._loaded_slots.get(r["body_id"])}
         self._fill_slots()
-        self._slots.blockSignals(True)  # edits made before Raven Colonial answered stay, against the new baseline
+        self._slots.blockSignals(True)  # unsaved edits stay, against the new baseline
         for i in range(self._slots.rowCount()):
             r = edited.get(self._slots.item(i, 0).data(Qt.ItemDataRole.UserRole)["body_id"])
             if r:
-                self._slots.item(i, 1).setText("" if r["orbital"] is None else str(r["orbital"]))
-                self._slots.item(i, 2).setText("" if r["surface"] is None else str(r["surface"]))
+                for c, k in ((1, "orbital"), (2, "surface")):
+                    t = "" if r[k] is None else str(r[k])
+                    self._slots.item(i, c).setText(t)
+                    self._slots.item(i, c).setData(Qt.ItemDataRole.UserRole, t)
         self._slots.blockSignals(False)
-        self._replan()
 
     def _fill_slots(self) -> None:
         sysname = self._system.get("name") or ""
@@ -271,10 +276,20 @@ class ColonisationDesignDialog(QDialog):
             for it in (name, src):
                 it.setFlags(it.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self._slots.setItem(i, 0, name)
-            self._slots.setItem(i, 1, QTableWidgetItem("" if r["orbital"] is None else str(r["orbital"])))
-            self._slots.setItem(i, 2, QTableWidgetItem("" if r["surface"] is None else str(r["surface"])))
+            for c, k in ((1, "orbital"), (2, "surface")):
+                cell = QTableWidgetItem("" if r[k] is None else str(r[k]))
+                cell.setData(Qt.ItemDataRole.UserRole, cell.text())  # last good text, for reverting a bad edit
+                self._slots.setItem(i, c, cell)
             self._slots.setItem(i, 3, src)
         self._slots.blockSignals(False)
+
+    def _on_slot_edit(self, item) -> None:
+        t = item.text().strip()
+        self._slots.blockSignals(True)  # 0-20 or blank (cleared); anything else reverts, so a typo never saves
+        item.setText(t if not t or (t.isdigit() and int(t) <= 20) else item.data(Qt.ItemDataRole.UserRole))
+        item.setData(Qt.ItemDataRole.UserRole, item.text())
+        self._slots.blockSignals(False)
+        self._replan()
 
     def _grid_slots(self) -> list:
         def count(r, c):
@@ -284,8 +299,13 @@ class ColonisationDesignDialog(QDialog):
                 for r in range(self._slots.rowCount())]
 
     def _save_slots(self) -> None:
-        changed = [r for r in self._grid_slots() if r["body_id"] is not None
-                   and (r["orbital"], r["surface"]) != self._loaded_slots.get(r["body_id"])]
+        # a cell goes to the hub only if edited or already entered there: Raven/est. counts never become squad facts
+        changed = []
+        for r in self._grid_slots():
+            old = self._loaded_slots.get(r["body_id"])
+            if r["body_id"] is not None and (r["orbital"], r["surface"]) != old:
+                changed.append({**r, **{k: r[k] if r[k] != old[i] or r[f"{k}_source"] == "entered" else None
+                                        for i, k in enumerate(("orbital", "surface"))}})
         if not changed:
             self._slots_lbl.setText("No slot changes to save")
             return
@@ -313,7 +333,7 @@ class ColonisationDesignDialog(QDialog):
                 b["orbital_slots"], b["surface_slots"] = saved[b["body_id"]]["orbital"], saved[b["body_id"]]["surface"]
         failed = len(result[1]) - len(saved)
         if failed:
-            self._loaded_slots.update({k: (r["orbital"], r["surface"]) for k, r in saved.items()})
+            self._refill()  # stored rows reload with their sources, refused edits stay
             self._slots_lbl.setText(f"Hub did not store {failed} of {len(result[1])} bodies (not reachable, or not updated yet)")
             return
         self._fill_slots()

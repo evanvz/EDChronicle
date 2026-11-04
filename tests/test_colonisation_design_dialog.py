@@ -243,6 +243,7 @@ def test_full_build_renders_plan_and_outcome(monkeypatch):
     assert d._table.item(0, 4).text() == f"T2 {p['steps'][0]['t2']}, T3 {p['steps'][0]['t3']}; 63,001 t"
     text = d._outcome.text()
     assert "score" in text and "haul" in text and "sec" in text and d._outcome.isVisibleTo(d)
+    assert "Up to 5 facilities can be under construction at once" in d._warnings.text()
     _kind(d, None)
     assert _titles(d)[:2] == ["Primary: Coriolis", "Comms installation"] and not d._outcome.text()
 
@@ -266,8 +267,8 @@ def test_save_slots_puts_each_changed_body(monkeypatch):
     assert d._slots.editTriggers() == mod.QTableWidget.EditTrigger.NoEditTriggers   # locked while saving
     _wait_slots(d)
     assert d._slots.editTriggers() == d._edit_triggers
-    assert sent == [("http://hub", 1, 28, 2, 0, "Evan")]
-    assert d._slots.item(r, 3).text() == "entered / entered"
+    assert sent == [("http://hub", 1, 28, 2, None, "Evan")]
+    assert d._slots.item(r, 3).text() == "entered / est."
     d._save_slots_btn.click()
     assert len(sent) == 1
 
@@ -295,7 +296,51 @@ def test_raven_refill_keeps_earlier_edit(monkeypatch):
     assert d._slots.item(_row(d, "4"), 1).text() == "2" and d._slots.item(_row(d, "4"), 3).text() == "Raven / est."
     d._save_slots_btn.click()
     _wait_slots(d)
-    assert sent == [("http://hub", 1, 28, 2, 0, None)]
+    assert sent == [("http://hub", 1, 28, 2, None, None)]
+
+
+def test_save_does_not_store_estimates(monkeypatch):
+    sent = []
+    monkeypatch.setattr(mod, "put_colonisation_slots", lambda *a: sent.append(a) or True)
+    d = _dialog(monkeypatch, _slotted(), raven={f"{SYS} 1": (2, 4)})
+    d._slots.item(_row(d, "4"), 1).setText("2")      # surface est.
+    d._slots.item(_row(d, "1"), 2).setText("3")      # orbital Raven
+    d._slots.item(_row(d, "3 a"), 1).setText("2")    # surface entered
+    d._save_slots_btn.click()
+    _wait_slots(d)
+    assert sorted(sent) == sorted([("http://hub", 1, 28, 2, None, None), ("http://hub", 1, 5, None, 3, None),
+                                   ("http://hub", 1, 9, 2, 2, None)])
+
+
+def test_partial_save_retry_keeps_estimates_out(monkeypatch):
+    sent = []
+    monkeypatch.setattr(mod, "put_colonisation_slots", lambda *a: sent.append(a) or a[2] == 28)
+    d = _dialog(monkeypatch, _slotted())
+    d._slots.item(_row(d, "4"), 1).setText("2")      # surface est., stored
+    d._slots.item(_row(d, "3 a"), 1).setText("2")    # refused
+    d._save_slots_btn.click()
+    _wait_slots(d)
+    sent.clear()
+    d._save_slots_btn.click()
+    _wait_slots(d)
+    assert sent == [("http://hub", 1, 9, 2, 2, None)]
+    assert d._slots.item(_row(d, "3 a"), 1).text() == "2" and d._slots.item(_row(d, "4"), 3).text() == "entered / est."
+
+
+def test_slot_grid_reverts_bad_input(monkeypatch):
+    sent = []
+    monkeypatch.setattr(mod, "put_colonisation_slots", lambda *a: sent.append(a) or True)
+    d = _dialog(monkeypatch, _slotted())
+    r = _row(d, "3 a")
+    d._slots.item(r, 1).setText("5")
+    for bad in ("x", "21", "-1", "1.5"):
+        d._slots.item(r, 1).setText(bad)
+        assert d._slots.item(r, 1).text() == "5"
+    d._slots.item(r, 2).setText("oops")
+    assert d._slots.item(r, 2).text() == "2"
+    d._save_slots_btn.click()
+    _wait_slots(d)
+    assert sent == [("http://hub", 1, 9, 5, 2, None)]
 
 
 def test_late_raven_result_for_previous_system_is_ignored(monkeypatch):

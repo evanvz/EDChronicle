@@ -89,7 +89,8 @@ def get_system_slots(system_name: str) -> Optional[Dict[str, Tuple[Optional[int]
         data = resp.json()
         names = {b["num"]: b["name"] for b in data["bodies"]}
         return {names[int(num)]: tuple(None if n == -1 else n for n in pair)
-                for num, pair in data["slots"].items() if int(num) in names}
+                for num, pair in data["slots"].items() if int(num) in names and isinstance(pair, list)
+                and len(pair) == 2 and all(type(n) is int and n >= -1 for n in pair)}
     except Exception as exc:
         log.warning("Raven Colonial slots lookup failed for %r: %s", system_name, exc)
         return None

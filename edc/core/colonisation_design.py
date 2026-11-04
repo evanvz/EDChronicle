@@ -82,6 +82,7 @@ def plan_system(system: dict, primary_body: str, group: bool) -> dict:
         if adds and adds not in main and _clash(main | {adds}):
             warnings.append(f"{title} adds {_NAMES.get(adds, adds)} next to the main port's {_econ_text(main)} (Frontier)")
 
+    # twin of colonisation_planner.plan's primary rule (101): keep both in step
     # 1. Primary port (101): solo Coriolis; group T3, Ocellus when the body has rings, else Orbis
     # The primary is free; a Coriolis primary still grants +1 T3 (gaborauth planner, in-game checked 2026-07-30)
     if group:

@@ -78,8 +78,32 @@ def test_unknown_orbital_never_used():
 
 def test_service_t3_primary_no_steps():
     p = _drm("service", group=True)
-    assert [(s["title"], s["note"]) for s in p["steps"]] == [("Primary: Ocellus", "free")]
+    assert (p["steps"][0]["title"], p["steps"][0]["note"]) == ("Primary: Ocellus", "free")
     assert p["note"] == "Tier 3 primary: all services from the start"
+
+
+def test_service_t3_primary_secures():
+    p = _drm("service", group=True)
+    assert p["outcome"]["stats"]["sec"] >= 0 or "security below 0 after the plan" in p["warnings"]
+    assert {s["facility"] for s in p["steps"][1:]} <= {"relay_installation", "security_installation",
+                                                       "military_settlement_medium"}
+
+
+def test_refinery_low_sec_warns():
+    p = _drm("refinery")
+    assert p["outcome"]["stats"]["sec"] < 0
+    assert "security below 0 after the plan" in p["warnings"]
+
+
+def test_refinery_third_economy_warns():
+    p = _drm("refinery", system=_with(DRM_SYS, DRM_PRIMARY, economies=["HighTech", "Industrial"]))
+    assert any(w.startswith("1 market: ") and "Refinery" in w and "cannibalised" in w for w in p["warnings"])
+    assert not any("market:" in w for w in _drm("service")["warnings"])
+
+
+def test_five_at_once_note_every_type():
+    for kind in ("refinery", "service", "full"):
+        assert "Up to 5 facilities can be under construction at once" in _drm(kind)["warnings"]
 
 
 def test_service_t2_adds_comms_on_primary():
@@ -152,6 +176,7 @@ def test_full_build_final_sec_warning_matches():
     plans = [plan(tour, slot_table(tour, None), "TR 1", g, "full") for g in (False, True)]
     plans += [_drm("full", group=g) for g in (False, True)]
     plans += [plan(LCT_SYS, slot_table(LCT_SYS, None), LCT_PRIMARY, g, "full") for g in (False, True)]
+    plans += [_drm(k, group=g) for k in ("service", "refinery") for g in (False, True)]
     for p in plans:
         assert ("security below 0 after the plan" in p["warnings"]) == (p["outcome"]["stats"]["sec"] < 0)
 

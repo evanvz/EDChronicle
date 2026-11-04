@@ -87,6 +87,12 @@ def test_raven_slots_skip_unmatched_names():
     assert got == {"X 3": (1, 2)}
 
 
+def test_raven_slots_skip_bad_pairs():
+    got, _ = _slots({"bodies": [{"num": n, "name": f"X {n}"} for n in range(1, 6)],
+                     "slots": {"1": [1, 2], "2": [1], "3": [1, "2"], "4": [-3, 1], "5": None}})
+    assert got == {"X 1": (1, 2)}
+
+
 def test_raven_slots_404_none():
     got, _ = _slots({}, 404)
     assert got is None

@@ -12,6 +12,7 @@ Facility costs, rewards, requirements and effects: settings/colonisation_facilit
 """
 
 from edc.core import colonisation_facilities
+from edc.core.colonisation_design import _clash
 
 TYPES = ("refinery", "service", "full")
 TYPE_NAMES = {"refinery": "Refinery", "service": "Service stop", "full": "Full build"}
@@ -28,6 +29,10 @@ _FAMILIES = {  # theme: (medium settlement, large settlement, cluster hub)
     "Military": ("military_settlement_medium", "military_settlement_large", "military_hub"),
     "Tourism": ("tourist_settlement_medium", "tourist_settlement_large", "space_bar_installation"),
 }
+# hubs carry economy null in the data: inferred from the hub's family, unverified
+_HUB_ECON = {"refinery_hub": "Refinery", "industrial_hub": "Industrial", "high_tech_hub": "HighTech",
+             "extraction_hub": "Extraction", "military_hub": "Military"}
+_FIVE = "Up to 5 facilities can be under construction at once"
 
 
 def _first(*pairs):
@@ -75,6 +80,7 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
                 free[(r["name"], loc)] = r[loc]
     unknown = [r["name"] for r in slots if r["orbital"] is None or r["surface"] is None]
 
+    # twin of colonisation_design.plan_system's primary rule (101): keep both in step
     # 101: solo Coriolis; group T3, Ocellus when the body has rings, else Orbis. Free, adds its reward.
     pkey = ("ocellus_starport" if bodies.get(primary_body, {}).get("rings") else "orbis_starport") if group \
         else "coriolis_starport"
@@ -116,14 +122,28 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
                       "t2": bal[0], "t3": bal[1], "note": note, "haul": f["haul"]})
         return True
 
+    def secure(order):  # Pass 6: security
+        room = lambda loc: next((n for n in order if free.get((n, loc), 0) > 0), None)
+        while stats["sec"] < 0:
+            n = room("orbital")
+            if n and "relay_installation" not in built and place("relay_installation", n):
+                continue
+            if n and place("security_installation", n):
+                continue
+            n = room("surface")
+            if not (n and place("military_settlement_medium", n)):
+                break
+
     if kind == "service":
         if pf["tier"] == 3:
             note = "Tier 3 primary: all services from the start"
+            secure([r["name"] for r in slots])
         elif not place("comms_installation", primary_body, "Cartographics/Vista link"):
             warnings.append("no free orbital slot on the primary body for the Cartographics/Vista link")
 
     elif kind == "refinery":
-        if not place("comms_installation", primary_body, "T2 point and link")                 and not any(place("comms_installation", b, "T2 point") for b in bodies):
+        if not place("comms_installation", primary_body, "T2 point and link") \
+                and not any(place("comms_installation", b, "T2 point") for b in bodies):
             warnings.append("no free orbital slot for the Comms installation")
         if free.get((primary_body, "surface"), 0) < 1:
             warnings.append("no surface slot on the primary body: no Refinery Hub")
@@ -152,7 +172,8 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
                     key = queue.pop(0)
                 else:
                     key, i = _T1_ORBITAL[i % 3], i + 1
-                place(key, n)
+                if not place(key, n):
+                    break
         # Pass 2's kept orbital slot per body stays held for a Tier 3 port until Pass 4
         held = [k for k, v in free.items() if k[1] == "orbital" and v > 0]
         for k in held:
@@ -181,15 +202,7 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
             n = n or room("surface")
             if not (n and place(key, n)):
                 break
-        while stats["sec"] < 0:  # Pass 6: security
-            n = room("orbital")
-            if n and "relay_installation" not in built and place("relay_installation", n):
-                continue
-            if n and place("security_installation", n):
-                continue
-            n = room("surface")
-            if not (n and place("military_settlement_medium", n)):
-                break
+        secure(order)
         # Pass 7 fallback: a zero-cost surface facility of the theme's economy, else civilian
         cheap = {c: next((k for k, f in fac.items() if f["location"] == "surface" and not f["port"]
                           and (f["economy"] or "").lower() == themes[c].lower() and not any(f["cp_cost"].values())),
@@ -201,9 +214,19 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
             while ((stats["sec"] < 0 and place("military_settlement_medium", n))
                    or place(fam[n][0], n) or place(cheap[cluster[n]], n)):
                 pass
-        if stats["sec"] < 0:
-            warnings.append("security below 0 after the plan")
 
+    if stats["sec"] < 0:
+        warnings.append("security below 0 after the plan")
+    # Spec: keep each market (primary body, any placed port's body) to at most two economies (strong link: same body)
+    ignore = {"Colony", "Terraforming"}
+    for m in dict.fromkeys([primary_body] + [s["body"] for s in steps[1:] if fac[s["facility"]]["port"]]):
+        econ = {e.replace("Hightech", "HighTech") for e in (bodies.get(m, {}).get("economies") or [])
+                + [fac[s["facility"]]["economy"] or _HUB_ECON.get(s["facility"]) for s in steps if s["body"] == m]
+                if e} - ignore
+        if _clash(econ):
+            short = m.removeprefix(system.get("name") or "").strip() or m
+            warnings.append(f"{short} market: {', '.join(sorted(econ))} — a third economy gets cannibalised")
+    warnings.append(_FIVE)
     if pf["tier"] == 1 and stats["tech"] < 35:
         warnings.append(f"tech level {stats['tech']} below 35: Tier 1 port shipyard/outfitting need 35 "
                         "(unverified that this sum is the game's tech level)")

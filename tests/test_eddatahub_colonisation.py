@@ -103,4 +103,4 @@ def test_put_slots_sends_json(monkeypatch):
 
 def test_put_slots_false_on_error(monkeypatch):
     monkeypatch.setattr(c.requests, "put", lambda *a, **k: Resp({}, 400))
-    assert c.put_colonisation_slots("http://hub", 7, 3, -5, 1, None) is False
+    assert c.put_colonisation_slots("http://hub", 7, 3, 2, 1, None) is False
