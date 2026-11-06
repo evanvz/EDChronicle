@@ -616,6 +616,9 @@ class Repository:
         my_reputation = faction.get("MyReputation")
         is_squadron_faction = faction.get("SquadronFaction") is True
         normalized_timestamp = _normalize_data_timestamp(data_timestamp)
+        # snapshot_date is the fetch day, not the reading's day, and readers take
+        # the newest date: a lagging EDSM reading must not outrank fresher data
+        # already held under an earlier date (Delta Indi 70.8% over 75.3%).
         self.db.execute(
             """
             INSERT INTO faction_snapshots (
@@ -624,7 +627,12 @@ class Repository:
                 active_states, pending_states, recovering_states, is_controlling,
                 my_reputation, is_squadron_faction, data_timestamp, source
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            WHERE NOT EXISTS (
+                SELECT 1 FROM faction_snapshots
+                WHERE system_address = ? AND faction_name = ?
+                  AND snapshot_date < ? AND data_timestamp > ?
+            )
             ON CONFLICT(system_address, faction_name, snapshot_date) DO UPDATE SET
                 influence           = excluded.influence,
                 government          = excluded.government,
@@ -659,6 +667,10 @@ class Repository:
                 1 if is_squadron_faction else 0,
                 normalized_timestamp,
                 source,
+                system_address,
+                name,
+                snapshot_date,
+                normalized_timestamp,
             ),
         )
         if normalized_timestamp:
