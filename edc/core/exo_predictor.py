@@ -43,6 +43,11 @@ def load_rules(*paths: Path) -> list[dict] | None:
     return None
 
 
+def genus_key(name: str) -> str:
+    s = str(name or "").strip().lower()
+    return s[:-1] if s.endswith("s") else s
+
+
 def _atm(s) -> str:
     s = re.sub(r"[^a-z]", "", str(s or "").lower())
     return "" if s == "none" else s
@@ -112,7 +117,9 @@ def fits(rec: dict, ruleset: dict, stars: dict[int, dict], system_classes: set[s
         elif rule in ("required", "any"):
             if not vol:
                 return False
-        elif isinstance(rule, dict) and not any(s in vol for s in rule.get("contains_any", [])):
+        elif isinstance(rule, dict) and not (
+            any(s in vol for s in rule.get("contains_any", [])) or vol in rule.get("equals_any", [])
+        ):
             return False
 
     if fss_complete:
@@ -151,14 +158,17 @@ def predict_body(rec, rules, values, stars, system_classes, fss_complete,
 
     dss = rec.get("BioGenuses")
     if dss:
-        genera = {g: v for g, v in genera.items() if g in dss}
+        dkeys = {genus_key(d) for d in dss}
+        genera = {g: v for g, v in genera.items() if genus_key(g) in dkeys}
         slots = len(dss)
     else:
         slots = signals
 
-    real = [value(sp) for g, sp in known_species.items() if g not in finished_genera]
-    taken = len(real) + len(finished_genera)
-    remaining = {g: v for g, v in genera.items() if g not in known_species and g not in finished_genera}
+    fkeys = {genus_key(g) for g in finished_genera}
+    kkeys = {genus_key(g) for g in known_species}
+    real = [value(sp) for g, sp in known_species.items() if genus_key(g) not in fkeys]
+    taken = len(real) + len(fkeys)
+    remaining = {g: v for g, v in genera.items() if genus_key(g) not in kkeys | fkeys}
     remaining = dict(sorted(remaining.items(), key=lambda kv: -kv[1][0][1]))
     best = [v[0][1] for v in remaining.values()]
     return BodyPrediction(remaining, sum(real) + sum(best[:max(0, slots - taken)]))

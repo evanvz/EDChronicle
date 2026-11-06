@@ -261,3 +261,21 @@ def test_guesses_not_written_to_state():
 def test_possible_text():
     p = BodyPrediction({"Aleoida": [("a", 12_300_000)], "Bacterium": [("b", 1)]}, 12_300_000)
     assert possible_text(p) == "Possible: Aleoida, Bacterium · up to 12.3M"
+
+
+def test_equals_any_volcanism_blatteum():
+    rs = next(r for r in RULES if r["species"] == "Blatteum Sinuous Tubers")["rulesets"]
+    vol = [x for x in rs if "equals_any" in (x.get("volcanism") or {})][0]
+    assert fit(body(Volcanism="Rocky magma volcanism"), {"volcanism": vol["volcanism"]})
+    assert fit(body(Volcanism="major silicate vapour geysers"), {"volcanism": vol["volcanism"]})
+    assert not fit(body(Volcanism="minor rocky magma volcanism"), {"volcanism": vol["volcanism"]})
+
+
+def test_plural_journal_genus_names():
+    t = {"Brain Tree One": ("Brain Tree", 5), "X One": ("X", 9)}
+    p = pb(body(BioSignals=2, BioGenuses=["Brain Trees"]), table=t)
+    assert list(p.possible) == ["Brain Tree"]
+    p = pb(body(BioSignals=1), finished={"Brain Trees"}, table=t)
+    assert p.up_to == 0 and "Brain Tree" not in p.possible
+    st = state({"A 1": body(BioSignals=1)}, {"k": {"BodyID": 5, "Genus": "Brain Trees", "Species": "", "Samples": 3}})
+    assert predict_system(st, fake_rules(t), fake_values(t), {})["A 1"].up_to == 0
