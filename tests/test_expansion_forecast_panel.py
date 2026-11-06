@@ -1,6 +1,8 @@
 """Forecast tab: renders watched systems, cached candidates and the last
 result without starting a lookup when the cache is fresh."""
 from datetime import date, datetime, timedelta, timezone
+
+from edc.utils.dates import utc_today
 from types import SimpleNamespace
 
 from PyQt6.QtWidgets import QApplication
@@ -29,12 +31,12 @@ def test_forecast_tab_renders_from_fresh_cache(tmp_path):
     QApplication.instance() or QApplication([])
     from edc.ui.panels.expansion_forecast_panel import ExpansionForecastPanel
     repo = _repo(tmp_path)
-    today = date.today().isoformat()
+    today = utc_today().isoformat()
     repo.db.execute("INSERT INTO systems (system_address, system_name) VALUES (1, 'Ekono'), (2, 'Arimavante')")
     repo.save_faction_snapshot(1, {"Name": EUW, "Influence": 0.80}, today, True, f"{today}T12:00:00Z", "edsm")
     # EUW left Arimavante 20 days ago (older than the 14-day "current" window,
     # inside the 30-day pruning window so the test data isn't deleted on save)
-    left = (date.today() - timedelta(days=20)).isoformat()
+    left = (utc_today() - timedelta(days=20)).isoformat()
     repo.save_faction_snapshot(2, {"Name": EUW, "Influence": 0.30}, left, False, f"{left}T00:00:00Z", "edsm")
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     repo.save_expansion_candidates(1, [
@@ -61,7 +63,7 @@ def test_no_faction_and_no_watched_system(tmp_path):
     w = ExpansionForecastPanel(SimpleNamespace(_repo=repo, _faction_name=None))
     w.refresh()
     assert "No squadron faction known yet" in w._status.text() and w._thread is None
-    today = date.today().isoformat()
+    today = utc_today().isoformat()
     repo.db.execute("INSERT INTO systems (system_address, system_name) VALUES (1, 'Low')")
     repo.save_faction_snapshot(1, {"Name": EUW, "Influence": 0.40}, today, True, f"{today}T12:00:00Z", "edsm")
     w = ExpansionForecastPanel(SimpleNamespace(_repo=repo, _faction_name=EUW))
@@ -119,7 +121,7 @@ def test_overview_alert_label():
 def test_main_window_alert_uses_detection(tmp_path):
     from edc.ui.main_window import MainWindow
     repo = _repo(tmp_path)
-    today = date.today().isoformat()
+    today = utc_today().isoformat()
     repo.db.execute("INSERT INTO systems (system_address, system_name) VALUES (2, 'Tucanae Sector YF-W b2-2')")
     repo.save_faction_snapshot(2, {"Name": EUW, "Influence": 0.091}, today, False, f"{today}T16:59:55Z", "eddn")
     shown = []
@@ -148,7 +150,7 @@ def test_session_report_shows_new_system_escaped(tmp_path):
     QApplication.instance() or QApplication([])
     from edc.ui.panels.session_activity_dialog import SessionActivityDialog
     repo = _repo(tmp_path)
-    today = date.today().isoformat()
+    today = utc_today().isoformat()
     repo.db.execute("INSERT INTO systems (system_address, system_name) VALUES (2, 'A <i>b</i>')")
     repo.save_faction_snapshot(2, {"Name": EUW, "Influence": 0.05}, today, False, f"{today}T10:00:00Z", "eddn")
     dlg = SessionActivityDialog(SimpleNamespace(_repo=repo, _faction_name=EUW, _latest_known_tick=None))
@@ -160,7 +162,7 @@ def test_refresh_new_system_alert_throttles_detection(tmp_path, monkeypatch):
     from edc.ui.main_window import MainWindow
     import edc.ui.main_window
     repo = _repo(tmp_path)
-    today = date.today().isoformat()
+    today = utc_today().isoformat()
     repo.db.execute("INSERT INTO systems (system_address, system_name) VALUES (2, 'Test System')")
     repo.save_faction_snapshot(2, {"Name": EUW, "Influence": 0.091}, today, False, f"{today}T16:59:55Z", "eddn")
 
@@ -196,7 +198,7 @@ def test_refresh_new_system_alert_throttles_detection(tmp_path, monkeypatch):
 def test_refresh_new_system_alert_fallback_to_squadron_faction(tmp_path):
     from edc.ui.main_window import MainWindow
     repo = _repo(tmp_path)
-    today = date.today().isoformat()
+    today = utc_today().isoformat()
     repo.db.execute("INSERT INTO systems (system_address, system_name) VALUES (2, 'Fallback Test')")
     # Save snapshot with SquadronFaction=True to mark EUW as the squadron faction
     repo.save_faction_snapshot(2, {"Name": EUW, "Influence": 0.075, "SquadronFaction": True}, today, False, f"{today}T14:00:00Z", "eddn")

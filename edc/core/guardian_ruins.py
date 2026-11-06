@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import date
+from edc.utils.dates import utc_today
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -55,7 +55,7 @@ class GuardianRuinsCache:
             self._systems = {}
 
     def is_stale(self) -> bool:
-        return self.fetched_date != date.today().isoformat()
+        return self.fetched_date != utc_today().isoformat()
 
     def has_data(self) -> bool:
         return bool(self._systems)
@@ -92,7 +92,7 @@ class GuardianRuinsCache:
             return False
 
         self._systems = systems
-        self.fetched_date = date.today().isoformat()
+        self.fetched_date = utc_today().isoformat()
 
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)

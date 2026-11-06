@@ -8,7 +8,7 @@ import logging
 import sqlite3
 import threading
 import time
-from datetime import date
+from edc.utils.dates import utc_today
 from PyQt6.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -1227,7 +1227,7 @@ class MainWindow(QMainWindow):
             return
 
         controlling = (getattr(self.state, "controlling_faction", None) or "").strip()
-        today = date.today().isoformat()
+        today = utc_today().isoformat()
         try:
             # Two auto-committing execute() calls per faction (upsert +
             # 30-day-retention delete, see save_faction_snapshot) -- one
@@ -2676,8 +2676,8 @@ class MainWindow(QMainWindow):
         # never re-checked staleness at all, since _maybe_start_edsm_
         # powerplay_refresh() was previously only ever called once at
         # startup plus this timer (which used to stop itself on a
-        # successful refresh). date.today() inside is_stale() moves at
-        # midnight regardless of how long the app's been open, so this
+        # successful refresh). utc_today() inside is_stale() moves at
+        # UTC midnight regardless of how long the app's been open, so this
         # needs to keep polling for the rest of the session -- the 10 min
         # cadence is cheap since is_stale()/the in-flight guard make a
         # not-actually-stale tick a no-op.
@@ -2691,7 +2691,7 @@ class MainWindow(QMainWindow):
         # at startup, so a session left open for multiple days (confirmed
         # live: 3.5GB network_cache.db, 13.8M market_prices rows after a
         # few days unattended) never re-ran the once/day prune past its
-        # first day. date.today() inside moves at midnight regardless of
+        # first day. utc_today() inside moves at UTC midnight regardless of
         # session length, so this needs to keep polling for the rest of
         # the session -- cheap since the cfg-date guard makes a
         # not-actually-a-new-day tick a no-op.
@@ -3458,8 +3458,8 @@ class MainWindow(QMainWindow):
         self._maybe_start_search_index_build()
         self._start_eddn_listener()
         # Always running, not just when today's initial check found the
-        # cache stale -- see the timer's own comment: date.today() moves
-        # at midnight regardless of session length, so this needs to keep
+        # cache stale -- see the timer's own comment: utc_today() moves
+        # at UTC midnight regardless of session length, so this needs to keep
         # polling for the rest of the app's lifetime, not stop once fresh.
         self._edsm_powerplay_retry_timer.start()
         self._fdev_powerplay_retry_timer.start()
@@ -3862,7 +3862,7 @@ class MainWindow(QMainWindow):
         """Once/day is plenty — the prune thresholds are 21 days for
         market_prices and 7 days for fleet_carrier_materials, so pruning
         more often would rarely find anything new to delete."""
-        today = date.today().isoformat()
+        today = utc_today().isoformat()
         if getattr(self.cfg, "last_market_prune_date", None) == today:
             return
         if self._market_prune_thread and self._market_prune_thread.isRunning():
@@ -3879,7 +3879,7 @@ class MainWindow(QMainWindow):
 
     def _on_market_prune_finished(self, deleted: int) -> None:
         log.info("Prune complete: %d stale rows removed (market_prices + fleet_carrier_materials)", deleted)
-        self.cfg.last_market_prune_date = date.today().isoformat()
+        self.cfg.last_market_prune_date = utc_today().isoformat()
         self.cfg_store.save(self.cfg)
 
     def _maybe_start_search_index_build(self):
@@ -6971,7 +6971,7 @@ class MainWindow(QMainWindow):
                 log.exception("Failed to check for new faction systems")
             try:
                 # an expansion candidate gaining or losing a free slot (live EDDN counts)
-                changes = [slot_change_text(c) for c in slot_changes(self.repo.get_candidate_faction_counts(), date.today(),
+                changes = [slot_change_text(c) for c in slot_changes(self.repo.get_candidate_faction_counts(), utc_today(),
                                                                      faction=faction)]
                 text = "\n".join([t for t in [text] if t] + changes)
             except Exception:

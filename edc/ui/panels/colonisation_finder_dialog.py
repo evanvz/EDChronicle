@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 from datetime import date
+
+from edc.utils.dates import utc_today
 from typing import Callable, Optional
 
 from PyQt6.QtCore import QObject, Qt, QThread, pyqtSignal
@@ -63,7 +65,7 @@ class _Worker(QObject):
 
 def _age_days(dump_date) -> str:
     try:
-        return f"{(date.today() - date.fromisoformat(str(dump_date)[:10])).days} d"
+        return f"{(utc_today() - date.fromisoformat(str(dump_date)[:10])).days} d"
     except (TypeError, ValueError):
         return ""
 

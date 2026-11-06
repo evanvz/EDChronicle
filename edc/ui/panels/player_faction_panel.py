@@ -16,6 +16,8 @@ import json
 import logging
 import time
 from datetime import date, datetime, timezone
+
+from edc.utils.dates import utc_today
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -141,12 +143,6 @@ def _days_fought(readings, ticks) -> Optional[Tuple[int, bool]]:
     return sum(1 for t in ticks if start < t <= readings[-1][0]), early
 
 
-def _utc_today() -> date:
-    """Snapshot dates and data timestamps are UTC (journal/EDDN event time);
-    the local date runs a day ahead for UTC+ players near local midnight."""
-    return datetime.now(timezone.utc).date()
-
-
 def _data_age_days(sys_rec: Dict[str, Any], today: Optional[date] = None) -> Optional[int]:
     """Days since this row's real underlying data last changed, from
     data_timestamp -- NOT snapshot_date, which is just the date WE last
@@ -158,7 +154,7 @@ def _data_age_days(sys_rec: Dict[str, Any], today: Optional[date] = None) -> Opt
     only when data_timestamp is absent (e.g. a caller/test that never set
     it), so older code paths don't silently break.
     """
-    today = today or _utc_today()
+    today = today or utc_today()
     raw = sys_rec.get("data_timestamp") or sys_rec.get("snapshot_date")
     if not isinstance(raw, str) or not raw:
         return None
@@ -512,7 +508,7 @@ class _CsvImportWorker(QObject):
                         data_timestamp = match.pop("LastUpdate", None)
                         source = "edsm"
                         faction_rec = match
-                        snapshot_date = _utc_today().isoformat()
+                        snapshot_date = utc_today().isoformat()
                         imported += 1
                     else:
                         # EDSM found the system but doesn't list our faction
@@ -526,7 +522,7 @@ class _CsvImportWorker(QObject):
                             "Allegiance": row.get("allegiance"),
                         }
                         is_controlling = False
-                        snapshot_date = row.get("updated_date") or _utc_today().isoformat()
+                        snapshot_date = row.get("updated_date") or utc_today().isoformat()
                         data_timestamp = row.get("updated_date") or "1970-01-01T00:00:00Z"
                         source = "csv"
                         fallback_used += 1
@@ -694,7 +690,7 @@ class _FactionRefreshWorker(QObject):
                         time.sleep(0.3)
                         continue
 
-                    snapshot_date = _utc_today().isoformat()
+                    snapshot_date = utc_today().isoformat()
                     present_names = set()
                     # One commit for this system's whole faction list instead
                     # of one per faction (save_faction_snapshot auto-commits
@@ -921,7 +917,7 @@ class PlayerFactionPanel(QWidget):
             "background:transparent; border:none; color:#FFB347; font-size:11px;"
         )
         refresh_row.addWidget(self._refresh_status_label, 1)
-        self._refresh_all_btn = QPushButton("Refresh All from EDSM")
+        self._refresh_all_btn = QPushButton("Refresh All")
         self._refresh_all_btn.setStyleSheet(
             "QPushButton { background:#1a3a5a; color:#FFB347; border:1px solid #2a5a8a;"
             " border-radius:3px; padding:3px 12px; font-weight:bold; }"
@@ -929,7 +925,8 @@ class PlayerFactionPanel(QWidget):
             "QPushButton:disabled { background:#111; color:#555; border-color:#333; }"
         )
         self._refresh_all_btn.setToolTip(
-            "Re-queries EDSM for every currently tracked system, saving every faction "
+            "Re-reads every currently tracked system from EDDataHub (EDSM for any it "
+            "doesn't have), saving every faction "
             "present there (not just this one) — refreshes stale data and captures "
             "rival-faction influence for conflict-risk detection. Runs automatically "
             "about once a day; this forces it now."
@@ -1338,7 +1335,7 @@ class PlayerFactionPanel(QWidget):
         system that matched none of the "needs attention" buckets; "Stale
         Data" is checked independently of that, on its own axis."""
         buckets: Dict[str, List[dict]] = {key: [] for key, _, _ in _BUCKET_DEFS}
-        today = _utc_today()
+        today = utc_today()
 
         for s in systems:
             active_names = _active_state_names(s)
@@ -1834,7 +1831,7 @@ class PlayerFactionPanel(QWidget):
             is_controlling = bool(match.pop("is_controlling", False))
             data_timestamp = match.pop("LastUpdate", None)
             self._repo.save_faction_snapshot(
-                result["system_address"], match, _utc_today().isoformat(), is_controlling,
+                result["system_address"], match, utc_today().isoformat(), is_controlling,
                 data_timestamp, "edsm",
             )
             # A deliberate manual add should override an earlier "Remove" —
@@ -2033,7 +2030,7 @@ class PlayerFactionPanel(QWidget):
         self._check_csv_staleness()
         last = self._refresh_tracker.last_refresh()
         self._update_refresh_status_label(last)
-        if last is not None and last.astimezone().date() == datetime.now().astimezone().date():
+        if last is not None and last.astimezone(timezone.utc).date() == utc_today():
             return
         if _in_weekly_maintenance_window():
             # Frontier's weekly server maintenance (Thursdays ~09:00-11:00
@@ -2045,7 +2042,7 @@ class PlayerFactionPanel(QWidget):
 
     def _update_refresh_status_label(self, last) -> None:
         if last is None:
-            self._refresh_status_label.setText("Full EDSM refresh: never run yet")
+            self._refresh_status_label.setText("Full refresh: never run yet")
             return
         from datetime import datetime, timezone
         age_hours = (datetime.now(timezone.utc) - last).total_seconds() / 3600.0
@@ -2055,7 +2052,7 @@ class PlayerFactionPanel(QWidget):
             age_txt = f"{int(age_hours)}h ago"
         else:
             age_txt = f"{int(age_hours // 24)}d ago"
-        self._refresh_status_label.setText(f"Full EDSM refresh: {age_txt}")
+        self._refresh_status_label.setText(f"Full refresh: {age_txt}")
 
     def _toggle_csv_stale_flash(self) -> None:
         self._csv_stale_flash_on = not self._csv_stale_flash_on
@@ -2101,7 +2098,7 @@ class PlayerFactionPanel(QWidget):
         if not systems:
             self._data_freshness_label.setText("")
             return
-        today = _utc_today()
+        today = utc_today()
         today_count = 0
         recent_count = 0  # 1-6 days
         stale_count = 0   # 7+ days (matches the Stale Data bucket threshold)
@@ -2209,7 +2206,7 @@ class PlayerFactionPanel(QWidget):
             # "not already refreshed today" — skips systems a live arrival (or
             # an earlier refresh today) already updated, cutting EDSM request
             # volume instead of re-querying every tracked system every time.
-            today = _utc_today().isoformat()
+            today = utc_today().isoformat()
             fresh_today = {
                 s.get("system_name")
                 for s in (self._last_overview.get("systems") if self._last_overview else None) or []
@@ -2217,7 +2214,7 @@ class PlayerFactionPanel(QWidget):
             }
             system_names = [n for n in system_names if n not in fresh_today]
             if not system_names:
-                self._refresh_status_label.setText("Full EDSM refresh: all systems already current today.")
+                self._refresh_status_label.setText("Full refresh: all systems already current today.")
                 return False
 
         self._refresh_all_btn.setEnabled(False)
@@ -2293,7 +2290,7 @@ class PlayerFactionPanel(QWidget):
         failed_txt = f", {failed} failed (blocked/not found)" if failed else ""
         retreated_txt = f", {retreated} dropped (faction no longer present)" if retreated else ""
         self._refresh_status_label.setText(
-            f"Full EDSM refresh: just now — {refreshed} refreshed{failed_txt}{retreated_txt}"
+            f"Full refresh: just now — {refreshed} refreshed{failed_txt}{retreated_txt}"
         )
         self._force_rebuild_next = True
         self.refresh(self._last_state)

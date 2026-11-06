@@ -22,7 +22,9 @@ misrepresent when expansion actually triggers.
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
+
+from edc.utils.dates import utc_today
 from typing import Any, Dict, List, Optional
 
 from PyQt6.QtCore import Qt, QObject, QThread, QTimer, pyqtSignal
@@ -34,6 +36,7 @@ from PyQt6.QtWidgets import (
 
 from edc.ui.style import CARD_STYLE as _CARD_STYLE, HDR_STYLE as _HDR_STYLE, PRIMARY_BUTTON_STYLE as _BTN_STYLE, TAB_STYLE
 from edc.ui import formatting as fmt
+from edc.core.eddatahub_client import fetch_system_factions as fetch_hub_factions
 from edc.core.edsm_faction_lookup import fetch_system_factions, ERROR_BLOCKED, ERROR_NOT_FOUND
 from edc.core.expansion_forecast import (
     expansion_endings, is_expanding as _is_expanding,
@@ -47,16 +50,22 @@ _EXPANSION_THRESHOLD = 75.0
 
 
 class _ExpansionLookupWorker(QObject):
-    """Live EDSM faction-influence lookup for the pinned target system --
-    same fetch_system_factions() call the existing "Add System" flow on
-    the Player Faction tab already uses."""
+    """Live faction-influence lookup for the pinned target system: EDDataHub
+    first (needs the address), then the same EDSM fetch_system_factions() call
+    the "Add System" flow on the Player Faction tab uses."""
     finished = pyqtSignal(object, object, str)  # (result dict or None, error code or None, queried system name)
 
-    def __init__(self, system_name: str):
+    def __init__(self, system_name: str, hub_url: str = "", system_address: Optional[int] = None):
         super().__init__()
         self._system_name = system_name
+        self._hub_url = hub_url
+        self._system_address = system_address
 
     def run(self):
+        hub = fetch_hub_factions(self._hub_url, [self._system_address]) or {}
+        if self._system_address in hub:
+            self.finished.emit({**hub[self._system_address], "source": "hub"}, None, self._system_name)
+            return
         result, error = fetch_system_factions(self._system_name)
         self.finished.emit(result, error, self._system_name)
 
@@ -411,7 +420,9 @@ class FactionExpansionDialog(QDialog):
             self._status_label.setText("No squadron faction configured yet on the Player Faction tab.")
             return
         self._status_label.setText(f"Looking up {system_name}…")
-        self._worker = _ExpansionLookupWorker(system_name)
+        address = self._system_address if system_name == self._tracked_system_name else (
+            self._panel._repo.get_known_system_addresses(self._panel._faction_name).get(system_name.strip().lower()))
+        self._worker = _ExpansionLookupWorker(system_name, self._panel.eddatahub_url, address)
         if self._thread is not None:
             self._thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
         self._thread = QThread()
@@ -441,14 +452,18 @@ class FactionExpansionDialog(QDialog):
         try:
             repo = self._panel._repo
             repo.save_system_name_if_missing(result["system_address"], result["system_name"])
-            is_controlling = bool(match.pop("is_controlling", False))
-            data_timestamp = match.pop("LastUpdate", None)
-            repo.save_faction_snapshot(
-                result["system_address"], dict(match), date.today().isoformat(), is_controlling,
-                data_timestamp, "edsm",
-            )
+            # every faction, not just ours: conflict checks look for rivals on our row's date
+            with repo.db.deferred_commit():
+                for f in factions:
+                    f = dict(f)
+                    is_controlling = bool(f.pop("is_controlling", False))
+                    data_timestamp = f.pop("LastUpdate", None)
+                    repo.save_faction_snapshot(
+                        result["system_address"], f, utc_today().isoformat(), is_controlling,
+                        data_timestamp, result.get("source", "edsm"),
+                    )
         except Exception:
-            log.exception("Failed to save EDSM-sourced faction snapshot for expansion tracker")
+            log.exception("Failed to save faction snapshots for expansion tracker")
             self._status_label.setText("Found it, but saving failed — see log.")
             return
 

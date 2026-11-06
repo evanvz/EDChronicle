@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import csv
 import re
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -33,7 +33,7 @@ def _parse_relative_date(text: str, now: Optional[datetime] = None) -> Optional[
     Approximate (day-granularity downstream anyway, via snapshot_date)."""
     if not text:
         return None
-    now = now or datetime.now()
+    now = now or datetime.now(timezone.utc)
     m = _RELATIVE_RE.search(text.strip())
     if not m:
         return None

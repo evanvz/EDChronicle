@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import json
 from datetime import date, timedelta
+
+from edc.utils.dates import utc_today
 from typing import Any, Dict, List, Optional
 
 WATCH_THRESHOLD = 0.70
@@ -346,7 +348,7 @@ def detect_new_systems(repo, faction: str, today: Optional[date] = None) -> List
     """new_systems() from the repository: expansion endings are only looked
     for in faction systems at 50%+ (a source sits near 60-70% after its
     expansion ends), to keep it to a few history queries."""
-    today = today or date.today()
+    today = today or utc_today()
     presence = repo.get_squadron_presence(faction)
     endings, unconfirmed = [], []
     for r in presence:

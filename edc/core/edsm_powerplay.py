@@ -30,7 +30,7 @@ from __future__ import annotations
 import gzip
 import json
 import logging
-from datetime import date
+from edc.utils.dates import utc_today
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -98,7 +98,7 @@ class EdsmPowerPlayCache:
         self._by_name = by_name
 
     def is_stale(self) -> bool:
-        return self.fetched_date != date.today().isoformat()
+        return self.fetched_date != utc_today().isoformat()
 
     def has_data(self) -> bool:
         return bool(self._systems)
@@ -205,7 +205,7 @@ class EdsmPowerPlayCache:
 
         self._systems = systems
         self._rebuild_name_index()
-        self.fetched_date = date.today().isoformat()
+        self.fetched_date = utc_today().isoformat()
 
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)

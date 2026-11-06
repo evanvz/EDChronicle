@@ -4,7 +4,7 @@ EDAstro's own remote "nearest" endpoint -- confirmed live 2026-09-24
 that endpoint returns an unrelated result (Sol) regardless of input,
 even when queried with a real POI's own exact coordinates."""
 import json
-from datetime import date
+from edc.utils.dates import utc_today
 
 from edc.core.edastro_poi import EdAstroPoiCache
 
@@ -12,7 +12,7 @@ from edc.core.edastro_poi import EdAstroPoiCache
 def _cache_with_pois(tmp_path, pois, fetched_date=None):
     path = tmp_path / "edastro_poi_cache.json"
     path.write_text(
-        json.dumps({"fetched_date": fetched_date or date.today().isoformat(), "pois": pois}),
+        json.dumps({"fetched_date": fetched_date or utc_today().isoformat(), "pois": pois}),
         encoding="utf-8",
     )
     return EdAstroPoiCache(tmp_path)
@@ -66,7 +66,7 @@ def test_is_stale_true_when_never_fetched(tmp_path):
 
 
 def test_is_stale_false_for_todays_fetch(tmp_path):
-    cache = _cache_with_pois(tmp_path, [_poi("X", 0, 0, 0)], fetched_date=date.today().isoformat())
+    cache = _cache_with_pois(tmp_path, [_poi("X", 0, 0, 0)], fetched_date=utc_today().isoformat())
     assert cache.is_stale() is False
 
 

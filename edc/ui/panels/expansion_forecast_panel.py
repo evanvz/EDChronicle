@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime, timedelta, timezone
+
+from edc.utils.dates import utc_today
 from typing import Optional
 
 from PyQt6.QtCore import QObject, Qt, QThread, pyqtSignal
@@ -267,7 +269,7 @@ class ExpansionForecastPanel(QWidget):
             _fill(self._next_table, [])
             _fill(self._target_table, [])
             return
-        repo, today = self._panel._repo, date.today()
+        repo, today = self._panel._repo, utc_today()
         presence = repo.get_squadron_presence(faction)
         histories = {r["system_address"]: list(reversed(repo.get_faction_history(r["system_address"], faction)))
                      for r in presence if is_current(r, today) and (r.get("influence") or 0) >= WATCH_THRESHOLD}
@@ -301,7 +303,7 @@ class ExpansionForecastPanel(QWidget):
         cached = merge_live_counts(cached, live, self._faction() or "")
         ranked = rank_candidates([dict(c, been_before=c.get("faction_former") or c["system_name"] in self._been)
                                   for c in cached])
-        today = date.today()
+        today = utc_today()
 
         def count_cell(c):
             if c["faction_count"] is None:
