@@ -115,3 +115,14 @@ Canonn's public codex reference
 fetched 2026-10-17). The names themselves are Frontier Developments' in-game
 Codex names, compiled by Canonn; used under Frontier's Fan Content Policy
 for non-commercial community tools. Only the ID and name are kept.
+
+## settings/exo_habitat.json (EliteNexus, GPL-3.0-or-later)
+
+The per-species habitat rules (atmosphere, body class, gravity, temperature,
+pressure, volcanism, star and system conditions) were cut down from
+`data/exobiology/species.json` in EliteNexus
+(`https://github.com/uruskan/EliteNexus`, GPL-3.0-or-later, commit
+`45627e4e8d44f308ae466ed727789d4268d9ed9e`, retrieved 2026-11-06). EliteNexus
+in turn compiles them from EDMC-BioScan (GPL-2.0-or-later), SrvSurvey
+(GPL-3.0) and Canonn codex data; the `sources` field of each species is kept
+as EliteNexus asks.
