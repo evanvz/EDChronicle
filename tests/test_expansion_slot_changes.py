@@ -121,20 +121,16 @@ def test_eddn_buffer_writes_through_to_the_table(tmp_path):
 
 
 def test_overview_shows_slot_change_line(tmp_path):
-    from types import SimpleNamespace
     from unittest.mock import patch
-    from edc.ui.main_window import MainWindow
+    from edc.ui.main_window import _compute_new_system_alert
     repo = _repo(tmp_path)
     repo.save_expansion_candidates(99, [{"system_name": "Arimavante", "system_address": 1, "faction_count": 6}],
                                    "2026-10-10T12:00:00Z")
     repo.save_candidate_faction_count(1, "Arimavante", list("ABCDEFG"),
                                     (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ"))
-    shown = []
-    fake = SimpleNamespace(repo=repo, overview_panel=SimpleNamespace(set_new_system_alert=shown.append),
-                           player_faction_panel=SimpleNamespace(_faction_name="Euw"))
     with patch("edc.ui.main_window.detect_new_systems", return_value=[]):
-        MainWindow._refresh_new_system_alert(fake, force=True)
-    assert shown[-1].startswith("⚠ Arimavante: 6 → 7 factions")
+        text = _compute_new_system_alert(repo, "Euw")
+    assert text.startswith("⚠ Arimavante: 6 → 7 factions")
 
 
 def test_future_timestamped_reading_is_rejected(tmp_path):

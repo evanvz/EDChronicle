@@ -119,17 +119,13 @@ def test_overview_alert_label():
 
 
 def test_main_window_alert_uses_detection(tmp_path):
-    from edc.ui.main_window import MainWindow
+    from edc.ui.main_window import _compute_new_system_alert
     repo = _repo(tmp_path)
     today = utc_today().isoformat()
     repo.db.execute("INSERT INTO systems (system_address, system_name) VALUES (2, 'Tucanae Sector YF-W b2-2')")
     repo.save_faction_snapshot(2, {"Name": EUW, "Influence": 0.091}, today, False, f"{today}T16:59:55Z", "eddn")
-    shown = []
-    fake = SimpleNamespace(repo=repo, overview_panel=SimpleNamespace(set_new_system_alert=shown.append),
-                           player_faction_panel=SimpleNamespace(_faction_name=EUW))
     # no expansion source in range -> colonisation, kept off the Overview
-    MainWindow._refresh_new_system_alert(fake)
-    assert shown == [""]
+    assert _compute_new_system_alert(repo, EUW) == ""
 
 
 def test_main_window_alert_shows_expansion_not_colonisation(monkeypatch):
@@ -139,11 +135,9 @@ def test_main_window_alert_shows_expansion_not_colonisation(monkeypatch):
              {"system_name": "Tucanae Sector YF-W b2-2", "influence": 0.091, "first_seen": "2026-10-07",
               "source": "Ekono", "kind": "expansion"}]
     monkeypatch.setattr(mw, "detect_new_systems", lambda repo, faction: items)
-    shown = []
-    fake = SimpleNamespace(repo=None, overview_panel=SimpleNamespace(set_new_system_alert=shown.append),
-                           player_faction_panel=SimpleNamespace(_faction_name=EUW))
-    mw.MainWindow._refresh_new_system_alert(fake, force=True)
-    assert shown == ["🆕 Elite United Worlds entered Tucanae Sector YF-W b2-2 (9.1%) — likely expansion from Ekono"]
+    repo = SimpleNamespace(get_candidate_faction_counts=dict)
+    assert mw._compute_new_system_alert(repo, EUW) == (
+        "🆕 Elite United Worlds entered Tucanae Sector YF-W b2-2 (9.1%) — likely expansion from Ekono")
 
 
 def test_session_report_shows_new_system_escaped(tmp_path):
@@ -158,67 +152,80 @@ def test_session_report_shows_new_system_escaped(tmp_path):
     assert "A &lt;i&gt;b&lt;/i&gt;" in dlg._new_label.text() and not dlg._new_label.isHidden()
 
 
-def test_refresh_new_system_alert_throttles_detection(tmp_path, monkeypatch):
+def _alert_fake(shown, started, thread=None):
     from edc.ui.main_window import MainWindow
-    import edc.ui.main_window
-    repo = _repo(tmp_path)
-    today = utc_today().isoformat()
-    repo.db.execute("INSERT INTO systems (system_address, system_name) VALUES (2, 'Test System')")
-    repo.save_faction_snapshot(2, {"Name": EUW, "Influence": 0.091}, today, False, f"{today}T16:59:55Z", "eddn")
-
-    call_count = [0]
-    original_detect = edc.ui.main_window.detect_new_systems
-    def counting_detect(r, f):
-        call_count[0] += 1
-        return original_detect(r, f)
-    monkeypatch.setattr(edc.ui.main_window, "detect_new_systems", counting_detect)
-
-    shown = []
     fake = SimpleNamespace(
-        repo=repo,
         overview_panel=SimpleNamespace(set_new_system_alert=shown.append),
-        player_faction_panel=SimpleNamespace(_faction_name=EUW)
+        _start_new_system_alert_worker=lambda: started.append(1),
+        _new_system_alert_thread=thread,
     )
+    fake._refresh_new_system_alert = lambda force=False: MainWindow._refresh_new_system_alert(fake, force)
+    return fake
+
+
+def test_refresh_new_system_alert_throttles_detection():
+    from edc.ui.main_window import MainWindow
+    shown, started = [], []
+    fake = _alert_fake(shown, started)
 
     # First call should detect
     MainWindow._refresh_new_system_alert(fake)
-    assert call_count[0] == 1
-    first_text = shown[-1]
+    assert len(started) == 1
+    MainWindow._on_new_system_alert_finished(fake, "alert")
+    assert shown == ["alert"]
 
     # Second call within throttle should NOT detect again
     MainWindow._refresh_new_system_alert(fake)
-    assert call_count[0] == 1  # Still 1, not incremented
-    assert shown[-1] == first_text  # Same text resent
+    assert len(started) == 1  # Still 1, not incremented
+    assert shown == ["alert", "alert"]  # Same text resent
 
     # Call with force=True should detect again
     MainWindow._refresh_new_system_alert(fake, force=True)
-    assert call_count[0] == 2  # Now incremented
+    assert len(started) == 2  # Now incremented
 
 
-def test_refresh_new_system_alert_fallback_to_squadron_faction(tmp_path):
+def test_refresh_new_system_alert_one_check_at_a_time_forced_one_reruns():
     from edc.ui.main_window import MainWindow
+    shown, started = [], []
+    running = SimpleNamespace(isRunning=lambda: True)
+    fake = _alert_fake(shown, started, running)
+
+    MainWindow._refresh_new_system_alert(fake)
+    assert started == [] and not fake._new_system_alert_rerun   # an unforced ask just joins the running check
+
+    MainWindow._refresh_new_system_alert(fake, force=True)
+    assert started == [] and fake._new_system_alert_rerun
+
+    fake._new_system_alert_thread = SimpleNamespace(isRunning=lambda: False)
+    MainWindow._on_new_system_alert_finished(fake, "old")
+    assert shown == ["old"] and len(started) == 1 and not fake._new_system_alert_rerun
+
+
+def test_alert_worker_runs_on_its_own_connection_and_always_finishes(tmp_path):
+    from edc.ui import main_window as mw
     repo = _repo(tmp_path)
     today = utc_today().isoformat()
     repo.db.execute("INSERT INTO systems (system_address, system_name) VALUES (2, 'Fallback Test')")
     # Save snapshot with SquadronFaction=True to mark EUW as the squadron faction
     repo.save_faction_snapshot(2, {"Name": EUW, "Influence": 0.075, "SquadronFaction": True}, today, False, f"{today}T14:00:00Z", "eddn")
+    repo.db.conn.commit()
 
-    shown = []
-    fake = SimpleNamespace(
-        repo=repo,
-        overview_panel=SimpleNamespace(set_new_system_alert=shown.append),
-        player_faction_panel=SimpleNamespace(_faction_name=None)  # No explicit faction
-    )
-
-    from edc.ui import main_window as mw
-    seen = []
-    real = mw.detect_new_systems
-    mw.detect_new_systems = lambda r, faction: seen.append(faction) or real(r, faction)
+    seen, out, real = [], [], mw.detect_new_systems
+    mw.detect_new_systems = lambda r, faction: seen.append((faction, r is repo)) or real(r, faction)
     try:
-        MainWindow._refresh_new_system_alert(fake, force=True)
+        worker = mw._NewSystemAlertWorker(repo.db.db_path, None)   # No explicit faction
+        worker.finished.connect(out.append)
+        worker.run()
+        assert seen == [(EUW, False)]   # fell back to the squadron faction from the database
+        assert out == [""]
+
+        out.clear()
+        broken = mw._NewSystemAlertWorker(tmp_path / "missing" / "t.db", EUW)
+        broken.finished.connect(out.append)
+        broken.run()
+        assert out == [""]
     finally:
         mw.detect_new_systems = real
-    assert seen == [EUW]   # fell back to the squadron faction from the database
 
 
 def _cache_row(repo, count=6):

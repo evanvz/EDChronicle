@@ -834,6 +834,56 @@ def _collect_background_work(obj, depth: int, seen: set, threads: list, workers:
             _collect_background_work(val, depth - 1, seen, threads, workers)
 
 
+def _compute_new_system_alert(repo, faction: Optional[str]) -> str:
+    """The Overview's new-system alert text. Slow: one history query per faction
+    system at 50%+ (up to 8.6 s on a cold disk), so never on the UI thread."""
+    text = ""
+    # get faction with fallback to squadron
+    if not faction:
+        try:
+            faction = repo.get_squadron_faction_name()
+        except Exception:
+            faction = None
+
+    if faction:
+        try:
+            exp = first_expansion(detect_new_systems(repo, faction))
+            text = alert_text(faction, exp) if exp else ""   # colonisations stay off the Overview
+        except Exception:
+            log.exception("Failed to check for new faction systems")
+        try:
+            # an expansion candidate gaining or losing a free slot (live EDDN counts)
+            changes = [slot_change_text(c) for c in slot_changes(repo.get_candidate_faction_counts(), utc_today(),
+                                                                 faction=faction)]
+            text = "\n".join([t for t in [text] if t] + changes)
+        except Exception:
+            log.exception("Failed to check expansion candidate faction counts")
+    return text
+
+
+class _NewSystemAlertWorker(QObject):
+    """Runs _compute_new_system_alert on its own connection (cross-thread SQLite rule)."""
+    finished = pyqtSignal(str)
+
+    def __init__(self, db_path, faction: Optional[str]):
+        super().__init__()
+        self._db_path = db_path
+        self._faction = faction
+
+    def run(self):
+        text = ""
+        db = None
+        try:
+            db = Database(self._db_path)
+            text = _compute_new_system_alert(Repository(db), self._faction)
+        except Exception:
+            log.exception("New-system alert check failed")
+        finally:
+            if db is not None:
+                db.close()
+        self.finished.emit(text)
+
+
 class _WalCheckpointWorker(QObject):
     """
     PRAGMA wal_checkpoint(TRUNCATE) on its own connection and its own
@@ -6954,33 +7004,33 @@ class MainWindow(QMainWindow):
                     self.overview_panel.set_new_system_alert(last_text)
                 return
 
-        # Need to compute: get faction with fallback to squadron
-        text = ""
-        faction = getattr(self.player_faction_panel, "_faction_name", None)
-        if not faction:
-            try:
-                faction = self.repo.get_squadron_faction_name()
-            except Exception:
-                faction = None
+        running = getattr(self, "_new_system_alert_thread", None)
+        if running is not None and running.isRunning():
+            # a forced check asked for newer data than the running one read
+            self._new_system_alert_rerun = force or getattr(self, "_new_system_alert_rerun", False)
+            return
+        self._start_new_system_alert_worker()
 
-        if faction:
-            try:
-                exp = first_expansion(detect_new_systems(self.repo, faction))
-                text = alert_text(faction, exp) if exp else ""   # colonisations stay off the Overview
-            except Exception:
-                log.exception("Failed to check for new faction systems")
-            try:
-                # an expansion candidate gaining or losing a free slot (live EDDN counts)
-                changes = [slot_change_text(c) for c in slot_changes(self.repo.get_candidate_faction_counts(), utc_today(),
-                                                                     faction=faction)]
-                text = "\n".join([t for t in [text] if t] + changes)
-            except Exception:
-                log.exception("Failed to check expansion candidate faction counts")
+    def _start_new_system_alert_worker(self) -> None:
+        self._new_system_alert_worker = _NewSystemAlertWorker(
+            self.repo.db.db_path, getattr(self.player_faction_panel, "_faction_name", None))
+        if getattr(self, "_new_system_alert_thread", None) is not None:
+            self._new_system_alert_thread.wait()  # old-thread teardown race -- see main_window.py's _start_spansh_enrich docstring
+        self._new_system_alert_thread = QThread()
+        self._new_system_alert_worker.moveToThread(self._new_system_alert_thread)
+        self._new_system_alert_thread.started.connect(self._new_system_alert_worker.run)
+        self._new_system_alert_worker.finished.connect(self._on_new_system_alert_finished)
+        self._new_system_alert_worker.finished.connect(self._new_system_alert_thread.quit, Qt.ConnectionType.DirectConnection)
+        self._new_system_alert_thread.start()
 
+    def _on_new_system_alert_finished(self, text: str) -> None:
         # Cache for throttling
         self._new_system_alert_at = time.monotonic()
         self._new_system_alert_text = text
         self.overview_panel.set_new_system_alert(text)
+        if getattr(self, "_new_system_alert_rerun", False):
+            self._new_system_alert_rerun = False
+            self._refresh_new_system_alert(force=True)
 
     def _refresh_expansion_watch(self) -> None:
         """Point the EDDN listener at the Expansion Forecast's candidate systems, so
