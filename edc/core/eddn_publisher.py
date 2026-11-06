@@ -42,6 +42,7 @@ _CODEXENTRY_SCHEMA_REF = "https://eddn.edcd.io/schemas/codexentry/1"
 _OUTFITTING_SCHEMA_REF = "https://eddn.edcd.io/schemas/outfitting/2"
 _SHIPYARD_SCHEMA_REF = "https://eddn.edcd.io/schemas/shipyard/2"
 _FSSSIGNAL_SCHEMA_REF = "https://eddn.edcd.io/schemas/fsssignaldiscovered/1"
+_NAVBEACONSCAN_SCHEMA_REF = "https://eddn.edcd.io/schemas/navbeaconscan/1"
 _ARRIVAL_EVENTS = ("Location", "FSDJump", "CarrierJump")
 # codexentry-v1.0.json: personal data, never sent
 _CODEX_DISALLOWED = {"IsNewEntry", "NewTraitsDiscovered"}
@@ -230,11 +231,28 @@ def build_fssbodysignals_message(
     return msg
 
 
+def build_navbeaconscan_message(event: Dict[str, Any], star_system: str, star_pos, system_address) -> Optional[Dict[str, Any]]:
+    """navbeaconscan/1 body. The event has no system name or position, so they come
+    from our tracked system, only when its SystemAddress matches (Developers.md
+    location cross-check)."""
+    timestamp, num_bodies = event.get("timestamp"), event.get("NumBodies")
+    if not (isinstance(timestamp, str) and timestamp
+            and isinstance(num_bodies, int) and not isinstance(num_bodies, bool)
+            and isinstance(star_system, str) and star_system
+            and isinstance(system_address, int) and event.get("SystemAddress") == system_address
+            and isinstance(star_pos, (list, tuple)) and len(star_pos) == 3
+            and all(isinstance(c, (int, float)) for c in star_pos)):
+        return None
+    return {"timestamp": timestamp, "event": "NavBeaconScan", "StarSystem": star_system, "StarPos": list(star_pos),
+            "SystemAddress": system_address, "NumBodies": num_bodies}
+
+
 def _build_codex_message(msg: Dict[str, Any], star_pos, system_address) -> Optional[Dict[str, Any]]:
     """codexentry/1 body: the event already carries System/SystemAddress; add
     StarPos only when SystemAddress matches our tracked system (Developers.md
-    location cross-check). BodyID/BodyName are dropped -- the schema allows them
-    only after a Status.json cross-check we don't do (codexentry-README:37-103)."""
+    location cross-check). The event's own BodyID/BodyName are dropped -- the schema
+    allows them only after a Status.json cross-check (codexentry-README:37-103),
+    done in EddnPublisher._add_codex_body."""
     for key in _CODEX_DISALLOWED | {"BodyID", "BodyName"}:
         msg.pop(key, None)
     if not (isinstance(msg.get("System"), str) and msg["System"] and isinstance(msg.get("EntryID"), int)
@@ -523,6 +541,8 @@ class EddnPublisher:
         self._gameversion: str = ""
         self._gamebuild: str = ""
         self._is_beta: bool = False
+        self._status_body_name: Optional[str] = None
+        self._journal_body: tuple = (None, None)   # (name, BodyID) from ApproachBody/Location
         self._signal_run: list = []   # contiguous FSSSignalDiscovered events awaiting a batch
         self._recent_sent: "collections.OrderedDict[str, None]" = collections.OrderedDict()
 
@@ -549,6 +569,16 @@ class EddnPublisher:
         name = event.get("event")
         if not isinstance(name, str):
             return
+
+        # codexentry-README "BodyID and BodyName". The README says BodyName, but the
+        # game's ApproachBody and Location write Body. SupercruiseEntry must not clear it.
+        if name == "Status":
+            self._status_body_name = event.get("BodyName") or None
+            return
+        if name in ("ApproachBody", "Location"):
+            self._journal_body = (event.get("Body"), event.get("BodyID"))
+        elif name in ("LeaveBody", "FSDJump"):
+            self._journal_body = (None, None)
 
         if name.lower() == "fileheader":
             gv = event.get("gameversion")
@@ -598,6 +628,18 @@ class EddnPublisher:
         if self._odyssey is not None:
             msg["odyssey"] = self._odyssey
 
+    def _add_codex_body(self, msg: Dict[str, Any]) -> None:
+        """BodyName only from Status.json; BodyID only when the journal's body has the
+        same name (a close binary companion gets no new ApproachBody). Keys left out
+        otherwise, never sent empty."""
+        name = self._status_body_name
+        if not name:
+            return
+        msg["BodyName"] = name
+        journal_name, journal_id = self._journal_body
+        if journal_name == name and isinstance(journal_id, int) and not isinstance(journal_id, bool):
+            msg["BodyID"] = journal_id
+
     def maybe_publish(
         self,
         event: Dict[str, Any],
@@ -614,6 +656,8 @@ class EddnPublisher:
         if msg is None:
             return
         self._apply_horizons_odyssey(msg)
+        if event.get("event") == "CodexEntry":
+            self._add_codex_body(msg)
         # The game sometimes writes the same event twice (identical line, same
         # timestamp -- seen on arrival-star AutoScans); send it once.
         key = json.dumps(msg, sort_keys=True)
@@ -672,6 +716,29 @@ class EddnPublisher:
             self._queue.put_nowait(payload)
         except queue.Full:
             log.warning("EDDN publish queue full — dropping fssbodysignals message")
+
+    def maybe_publish_navbeaconscan(self, event: Dict[str, Any], star_system: str, star_pos, system_address) -> None:
+        if self._is_beta or not self._commander:
+            return
+        msg = build_navbeaconscan_message(event, star_system, star_pos, system_address)
+        if msg is None:
+            return
+        self._apply_horizons_odyssey(msg)
+        payload = {
+            "$schemaRef": _NAVBEACONSCAN_SCHEMA_REF,
+            "header": {
+                "uploaderID": self._commander,
+                "softwareName": _SOFTWARE_NAME,
+                "softwareVersion": _SOFTWARE_VERSION,
+                "gameversion": self._gameversion,
+                "gamebuild": self._gamebuild,
+            },
+            "message": msg,
+        }
+        try:
+            self._queue.put_nowait(payload)
+        except queue.Full:
+            log.warning("EDDN publish queue full — dropping navbeaconscan message")
 
     def maybe_publish_commodity(self, data: Dict[str, Any], docking_access: Optional[str] = None) -> None:
         if self._is_beta:

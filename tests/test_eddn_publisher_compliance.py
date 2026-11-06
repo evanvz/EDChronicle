@@ -197,5 +197,5 @@ def test_identical_journal_message_sent_once():
 def test_one_version_everywhere():
     from edc.core import bgs_tick, eddn_publisher
     from edc.version import APP_VERSION
-    assert eddn_publisher._SOFTWARE_VERSION == APP_VERSION == "1.0.2"
-    assert bgs_tick._USER_AGENT.startswith("EDChronicle/1.0.2 ")
+    assert eddn_publisher._SOFTWARE_VERSION == APP_VERSION == "1.0.3"
+    assert bgs_tick._USER_AGENT.startswith("EDChronicle/1.0.3 ")

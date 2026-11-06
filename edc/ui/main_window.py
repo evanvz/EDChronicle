@@ -4487,6 +4487,8 @@ class MainWindow(QMainWindow):
             self.eddn_publisher.maybe_publish(evt, self.state.system, star_pos, self.state.system_address)
             if name == "FSSBodySignals":
                 self.eddn_publisher.maybe_publish_fssbodysignals(evt, self.state.system, star_pos, self.state.system_address)
+            elif name == "NavBeaconScan":
+                self.eddn_publisher.maybe_publish_navbeaconscan(evt, self.state.system, star_pos, self.state.system_address)
             self.eddn_publisher.batch_signals(evt, self.state.system, star_pos, self.state.system_address)
         self._push_third_party(evt)
 
