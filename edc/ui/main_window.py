@@ -7370,7 +7370,8 @@ class MainWindow(QMainWindow):
         # Temporary: remove once the freeze reported 2026-08-27 is diagnosed.
         _t0 = time.perf_counter()
         self.exploration_panel.refresh(
-            self.state, self.cfg, self.planet_values, spansh_rings=spansh_rings, edastro_poi=self.edastro_poi
+            self.state, self.cfg, self.planet_values, spansh_rings=spansh_rings, edastro_poi=self.edastro_poi,
+            exo_predictions=self._exo_predictions(),
         )
         _elapsed_ms = (time.perf_counter() - _t0) * 1000
         if _elapsed_ms > 100:
@@ -7425,7 +7426,8 @@ class MainWindow(QMainWindow):
             pass
         try:
             self.exploration_panel.refresh(
-                self.state, self.cfg, self.planet_values
+                self.state, self.cfg, self.planet_values,
+                exo_predictions=self._exo_predictions(),
             )
         except Exception:
             pass

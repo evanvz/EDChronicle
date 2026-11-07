@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
+from edc.core.exo_predictor import possible_text
 from edc.ui import formatting as fmt
 from edc.ui.style import CARD_STYLE, HDR_STYLE
 
@@ -227,7 +228,7 @@ class ExplorationPanel(QWidget):
         )
 
     # ── Main refresh ──────────────────────────────────────────────────────────
-    def refresh(self, state, cfg, planet_values, spansh_rings=None, edastro_poi=None):
+    def refresh(self, state, cfg, planet_values, spansh_rings=None, edastro_poi=None, exo_predictions=None):
         try:
             min_100k = int(getattr(cfg, "min_planet_value_100k", 5) or 5)
         except Exception:
@@ -240,7 +241,7 @@ class ExplorationPanel(QWidget):
         self._refresh_signals(state)
         self._refresh_nearest_poi(state, edastro_poi)
         self._refresh_rings(state, spansh_rings)
-        self._refresh_bodies(state, min_value, planet_values)
+        self._refresh_bodies(state, min_value, planet_values, exo_predictions)
         self._refresh_materials(state)
 
     # ── Nearest notable POI box ──────────────────────────────────────────────
@@ -496,7 +497,7 @@ class ExplorationPanel(QWidget):
             self._sig_toggle_btn.setText("Show detail ▼")
 
     # ── Body cards ────────────────────────────────────────────────────────────
-    def _refresh_bodies(self, state, min_value, planet_values):
+    def _refresh_bodies(self, state, min_value, planet_values, exo_predictions=None):
         if not state.bodies:
             for card, _sig in self._body_cards.values():
                 card.deleteLater()
@@ -574,12 +575,14 @@ class ExplorationPanel(QWidget):
                 hv_unmapped += 1
 
             shown += 1
+            pred = (exo_predictions or {}).get(body)
+            exo_line = possible_text(pred) if pred else ""
             signature = (
                 body, pc_disp, dist, est, tf, was_mapped, dss_mapped,
                 first, bio, geo, human, guardian, thargoid, other_sig,
                 genuses, landable, volcanism, materials, min_value,
                 first_footfall, has_footfall, was_footfalled,
-                mining, first_mapped,
+                mining, first_mapped, exo_line,
             )
             existing = self._body_cards.get(body)
             if existing is not None and existing[1] == signature:
@@ -647,7 +650,7 @@ class ExplorationPanel(QWidget):
         first, bio, geo, human, guardian, thargoid, other_sig,
         genuses, landable, volcanism, materials, min_value,
         first_footfall=False, has_footfall=False, was_footfalled=False,
-        mining=0, first_mapped=None
+        mining=0, first_mapped=None, exo_line=""
     ):
         esc = self._esc
 
@@ -833,6 +836,12 @@ class ExplorationPanel(QWidget):
             genus_lbl.setWordWrap(True)
             genus_lbl.setStyleSheet("background: transparent; border: none;")
             card_l.addWidget(genus_lbl)
+
+        if exo_line:
+            exo_lbl = QLabel(exo_line)
+            exo_lbl.setWordWrap(True)
+            exo_lbl.setStyleSheet("color: #888888; background: transparent; border: none;")
+            card_l.addWidget(exo_lbl)
 
         # ── Materials row (landable only) ─────────────────────────────────
         if landable and isinstance(materials, dict) and materials:
