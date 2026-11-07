@@ -47,3 +47,31 @@ def test_coverage_by_area():
                      "edc/core/zz.py": {"summary": {"covered_lines": 3, "num_statements": 4}}}}
     out = coverage_by_area(cov, AREAS)
     assert out["Overview/HUD"] == 25.0 and out["Other"] == 75.0 and "Mining" not in out
+
+
+COLLECT_XML = """<?xml version="1.0"?><testsuites><testsuite>
+<testcase classname="" name="tests.test_broken"><error message="collection failure">ImportError</error></testcase>
+</testsuite></testsuites>"""
+
+
+def test_collection_error_is_a_test_finding(tmp_path):
+    p = tmp_path / "j.xml"
+    p.write_text(COLLECT_XML, encoding="utf-8")
+    f, _ = findings_from_junit(p, AREAS, set())
+    assert [(x["severity"], x["text"]) for x in f] == [("test", "tests/test_broken.py: collection failure")]
+
+
+def test_pytest_bad_exit_code_is_a_finding(tmp_path, monkeypatch):
+    import subprocess
+    from types import SimpleNamespace
+    from tools.app_status import check_tests
+
+    def fake_run(cmd, **kw):
+        junit = next(a for a in cmd if a.startswith("--junitxml=")).split("=", 1)[1]
+        Path(junit).write_text(XML, encoding="utf-8")
+        return SimpleNamespace(returncode=2)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    r = check_tests.run_tests(tmp_path, False)
+    assert any(x["severity"] == "test" and x["text"] == "pytest exit 2" for x in r["findings"])
+    assert any("test_bad" in x["text"] for x in r["findings"])

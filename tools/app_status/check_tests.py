@@ -18,12 +18,13 @@ TIMEOUT_S = 1800
 def _cases(xml_path):
     """Yield (file, nodeid, status, message); status is passed/failed/errors/skipped."""
     for tc in ET.parse(xml_path).getroot().iter("testcase"):
-        parts = tc.get("classname", "").split(".")
+        cls = tc.get("classname", "")
+        parts = (cls or tc.get("name", "")).split(".")  # collection errors: empty classname, module in name
         i = next((n for n, p in enumerate(parts) if p.startswith("test_")), None)
         if i is None:
             continue
         file = "/".join(parts[:i + 1]) + ".py"
-        nodeid = "::".join([file] + parts[i + 1:] + [tc.get("name", "")])
+        nodeid = "::".join([file] + parts[i + 1:] + ([tc.get("name", "")] if cls else []))
         bad = tc.find("failure")
         status, msg = ("failed", None) if bad is not None else ("passed", None)
         if bad is None:
@@ -98,12 +99,15 @@ def run_tests(repo_root, full):
             cmd += ["--cov=edc", "--cov=persistence", f"--cov-report=json:{covjson}"]
         env = {**os.environ, "QT_QPA_PLATFORM": "offscreen"}
         try:
-            subprocess.run(cmd, cwd=repo_root, env=env, capture_output=True, timeout=TIMEOUT_S)
+            p = subprocess.run(cmd, cwd=repo_root, env=env, capture_output=True, timeout=TIMEOUT_S)
         except subprocess.TimeoutExpired:
             return fail(f"pytest timed out after {TIMEOUT_S}s")
+        if p.returncode not in (0, 1):
+            fail(f"pytest exit {p.returncode}")
         if not junit.exists():
             return fail("pytest produced no junit XML")
-        result["findings"], known_failed = findings_from_junit(junit, areas, KNOWN_FAILURES)
+        found, known_failed = findings_from_junit(junit, areas, KNOWN_FAILURES)
+        result["findings"] += found
         result["cells"] = cells_from_counts(parse_junit(junit), areas, known_failed)
         if full and covjson.exists():
             result["coverage"] = coverage_by_area(load_json(covjson), areas)
