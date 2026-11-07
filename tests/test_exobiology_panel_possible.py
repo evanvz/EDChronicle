@@ -44,6 +44,38 @@ def test_needs_dss_row_shows_possible_and_up_to():
     assert "NEEDS DSS" in t and "possible: Bacterium, Fonticulua" in t and "up to 20.0M" in t
 
 
+def test_body_header_shows_total_once_dimmed():
+    st = _state({"Sys 1": {"BodyID": 1, "BioSignals": 2}})
+    preds = {"Sys 1": _pred({"Bacterium": [("Bacterium Aurasus", 1_000_000)]}, 20_000_000)}
+    p = ExobiologyPanel()
+    p.refresh(st, SimpleNamespace(exo_high_value_m=2), VALUES, exo_predictions=preds)
+    t = p.exo_display.toPlainText()
+    assert "up to 20.0M" in t.splitlines()[0] and t.count("up to 20.0M") == 1
+    assert "#888888" in p.exo_display.toHtml().lower()
+
+
+def test_body_header_shows_total_after_dss_and_with_canonn_hint():
+    after = _state({"Sys 1": {"BodyID": 1, "BioSignals": 2, "BioGenuses": ["Bacterium", "Fonticulua"]}})
+    preds = {"Sys 1": _pred({"Bacterium": [("Bacterium Aurasus", 1_000_000)],
+                             "Fonticulua": [("Fonticulua Segmentatus", 19_000_000)]}, 20_000_000)}
+    assert "up to 20.0M" in _text(after, preds).splitlines()[0]
+    poi = SimpleNamespace(codex=[SimpleNamespace(body="1", name="Bacterium Aurasus")])
+    needs = _state({"Sys 1": {"BodyID": 1, "BioSignals": 2}})
+    assert "up to 20.0M" in _text(needs, preds, poi).splitlines()[0]
+
+
+def test_body_header_has_no_total_when_nothing_left():
+    st = _state({"Sys 1": {"BodyID": 1, "BioSignals": 1, "BioGenuses": ["Bacterium"]}})
+    assert "up to" not in _text(st, {"Sys 1": _pred({}, 0)}).splitlines()[0]
+
+
+def test_concha_biconcavis_value():
+    import json
+    from pathlib import Path
+    data = json.loads((Path(__file__).parent.parent / "settings" / "exo_values.json").read_text(encoding="utf-8"))
+    assert data["species"]["Concha Biconcavis"]["base_value"] == 19_010_800
+
+
 def test_canonn_hint_keeps_priority():
     st = _state({"Sys 1": {"BodyID": 1, "BioSignals": 1}})
     poi = SimpleNamespace(codex=[SimpleNamespace(body="1", name="Bacterium Aurasus")])

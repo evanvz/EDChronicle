@@ -569,8 +569,6 @@ class ExobiologyPanel(QWidget):
                     if pred.possible:
                         hints.append("possible: " + ", ".join(pred.possible))
                     sp_hint = " · ".join(hints)
-                    if pred.up_to > 0:
-                        base_hint = f"up to {pred.up_to / 1e6:.1f}M"
 
                 rows.append((
                     0, status_txt, body, genus_txt,
@@ -756,8 +754,13 @@ class ExobiologyPanel(QWidget):
 
         for body_txt in bodies_order:
             entries = bodies_data[body_txt]
+            up_to = up_to_by_body.get(body_txt, 0)
+            total = (
+                f' &nbsp;<span style="color:#888888;font-weight:400;">up to {up_to / 1e6:.1f}M</span>'
+                if up_to > 0 else ""
+            )
             html.append(
-                f'<div class="bh">🪐 {_esc(body_txt)}</div>'
+                f'<div class="bh">🪐 {_esc(body_txt)}{total}</div>'
             )
             for e in entries:
                 sc = _status_color(e["status"])
