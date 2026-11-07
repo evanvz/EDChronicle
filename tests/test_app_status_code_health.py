@@ -32,3 +32,19 @@ def test_cap_adds_summary(monkeypatch, tmp_path):
     texts = [f["text"] for f in r["findings"]]
     assert "vulture: 60 unused? (first 50 listed)" in texts
     assert sum(t.startswith("unused?") for t in texts) == 50
+
+
+def test_tool_crash_exit_code_is_info(monkeypatch, tmp_path):
+    import subprocess
+    from types import SimpleNamespace
+
+    def fake_run(cmd, **kw):
+        if "--version" in cmd:
+            return SimpleNamespace(returncode=0, stdout="x", stderr="")
+        return SimpleNamespace(returncode=2, stdout="", stderr="usage: boom\nmore")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    r = ch.check_code_health(tmp_path, None)
+    assert {f["severity"] for f in r["findings"]} == {"info"}
+    assert any("vulture failed (exit 2): usage: boom" in f["text"] for f in r["findings"])
+    assert any("pylint failed" in f["text"] for f in r["findings"])

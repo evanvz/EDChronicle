@@ -9,6 +9,11 @@ from pathlib import Path
 from tools.app_status.areas import AREAS_PATH, AREA_ORDER, area_of, load_json
 
 CAP = 50
+# Exit codes meaning "ran fine" per tool. vulture: 0 clean / 3 dead code (vulture/utils.py ExitCode;
+# 1 invalid input, 2 bad args). ruff: 0 clean / 1 violations (ruff check --help; 2 = error).
+# pylint: bit flags, 1 fatal and 32 usage error are failures (pylint docs, "Exit codes").
+OK_CODES = {"vulture": {0, 3}, "ruff": {0, 1}}
+PYLINT_ERROR_BITS = 1 | 32
 TOOL_TIMEOUT_S = 600
 WHITELIST = Path(__file__).parent / "vulture_whitelist.py"
 LIVE_FILES = ["edc/core/event_engine.py", "edc/engine/handlers/*.py"]
@@ -113,6 +118,11 @@ def _run(repo_root, module, args):
         return None, f"{module} timed out after {TOOL_TIMEOUT_S}s"
     except OSError as e:
         return None, f"{module} failed to run ({e})"
+    rc = r.returncode
+    bad = bool(rc & PYLINT_ERROR_BITS) if module == "pylint" else rc not in OK_CODES[module]
+    if bad or (rc != 0 and not r.stdout.strip()):
+        first = (r.stderr.strip().splitlines() or [""])[0]
+        return None, f"{module} failed (exit {rc}): {first}"
     return r.stdout, None
 
 
