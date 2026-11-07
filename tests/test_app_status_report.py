@@ -55,6 +55,41 @@ def test_load_previous_ignores_today_and_bad_json(tmp_path):
     assert load_previous(tmp_path, "app_status_2026-11-07") == "unreadable"
 
 
+def test_load_previous_wrong_shape_is_unreadable(tmp_path):
+    for bad in ("[]", '{"findings": [{"area": "Other"}]}', '{"findings": "x"}'):
+        (tmp_path / "app_status_2026-11-06.json").write_text(bad, encoding="utf-8")
+        assert load_previous(tmp_path, "app_status_2026-11-07") == "unreadable"
+
+
+def test_unknown_severity_sorts_last():
+    md, _ = build_report(_results(_f("weird", "msg-w"), _f("start", "msg-s")), META, None, {})
+    assert md.index("msg-s") < md.index("msg-w")
+
+
+def test_journal_dir_read_does_not_rewrite_settings(tmp_path):
+    from tools.app_status.report import _journal_dir
+    settings = tmp_path / "settings" / "settings.json"
+    settings.parent.mkdir()
+    settings.write_bytes(b'{"journal_dir": "J:/x", "min_planet_value__100k": 3}')
+    assert _journal_dir(tmp_path) == "J:/x"
+    assert settings.read_bytes() == b'{"journal_dir": "J:/x", "min_planet_value__100k": 3}'
+    legacy = tmp_path / "legacy"
+    legacy.mkdir()
+    (legacy / "settings.json").write_bytes(b'{"journal_dir": "J:/y"}')
+    assert _journal_dir(legacy) == "J:/y"
+    assert not (legacy / "settings").exists()
+    assert _journal_dir(tmp_path / "missing") is None
+
+
+def test_main_with_list_previous_still_writes(tmp_path):
+    jdir = tmp_path / "journals"
+    write_synthetic_journal(jdir)
+    (tmp_path / "app_status_2000-01-01.json").write_text("[]", encoding="utf-8")
+    main(["--skip-tests", "--journal-dir", str(jdir)], app_dir=tmp_path, reports_dir=tmp_path)
+    md = [p for p in tmp_path.glob("app_status_*.md")]
+    assert len(md) == 1 and "previous report unreadable" in md[0].read_text(encoding="utf-8")
+
+
 def test_main_writes_report_pair(tmp_path):
     jdir = tmp_path / "journals"
     write_synthetic_journal(jdir)

@@ -26,9 +26,13 @@ def load_previous(reports_dir: Path, today_stem: str) -> dict | None | str:
     if not older:
         return None
     try:
-        return json.loads(older[-1].read_text(encoding="utf-8"))
+        prev = json.loads(older[-1].read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return "unreadable"
+    ok = isinstance(prev, dict) and isinstance(prev.get("findings"), list) and all(
+        isinstance(f, dict) and all(isinstance(f.get(k), str) for k in ("area", "check", "text"))
+        for f in prev["findings"])
+    return prev if ok else "unreadable"
 
 
 def _key(f):
@@ -36,7 +40,11 @@ def _key(f):
 
 
 def _line(f):
-    return f"- [{f['severity']}] {f['area']}: {f['text']}"
+    return f"- [{f.get('severity')}] {f['area']}: {f['text']}"
+
+
+def _rank(severity):
+    return SEVERITIES.index(severity) if severity in SEVERITIES else len(SEVERITIES)
 
 
 def _cell(results, check, area):
@@ -46,7 +54,7 @@ def _cell(results, check, area):
 def build_report(results: dict, meta: dict, previous, problems: dict) -> tuple[str, dict]:
     findings = [f for r in results.values() for f in r.get("findings", [])]
     order = {a: i for i, a in enumerate(AREA_ORDER)}
-    findings.sort(key=lambda f: (SEVERITIES.index(f["severity"]), order.get(f["area"], len(order))))
+    findings.sort(key=lambda f: (_rank(f["severity"]), order.get(f["area"], len(order))))
     js = {"meta": meta, "results": results, "problems": problems, "findings": findings}
     js["exit_code"] = exit_code(js)
     must = sum(f["severity"] in BLOCKING for f in findings)
@@ -124,6 +132,18 @@ def _commit(repo_root):
         return "unknown"
 
 
+def _journal_dir(app_dir: Path) -> str | None:
+    """Read journal_dir without ConfigStore.load(), which can rewrite settings.json on migration."""
+    from edc.config import ConfigStore
+    store = ConfigStore(app_dir)
+    path = store.path if store.path.exists() else store.legacy_path
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data.get("journal_dir") if isinstance(data, dict) else None
+
+
 def main(argv: list[str], repo_root: Path | None = None, app_dir: Path | None = None,
          reports_dir: Path | None = None) -> int:
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -134,12 +154,12 @@ def main(argv: list[str], repo_root: Path | None = None, app_dir: Path | None = 
     ap.add_argument("--journal-dir")
     args = ap.parse_args(argv)
 
-    from edc.config import ConfigStore, default_app_dir
+    from edc.config import default_app_dir
     from edc.version import APP_VERSION
     repo_root = Path(repo_root or REPO_ROOT)
-    app_dir = Path(app_dir or ConfigStore(default_app_dir()).app_dir)
+    app_dir = Path(app_dir or default_app_dir())
     reports_dir = Path(reports_dir or repo_root / "reports")
-    journal_dir = args.journal_dir or ConfigStore(app_dir).load().journal_dir
+    journal_dir = args.journal_dir or _journal_dir(app_dir)
     full = args.full
     days = (None if args.all_journals else 30) if full else 7
     timeout = 1800 if full else 600
