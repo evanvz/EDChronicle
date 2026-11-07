@@ -7335,7 +7335,11 @@ class MainWindow(QMainWindow):
         return self._codex_sightings_cache
 
     def _exo_predictions(self) -> dict:
-        return predict_system(self.state, self.exo_rules, self.exo_values, self._codex_sightings())
+        try:
+            return predict_system(self.state, self.exo_rules, self.exo_values, self._codex_sightings())
+        except Exception:
+            log.exception("Exobiology prediction failed")
+            return {}
 
     def _refresh_exobiology(self):
         self.exobiology_panel.refresh(

@@ -462,8 +462,6 @@ class ExobiologyPanel(QWidget):
                         (v for g2, v in pred.possible.items()
                          if genus_key(g2) == genus_key(gk)), None
                     ) if pred else None
-                    if poss:
-                        pot = poss[0][1]
                     sp = ""
                     vv = ""
                     try:
@@ -481,6 +479,8 @@ class ExobiologyPanel(QWidget):
                     except Exception:
                         sp = ""
                         vv = ""
+                    if poss and not sp:
+                        pot = poss[0][1]
                     pot_txt = "" if sp or vv else (
                         f"{pot:,} cr"
                         if isinstance(pot, int) and pot > 0

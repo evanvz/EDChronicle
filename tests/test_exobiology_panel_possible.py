@@ -77,3 +77,20 @@ def test_rank_by_up_to_across_needs_dss_and_unscanned():
     b = (0, "UNSCANNED", "B", "g", "", "", "", "", "0/3", "x")
     c = (3, "COMPLETE", "C", "g", "", "", "", "", "3/3", "x")
     assert [r[2] for r in sorted([c, a, b], key=lambda r: _row_sort_key(r, up))] == ["B", "A", "C"]
+
+
+def test_codex_hint_keeps_genus_max_not_fit_top():
+    st = _state({"Sys 1": {"BodyID": 1, "BioSignals": 1, "BioGenuses": ["Bacterium"]}},
+                {"k": {"BodyID": 1, "Genus": "Bacterium", "Species": "Bacterium Aurasus", "LastScanType": "CODEX"}})
+    preds = {"Sys 1": _pred({"Bacterium": [("Bacterium Aurasus", 1)]}, 1)}
+    p = ExobiologyPanel()
+    p.refresh(st, SimpleNamespace(exo_high_value_m=1), VALUES, exo_predictions=preds)
+    assert "possible:" not in p.exo_display.toPlainText()
+    assert "1 high-value" in p.exo_action.text()
+
+
+def test_exo_predictions_swallows_errors(monkeypatch):
+    from edc.ui import main_window as mw
+    monkeypatch.setattr(mw, "predict_system", lambda *a: 1 / 0)
+    me = SimpleNamespace(state=None, exo_rules=[], exo_values=None, _codex_sightings=lambda: {})
+    assert mw.MainWindow._exo_predictions(me) == {}
