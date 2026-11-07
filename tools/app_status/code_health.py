@@ -138,7 +138,7 @@ def check_code_health(repo_root, coverage):
     t0 = time.time()
     repo_root = Path(repo_root)
     areas = load_json(AREAS_PATH)
-    findings, secs = [], {}
+    findings, secs, failed = [], {}, set()
     counts = {a: {"U": 0, "D": 0} for a in AREA_ORDER}
 
     def add(area, severity, text):
@@ -163,6 +163,7 @@ def check_code_health(repo_root, coverage):
         out, err = _run(repo_root, module, args)
         secs[module] = round(time.time() - t, 1)
         if err:
+            failed.add(module)
             add("Other", "info", err)
         return out
 
@@ -179,6 +180,7 @@ def check_code_health(repo_root, coverage):
             hits = [(area_for(p), f"ruff {code} {p}:{ln}") for p, ln, code in parse_ruff_json(out)]
         except (ValueError, KeyError) as e:
             hits = []
+            failed.add("ruff")
             add("Other", "info", f"ruff output unreadable ({e})")
         for a, n in report("ruff", "findings", hits).items():
             counts[a]["U"] += n
@@ -202,7 +204,10 @@ def check_code_health(repo_root, coverage):
 
     cells = {}
     for a in AREA_ORDER:
-        parts = [f"{counts[a]['U']} unused?", f"{counts[a]['D']} dup?"]
+        down = [t for t in ("vulture", "ruff") if t in failed]
+        unused = "unused? not run" if len(down) == 2 else f"{counts[a]['U']} unused?" + (
+            f" ({down[0]} not run)" if down else "")
+        parts = [unused, "dup? not run" if "pylint" in failed else f"{counts[a]['D']} dup?"]
         if coverage and a in coverage:
             parts.append(f"{coverage[a]:.0f}% covered")
         cells[a] = " / ".join(parts)

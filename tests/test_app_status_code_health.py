@@ -48,3 +48,11 @@ def test_tool_crash_exit_code_is_info(monkeypatch, tmp_path):
     assert {f["severity"] for f in r["findings"]} == {"info"}
     assert any("vulture failed (exit 2): usage: boom" in f["text"] for f in r["findings"])
     assert any("pylint failed" in f["text"] for f in r["findings"])
+
+
+def test_failed_tool_shows_not_run_in_cell(monkeypatch, tmp_path):
+    monkeypatch.setattr(ch, "_run", lambda r, m, a: (None, f"{m} failed") if m in ("vulture", "pylint") else ("[]", None))
+    cell = ch.check_code_health(tmp_path, None)["cells"]["Mining"]
+    assert cell == "0 unused? (vulture not run) / dup? not run"
+    monkeypatch.setattr(ch, "_run", lambda r, m, a: (None, f"{m} failed"))
+    assert ch.check_code_health(tmp_path, None)["cells"]["Mining"] == "unused? not run / dup? not run"

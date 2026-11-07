@@ -108,3 +108,13 @@ def test_scan_logs_source_line_with_timeout_is_not_network(tmp_path):
     r = scan_logs(tmp_path, 7, _areas(), NOW)
     assert r["cells"] == {"A": "1 errors"}
     assert [f["severity"] for f in r["findings"]] == ["replay"]
+
+
+def test_empty_table_shows_no_data(tmp_path):
+    c = sqlite3.connect(tmp_path / "e.db")
+    c.execute("create table t(ts text)")
+    c.commit()
+    c.close()
+    r = check_freshness(tmp_path / "e.db", _areas(), NOW, NOW)
+    assert r["cells"]["A"] == "no data"
+    assert [(f["severity"], f["text"]) for f in r["findings"]] == [("info", "t.ts no data")]

@@ -73,13 +73,17 @@ def check_freshness(db_copy: Path, areas: dict, newest_event: datetime | None, n
     conn = sqlite3.connect(db_copy)
     try:
         for area, a in areas.items():
-            dates, stale = [], []
+            dates, stale, empty = [], [], False
             for e in a.get("fresh", []):
                 tbl, col, clock = e["table"], e["column"], e["clock"]
                 try:
                     raw = conn.execute(f'SELECT MAX("{col}") FROM "{tbl}"').fetchone()[0]
                 except sqlite3.Error as ex:
                     findings.append(_info(area, f"{tbl}.{col} not checked: {ex}"))
+                    continue
+                if raw is None:
+                    empty = True
+                    findings.append(_info(area, f"{tbl}.{col} no data"))
                     continue
                 d = _parse(raw)
                 if d is None:
@@ -97,6 +101,8 @@ def check_freshness(db_copy: Path, areas: dict, newest_event: datetime | None, n
                 cells[area] = f"STALE {min(stale)}"
             elif dates:
                 cells[area] = max(dates)
+            if empty:
+                cells[area] = f"{cells[area]}; no data" if area in cells else "no data"
     finally:
         conn.close()
     return {"cells": cells, "findings": findings, "seconds": time.time() - t0}
