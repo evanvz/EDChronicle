@@ -46,3 +46,11 @@ def mapping_problems(repo_root: Path, areas: dict) -> dict:
         elif len(hits) > 1:
             ambiguous.append(rel)
     return {"unmapped": unmapped, "ambiguous": ambiguous}
+
+
+def area_of_logger(name: str, repo_root: Path, areas: dict) -> str:
+    if not name.startswith("edc."):
+        return "Other"
+    rel = name.replace(".", "/")
+    rel += "/__init__.py" if (Path(repo_root) / rel).is_dir() else ".py"
+    return area_of(rel, "module", areas)

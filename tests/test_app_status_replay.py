@@ -87,3 +87,18 @@ def test_journal_files_days_window(tmp_path):
     names = [p.name for p in journal_files(tmp_path, 7)]
     assert names == ["Journal.2026-10-28T100000.01.log", "Journal.2026-11-01T100000.01.log"]
     assert len(journal_files(tmp_path, None)) == 3
+
+
+def test_empty_journal_dir_fails_loudly(tmp_path):
+    res = run_replay(ROOT, str(tmp_path), 7)
+    assert any("no journal files" in f["text"] for f in _sev(res, "replay"))
+
+
+def test_market_event_gives_trade_not_checkable_note(tmp_path):
+    p = write_synthetic_journal(tmp_path / "j")
+    with p.open("a", encoding="utf-8") as f:
+        f.write(json.dumps({"timestamp": "2026-11-01T10:05:00Z", "event": "Market", "MarketID": 1,
+                            "StationName": "X", "StarSystem": _SYS["StarSystem"]}) + "\n")
+    res = run_replay(ROOT, str(tmp_path / "j"), 7)
+    assert any(f["text"].startswith("trade check not checkable from journals")
+               and f["area"] == "Trade, markets & routes" for f in _sev(res, "info"))

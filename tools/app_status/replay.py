@@ -9,14 +9,14 @@ from datetime import date
 from pathlib import Path
 from typing import Iterator
 
-from tools.app_status.areas import AREAS_PATH, AREA_ORDER, BASELINES_PATH, area_of, load_json
+from tools.app_status.areas import AREAS_PATH, AREA_ORDER, BASELINES_PATH, area_of_logger, load_json
 from tools.app_status.sandbox import (
     _area_from_exc, block_network, build_window, capture_errors, make_app_dir, release_errors, unblock_network)
 
 _NEW = re.compile(r"Journal\.(\d{4})-(\d{2})-(\d{2})T")
 _OLD = re.compile(r"Journal\.(\d{2})(\d{2})(\d{2})\d{6}\.")
-EXOBIO, MISSIONS, BGS, COLONY = ("Exploration & exobiology", "Missions", "BGS & factions",
-                                 "Colonisation & system planner")
+EXOBIO, MISSIONS, BGS, COLONY, TRADE = ("Exploration & exobiology", "Missions", "BGS & factions",
+                                        "Colonisation & system planner", "Trade, markets & routes")
 
 
 def _file_date(p: Path):
@@ -68,7 +68,7 @@ def _record_area(rec, repo_root: Path, areas: dict) -> str:
         a = _area_from_exc(rec.exc_info[1], repo_root, areas)
         if a != "Other":
             return a
-    return area_of(rec.name.replace(".", "/") + ".py", "module", areas)
+    return area_of_logger(rec.name, repo_root, areas)
 
 
 def _is_bio(evt) -> bool:
@@ -118,6 +118,10 @@ def run_replay(repo_root: Path, journal_dir: str | None, days: int | None, keep_
     areas = load_json(AREAS_PATH)
     baselines = load_json(BASELINES_PATH)
     files = journal_files(Path(journal_dir), days)
+    if not files:
+        return {"cells": {}, "seconds": time.time() - t0, "stats": {},
+                "findings": [{"area": "Other", "check": "replay", "severity": "replay",
+                              "text": f"replay not run: no journal files in {journal_dir}"}]}
     findings, errs, bad = [], Counter(), []
     seen = Counter()
     misses = Counter()
@@ -229,6 +233,10 @@ def run_replay(repo_root: Path, journal_dir: str | None, days: int | None, keep_
         findings.append({"area": MISSIONS, "check": "replay", "severity": "info",
                          "text": "mission_completion_duplicates not checkable: "
                                  "faction_mission_completions stores no mission id"})
+    if seen["Market"]:
+        findings.append({"area": TRADE, "check": "replay", "severity": "info",
+                         "text": "trade check not checkable from journals: market rows are saved from "
+                                 "Market.json (live only), not from the Market event"})
     if seen["_factions"] and not after1.get("faction_snapshots"):
         findings.append({"area": BGS, "check": "replay", "severity": "replay",
                          "text": "FSDJump/Location with Factions replayed but faction_snapshots is empty"})

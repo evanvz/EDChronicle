@@ -6,9 +6,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from tools.app_status.areas import area_of
+from tools.app_status.areas import area_of_logger
 from tools.app_status.replay import journal_files
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
 _TAIL_BYTES = 65536
 # 2026-11-07 10:22:03,775 [ERROR] [edc.core.x] message  (app log times are local, UTC+2)
 _LOG_LINE = re.compile(r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d+ \[(\w+)\] \[([^\]]+)\] (.*)$")
@@ -145,21 +146,18 @@ def scan_logs(logs_dir: Path, days: int, areas: dict, now: datetime) -> dict:
         c = msgs.setdefault(lg, {})
         c[msg[:120]] = c.get(msg[:120], 0) + 1
 
-    def area_for(lg):
-        return area_of(lg.replace(".", "/") + ".py", "module", areas) if lg.startswith("edc.") else "Other"
-
     per_area = {a: 0 for a in areas}
     findings = []
     if not files:
         findings.append({"area": "Other", "check": "logs", "severity": "info",
                          "text": f"no log files in last {days} days ({logs_dir})"})
     for lg in sorted(errors):
-        a = area_for(lg)
+        a = area_of_logger(lg, REPO_ROOT, areas)
         per_area[a] = per_area.get(a, 0) + errors[lg]
         findings.append({"area": a, "check": "logs", "severity": "replay",
                          "text": f"{lg}: {errors[lg]} errors, {tracebacks[lg]} tracebacks in {days} days; top: {_top(msgs[lg])}"})
     for lg in sorted(net):
-        findings.append({"area": area_for(lg), "check": "logs", "severity": "info",
+        findings.append({"area": area_of_logger(lg, REPO_ROOT, areas), "check": "logs", "severity": "info",
                          "text": f"{lg}: {net[lg]} network errors (EDSM/Spansh unreachable or rate-limited): {_top(net_msgs[lg])}"})
     cells = {a: f"{n} errors" if n else "0" for a, n in per_area.items()}
     return {"cells": cells, "findings": findings, "seconds": time.time() - t0}

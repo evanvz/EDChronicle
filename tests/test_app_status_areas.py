@@ -19,3 +19,12 @@ def test_area_order_matches_map_and_ends_with_other():
 
 def test_reports_dir_is_ignored():
     assert "reports/" in (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+
+
+def test_area_of_logger():
+    from tools.app_status.areas import area_of_logger
+    areas = {"A": {"modules": ["edc/core/x.py", "edc/engine/handlers/*.py"]}, "Other": {}}
+    assert area_of_logger("edc.core.x", ROOT, areas) == "A"
+    assert area_of_logger("edc.engine.handlers", ROOT, areas) == "A"
+    assert area_of_logger("app_status", ROOT, areas) == "Other"
+    assert area_of_logger("core.x", ROOT, areas) == "Other"
