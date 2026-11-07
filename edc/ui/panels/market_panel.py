@@ -1160,6 +1160,8 @@ class MarketPanel(QWidget):
         no data for at all, then re-renders once resolved so a system that
         turns out enemy-controlled gets excluded retroactively instead of
         never being caught."""
+        if self._power_lookup_thread is not None and self._power_lookup_thread.isRunning():
+            return  # never block the UI on it; _on_power_lookup_finished re-renders and re-queues these
         for name in system_names:
             self._spansh_power_pending.add(name.strip().lower())
         if self._power_lookup_thread is not None:

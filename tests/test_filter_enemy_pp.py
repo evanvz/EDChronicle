@@ -98,6 +98,18 @@ def test_spansh_cache_hit_matching_own_power_is_kept():
     assert excluded == 0
 
 
+def test_lookup_still_running_does_not_block_ui_or_mark_pending():
+    # Live 2026-11-08: Spansh down, .wait() on the running batch froze the UI 2+ min.
+    def wait():
+        raise AssertionError("UI thread must not wait on a running lookup")
+    fake_self = SimpleNamespace(
+        _spansh_power_pending=set(),
+        _power_lookup_thread=SimpleNamespace(isRunning=lambda: True, wait=wait),
+    )
+    MarketPanel._resolve_unknown_pp_systems(fake_self, {"Arcadian"})
+    assert fake_self._spansh_power_pending == set()  # re-queued by the re-render when the batch ends
+
+
 def test_on_power_lookup_finished_caches_and_rerenders():
     rendered = {"results": False, "trade": False}
     fake_self = SimpleNamespace(
