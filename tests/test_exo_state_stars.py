@@ -1,3 +1,7 @@
+# EDChronicle — Copyright © 2026 CMDR B0B R0GERS
+# Licensed under the GNU General Public License v3.0 or later (GPL-3.0-or-later).
+# See the LICENSE file in the project root for full terms.
+
 from edc.core.event_engine import EventEngine
 from edc.core.state import GameState
 

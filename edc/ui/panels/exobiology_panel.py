@@ -14,7 +14,24 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
+from edc.core.exo_predictor import genus_key
+
 log = logging.getLogger(__name__)
+
+
+def _row_sort_key(row, up_to_by_body):
+    s = row[1]
+    if not isinstance(s, str):
+        rank = 99
+    elif s == "COMPLETE":
+        rank = 50
+    elif s.startswith("NEEDS DSS") or s == "UNSCANNED":
+        rank = 10
+    elif s == "CODEX":
+        rank = 25
+    else:
+        rank = 30
+    return (rank, -row[0], -up_to_by_body.get(row[2], 0))
 
 
 class ExobiologyPanel(QWidget):
@@ -140,7 +157,7 @@ class ExobiologyPanel(QWidget):
                 return s
         return s
 
-    def refresh(self, state, cfg, exo_values, canonn_poi=None):
+    def refresh(self, state, cfg, exo_values, canonn_poi=None, exo_predictions=None):
         try:
             if not isinstance(state.bodies, dict):
                 state.bodies = {}
@@ -440,6 +457,13 @@ class ExobiologyPanel(QWidget):
                     ):
                         continue
                     pot = genus_max.get(gk)
+                    pred = (exo_predictions or {}).get(body)
+                    poss = next(
+                        (v for g2, v in pred.possible.items()
+                         if genus_key(g2) == genus_key(gk)), None
+                    ) if pred else None
+                    if poss:
+                        pot = poss[0][1]
                     sp = ""
                     vv = ""
                     try:
@@ -495,8 +519,13 @@ class ExobiologyPanel(QWidget):
                             base_txt = f"{bv:,} cr"
                     except Exception:
                         base_txt = ""
+                    sp_txt = sp
+                    if poss and not sp:
+                        sp_txt = "possible: " + ", ".join(n for n, _ in poss)
+                        if isinstance(pot, int) and pot > 0:
+                            base_txt = f"up to {pot:,} cr"
                     rows.append((
-                        0, status_txt, body, gk, sp, vv,
+                        0, status_txt, body, gk, sp_txt, vv,
                         pot_txt, base_txt, "0/3", status_txt
                     ))
                     targets += 1
@@ -523,6 +552,13 @@ class ExobiologyPanel(QWidget):
                         exo_rec = exo_values.by_species.get(canonn_species[0])
                         if exo_rec is not None and isinstance(getattr(exo_rec, "base_value", None), int):
                             base_hint = f"~{exo_rec.base_value:,} cr"
+
+                pred = (exo_predictions or {}).get(body)
+                if not canonn_species and pred:
+                    if pred.possible:
+                        sp_hint = "possible: " + ", ".join(pred.possible)
+                    if pred.up_to > 0:
+                        base_hint = f"up to {pred.up_to / 1e6:.1f}M"
 
                 rows.append((
                     0, status_txt, body, genus_txt,
@@ -633,20 +669,8 @@ class ExobiologyPanel(QWidget):
                 var_txt, pot_txt, base_txt, prog_row, row_status
             ))
 
-        def _status_rank(s):
-            if not isinstance(s, str):
-                return 99
-            if s == "COMPLETE":
-                return 50
-            if s.startswith("NEEDS DSS"):
-                return 10
-            if s == "UNSCANNED":
-                return 20
-            if s == "CODEX":
-                return 25
-            return 30
-
-        rows.sort(key=lambda x: (_status_rank(x[1]), -x[0]))
+        up_to_by_body = {b: p.up_to for b, p in (exo_predictions or {}).items()}
+        rows.sort(key=lambda x: _row_sort_key(x, up_to_by_body))
         shown = rows[:80]
 
         # Group by body
@@ -748,7 +772,13 @@ class ExobiologyPanel(QWidget):
                 )
 
                 if e["species"]:
-                    line += f' — {_esc(e["species"])}'
+                    if e["species"].startswith("possible:"):
+                        line += (
+                            f' — <span style="color:#888888;">'
+                            f'{_esc(e["species"])}</span>'
+                        )
+                    else:
+                        line += f' — {_esc(e["species"])}'
                 if e["variant"]:
                     line += (
                         f' <span class="dm">'
@@ -759,8 +789,12 @@ class ExobiologyPanel(QWidget):
                     f'{_esc(e["progress"])}</span>'
                 )
                 if e["base"]:
+                    base_color = (
+                        "#888888" if e["base"].startswith("up to")
+                        else "#FFD93D"
+                    )
                     line += (
-                        f' &nbsp;<span style="color:#FFD93D;">'
+                        f' &nbsp;<span style="color:{base_color};">'
                         f'{_esc(e["base"])}</span>'
                     )
                 if e["ccr"]:

@@ -57,6 +57,7 @@ from edc.ui.panels.exobiology_panel import ExobiologyPanel
 from edc.ui.panels.intel_panel import IntelPanel
 from edc.core.status_watcher import StatusWatcher
 from edc.core.planet_values import PlanetValueTable
+from edc.core.exo_predictor import load_rules, predict_system
 from edc.core.exo_values import ExoValueTable
 from edc.core.external_intel import ExternalIntel
 from edc.core.item_catalog import ItemCatalog
@@ -2640,6 +2641,7 @@ class MainWindow(QMainWindow):
         # Load value tables from the canonical app_dir only (no Path.cwd fallbacks).
         self.planet_values = PlanetValueTable.load_from_paths(settings_base / "planet_values.json")
         self.exo_values = ExoValueTable.load_from_paths(settings_base / "exo_values.json")
+        self.exo_rules = load_rules(settings_base / "exo_habitat.json")
         self.pp_activities = PowerPlayActivityTable.load_from_paths(settings_base / "powerplay_activities.json")
 
         log.info("MainWindow paths: app_dir=%s settings_dir=%s", str(app_dir), str(settings_base))
@@ -7323,9 +7325,22 @@ class MainWindow(QMainWindow):
     def _refresh_powerplay(self):
         self.powerplay_panel.refresh(self.state, self.pp_activities)
 
+    def _codex_sightings(self) -> dict:
+        system_address = getattr(self.state, "system_address", None)
+        if not isinstance(system_address, int):
+            return {}
+        if self._codex_sightings_cache_system != system_address:
+            self._codex_sightings_cache = self.repo.get_codex_species_sightings_for_system(system_address)
+            self._codex_sightings_cache_system = system_address
+        return self._codex_sightings_cache
+
+    def _exo_predictions(self) -> dict:
+        return predict_system(self.state, self.exo_rules, self.exo_values, self._codex_sightings())
+
     def _refresh_exobiology(self):
         self.exobiology_panel.refresh(
-            self.state, self.cfg, self.exo_values, canonn_poi=self._canonn_poi
+            self.state, self.cfg, self.exo_values, canonn_poi=self._canonn_poi,
+            exo_predictions=self._exo_predictions(),
         )
 
     def _open_planet_detail(self, body_name: str):
@@ -7412,7 +7427,8 @@ class MainWindow(QMainWindow):
             pass
         try:
             self.exobiology_panel.refresh(
-                self.state, self.cfg, self.exo_values, canonn_poi=self._canonn_poi
+                self.state, self.cfg, self.exo_values, canonn_poi=self._canonn_poi,
+                exo_predictions=self._exo_predictions(),
             )
         except Exception:
             pass
@@ -7471,13 +7487,7 @@ class MainWindow(QMainWindow):
         # personally running a DSS, unlike the generic genus-range guess
         # below that's all we have for a body nobody's reported yet.
         system_address = getattr(self.state, "system_address", None)
-        if isinstance(system_address, int):
-            if self._codex_sightings_cache_system != system_address:
-                self._codex_sightings_cache = self.repo.get_codex_species_sightings_for_system(system_address)
-                self._codex_sightings_cache_system = system_address
-            codex_sightings = self._codex_sightings_cache
-        else:
-            codex_sightings = {}
+        codex_sightings = self._codex_sightings()
         confirmed_species: list[tuple[str, Optional[int]]] = []
         confirmed_bodies = 0
 

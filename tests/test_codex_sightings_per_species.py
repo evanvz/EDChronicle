@@ -39,6 +39,7 @@ def test_two_species_on_one_body_both_kept_and_counted_once(tmp_path):
         state=SimpleNamespace(system_address=42, rings={},
                               bodies={"A 1": {"BodyID": 7, "BioSignals": 2, "BioGenuses": []}}),
         repo=repo, _spansh_rings_by_system={}, _codex_sightings_cache={}, _codex_sightings_cache_system=None)
+    fake._codex_sightings = lambda: MainWindow._codex_sightings(fake)
     out = MainWindow._compute_action_state(fake)
     line = [l for l in out["exobiology"] if "EDDN-confirmed" in l][0]
     assert line.startswith("🔬 Action: 1 body EDDN-confirmed") and "Bacterium Aurasus - Teal" in line

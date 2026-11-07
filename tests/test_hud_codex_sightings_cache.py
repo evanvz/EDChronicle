@@ -19,7 +19,7 @@ def _fake_self(system_address=123):
 
     refresh_calls = []
     notify_calls = []
-    return SimpleNamespace(
+    fake = SimpleNamespace(
         cfg=SimpleNamespace(min_planet_value_100k=5, exo_high_value_m=2),
         exo_values=None,
         state=SimpleNamespace(system_address=system_address, bodies={}, rings={}),
@@ -36,6 +36,8 @@ def _fake_self(system_address=123):
         _notify_calls=notify_calls,
         _notify_bgs_activity=lambda: None,
     )
+    fake._codex_sightings = lambda: MainWindow._codex_sightings(fake)
+    return fake
 
 
 def test_first_call_queries_sightings():
