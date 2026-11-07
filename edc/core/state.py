@@ -81,6 +81,7 @@ class GameState:
     exo: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     bio_signals: Dict[str, int] = field(default_factory=dict)          # BodyName -> biological count
     bio_genuses: Dict[str, List[str]] = field(default_factory=dict)    # BodyName -> confirmed genera list
+    system_stars: Dict[int, Dict[str, Any]] = field(default_factory=dict)  # BodyID -> StarType/Luminosity/DistanceLS
     geo_signals: Dict[str, int] = field(default_factory=dict)          # BodyName -> geological count
     human_signals: Dict[str, int] = field(default_factory=dict)        # BodyName -> human signal count
     guardian_signals: Dict[str, int] = field(default_factory=dict)

@@ -485,11 +485,13 @@ class EventEngine:
                 self.state.bio_signals.clear()
                 self.state.human_signals.clear()
                 self.state.bio_genuses.clear()
+                self.state.system_stars.clear()
                 self.state.geo_signals.clear()
                 self.state.thargoid_signals.clear()
                 self.state.other_signals.clear()
                 self.state.surface_mining_signals.clear()
                 self.state.non_body_count = None
+                self.state.fss_complete = False
                 self.state.system_signals = []
                 self.state.external_pois = []
                 self.state.system_body_count = None
@@ -622,6 +624,7 @@ class EventEngine:
                 self.state.bio_signals.clear()
                 self.state.human_signals.clear()
                 self.state.bio_genuses.clear()
+                self.state.system_stars.clear()
                 self.state.geo_signals.clear()
                 self.state.thargoid_signals.clear()
                 self.state.other_signals.clear()
@@ -1430,6 +1433,13 @@ class EventEngine:
                     # both are excluded here the same way.
                     self.state.resolved_body_ids.add(body_id)
 
+                if event.get("StarType") and isinstance(body_id, int) and not ring_match and "Belt Cluster" not in body:
+                    self.state.system_stars[body_id] = {
+                        "StarType": event["StarType"],
+                        "Luminosity": event.get("Luminosity") or "",
+                        "DistanceLS": event.get("DistanceFromArrivalLS"),
+                    }
+
                 planet_class = event.get("PlanetClass") or ""
                 if not planet_class:
                     return self.state, msgs
@@ -1469,6 +1479,7 @@ class EventEngine:
                     {
                         "BodyName": body,
                         "BodyID": body_id if isinstance(body_id, int) else None,
+                        "Parents": event.get("Parents") or [],
                         "PlanetClass": planet_class,
                         "Terraformable": terraformable,
                         "DistanceLS": distance_ls,

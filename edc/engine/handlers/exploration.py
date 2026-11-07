@@ -217,6 +217,7 @@ def handle(engine, name: str | None, event: Dict[str, Any], msgs: List[str]) -> 
             rec = {
                 "BodyID":          body_id if isinstance(body_id, int) else existing.get("BodyID"),
                 "BodyName":        body_name,
+                "Parents":         event.get("Parents") or [],
                 "PlanetClass":     planet_class,
                 "Terraformable":   terraformable,
                 "DistanceLS":      distance,
