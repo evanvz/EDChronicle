@@ -1,0 +1,70 @@
+{
+ "Overview/HUD": {
+  "date": null,
+  "note": ""
+ },
+ "BGS & factions": {
+  "date": null,
+  "note": ""
+ },
+ "Powerplay": {
+  "date": null,
+  "note": ""
+ },
+ "Colonisation & system planner": {
+  "date": null,
+  "note": ""
+ },
+ "Exploration & exobiology": {
+  "date": null,
+  "note": "merged dffb398, awaiting live check"
+ },
+ "Trade, markets & routes": {
+  "date": null,
+  "note": ""
+ },
+ "Mining": {
+  "date": null,
+  "note": ""
+ },
+ "Missions": {
+  "date": null,
+  "note": ""
+ },
+ "Megaships": {
+  "date": null,
+  "note": ""
+ },
+ "Engineering & materials": {
+  "date": null,
+  "note": ""
+ },
+ "Combat scanners": {
+  "date": null,
+  "note": ""
+ },
+ "Squadron": {
+  "date": null,
+  "note": ""
+ },
+ "EDDN sending": {
+  "date": null,
+  "note": ""
+ },
+ "EDDataHub link": {
+  "date": null,
+  "note": ""
+ },
+ "Raven Colonial & EDSM push": {
+  "date": "2026-11-02",
+  "note": "EDSM live; Raven depot pending"
+ },
+ "Voice": {
+  "date": null,
+  "note": ""
+ },
+ "Other": {
+  "date": null,
+  "note": ""
+ }
+}

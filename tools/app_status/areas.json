@@ -1,0 +1,496 @@
+{
+ "Overview/HUD": {
+  "modules": [
+   "edc/ui/panels/overview_panel.py",
+   "edc/ui/panels/fleet_carrier_panel.py",
+   "edc/core/galnet_news.py",
+   "edc/core/server_status.py",
+   "edc/core/service_health.py",
+   "edc/core/rank_scanner.py",
+   "edc/core/notoriety_scanner.py",
+   "edc/core/fine_scanner.py",
+   "edc/core/bounty_scanner.py",
+   "edc/core/carrier_scanner.py",
+   "edc/engine/handlers/fleet_carrier.py",
+   "edc/core/game_version.py",
+   "edc/core/journal_shape_watch.py"
+  ],
+  "tests": [
+   "tests/test_one_today.py",
+   "tests/test_background_saves_and_overview.py",
+   "tests/test_server_status.py",
+   "tests/test_service_health.py",
+   "tests/test_galnet_news.py",
+   "tests/test_notoriety_*.py",
+   "tests/test_fine_tracking.py",
+   "tests/test_resurrect_*.py",
+   "tests/test_fleet_carrier_*.py",
+   "tests/test_carrier_*.py",
+   "tests/test_frontier_notices.py",
+   "tests/test_hud_*.py",
+   "tests/test_journal_shape*.py"
+  ],
+  "fresh": [
+   {
+    "table": "systems",
+    "column": "last_visit",
+    "max_days": 14,
+    "clock": "play"
+   }
+  ]
+ },
+ "BGS & factions": {
+  "modules": [
+   "edc/core/bgs_*.py",
+   "edc/core/faction_refresh_tracker.py",
+   "edc/core/edsm_faction_lookup.py",
+   "edc/core/inara_faction_csv.py",
+   "edc/core/discord_report.py",
+   "edc/core/session_ledger.py",
+   "edc/core/system_ticks.py",
+   "edc/core/tick_detector.py",
+   "edc/core/expansion_forecast.py",
+   "edc/core/faction_expansion_pin.py",
+   "edc/ui/influence_chart.py",
+   "edc/ui/panels/player_faction_panel.py",
+   "edc/ui/panels/combat_bgs_status_panel.py",
+   "edc/ui/panels/bgs_*.py",
+   "edc/ui/panels/faction_expansion_dialog.py",
+   "edc/ui/panels/expansion_forecast_panel.py",
+   "edc/ui/panels/session_activity_dialog.py"
+  ],
+  "tests": [
+   "tests/test_bgs_*.py",
+   "tests/test_faction_*.py",
+   "tests/test_eddn_bgs_*.py",
+   "tests/test_eddn_happiness_decode.py",
+   "tests/test_combat_bgs_*.py",
+   "tests/test_edsm_conflict_derivation.py",
+   "tests/test_expansion_*.py",
+   "tests/test_influence_chart.py",
+   "tests/test_membership_changes.py",
+   "tests/test_player_faction_*.py",
+   "tests/test_session_activity_*.py",
+   "tests/test_record_*.py",
+   "tests/test_system_ticks.py",
+   "tests/test_tick_detector.py",
+   "tests/test_war_corroboration.py",
+   "tests/test_active_war_opponent.py",
+   "tests/test_discord_report.py",
+   "tests/test_hinder_task.py",
+   "tests/test_has_raid_opportunity_state.py",
+   "tests/test_eddn_current_system_update.py",
+   "tests/test_eddatahub_factions.py",
+   "tests/test_eddatahub_ticks.py"
+  ],
+  "fresh": [
+   {
+    "table": "faction_readings",
+    "column": "observed_at",
+    "max_days": 14,
+    "clock": "play"
+   },
+   {
+    "table": "faction_snapshots",
+    "column": "snapshot_date",
+    "max_days": 14,
+    "clock": "play"
+   },
+   {
+    "table": "bgs_ticks",
+    "column": "tick_at",
+    "max_days": 3,
+    "clock": "now"
+   }
+  ]
+ },
+ "Powerplay": {
+  "modules": [
+   "edc/core/powerplay_*.py",
+   "edc/core/pp_week.py",
+   "edc/core/fdev_powerplay.py",
+   "edc/core/eddn_powerplay.py",
+   "edc/core/edsm_powerplay.py",
+   "edc/core/spansh_client.py",
+   "edc/ui/panels/powerplay_*.py",
+   "edc/ui/pp_week_chart.py",
+   "edc/ui/pp_week_worker.py",
+   "edc/engine/handlers/powerplay.py"
+  ],
+  "tests": [
+   "tests/test_powerplay_*.py",
+   "tests/test_pp_*.py",
+   "tests/test_fdev_powerplay.py",
+   "tests/test_eddn_powerplay_cache.py",
+   "tests/test_eddatahub_pp_week.py",
+   "tests/test_spansh_*.py",
+   "tests/test_system_powerplay_snapshot.py",
+   "tests/test_save_system_powerplay_snapshot.py",
+   "tests/test_filter_enemy_pp.py",
+   "tests/test_signed_tier_value.py",
+   "tests/test_combat_quip_pp_gate.py"
+  ],
+  "fresh": [
+   {
+    "table": "powerplay_merits",
+    "column": "earned_at",
+    "max_days": 30,
+    "clock": "play"
+   },
+   {
+    "table": "pp_control_history",
+    "column": "observed_at",
+    "max_days": 14,
+    "clock": "play"
+   },
+   {
+    "table": "pp_progress_history",
+    "column": "observed_at",
+    "max_days": 14,
+    "clock": "play"
+   }
+  ]
+ },
+ "Colonisation & system planner": {
+  "modules": [
+   "edc/core/colonisation_*.py",
+   "edc/ui/panels/colonisation_*.py",
+   "edc/core/station_pads.py",
+   "edc/core/ship_pad_sizes.py"
+  ],
+  "tests": [
+   "tests/test_colonisation_*.py",
+   "tests/test_known_construction_sites.py",
+   "tests/test_known_sites_combo.py",
+   "tests/test_eddatahub_colonisation.py",
+   "tests/test_journal_importer_colonisation_depot.py",
+   "tests/test_ship_pad_sizes.py",
+   "tests/test_station_services.py"
+  ],
+  "fresh": [
+   {
+    "table": "colonisation_depots",
+    "column": "last_updated",
+    "max_days": 60,
+    "clock": "play"
+   }
+  ]
+ },
+ "Exploration & exobiology": {
+  "modules": [
+   "edc/core/exo_*.py",
+   "edc/core/canonn_client.py",
+   "edc/core/edastro_poi.py",
+   "edc/core/guardian_*.py",
+   "edc/core/planet_values.py",
+   "edc/core/ring_signals.py",
+   "edc/core/external_intel.py",
+   "edc/ui/panels/exobiology_panel.py",
+   "edc/ui/panels/exploration_panel.py",
+   "edc/ui/planet_detail_dialog.py",
+   "edc/engine/handlers/exobio.py",
+   "edc/engine/handlers/exploration.py"
+  ],
+  "tests": [
+   "tests/test_exo_*.py",
+   "tests/test_exobiology_*.py",
+   "tests/test_exploration_*.py",
+   "tests/test_codex_*.py",
+   "tests/test_eddn_codex*.py",
+   "tests/test_eddn_fsssignaldiscovered.py",
+   "tests/test_eddn_listener_body_*.py",
+   "tests/test_eddn_navbeaconscan.py",
+   "tests/test_edastro_poi.py",
+   "tests/test_guardian_*.py",
+   "tests/test_planet_values_data.py",
+   "tests/test_ring_belt_filtering.py",
+   "tests/test_body_*.py",
+   "tests/test_footfall_tracking.py",
+   "tests/test_ccr_distance_tracking.py",
+   "tests/test_high_value_dss_gate.py",
+   "tests/test_fssbodysignals_*.py",
+   "tests/test_saasignals_*.py",
+   "tests/test_save_exobiology_*.py",
+   "tests/test_load_last_system_data_canonn.py",
+   "tests/test_canonn_*.py",
+   "tests/test_coords_backfill.py",
+   "tests/test_system_profile_persistence.py",
+   "tests/test_eddn_listener_system_profile.py"
+  ],
+  "fresh": [
+   {
+    "table": "systems",
+    "column": "first_visit",
+    "max_days": 30,
+    "clock": "play"
+   }
+  ]
+ },
+ "Trade, markets & routes": {
+  "modules": [
+   "edc/core/trade_routes.py",
+   "edc/core/eddn_market.py",
+   "edc/core/commodity_categories.py",
+   "edc/core/rare_commodities.py",
+   "edc/core/market_destination.py",
+   "edc/ui/panels/market_panel.py",
+   "edc/ui/panels/trade_route_panel.py"
+  ],
+  "tests": [
+   "tests/test_trade_routes*.py",
+   "tests/test_market_*.py",
+   "tests/test_commodity_categories.py",
+   "tests/test_eddn_commodity.py",
+   "tests/test_eddn_market_*.py",
+   "tests/test_eddatahub_markets.py",
+   "tests/test_sell_*.py",
+   "tests/test_save_own_market_snapshot.py",
+   "tests/test_eddn_outfitting_shipyard.py",
+   "tests/test_interstellar_factors.py"
+  ],
+  "fresh": [
+   {
+    "table": "faction_trade_sold",
+    "column": "sold_at",
+    "max_days": 30,
+    "clock": "play"
+   }
+  ]
+ },
+ "Mining": {
+  "modules": [
+   "edc/ui/panels/mining_panel.py",
+   "edc/engine/handlers/mining.py"
+  ],
+  "tests": [
+   "tests/test_mining_*.py",
+   "tests/test_planetary_mining_*.py"
+  ],
+  "fresh": []
+ },
+ "Missions": {
+  "modules": [
+   "edc/core/mission_*.py"
+  ],
+  "tests": [
+   "tests/test_mission_*.py",
+   "tests/test_massacre_*.py"
+  ],
+  "fresh": [
+   {
+    "table": "faction_mission_completions",
+    "column": "completed_at",
+    "max_days": 30,
+    "clock": "play"
+   }
+  ]
+ },
+ "Megaships": {
+  "modules": [
+   "edc/core/megaship_*.py"
+  ],
+  "tests": [
+   "tests/test_megaship_*.py"
+  ],
+  "fresh": []
+ },
+ "Engineering & materials": {
+  "modules": [
+   "edc/core/engineering_*.py",
+   "edc/core/engineer_progress_store.py",
+   "edc/core/experimental_effects.py",
+   "edc/core/odyssey_*.py",
+   "edc/core/item_catalog.py",
+   "edc/core/material_trading.py",
+   "edc/core/materials_scanner.py",
+   "edc/core/farming_locations.py",
+   "edc/ui/panels/engineering_panel.py",
+   "edc/ui/panels/inventory_panel.py",
+   "edc/ui/panels/intel_panel.py",
+   "edc/ui/odyssey_storage_dialog.py",
+   "edc/engine/handlers/engineers.py",
+   "edc/engine/handlers/inventory.py"
+  ],
+  "tests": [
+   "tests/test_engineer*.py",
+   "tests/test_engineering_*.py",
+   "tests/test_odyssey_*.py",
+   "tests/test_materials_*.py",
+   "tests/test_farming_*.py",
+   "tests/test_nearby_farming_search.py",
+   "tests/test_acquisition_progress.py",
+   "tests/test_eddn_fcmaterials.py"
+  ],
+  "fresh": []
+ },
+ "Combat scanners": {
+  "modules": [
+   "edc/core/combat_*.py",
+   "edc/core/res_signals.py",
+   "edc/core/ship_loadout.py",
+   "edc/ui/panels/combat_panel.py"
+  ],
+  "tests": [
+   "tests/test_combat_bond_scanner.py",
+   "tests/test_active_combat_bonds.py",
+   "tests/test_res_signal*.py",
+   "tests/test_ship_loadout.py",
+   "tests/test_loadout_ship_swap.py",
+   "tests/test_unarmed_enemy_scan.py",
+   "tests/test_engage_risk.py",
+   "tests/test_bounty_*.py",
+   "tests/test_event_engine_cz_kill_credit.py",
+   "tests/test_cz_station_note.py",
+   "tests/test_callout_reason.py",
+   "tests/test_comms_signal_quality.py",
+   "tests/test_compromised_nav_beacon_phrases.py"
+  ],
+  "fresh": [
+   {
+    "table": "faction_combat_bonds",
+    "column": "earned_at",
+    "max_days": 30,
+    "clock": "play"
+   },
+   {
+    "table": "faction_cz_kills",
+    "column": "earned_at",
+    "max_days": 30,
+    "clock": "play"
+   },
+   {
+    "table": "faction_bounties",
+    "column": "redeemed_at",
+    "max_days": 30,
+    "clock": "play"
+   }
+  ]
+ },
+ "Squadron": {
+  "modules": [
+   "edc/core/squadron_*.py",
+   "edc/ui/panels/squadron_panel.py"
+  ],
+  "tests": [
+   "tests/test_squadron_*.py"
+  ],
+  "fresh": []
+ },
+ "EDDN sending": {
+  "modules": [
+   "edc/core/eddn_publisher.py"
+  ],
+  "tests": [
+   "tests/test_eddn_publisher_compliance.py",
+   "tests/test_eddn_*_publish.py"
+  ],
+  "fresh": []
+ },
+ "EDDataHub link": {
+  "modules": [
+   "edc/core/eddatahub_client.py",
+   "edc/core/eddn_listener.py"
+  ],
+  "tests": [
+   "tests/test_eddn_listener_watchdog.py",
+   "tests/test_eddn_relay_fallback.py",
+   "tests/test_eddn_flush_checkpoint_mutex.py"
+  ],
+  "fresh": [
+   {
+    "table": "hub_system_ticks",
+    "column": "tick_at",
+    "max_days": 3,
+    "clock": "now"
+   }
+  ]
+ },
+ "Raven Colonial & EDSM push": {
+  "modules": [
+   "edc/core/raven_colonial*.py",
+   "edc/core/edsm_push.py",
+   "edc/core/push_credentials.py"
+  ],
+  "tests": [
+   "tests/test_raven_colonial*.py",
+   "tests/test_edsm_push.py",
+   "tests/test_push_*.py"
+  ],
+  "fresh": []
+ },
+ "Voice": {
+  "modules": [
+   "edc/audio/*.py",
+   "edc/audio/handlers/*.py",
+   "edc/ui/panels/voice_commands_panel.py",
+   "edc/core/binds_reader.py",
+   "edc/core/ship_command_dispatcher.py"
+  ],
+  "tests": [
+   "tests/test_tts_*.py",
+   "tests/test_voice_*.py",
+   "tests/test_config_voice_*.py",
+   "tests/test_config_tts_events.py",
+   "tests/test_phrase_review.py",
+   "tests/test_binds_reader_status.py",
+   "tests/test_model_mirror_fallback.py"
+  ],
+  "fresh": []
+ },
+ "Other": {
+  "modules": [
+   "edc/app.py",
+   "edc/config.py",
+   "edc/version.py",
+   "edc/core/event_engine.py",
+   "edc/core/fdevids_names.py",
+   "edc/core/journal_importer.py",
+   "edc/core/journal_watcher.py",
+   "edc/core/rank_names.py",
+   "edc/core/state.py",
+   "edc/core/status_watcher.py",
+   "edc/engine/handlers/misc.py",
+   "edc/ui/busy_spinner.py",
+   "edc/ui/formatting.py",
+   "edc/ui/main_window.py",
+   "edc/ui/splash_screen.py",
+   "edc/ui/style.py",
+   "edc/ui/system_data_loader.py",
+   "edc/ui/watcher_controller.py",
+   "edc/utils/*.py",
+   "persistence/*.py"
+  ],
+  "tests": [
+   "tests/test_app_status_*.py",
+   "tests/test_close_stops_background_workers.py",
+   "tests/test_config_bgs_limits.py",
+   "tests/test_database_deferred_commit.py",
+   "tests/test_docked_station_state.py",
+   "tests/test_edsm_flight_log_import.py",
+   "tests/test_fdevids_names.py",
+   "tests/test_formatting_bounty_age.py",
+   "tests/test_fsdjump_same_system.py",
+   "tests/test_journal_importer_persistence.py",
+   "tests/test_journal_json_retry_read.py",
+   "tests/test_journal_save_dirty_tracking.py",
+   "tests/test_retry_once_if_locked.py",
+   "tests/test_schema_split.py",
+   "tests/test_search_index_worker.py",
+   "tests/test_splash_screen_vacuum_sequencing.py",
+   "tests/test_startjump_arrival_clearing.py",
+   "tests/test_thread_quit_direct.py",
+   "tests/test_ui_stall_watchdog.py",
+   "tests/test_ui_thread_lag_fixes.py",
+   "tests/test_untrusted_text_and_downloads.py",
+   "tests/test_wal_checkpoint_short_wait.py"
+  ],
+  "fresh": [
+   {
+    "table": "processed_journals",
+    "column": "processed_at",
+    "max_days": 7,
+    "clock": "play"
+   }
+  ]
+ }
+}
