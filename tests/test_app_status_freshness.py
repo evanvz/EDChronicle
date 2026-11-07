@@ -96,3 +96,15 @@ def test_scan_logs_network_error_is_info_not_counted(tmp_path):
     by = {f["severity"]: f for f in r["findings"]}
     assert "2 network errors" in by["info"]["text"] and by["info"]["area"] == "A"
     assert by["replay"]["area"] == "B" and "real bug" in by["replay"]["text"]
+
+
+def test_scan_logs_source_line_with_timeout_is_not_network(tmp_path):
+    (tmp_path / "edc_2026-11-06_101641.log").write_text(
+        "2026-11-06 10:16:42,000 [ERROR] [edc.core.x] handler failed\n"
+        "Traceback (most recent call last):\n"
+        '  File "x.py", line 3, in f\n'
+        "    r = requests.get(url, timeout=10)  # timed out? no\n"
+        "KeyError: 'x'\n", encoding="utf-8")
+    r = scan_logs(tmp_path, 7, _areas(), NOW)
+    assert r["cells"] == {"A": "1 errors"}
+    assert [f["severity"] for f in r["findings"]] == ["replay"]

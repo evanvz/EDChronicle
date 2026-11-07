@@ -16,6 +16,7 @@ _NETWORK = re.compile(
     r"[45]\d\d (?:Client|Server) Error|requests\.exceptions\.(?:ConnectionError|ReadTimeout|ConnectTimeout|Timeout)"
     r"|timed? ?out|Connection (?:refused|reset|aborted)|Connection(?:Refused|Reset|Aborted)Error|Max retries exceeded"
     r"|SSLError|getaddrinfo failed|Name or service not known|NameResolutionError", re.I)
+_EXC_LINE = re.compile(r"^\w[\w.]*(?:Error|Exception|Timeout)\b.*", re.M)
 _LOG_NAME = re.compile(r"^edc_(\d{4})-(\d\d)-(\d\d)_\d+\.log$")
 
 
@@ -134,7 +135,7 @@ def scan_logs(logs_dir: Path, days: int, areas: dict, now: datetime) -> dict:
                     cur[2] += line
     errors, tracebacks, msgs, net, net_msgs = {}, {}, {}, {}, {}
     for lg, msg, extra in records:
-        if _NETWORK.search(msg + extra):
+        if _NETWORK.search(" ".join([msg] + _EXC_LINE.findall(extra))):
             net[lg] = net.get(lg, 0) + 1
             c = net_msgs.setdefault(lg, {})
             c[msg[:120]] = c.get(msg[:120], 0) + 1
