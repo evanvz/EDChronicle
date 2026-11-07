@@ -349,7 +349,7 @@ def detect_new_systems(repo, faction: str, today: Optional[date] = None) -> List
     for in faction systems at 50%+ (a source sits near 60-70% after its
     expansion ends), to keep it to a few history queries."""
     today = today or utc_today()
-    presence = repo.get_squadron_presence(faction)
+    presence = [r for r in repo.get_squadron_presence(faction) if r.get("system_name")]  # unnamed can't be shown
     endings, unconfirmed = [], []
     for r in presence:
         if (r.get("influence") or 0.0) >= 0.5:

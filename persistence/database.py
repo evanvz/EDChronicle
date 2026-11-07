@@ -321,6 +321,9 @@ class Database:
             # previous, only-ever-seen behavior), since there's no way to
             # recover the real sign for those rows after the fact.
             "ALTER TABLE faction_mission_completions ADD COLUMN trend TEXT",
+            # The journal's MissionID -- tells two same-second missions apart
+            # and lets a restart replay skip one already stored. NULL before 2026-11-07.
+            "ALTER TABLE faction_mission_completions ADD COLUMN mission_id INTEGER",
             # Live PowerPlay reading from the journal's own PowerplayState*
             # fields (Location/FSDJump only) -- previously only ever held in
             # memory, lost the moment the player left the system. Persisting

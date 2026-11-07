@@ -73,6 +73,14 @@ def test_missing_market_id_returns_false():
     assert fake_self._saved == []
 
 
+def test_docked_station_is_used_without_market_json():
+    # The depot screen doesn't write Market.json; the Docked event's station is enough.
+    fake_self = _fake_self(station=None)
+    fake_self.state.station_name = "Planetary Construction Site: Test"
+    assert MainWindow._save_colonisation_depot(fake_self, _depot_event()) is True
+    assert fake_self._saved[0]["station_name"] == "Planetary Construction Site: Test"
+
+
 def test_missing_system_or_station_returns_false():
     fake_self = _fake_self(system="", station="")
     changed = MainWindow._save_colonisation_depot(fake_self, _depot_event())

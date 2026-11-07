@@ -133,6 +133,17 @@ def test_detect_new_systems_ignores_zero_drop_endings():
     assert [(o["system_name"], o["source"]) for o in out] == [("Tucanae Sector YF-W b2-2", "Ekono")]
 
 
+def test_detect_new_systems_skips_a_system_with_no_name():
+    # Found by the app status replay: a system known only by address crashed sorted(names).
+    from types import SimpleNamespace
+    repo = SimpleNamespace(
+        get_squadron_presence=lambda f: [_p(1, None, 0.6, "2026-10-07", "2026-10-07"),
+                                         _p(2, "Ekono", 0.6, "2026-10-07", "2026-10-07")],
+        get_faction_history=lambda addr, f: [],
+        get_system_coords_for_names=lambda names: {})
+    assert all(o["system_name"] for o in ef.detect_new_systems(repo, "EUW", TODAY))
+
+
 def test_unread_drop_source_is_only_the_highest_influence_system():
     """Expansion comes from the faction's highest-influence system; a new system
     near a lower 75%+ system but out of the top system's range is a colonisation."""

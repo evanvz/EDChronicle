@@ -3167,7 +3167,7 @@ class Repository:
         self, system_address: int, faction_name: str, completed_at: str,
         influence_tier: Optional[str] = None, is_primary: bool = True,
         mission_type: Optional[str] = None, reward: Optional[int] = None,
-        trend: Optional[str] = None,
+        trend: Optional[str] = None, mission_id: Optional[int] = None,
     ) -> None:
         """One row per faction a MissionCompleted's FactionEffects actually
         moved in system_address -- see main_window.py's
@@ -3205,19 +3205,22 @@ class Repository:
 
         The startup replay re-reads the current journal, so the same completion
         arrives again on every restart (one massacre mission was stored 3 times,
-        2026-10-23): an identical row is skipped.
-        ponytail: two missions with the same type, tier and second would merge;
-        store the MissionID if that ever happens."""
+        2026-10-23): an identical row is skipped. mission_id keeps two
+        same-second missions apart; a row stored before it existed (NULL)
+        still matches, so the first replay after the upgrade adds nothing."""
         self.db.execute(
             "INSERT INTO faction_mission_completions "
-            "(system_address, faction_name, completed_at, influence_tier, is_primary, mission_type, reward, trend) "
-            "SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM faction_mission_completions "
+            "(system_address, faction_name, completed_at, influence_tier, is_primary, mission_type, reward, trend, "
+            "mission_id) "
+            "SELECT ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM faction_mission_completions "
             "WHERE system_address = ? AND faction_name = ? AND completed_at = ? AND is_primary = ? "
-            "AND mission_type IS ? AND influence_tier IS ? AND trend IS ?)",
+            "AND mission_type IS ? AND influence_tier IS ? AND trend IS ? "
+            "AND (mission_id IS ? OR mission_id IS NULL))",
             (
                 system_address, faction_name, completed_at, influence_tier, 1 if is_primary else 0,
-                mission_type, reward, trend,
+                mission_type, reward, trend, mission_id,
                 system_address, faction_name, completed_at, 1 if is_primary else 0, mission_type, influence_tier, trend,
+                mission_id,
             ),
         )
 

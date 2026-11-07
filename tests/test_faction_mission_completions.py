@@ -189,3 +189,20 @@ def test_the_same_cz_replayed_at_startup_is_stored_once(tmp_path):
     repo.record_faction_cz_kill(system_address=123, faction_name="EUW", zone_type="space", size="l",
                                 earned_at="2026-10-23T07:42:53Z")
     assert repo.db.conn.execute("SELECT COUNT(*) FROM faction_cz_kills").fetchone()[0] == 2
+
+
+def test_mission_id_keeps_same_second_missions_apart_and_skips_repeats(tmp_path):
+    repo = _repo(tmp_path)
+    at = _iso(0)
+    for mid in (1, 2, 1):  # two missions in the same second, then mission 1 replayed
+        repo.record_faction_mission_completion(123, "Test Faction", at, "++", mission_type="Courier", mission_id=mid)
+    ids = [r[0] for r in repo.db.execute("SELECT mission_id FROM faction_mission_completions ORDER BY mission_id")]
+    assert ids == [1, 2]
+
+
+def test_replay_after_upgrade_skips_old_row_without_mission_id(tmp_path):
+    repo = _repo(tmp_path)
+    at = _iso(0)
+    repo.record_faction_mission_completion(123, "Test Faction", at, "++", mission_type="Courier")
+    repo.record_faction_mission_completion(123, "Test Faction", at, "++", mission_type="Courier", mission_id=7)
+    assert repo.db.execute("SELECT COUNT(*) FROM faction_mission_completions").fetchone()[0] == 1

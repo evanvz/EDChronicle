@@ -1713,7 +1713,9 @@ class MainWindow(QMainWindow):
         if not isinstance(market_id, int):
             return False
         system_name = getattr(self.state, "system", None) or ""
-        station_name = getattr(self.state, "current_market_station", None) or ""
+        # The Docked station first: the depot screen doesn't write Market.json.
+        station_name = (getattr(self.state, "station_name", None)
+                        or getattr(self.state, "current_market_station", None) or "")
         if not system_name or not station_name:
             return False
         system_address = getattr(self.state, "system_address", None)
@@ -1802,6 +1804,7 @@ class MainWindow(QMainWindow):
 
         reward = evt.get("Reward")
         reward = reward if isinstance(reward, int) else None
+        mission_id = evt.get("MissionID") if isinstance(evt.get("MissionID"), int) else None
 
         notified_systems: set = set()
         wrote_primary = False
@@ -1840,6 +1843,7 @@ class MainWindow(QMainWindow):
                             mission_type=mission_type,
                             reward=reward,
                             trend=trend if isinstance(trend, str) else None,
+                            mission_id=mission_id,
                         )
                     except Exception:
                         log.exception("Failed to record faction mission completion")
@@ -1860,6 +1864,7 @@ class MainWindow(QMainWindow):
                         is_primary=True,
                         mission_type=mission_type,
                         reward=reward,
+                        mission_id=mission_id,
                     )
                     notified_systems.add(current_system_address)
                 except Exception:
