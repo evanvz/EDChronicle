@@ -100,3 +100,72 @@ def test_main_writes_report_pair(tmp_path):
     data = json.loads(js[0].read_text(encoding="utf-8"))
     assert data["exit_code"] == code == 1
     assert any(f["text"] == "no database found" for f in data["findings"])
+    assert any(f["severity"] == "info" and f["text"] == "tests skipped (--skip-tests)" for f in data["findings"])
+
+
+def test_since_last_report_ignores_number_churn():
+    prev = {"findings": [_f("replay", "edc.x: 12 errors, 3 tracebacks in 7 days (x4)")]}
+    md, _ = build_report(_results(_f("replay", "edc.x: 15 errors, 0 tracebacks in 7 days")), META, prev, {})
+    since = md.split("## Since last report")[1].split("## Mapping")[0]
+    new, resolved = since.split("Resolved")
+    assert "edc.x" not in new and "edc.x" not in resolved
+
+
+def test_live_confirmed_non_dict_entry_is_tolerated(tmp_path, monkeypatch):
+    from tools.app_status import report
+    bad = tmp_path / "live.json"
+    bad.write_text('{"Mining": "yes"}', encoding="utf-8")
+    monkeypatch.setattr(report, "LIVE_CONFIRMED_PATH", bad)
+    md, _ = build_report(_results(), META, None, {})
+    assert "| Mining |" in md
+
+
+def test_main_survives_malformed_json_files(tmp_path, monkeypatch):
+    from tools.app_status import report
+    live, areas = tmp_path / "live_confirmed.json", tmp_path / "areas.json"
+    live.write_text("{bad", encoding="utf-8")
+    areas.write_text("[1]", encoding="utf-8")
+    monkeypatch.setattr(report, "LIVE_CONFIRMED_PATH", live)
+    monkeypatch.setattr(report, "AREAS_PATH", areas)
+    reports = tmp_path / "r"
+    write_synthetic_journal(tmp_path / "j")
+    main(["--skip-tests", "--journal-dir", str(tmp_path / "j")], app_dir=tmp_path, reports_dir=reports)
+    data = json.loads(next(reports.glob("*.json")).read_text(encoding="utf-8"))
+    starts = [f["text"] for f in data["findings"] if f["severity"] == "start"]
+    assert any(t.startswith("live_confirmed.json unreadable") for t in starts)
+    assert any(t.startswith("areas.json unreadable") for t in starts)
+
+
+def test_all_journals_needs_full(tmp_path):
+    import pytest
+    with pytest.raises(SystemExit):
+        main(["--all-journals", "--skip-tests"], app_dir=tmp_path, reports_dir=tmp_path)
+    assert not list(tmp_path.glob("app_status_*"))
+
+
+def _fake_child(monkeypatch, rc, out_text, stderr=b""):
+    import subprocess
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    def fake_run(cmd, **kw):
+        if out_text is not None:
+            Path(cmd[-1]).write_text(out_text, encoding="utf-8")
+        return SimpleNamespace(returncode=rc, stderr=stderr)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+
+def test_child_nonzero_exit_with_results_keeps_them(tmp_path, monkeypatch):
+    from tools.app_status.report import _child
+    _fake_child(monkeypatch, 3, json.dumps({"cells": {"Mining": "ok"}, "findings": [], "seconds": 1.0}))
+    r = _child(tmp_path, "replay", {}, 10)
+    assert r["cells"] == {"Mining": "ok"}
+    assert [(f["severity"], f["text"]) for f in r["findings"]] == [("info", "child exited 3 after writing results")]
+
+
+def test_child_crash_text_has_last_stderr_line(tmp_path, monkeypatch):
+    from tools.app_status.report import _child
+    _fake_child(monkeypatch, 1, None, b"Traceback\n  x\nValueError: boom\n")
+    r = _child(tmp_path, "replay", {}, 10)
+    assert r["findings"][0]["text"] == "check replay crashed (exit 1): ValueError: boom"

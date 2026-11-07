@@ -36,7 +36,20 @@ def load_previous(reports_dir: Path, today_stem: str) -> dict | None | str:
 
 
 def _key(f):
-    return f["area"], f["check"], _XN.sub("", f["text"])
+    return f["area"], f["check"], re.sub(r"\d+", "#", _XN.sub("", f["text"]))
+
+
+def _read_json(path):
+    """Return (dict or None, finding or None); a hand-edited file must not stop the report."""
+    try:
+        data = load_json(path)
+        err = None if isinstance(data, dict) else "not a JSON object"
+    except (OSError, ValueError) as e:
+        data, err = None, e
+    if err is None:
+        return data, None
+    return None, {"area": "Other", "check": "config", "severity": "start",
+                  "text": f"{Path(path).name} unreadable: {err}"}
 
 
 def _line(f):
@@ -52,13 +65,14 @@ def _cell(results, check, area):
 
 
 def build_report(results: dict, meta: dict, previous, problems: dict) -> tuple[str, dict]:
-    findings = [f for r in results.values() for f in r.get("findings", [])]
+    live, bad = _read_json(LIVE_CONFIRMED_PATH)
+    live = live or {}
+    findings = [f for r in results.values() for f in r.get("findings", [])] + ([bad] if bad else [])
     order = {a: i for i, a in enumerate(AREA_ORDER)}
     findings.sort(key=lambda f: (_rank(f["severity"]), order.get(f["area"], len(order))))
     js = {"meta": meta, "results": results, "problems": problems, "findings": findings}
     js["exit_code"] = exit_code(js)
     must = sum(f["severity"] in BLOCKING for f in findings)
-    live = load_json(LIVE_CONFIRMED_PATH)
     full = meta["mode"] == "full"
 
     secs = ", ".join(f"{k} {v:.0f}s" for k, v in meta["seconds"].items())
@@ -74,8 +88,8 @@ def build_report(results: dict, meta: dict, previous, problems: dict) -> tuple[s
     md += ["| Area | Tests | Replay | Data fresh | Code health | Last live-confirmed |",
            "|---|---|---|---|---|---|"]
     for a in AREA_ORDER:
-        lc = live.get(a) or {}
-        conf = (lc.get("date") or "never") + (f" ({lc['note']})" if lc.get("note") else "")
+        lc = live.get(a) if isinstance(live.get(a), dict) else {}
+        conf = f"{lc.get('date') or 'never'}" + (f" ({lc['note']})" if lc.get("note") else "")
         health = f"{_cell(results, 'code_health', a)}; {_cell(results, 'importer', a)}" if full else "—"
         md.append(f"| {a} | {_cell(results, 'tests', a)} | {_cell(results, 'replay', a)}; "
                   f"{_cell(results, 'logs', a)} | {_cell(results, 'freshness', a)} | {health} | {conf} |")
@@ -118,9 +132,17 @@ def _child(repo_root, name, args, timeout):
                                capture_output=True, timeout=timeout)
         except subprocess.TimeoutExpired:
             return _crash(name, f"check {name} timed out")
-        if p.returncode or not out.exists():
-            return _crash(name, f"check {name} crashed (exit {p.returncode})")
-        return json.loads(out.read_text(encoding="utf-8"))
+        try:
+            res = json.loads(out.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            res = None
+        if not isinstance(res, dict):
+            last = (p.stderr or b"").decode("utf-8", "replace").strip().splitlines()
+            return _crash(name, f"check {name} crashed (exit {p.returncode})" + (f": {last[-1]}" if last else ""))
+        if p.returncode:
+            res.setdefault("findings", []).append({"area": "Other", "check": name, "severity": "info",
+                                                   "text": f"child exited {p.returncode} after writing results"})
+        return res
 
 
 def _commit(repo_root):
@@ -153,6 +175,8 @@ def main(argv: list[str], repo_root: Path | None = None, app_dir: Path | None = 
     ap.add_argument("--skip-tests", action="store_true")
     ap.add_argument("--journal-dir")
     args = ap.parse_args(argv)
+    if args.all_journals and not args.full:
+        ap.error("--all-journals needs --full")
 
     from edc.config import default_app_dir
     from edc.version import APP_VERSION
@@ -162,10 +186,13 @@ def main(argv: list[str], repo_root: Path | None = None, app_dir: Path | None = 
     journal_dir = args.journal_dir or _journal_dir(app_dir)
     full = args.full
     days = (None if args.all_journals else 30) if full else 7
-    timeout = 1800 if full else 600
+    timeout = 7200 if args.all_journals else 1800 if full else 600
     now = datetime.now(timezone.utc)
-    areas = load_json(AREAS_PATH)
     results, seconds, problems = {}, {}, {}
+    areas, bad = _read_json(AREAS_PATH)
+    if bad:
+        areas = {"Other": {}}
+        results["config"] = {"cells": {}, "findings": [bad], "seconds": 0.0}
 
     def timed(name, fn):
         t = time.time()
@@ -177,7 +204,10 @@ def main(argv: list[str], repo_root: Path | None = None, app_dir: Path | None = 
 
     from tools.app_status import code_health, freshness
     from tools.app_status.check_tests import run_tests
-    if not args.skip_tests:
+    if args.skip_tests:
+        results["tests"] = {"cells": {}, "seconds": 0.0, "findings": [
+            {"area": "Other", "check": "tests", "severity": "info", "text": "tests skipped (--skip-tests)"}]}
+    else:
         timed("tests", lambda: run_tests(repo_root, full))
     timed("app_start", lambda: _child(repo_root, "app_start", {}, 600))
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:

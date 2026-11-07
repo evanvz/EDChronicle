@@ -21,7 +21,7 @@ Other flags: `--all-journals` (full only), `--skip-tests`, `--journal-dir PATH`.
 
 - The `**Result: PASS|FAIL**` line is also the exit code: 1 if any must-fix finding exists, else 0.
 - Severity, worst first: `start`, `test`, `replay`, `stale` are must-fix. `suspect` means review. `info` is a note.
-- "Since last report" compares with the previous report: new, fixed and changed findings.
+- "Since last report" compares with the previous report: new and resolved findings. Numbers inside a finding are ignored when matching, so a changed count is neither new nor resolved.
 - Suspects are not certainties. Code health and sampled misses can be false positives.
 - Network outages show as `info` notes, not failures.
 
