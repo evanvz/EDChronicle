@@ -6,7 +6,7 @@ import html
 import json
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 log = logging.getLogger("edc.exo_predictor")
@@ -30,6 +30,9 @@ _LUM_SUFFIXES = ("a", "b", "ab", "z")
 class BodyPrediction:
     possible: dict[str, list[tuple[str, int]]]
     up_to: int
+    known: dict[str, tuple[str, int]] = field(default_factory=dict)  # sighted or partly sampled, unfinished
+    sampled: frozenset[str] = frozenset()  # the genera in known the player sampled himself
+    after_dss: bool = False
 
 
 def load_rules(*paths: Path) -> list[dict] | None:
@@ -141,7 +144,8 @@ def fits(rec: dict, ruleset: dict, stars: dict[int, dict], system_classes: set[s
 
 
 def predict_body(rec, rules, values, stars, system_classes, fss_complete,
-                 known_species: dict[str, str], finished_genera: set[str]) -> BodyPrediction | None:
+                 known_species: dict[str, str], finished_genera: set[str],
+                 sampled_genera: frozenset[str] = frozenset()) -> BodyPrediction | None:
     signals = rec.get("BioSignals") or 0
     if not rec.get("PlanetClass") or rec.get("SurfaceGravity") is None or signals <= 0:
         return None
@@ -167,12 +171,19 @@ def predict_body(rec, rules, values, stars, system_classes, fss_complete,
 
     fkeys = {genus_key(g) for g in finished_genera}
     kkeys = {genus_key(g) for g in known_species}
-    real = [value(sp) for g, sp in known_species.items() if genus_key(g) not in fkeys]
-    taken = len(real) + len(fkeys)
-    remaining = {g: v for g, v in genera.items() if genus_key(g) not in kkeys | fkeys}
-    remaining = dict(sorted(remaining.items(), key=lambda kv: -kv[1][0][1]))
+    real = [(g, sp) for g, sp in known_species.items() if genus_key(g) not in fkeys]
+    # More known species than the body has room for: the player's own samples first, then the richest.
+    real.sort(key=lambda gs: (gs[0] not in sampled_genera, -value(gs[1])))
+    room = max(0, slots - len(fkeys))
+    known = {g: (sp, value(sp)) for g, sp in real[:room]}
+    left = room - len(real)
+    remaining = {}
+    if left > 0:
+        remaining = {g: v for g, v in genera.items() if genus_key(g) not in kkeys | fkeys}
+        remaining = dict(sorted(remaining.items(), key=lambda kv: -kv[1][0][1]))
     best = [v[0][1] for v in remaining.values()]
-    return BodyPrediction(remaining, sum(real) + sum(best[:max(0, slots - taken)]))
+    return BodyPrediction(remaining, sum(v for _, v in known.values()) + sum(best[:max(0, left)]),
+                          known, sampled_genera.intersection(known), bool(dss))
 
 
 def predict_system(state, rules, values, sightings: dict[int, list]) -> dict[str, BodyPrediction]:
@@ -189,30 +200,53 @@ def predict_system(state, rules, values, sightings: dict[int, list]) -> dict[str
     out = {}
     for name, rec in state.bodies.items():
         bid = rec.get("BodyID")
+        dkeys = {genus_key(d) for d in rec.get("BioGenuses") or []}
+
+        def allowed(genus):  # the player's own DSS beats a sighting
+            return not dkeys or genus_key(genus) in dkeys
+
         known: dict[str, str] = {}
         for s in sorted(sightings.get(bid) or [], key=lambda s: s.get("last_seen") or ""):
             gs = genus_of(s.get("species_name"))
-            if gs:
+            if gs and allowed(gs[0]):
                 known[gs[0]] = gs[1]
         finished: set[str] = set()
+        sampled: set[str] = set()
         for e in state.exo.values():
             if e.get("BodyID") != bid:
                 continue
             gs = genus_of(e.get("Species"))
-            if gs:
+            samples = e.get("Samples") or 0
+            if gs and samples >= 1:
                 known[gs[0]] = gs[1]
-            if (e.get("Samples") or 0) >= 3 and (gs or e.get("Genus")):
+                sampled.add(gs[0])
+            elif gs and allowed(gs[0]) and gs[0] not in sampled:  # own CodexEntry, 0 samples
+                known[gs[0]] = gs[1]
+            if samples >= 3 and (gs or e.get("Genus")):
                 finished.add(gs[0] if gs else e["Genus"])
-        pred = predict_body(rec, rules, values, stars, classes, bool(state.fss_complete), known, finished)
+        pred = predict_body(rec, rules, values, stars, classes, bool(state.fss_complete), known, finished,
+                            frozenset(sampled))
         if pred is not None:
             out[name] = pred
     return out
 
 
+def sighted_species(pred: BodyPrediction) -> list[tuple[str, int]]:
+    return [sv for g, sv in pred.known.items() if g not in pred.sampled]
+
+
 def possible_text(pred: BodyPrediction) -> str:
-    if not pred.possible:
-        return ""
-    return f"Possible: {', '.join(pred.possible)} · up to {pred.up_to / 1e6:.1f}M"
+    parts = []
+    sighted = sighted_species(pred)
+    if sighted:
+        parts.append("Sighted: " + ", ".join(sp for sp, _ in sighted))
+    if pred.possible and pred.after_dss:
+        parts.append("Possible species: " + ", ".join(sp for v in pred.possible.values() for sp, _ in v))
+    elif pred.possible:
+        parts.append("Possible: " + ", ".join(pred.possible))
+    if pred.up_to > 0:
+        parts.append(f"up to {pred.up_to / 1e6:.1f}M")
+    return " · ".join(parts)
 
 
 def high_value_line(predictions: dict[str, BodyPrediction], threshold_m: int) -> str:

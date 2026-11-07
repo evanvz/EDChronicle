@@ -94,3 +94,41 @@ def test_exo_predictions_swallows_errors(monkeypatch):
     monkeypatch.setattr(mw, "predict_system", lambda *a: 1 / 0)
     me = SimpleNamespace(state=None, exo_rules=[], exo_values=None, _codex_sightings=lambda: {})
     assert mw.MainWindow._exo_predictions(me) == {}
+
+
+SIGHTED = {"Bacterium": ("Bacterium Aurasus", 1_000_000)}
+
+
+def test_needs_dss_row_names_sighted_species_and_value():
+    st = _state({"Sys 1": {"BodyID": 1, "BioSignals": 2}})
+    preds = {"Sys 1": BodyPrediction({"Fonticulua": [("Fonticulua Segmentatus", 19_000_000)]}, 20_000_000, known=SIGHTED)}
+    t = _text(st, preds)
+    assert "sighted: Bacterium Aurasus 1,000,000 cr" in t and "possible: Fonticulua" in t and "up to 20.0M" in t
+
+
+def test_after_dss_row_names_sighted_species_and_value():
+    st = _state({"Sys 1": {"BodyID": 1, "BioSignals": 1, "BioGenuses": ["Bacterium"]}})
+    t = _text(st, {"Sys 1": BodyPrediction({}, 1_000_000, known=SIGHTED)})
+    assert "UNSCANNED" in t and "sighted: Bacterium Aurasus" in t and "1,000,000 cr" in t and "possible:" not in t
+
+
+def test_sighted_after_dss_is_dim_not_gold():
+    st = _state({"Sys 1": {"BodyID": 1, "BioSignals": 1, "BioGenuses": ["Bacterium"]}})
+    p = ExobiologyPanel()
+    p.refresh(st, SimpleNamespace(exo_high_value_m=2), VALUES,
+              exo_predictions={"Sys 1": BodyPrediction({}, 1_000_000, known=SIGHTED)})
+    h = p.exo_display.toHtml().lower()
+    assert "#ffd93d" not in h and "#888888" in h
+
+
+def _sampled_state(bodyrec):
+    return _state({"Sys 1": bodyrec},
+                  {"k": {"BodyID": 1, "Genus": "Bacterium", "Species": "Bacterium Aurasus", "Samples": 1,
+                         "LastScanType": "LOG", "BaseValue": 1_000_000}})
+
+
+def test_sampled_row_is_not_duplicated_or_labelled_sighted():
+    preds = {"Sys 1": BodyPrediction({}, 1_000_000, known=SIGHTED, sampled=frozenset({"Bacterium"}))}
+    for rec in ({"BodyID": 1, "BioSignals": 2}, {"BodyID": 1, "BioSignals": 1, "BioGenuses": ["Bacterium"]}):
+        t = _text(_sampled_state(rec), preds)
+        assert "sighted:" not in t and t.count("Bacterium Aurasus") == 1

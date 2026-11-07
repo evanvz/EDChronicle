@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
-from edc.core.exo_predictor import genus_key
+from edc.core.exo_predictor import genus_key, sighted_species
 
 log = logging.getLogger(__name__)
 
@@ -462,6 +462,10 @@ class ExobiologyPanel(QWidget):
                         (v for g2, v in pred.possible.items()
                          if genus_key(g2) == genus_key(gk)), None
                     ) if pred else None
+                    seen = next(
+                        (v for g2, v in pred.known.items()
+                         if genus_key(g2) == genus_key(gk) and g2 not in pred.sampled), None
+                    ) if pred else None
                     sp = ""
                     vv = ""
                     try:
@@ -479,7 +483,9 @@ class ExobiologyPanel(QWidget):
                     except Exception:
                         sp = ""
                         vv = ""
-                    if poss and not sp:
+                    if seen and not sp:
+                        pot = seen[1]
+                    elif poss and not sp:
                         pot = poss[0][1]
                     pot_txt = "" if sp or vv else (
                         f"{pot:,} cr"
@@ -520,7 +526,10 @@ class ExobiologyPanel(QWidget):
                     except Exception:
                         base_txt = ""
                     sp_txt = sp
-                    if poss and not sp:
+                    if seen and not sp:
+                        sp_txt = f"sighted: {seen[0]}"
+                        base_txt = f"{seen[1]:,} cr"
+                    elif poss and not sp:
                         sp_txt = "possible: " + ", ".join(n for n, _ in poss)
                         if isinstance(pot, int) and pot > 0:
                             base_txt = f"up to {pot:,} cr"
@@ -555,8 +564,11 @@ class ExobiologyPanel(QWidget):
 
                 pred = (exo_predictions or {}).get(body)
                 if not canonn_species and pred:
+                    hints = [f"{n} {v:,} cr" for n, v in sighted_species(pred)]
+                    hints = ["sighted: " + ", ".join(hints)] if hints else []
                     if pred.possible:
-                        sp_hint = "possible: " + ", ".join(pred.possible)
+                        hints.append("possible: " + ", ".join(pred.possible))
+                    sp_hint = " · ".join(hints)
                     if pred.up_to > 0:
                         base_hint = f"up to {pred.up_to / 1e6:.1f}M"
 
@@ -772,7 +784,7 @@ class ExobiologyPanel(QWidget):
                 )
 
                 if e["species"]:
-                    if e["species"].startswith("possible:"):
+                    if e["species"].startswith(("possible:", "sighted:")):
                         line += (
                             f' — <span style="color:#888888;">'
                             f'{_esc(e["species"])}</span>'
@@ -790,7 +802,7 @@ class ExobiologyPanel(QWidget):
                 )
                 if e["base"]:
                     base_color = (
-                        "#888888" if e["base"].startswith("up to")
+                        "#888888" if e["base"].startswith("up to") or e["species"].startswith("sighted:")
                         else "#FFD93D"
                     )
                     line += (

@@ -66,3 +66,17 @@ def test_sort_order_unchanged():
     lay = p._cards_layout
     order = [lay.itemAt(i).widget() for i in range(lay.count())]
     assert order.index(p._body_cards["Sys 2"][0]) < order.index(p._body_cards["Sys 1"][0])
+
+
+def test_card_shows_sighted_species_with_no_possible():
+    p = ExplorationPanel()
+    _refresh(p, {"Sys 1": BodyPrediction({}, 8_000_000, known={"X": ("X Two", 8_000_000)})})
+    lbl = next(l for l in _texts(p, "Sys 1") if "Sighted:" in l.text())
+    assert lbl.text() == "Sighted: X Two · up to 8.0M" and "#888888" in lbl.styleSheet()
+
+
+def test_card_after_dss_says_possible_species():
+    p = ExplorationPanel()
+    _refresh(p, {"Sys 1": BodyPrediction({"X": [("X One", 8_000_000), ("X Two", 1)]}, 8_000_000, after_dss=True)})
+    txt = " ".join(l.text() for l in _texts(p, "Sys 1"))
+    assert "Possible species: X One, X Two · up to 8.0M" in txt and "Possible: " not in txt

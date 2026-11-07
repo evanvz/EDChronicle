@@ -279,3 +279,114 @@ def test_plural_journal_genus_names():
     assert p.up_to == 0 and "Brain Tree" not in p.possible
     st = state({"A 1": body(BioSignals=1)}, {"k": {"BodyID": 5, "Genus": "Brain Trees", "Species": "", "Samples": 3}})
     assert predict_system(st, fake_rules(t), fake_values(t), {})["A 1"].up_to == 0
+
+
+def test_known_field_holds_unfinished_species_and_value():
+    p = pb(body(BioSignals=2), known={"X": "X Two"})
+    assert p.known == {"X": ("X Two", 4)}
+    assert "Y" in p.possible and p.up_to == 4 + 7
+
+
+def test_known_field_leaves_out_finished():
+    p = pb(body(BioSignals=2), known={"X": "X Two", "Y": "Y One"}, finished={"X"})
+    assert p.known == {"Y": ("Y One", 7)} and p.up_to == 7
+
+
+def test_sighted_text_after_dss_has_species_and_value():
+    t = {"X One": ("X", 9_000_000), "X Two": ("X", 8_000_000)}
+    p = pb(body(BioSignals=1, BioGenuses=["X"]), known={"X": "X Two"}, table=t)
+    assert p.possible == {} and possible_text(p) == "Sighted: X Two · up to 8.0M"
+
+
+def test_sighted_text_before_dss_names_sighting_and_guesses():
+    t = {"X Big": ("X", 8_000_000), "Y One": ("Y", 2_000_000), "Z One": ("Z", 1_000_000)}
+    p = pb(body(BioSignals=2), known={"X": "X Big"}, table=t)
+    assert possible_text(p) == "Sighted: X Big · Possible: Y, Z · up to 10.0M"
+
+
+def test_sampled_species_not_labelled_sighted():
+    st = state({"A 1": body(BioSignals=1)}, {"k": {"BodyID": 5, "Genus": "X", "Species": "X Two", "Samples": 1}})
+    p = predict_system(st, fake_rules(GEN), fake_values(GEN), {})["A 1"]
+    assert p.known == {"X": ("X Two", 4)} and p.sampled == {"X"}
+    assert "Sighted" not in possible_text(p) and "up to" in possible_text(p)
+
+
+def test_own_codex_entry_counts_as_a_sighting():
+    st = state({"A 1": body(BioSignals=1)},
+               {"k": {"BodyID": 5, "Genus": "X", "Species": "X Two", "Samples": 0, "LastScanType": "CODEX"}})
+    p = predict_system(st, fake_rules(GEN), fake_values(GEN), {})["A 1"]
+    assert p.sampled == frozenset() and possible_text(p).startswith("Sighted: X Two")
+
+
+def test_no_slots_left_no_guesses_all_finished():
+    p = pb(body(BioSignals=2), finished={"X", "Y"})
+    assert p.possible == {} and p.up_to == 0 and possible_text(p) == ""
+
+
+def test_no_slots_left_no_guesses_sighting_fills_body():
+    p = pb(body(BioSignals=1), known={"Y": "Y One"})
+    assert p.possible == {} and p.up_to == 7
+    assert "Possible" not in possible_text(p)
+
+
+def test_nothing_left_shows_no_up_to():
+    assert "up to" not in possible_text(BodyPrediction({"X": [("X One", 0)]}, 0))
+
+
+def test_sighting_outside_own_dss_is_ignored():
+    st = state({"A 1": body(BioSignals=2, BioGenuses=["X", "Y"])})
+    p = predict_system(st, fake_rules(GEN), fake_values(GEN), {5: [{"species_name": "Z One", "last_seen": "1"}]})["A 1"]
+    assert p.up_to == 17 and p.known == {}
+
+
+def test_sighting_inside_own_dss_counts_plural_spelling():
+    t = {"Brain Tree One": ("Brain Tree", 5), "Y One": ("Y", 9)}
+    st = state({"A 1": body(BioSignals=2, BioGenuses=["Brain Trees", "Y"])})
+    sight = {5: [{"species_name": "Brain Tree One", "last_seen": "1"}]}
+    p = predict_system(st, fake_rules(t), fake_values(t), sight)["A 1"]
+    assert p.known == {"Brain Tree": ("Brain Tree One", 5)} and p.up_to == 14
+
+
+def test_sampled_species_outside_dss_stays():
+    st = state({"A 1": body(BioSignals=2, BioGenuses=["X", "Y"])},
+               {"k": {"BodyID": 5, "Genus": "Z", "Species": "Z One", "Samples": 1}})
+    p = predict_system(st, fake_rules(GEN), fake_values(GEN), {})["A 1"]
+    assert p.known == {"Z": ("Z One", 3)} and p.up_to == 3 + 10
+
+
+def test_more_sightings_than_signals_capped():
+    sight = {5: [{"species_name": n, "last_seen": "1"} for n in ("X One", "Y One", "Z One")]}
+    p = predict_system(state({"A 1": body(BioSignals=1)}), fake_rules(GEN), fake_values(GEN), sight)["A 1"]
+    assert p.up_to == 10 and p.known == {"X": ("X One", 10)}
+
+
+def test_cap_keeps_own_sample_over_sighting():
+    st = state({"A 1": body(BioSignals=1)}, {"k": {"BodyID": 5, "Genus": "Z", "Species": "Z One", "Samples": 1}})
+    p = predict_system(st, fake_rules(GEN), fake_values(GEN), {5: [{"species_name": "X One", "last_seen": "1"}]})["A 1"]
+    assert p.up_to == 3 and p.known == {"Z": ("Z One", 3)}
+
+
+def test_finished_slot_counts_against_the_cap():
+    st = state({"A 1": body(BioSignals=1)}, {"k": {"BodyID": 5, "Genus": "Y", "Species": "Y One", "Samples": 3}})
+    p = predict_system(st, fake_rules(GEN), fake_values(GEN), {5: [{"species_name": "X One", "last_seen": "1"}]})["A 1"]
+    assert p.up_to == 0 and p.known == {} and possible_text(p) == ""
+
+
+def test_after_dss_card_lists_species_not_genera():
+    t = {"A One": ("A", 8_000_000), "A Two": ("A", 1), "B One": ("B", 1)}
+    p = pb(body(BioSignals=1, BioGenuses=["A"]), table=t)
+    assert possible_text(p) == "Possible species: A One, A Two · up to 8.0M"
+
+
+def test_after_dss_up_to_only_when_every_genus_is_sampled():
+    st = state({"A 1": body(BioSignals=1, BioGenuses=["X"])},
+               {"k": {"BodyID": 5, "Genus": "X", "Species": "X Two", "Samples": 2}})
+    t = {"X Two": ("X", 4_000_000)}
+    p = predict_system(st, fake_rules(t), fake_values(t), {})["A 1"]
+    assert possible_text(p) == "up to 4.0M"
+
+
+def test_radicoida_uses_journal_spelling():
+    assert "Radicoida Unica" in TABLE.by_species and "Radicoida Unicus" not in TABLE.by_species
+    assert any(r["species"] == "Radicoida Unica" for r in RULES)
+    assert not any(r["species"] == "Radicoida Unicus" for r in RULES)
