@@ -87,7 +87,8 @@ class _Collector(logging.Handler):
         self.records = []
 
     def emit(self, record):
-        if BLOCK_MSG not in record.getMessage():
+        exc = record.exc_info[1] if record.exc_info else None
+        if BLOCK_MSG not in record.getMessage() + str(exc or ""):
             self.records.append(record)
 
 

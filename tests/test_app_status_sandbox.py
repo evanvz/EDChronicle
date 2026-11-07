@@ -35,3 +35,12 @@ def test_blocked_records_are_not_errors():
     logging.getLogger("edc.core.galnet_news").error("fetch failed: app_status: outbound blocked example.com")
     logging.getLogger("edc.core.galnet_news").error("real failure")
     assert [r.getMessage() for r in recs] == ["real failure"]
+
+
+def test_blocked_exception_records_are_not_errors():
+    recs = capture_errors()
+    try:
+        raise OutboundBlocked("app_status: outbound blocked ('1.2.3.4', 443)")
+    except OutboundBlocked:
+        logging.getLogger("edc.core.colonisation_eligibility").exception("lookup failed")
+    assert recs == []
