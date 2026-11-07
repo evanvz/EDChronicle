@@ -193,9 +193,15 @@ def run_replay(repo_root: Path, journal_dir: str | None, days: int | None, keep_
                         dst.close()
 
                 t2 = time.time()
+                win._on_event({"event": "_BootstrapStart"})  # an app restart replays like journal_watcher does
                 _feed(app, win, files, [], lambda e: None, lambda e, x, tag="": on_exc(e, x, "dedupe pass: " + tag))
+                win._on_event({"event": "_BootstrapEnd"})
                 stats["pass2_seconds"] = round(time.time() - t2, 1)
                 after2 = table_counts(win.db.conn)
+                misses["mission_completion_duplicates"] = win.db.conn.execute(
+                    "SELECT COALESCE(SUM(n - 1), 0) FROM (SELECT COUNT(*) n FROM faction_mission_completions "
+                    "WHERE mission_id IS NOT NULL GROUP BY mission_id, system_address, faction_name, is_primary, "
+                    "influence_tier, trend HAVING n > 1)").fetchone()[0]
             finally:
                 win.close()
                 win.deleteLater()
@@ -221,6 +227,8 @@ def run_replay(repo_root: Path, journal_dir: str | None, days: int | None, keep_
         checks.append((EXOBIO, "exobio_bio_bodies_unpredicted"))
     if seen["_analyse"]:
         checks.append((EXOBIO, "exobio_sampled_misses"))
+    if seen["MissionCompleted"]:
+        checks.append((MISSIONS, "mission_completion_duplicates"))
     for area, key in checks:
         now, base = misses[key], baselines.get(key, 0)
         if now > base:
@@ -229,10 +237,6 @@ def run_replay(repo_root: Path, journal_dir: str | None, days: int | None, keep_
         elif now < base:
             findings.append({"area": area, "check": "replay", "severity": "info",
                              "text": f"better than baseline: {key} now {now}, baseline {base}"})
-    if seen["MissionCompleted"]:
-        findings.append({"area": MISSIONS, "check": "replay", "severity": "info",
-                         "text": "mission_completion_duplicates not checkable: "
-                                 "faction_mission_completions stores no mission id"})
     if seen["Market"]:
         findings.append({"area": TRADE, "check": "replay", "severity": "info",
                          "text": "trade check not checkable from journals: market rows are saved from "

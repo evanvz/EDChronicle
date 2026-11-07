@@ -94,6 +94,17 @@ def test_empty_journal_dir_fails_loudly(tmp_path):
     assert any("no journal files" in f["text"] for f in _sev(res, "replay"))
 
 
+def test_second_pass_replays_like_an_app_restart(tmp_path):
+    # Repeated same-second PowerplayMerits are real game events; the app's restart replay skips them.
+    p = write_synthetic_journal(tmp_path / "j")
+    merit = {"timestamp": "2026-11-01T10:06:00Z", "event": "PowerplayMerits", "Power": "Aisling Duval",
+             "MeritsGained": 7, "TotalMerits": 100}
+    with p.open("a", encoding="utf-8") as f:
+        f.write((json.dumps(merit) + "\n") * 2)
+    res = run_replay(ROOT, str(tmp_path / "j"), 7)
+    assert not any("dedupe: powerplay_merits" in f["text"] for f in res["findings"])
+
+
 def test_market_event_gives_trade_not_checkable_note(tmp_path):
     p = write_synthetic_journal(tmp_path / "j")
     with p.open("a", encoding="utf-8") as f:
@@ -102,3 +113,15 @@ def test_market_event_gives_trade_not_checkable_note(tmp_path):
     res = run_replay(ROOT, str(tmp_path / "j"), 7)
     assert any(f["text"].startswith("trade check not checkable from journals")
                and f["area"] == "Trade, markets & routes" for f in _sev(res, "info"))
+
+
+def test_mission_completions_are_checked_for_duplicates(tmp_path):
+    p = write_synthetic_journal(tmp_path / "j")
+    done = {"timestamp": "2026-11-01T10:07:00Z", "event": "MissionCompleted", "Faction": "F", "MissionID": 9,
+            "Name": "Mission_Courier_name", "Reward": 100,
+            "FactionEffects": [{"Faction": "F", "Influence": [{"SystemAddress": _SYS["SystemAddress"],
+                                                                "Trend": "UpGood", "Influence": "++"}]}]}
+    with p.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(done) + "\n")
+    res = run_replay(ROOT, str(tmp_path / "j"), 7)
+    assert not any("mission" in f["text"] for f in res["findings"])
