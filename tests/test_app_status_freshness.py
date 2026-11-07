@@ -73,3 +73,26 @@ def test_scan_logs(tmp_path):
     r = scan_logs(tmp_path, 7, _areas(), NOW)
     assert r["cells"] == {"A": "1 errors"}
     assert r["findings"][0]["severity"] == "replay" and "boom" in r["findings"][0]["text"]
+
+
+def test_scan_logs_empty_dir_is_info_and_zero_cells(tmp_path):
+    r = scan_logs(tmp_path / "nologs", 7, _areas(), NOW)
+    assert r["cells"] == {"A": "0"}
+    assert [f["severity"] for f in r["findings"]] == ["info"]
+    assert "no log files in last 7 days" in r["findings"][0]["text"]
+
+
+def test_scan_logs_network_error_is_info_not_counted(tmp_path):
+    (tmp_path / "edc_2026-11-06_101641.log").write_text(
+        "2026-11-06 10:16:42,000 [ERROR] [edc.core.x] lookup failed: 429 Client Error: Too Many Requests\n"
+        "2026-11-06 10:16:43,000 [ERROR] [edc.core.x] sphere failed\n"
+        "Traceback (most recent call last):\n"
+        "requests.exceptions.HTTPError: 503 Server Error: Service Unavailable for url: https://x\n"
+        "2026-11-06 10:16:44,000 [ERROR] [edc.core.y] real bug\n", encoding="utf-8")
+    areas = _areas()
+    areas["B"] = {"modules": ["edc/core/y.py"]}
+    r = scan_logs(tmp_path, 7, areas, NOW)
+    assert r["cells"] == {"A": "0", "B": "1 errors"}
+    by = {f["severity"]: f for f in r["findings"]}
+    assert "2 network errors" in by["info"]["text"] and by["info"]["area"] == "A"
+    assert by["replay"]["area"] == "B" and "real bug" in by["replay"]["text"]

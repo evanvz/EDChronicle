@@ -12,6 +12,10 @@ from tools.app_status.replay import journal_files
 _TAIL_BYTES = 65536
 # 2026-11-07 10:22:03,775 [ERROR] [edc.core.x] message  (app log times are local, UTC+2)
 _LOG_LINE = re.compile(r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d+ \[(\w+)\] \[([^\]]+)\] (.*)$")
+_NETWORK = re.compile(
+    r"[45]\d\d (?:Client|Server) Error|requests\.exceptions\.(?:ConnectionError|ReadTimeout|ConnectTimeout|Timeout)"
+    r"|timed? ?out|Connection (?:refused|reset|aborted)|Connection(?:Refused|Reset|Aborted)Error|Max retries exceeded"
+    r"|SSLError|getaddrinfo failed|Name or service not known|NameResolutionError", re.I)
 _LOG_NAME = re.compile(r"^edc_(\d{4})-(\d\d)-(\d\d)_\d+\.log$")
 
 
@@ -107,33 +111,54 @@ def run_freshness(db_path: Path, journal_dir, areas: dict, now: datetime) -> dic
         return check_freshness(dst, areas, newest, now)
 
 
+def _top(counter: dict) -> str:
+    return max(counter, key=counter.get) if counter else ""
+
+
 def scan_logs(logs_dir: Path, days: int, areas: dict, now: datetime) -> dict:
     t0 = time.time()
     cutoff = (now - timedelta(days=days)).date()
-    errors, tracebacks, msgs = {}, {}, {}
-    for p in sorted(Path(logs_dir).glob("edc_*.log")):
-        m = _LOG_NAME.match(p.name)
-        if not m or datetime(*map(int, m.groups())).date() < cutoff:
-            continue
-        last = None
+    files = [p for p in sorted(Path(logs_dir).glob("edc_*.log"))
+             if (m := _LOG_NAME.match(p.name)) and datetime(*map(int, m.groups())).date() >= cutoff]
+    records = []  # [logger, message, continuation text] per ERROR line
+    for p in files:
+        cur = None
         with open(p, encoding="utf-8", errors="replace") as f:
             for line in f:
                 m = _LOG_LINE.match(line)
                 if m:
-                    last = m.group(2)
-                    if m.group(1) == "ERROR":
-                        errors[last] = errors.get(last, 0) + 1
-                        c = msgs.setdefault(last, {})
-                        c[m.group(3)[:120]] = c.get(m.group(3)[:120], 0) + 1
-                elif last and line.startswith("Traceback"):
-                    tracebacks[last] = tracebacks.get(last, 0) + 1
-    per_area, findings = {}, []
-    for lg in sorted(set(errors) | set(tracebacks)):
-        n, tb = errors.get(lg, 0), tracebacks.get(lg, 0)
-        area = area_of(lg.replace(".", "/") + ".py", "module", areas) if lg.startswith("edc.") else "Other"
-        per_area[area] = per_area.get(area, 0) + n
-        top = max(msgs[lg], key=msgs[lg].get) if lg in msgs else ""
-        findings.append({"area": area, "check": "logs", "severity": "replay",
-                         "text": f"{lg}: {n} errors, {tb} tracebacks in {days} days; top: {top}"})
+                    cur = [m.group(2), m.group(3), ""] if m.group(1) == "ERROR" else None
+                    if cur:
+                        records.append(cur)
+                elif cur:
+                    cur[2] += line
+    errors, tracebacks, msgs, net, net_msgs = {}, {}, {}, {}, {}
+    for lg, msg, extra in records:
+        if _NETWORK.search(msg + extra):
+            net[lg] = net.get(lg, 0) + 1
+            c = net_msgs.setdefault(lg, {})
+            c[msg[:120]] = c.get(msg[:120], 0) + 1
+            continue
+        errors[lg] = errors.get(lg, 0) + 1
+        tracebacks[lg] = tracebacks.get(lg, 0) + extra.count("Traceback (most recent")
+        c = msgs.setdefault(lg, {})
+        c[msg[:120]] = c.get(msg[:120], 0) + 1
+
+    def area_for(lg):
+        return area_of(lg.replace(".", "/") + ".py", "module", areas) if lg.startswith("edc.") else "Other"
+
+    per_area = {a: 0 for a in areas}
+    findings = []
+    if not files:
+        findings.append({"area": "Other", "check": "logs", "severity": "info",
+                         "text": f"no log files in last {days} days ({logs_dir})"})
+    for lg in sorted(errors):
+        a = area_for(lg)
+        per_area[a] = per_area.get(a, 0) + errors[lg]
+        findings.append({"area": a, "check": "logs", "severity": "replay",
+                         "text": f"{lg}: {errors[lg]} errors, {tracebacks[lg]} tracebacks in {days} days; top: {_top(msgs[lg])}"})
+    for lg in sorted(net):
+        findings.append({"area": area_for(lg), "check": "logs", "severity": "info",
+                         "text": f"{lg}: {net[lg]} network errors (EDSM/Spansh unreachable or rate-limited): {_top(net_msgs[lg])}"})
     cells = {a: f"{n} errors" if n else "0" for a, n in per_area.items()}
     return {"cells": cells, "findings": findings, "seconds": time.time() - t0}
