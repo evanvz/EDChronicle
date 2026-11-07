@@ -96,7 +96,10 @@ def _feed(app, win, files, bad, after, on_exc):
                 win._on_event(evt)
             except Exception as e:
                 on_exc(evt, e)
-            after(evt)
+            try:
+                after(evt)
+            except Exception as e:
+                on_exc(evt, e, "sanity check: ")
             n += 1
             if n % 500 == 0:
                 app.processEvents()
@@ -164,7 +167,13 @@ def run_replay(repo_root: Path, journal_dir: str | None, days: int | None) -> di
             app, win, _ = build_window(app_dir, journal_dir)
             try:
                 t1 = time.time()
-                win._startup_history_thread.wait()  # its result lands as DB writes; settle before counting
+                th = getattr(win, "_startup_history_thread", None)  # its result lands as DB writes; settle first
+                if th is None:
+                    findings.append({"area": "Other", "check": "replay", "severity": "info",
+                                     "text": "no startup history scan thread to wait for"})
+                elif not th.wait(120_000):
+                    findings.append({"area": "Other", "check": "replay", "severity": "replay",
+                                     "text": "startup history scan did not finish in 120 s"})
                 app.processEvents()
                 stats["events"] = _feed(app, win, files, bad, sanity, on_exc)
                 stats["pass1_seconds"] = round(time.time() - t1, 1)
@@ -173,7 +182,7 @@ def run_replay(repo_root: Path, journal_dir: str | None, days: int | None) -> di
                 after1 = table_counts(win.db.conn)
 
                 t2 = time.time()
-                _feed(app, win, files, [], lambda e: None, lambda e, x: on_exc(e, x, "dedupe pass: "))
+                _feed(app, win, files, [], lambda e: None, lambda e, x, tag="": on_exc(e, x, "dedupe pass: " + tag))
                 stats["pass2_seconds"] = round(time.time() - t2, 1)
                 after2 = table_counts(win.db.conn)
             finally:

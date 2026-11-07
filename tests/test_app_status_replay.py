@@ -60,6 +60,18 @@ def test_bio_signal_before_scan_is_checked_at_the_scan(tmp_path):
     assert any("exobio_bio_bodies_unpredicted now 1" in f["text"] for f in _sev(res, "replay"))
 
 
+def test_sanity_check_exception_is_a_finding(tmp_path, monkeypatch):
+    from tools.app_status import replay
+
+    def boom(evt):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(replay, "_is_bio", boom)
+    write_synthetic_journal(tmp_path / "j")
+    res = run_replay(ROOT, str(tmp_path / "j"), 7)
+    assert any("sanity check: FSSBodySignals: RuntimeError: boom" in f["text"] for f in _sev(res, "replay"))
+
+
 def test_truncated_last_line_is_counted_not_raised(tmp_path):
     p = write_synthetic_journal(tmp_path / "j")
     with p.open("a", encoding="utf-8") as f:
