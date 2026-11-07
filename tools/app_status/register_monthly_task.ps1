@@ -6,4 +6,7 @@ if (-not (Test-Path $py)) { throw "missing $py" }
 $tr = 'cmd /c cd /d \"{0}\" && \"{1}\" -m tools.app_status --full' -f $repo, $py
 $schArgs = '/Create /F /SC MONTHLY /D 1 /ST 10:00 /IT /TN "EDChronicle App Status (monthly)" /TR "{0}"' -f $tr
 $p = Start-Process schtasks.exe -ArgumentList $schArgs -Wait -NoNewWindow -PassThru
-exit $p.ExitCode
+if ($p.ExitCode -ne 0) { exit $p.ExitCode }
+# schtasks defaults skip the run on battery or after a missed start
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+Set-ScheduledTask -TaskName 'EDChronicle App Status (monthly)' -Settings $settings | Out-Null

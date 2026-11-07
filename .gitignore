@@ -33,3 +33,5 @@ settings/voice_commands.json
 .superpowers/
 
 reports/
+
+.coverage
