@@ -1,5 +1,6 @@
 import json
 import re
+import sqlite3
 import sys
 import tempfile
 import time
@@ -107,7 +108,7 @@ def _feed(app, win, files, bad, after, on_exc):
     return n
 
 
-def run_replay(repo_root: Path, journal_dir: str | None, days: int | None) -> dict:
+def run_replay(repo_root: Path, journal_dir: str | None, days: int | None, keep_db: Path | None = None) -> dict:
     t0 = time.time()
     if not journal_dir or not Path(journal_dir).is_dir():
         return {"cells": {}, "seconds": time.time() - t0, "stats": {},
@@ -180,6 +181,12 @@ def run_replay(repo_root: Path, journal_dir: str | None, days: int | None) -> di
                 stats["bad_lines"] = len(bad)
                 n_rec1 = len(records)
                 after1 = table_counts(win.db.conn)
+                if keep_db is not None:
+                    dst = sqlite3.connect(keep_db)
+                    try:
+                        win.db.conn.backup(dst)  # main DB only; net.* is not copied
+                    finally:
+                        dst.close()
 
                 t2 = time.time()
                 _feed(app, win, files, [], lambda e: None, lambda e, x, tag="": on_exc(e, x, "dedupe pass: " + tag))
