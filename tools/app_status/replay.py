@@ -11,7 +11,7 @@ from typing import Iterator
 
 from tools.app_status.areas import AREAS_PATH, AREA_ORDER, BASELINES_PATH, area_of_logger, load_json
 from tools.app_status.sandbox import (
-    _area_from_exc, block_network, build_window, capture_errors, make_app_dir, release_errors, unblock_network)
+    _area_from_exc, block_network, blocked_note, build_window, capture_errors, make_app_dir, release_errors, unblock_network)
 
 _NEW = re.compile(r"Journal\.(\d{4})-(\d{2})-(\d{2})T")
 _OLD = re.compile(r"Journal\.(\d{2})(\d{2})(\d{2})\d{6}\.")
@@ -256,7 +256,7 @@ def run_replay(repo_root: Path, journal_dir: str | None, days: int | None, keep_
                          "text": f"{len(bad)} bad JSON line(s) skipped: "
                                  + ", ".join(f"{f}:{n}" for f, n in bad[:5])})
     findings.append({"area": "Other", "check": "replay", "severity": "info",
-                     "text": f"outbound senders disabled; {counter['attempts']} connection attempts blocked"})
+                     "text": blocked_note("replay", counter)})
 
     problems = Counter(f["area"] for f in findings if f["severity"] == "replay")
     cells = {a: f"{problems[a]} problems" if problems[a] else "ok" for a in AREA_ORDER}

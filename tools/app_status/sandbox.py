@@ -6,9 +6,10 @@ import sys
 import socket
 import time
 import traceback
+from collections import Counter
 from pathlib import Path
 
-from tools.app_status.areas import AREAS_PATH, AREA_ORDER, area_of, load_json
+from tools.app_status.areas import AREAS_PATH, AREA_ORDER, area_of, area_of_logger, load_json
 
 BLOCK_MSG = "app_status: outbound blocked"
 _WINDOWS = []  # keep windows (and their QThreads) alive until process exit
@@ -24,20 +25,38 @@ class OutboundBlocked(OSError):
     pass
 
 
+def _loopback(host) -> bool:
+    h = host.decode() if isinstance(host, bytes) else str(host)
+    return h.lower() in ("localhost", "::1") or h.startswith("127.")
+
+
 def block_network() -> dict:
     unblock_network()
     counter = {"attempts": 0, "hosts": set()}
+    orig = {"connect": socket.socket.connect, "connect_ex": socket.socket.connect_ex,
+            "create_connection": socket.create_connection, "getaddrinfo": socket.getaddrinfo}
 
     def _deny(addr):
         counter["attempts"] += 1
         counter["hosts"].add(str(addr[0]) if isinstance(addr, tuple) else str(addr))
         raise OutboundBlocked(f"{BLOCK_MSG} {addr}")
 
-    _ORIG.update(connect=socket.socket.connect, connect_ex=socket.socket.connect_ex,
-                 create_connection=socket.create_connection)
-    socket.socket.connect = lambda self, addr: _deny(addr)
-    socket.socket.connect_ex = lambda self, addr: _deny(addr)
-    socket.create_connection = lambda address, *a, **k: _deny(address)
+    def _host(addr):
+        return addr[0] if isinstance(addr, tuple) else addr
+
+    def _getaddrinfo(host, *a, **k):
+        if host is None or _loopback(host):
+            return orig["getaddrinfo"](host, *a, **k)
+        return _deny(host)
+
+    _ORIG.update(orig)
+    socket.socket.connect = lambda self, addr: (
+        orig["connect"](self, addr) if _loopback(_host(addr)) else _deny(addr))
+    socket.socket.connect_ex = lambda self, addr: (
+        orig["connect_ex"](self, addr) if _loopback(_host(addr)) else _deny(addr))
+    socket.create_connection = lambda address, *a, **k: (
+        orig["create_connection"](address, *a, **k) if _loopback(_host(address)) else _deny(address))
+    socket.getaddrinfo = _getaddrinfo
     return counter
 
 
@@ -46,7 +65,14 @@ def unblock_network() -> None:
         socket.socket.connect = _ORIG["connect"]
         socket.socket.connect_ex = _ORIG["connect_ex"]
         socket.create_connection = _ORIG["create_connection"]
+        socket.getaddrinfo = _ORIG["getaddrinfo"]
         _ORIG.clear()
+
+
+def blocked_note(check: str, counter: dict) -> str:
+    hosts = sorted(counter["hosts"])[:10]
+    return (f"{check}: outbound senders disabled; {counter['attempts']} connection attempts blocked"
+            + (f" ({', '.join(hosts)})" if hosts else ""))
 
 
 def make_app_dir(repo_root: Path, tmp: Path) -> Path:
@@ -134,6 +160,7 @@ def check_app_start(repo_root: Path) -> dict:
     areas = load_json(AREAS_PATH)
     findings = []
     counter = block_network()
+    records = capture_errors()
     try:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             app_dir = make_app_dir(repo_root, Path(tmp))
@@ -159,8 +186,13 @@ def check_app_start(repo_root: Path) -> dict:
                 win.db.close()
     finally:
         unblock_network()
+        release_errors()
+    logs = Counter((area_of_logger(r.name, repo_root, areas), f"{r.name}: {r.getMessage()}") for r in records)
+    for (area, text), n in logs.items():
+        findings.append({"area": area, "check": "app start", "severity": "start",
+                         "text": text if n == 1 else f"{text} (x{n})"})
     bad = {f["area"] for f in findings}
     findings.append({"area": "Other", "check": "app start", "severity": "info",
-                     "text": f"outbound senders disabled; {counter['attempts']} connection attempts blocked"})
+                     "text": blocked_note("app start", counter)})
     return {"cells": {a: "error" if a in bad else "ok" for a in AREA_ORDER},
             "findings": findings, "seconds": time.time() - t0}
