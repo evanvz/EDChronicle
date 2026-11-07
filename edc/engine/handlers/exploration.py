@@ -215,6 +215,7 @@ def handle(engine, name: str | None, event: Dict[str, Any], msgs: List[str]) -> 
                 existing = {}
 
             rec = {
+                **existing,
                 "BodyID":          body_id if isinstance(body_id, int) else existing.get("BodyID"),
                 "BodyName":        body_name,
                 "Parents":         event.get("Parents") or [],
