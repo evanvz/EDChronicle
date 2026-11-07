@@ -81,6 +81,14 @@ def test_docked_station_is_used_without_market_json():
     assert fake_self._saved[0]["station_name"] == "Planetary Construction Site: Test"
 
 
+def test_colonisation_ship_token_is_stripped_from_station_name():
+    # Live 2026-11-07: the claim's colonisation ship docks as "$EXT_PANEL_ColonisationShip; <name>".
+    fake_self = _fake_self(station=None)
+    fake_self.state.station_name = "$EXT_PANEL_ColonisationShip; Equiano Territory"
+    assert MainWindow._save_colonisation_depot(fake_self, _depot_event()) is True
+    assert fake_self._saved[0]["station_name"] == "Equiano Territory"
+
+
 def test_missing_system_or_station_returns_false():
     fake_self = _fake_self(system="", station="")
     changed = MainWindow._save_colonisation_depot(fake_self, _depot_event())

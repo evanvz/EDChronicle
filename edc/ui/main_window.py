@@ -1716,6 +1716,8 @@ class MainWindow(QMainWindow):
         # The Docked station first: the depot screen doesn't write Market.json.
         station_name = (getattr(self.state, "station_name", None)
                         or getattr(self.state, "current_market_station", None) or "")
+        if station_name.startswith("$") and ";" in station_name:  # "$EXT_PANEL_ColonisationShip; Name"
+            station_name = station_name.split(";", 1)[1].strip()
         if not system_name or not station_name:
             return False
         system_address = getattr(self.state, "system_address", None)
