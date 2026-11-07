@@ -2,6 +2,7 @@
 # Licensed under the GNU General Public License v3.0 or later (GPL-3.0-or-later).
 # See the LICENSE file in the project root for full terms.
 
+import html
 import json
 import logging
 import re
@@ -212,3 +213,15 @@ def possible_text(pred: BodyPrediction) -> str:
     if not pred.possible:
         return ""
     return f"Possible: {', '.join(pred.possible)} · up to {pred.up_to / 1e6:.1f}M"
+
+
+def high_value_line(predictions: dict[str, BodyPrediction], threshold_m: int) -> str:
+    if not predictions:
+        return ""
+    name, pred = max(predictions.items(), key=lambda kv: kv[1].up_to)
+    if pred.up_to <= 0 or pred.up_to < threshold_m * 1_000_000:
+        return ""
+    return (
+        '<a href="exobiology" style="color:#6BCB77; text-decoration:none;">'
+        f"🧬 High value exo planet: {html.escape(name)}, up to {pred.up_to / 1e6:.0f}M</a>"
+    )

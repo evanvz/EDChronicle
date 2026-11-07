@@ -57,7 +57,7 @@ from edc.ui.panels.exobiology_panel import ExobiologyPanel
 from edc.ui.panels.intel_panel import IntelPanel
 from edc.core.status_watcher import StatusWatcher
 from edc.core.planet_values import PlanetValueTable
-from edc.core.exo_predictor import load_rules, predict_system
+from edc.core.exo_predictor import high_value_line, load_rules, predict_system
 from edc.core.exo_values import ExoValueTable
 from edc.core.external_intel import ExternalIntel
 from edc.core.item_catalog import ItemCatalog
@@ -3002,6 +3002,15 @@ class MainWindow(QMainWindow):
         self.exo_min_slider.setValue(int(getattr(self.cfg, "exo_high_value_m", 2) or 2))
         self.exo_min_slider.valueChanged.connect(self._on_exo_min_changed)
 
+        self.exo_alert_label = QLabel()
+        self.exo_alert_slider = QSlider()
+        self.exo_alert_slider.setOrientation(Qt.Orientation.Horizontal)
+        self.exo_alert_slider.setMinimum(5)
+        self.exo_alert_slider.setMaximum(100)
+        self.exo_alert_slider.setValue(int(getattr(self.cfg, "exo_overview_alert_m", 30) or 30))
+        self.exo_alert_label.setText(f"{self.exo_alert_slider.value()}M")
+        self.exo_alert_slider.valueChanged.connect(self._on_exo_alert_changed)
+
         self.log_box = QTextEdit()
         self.log_box.setReadOnly(True)
 
@@ -3152,6 +3161,12 @@ class MainWindow(QMainWindow):
         row3.addWidget(self.exo_min_slider)
         row3.addWidget(self.exo_min_label)
         st.addLayout(row3)
+
+        st.addWidget(QLabel("Exobiology: Overview alert, planet worth up to (M cr)"))
+        row3b = QHBoxLayout()
+        row3b.addWidget(self.exo_alert_slider)
+        row3b.addWidget(self.exo_alert_label)
+        st.addLayout(row3b)
 
         from PyQt6.QtWidgets import QCheckBox
 
@@ -4261,6 +4276,15 @@ class MainWindow(QMainWindow):
             pass
         self.status.setText("Status: settings saved")
         self._refresh_exploration()
+
+    def _on_exo_alert_changed(self, v: int):
+        try:
+            self.cfg.exo_overview_alert_m = int(v)
+            self.cfg_store.save(self.cfg)
+        except Exception:
+            pass
+        self.exo_alert_label.setText(f"{int(v)}M")
+        self._refresh_hud()
 
     def _on_exo_min_changed(self, v: int):
         # persist immediately
@@ -6699,6 +6723,11 @@ class MainWindow(QMainWindow):
                 final_lines.extend(intel_lines[:4])
             if has_pp_action:
                 final_lines.append(pp_txt)
+            exo_txt = high_value_line(
+                self._exo_predictions(), int(getattr(self.cfg, "exo_overview_alert_m", 30) or 30)
+            )
+            if exo_txt:
+                final_lines.append(exo_txt)
 
             self._animate_overview_update("<br>".join(final_lines))
         except Exception:

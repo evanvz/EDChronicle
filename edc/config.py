@@ -35,6 +35,7 @@ class AppConfig:
     journal_dir: Optional[str] = None
     min_planet_value_100k: int = 1
     exo_high_value_m: int = 2
+    exo_overview_alert_m: int = 30
     tts_enabled: bool = True
     tts_rate: int = 175
     tts_volume: float = 0.9
@@ -200,6 +201,7 @@ class ConfigStore:
                 journal_dir=data.get("journal_dir"),
                 min_planet_value_100k=min_100k,
                 exo_high_value_m=int(data.get("exo_high_value_m", 2) or 2),
+                exo_overview_alert_m=int(data.get("exo_overview_alert_m", 30) or 30),
                 tts_enabled=bool(data.get("tts_enabled", False)),
                 tts_rate=int(data.get("tts_rate", 175) or 175),
                 tts_volume=float(data.get("tts_volume", 0.9) or 0.9),
@@ -249,6 +251,7 @@ class ConfigStore:
                         "journal_dir": cfg.journal_dir,
                         "min_planet_value_100k": int(getattr(cfg, "min_planet_value_100k", 1) or 1),
                         "exo_high_value_m": int(getattr(cfg, "exo_high_value_m", 2) or 2),
+                        "exo_overview_alert_m": int(getattr(cfg, "exo_overview_alert_m", 30) or 30),
                         "tts_enabled": bool(getattr(cfg, "tts_enabled", False)),
                         "tts_rate": int(getattr(cfg, "tts_rate", 175) or 175),
                         "tts_volume": float(getattr(cfg, "tts_volume", 0.9) or 0.9),
