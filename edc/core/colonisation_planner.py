@@ -184,16 +184,14 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
                                   "slot_index": i["slot_index"], "fixed": True, "status": i["status"],
                                   "error": i["error"]})
 
-    def secure(order):  # Pass 6: security
-        room = lambda loc: next((n for n in order if free.get((n, loc), 0) > 0), None)
+    def secure(order):  # Pass 6: security; every body is tried, one may refuse on its economies
+        anywhere = lambda key: any(place(key, n) for n in order)
         while stats["sec"] < 0:
-            n = room("orbital")
-            if n and "relay_installation" not in built and place("relay_installation", n):
+            if "relay_installation" not in built and anywhere("relay_installation"):
                 continue
-            if n and place("security_installation", n):
+            if anywhere("security_installation"):
                 continue
-            n = room("surface")
-            if not (n and place("military_settlement_medium", n)):
+            if not anywhere("military_settlement_medium"):
                 break
 
     if kind == "service":
@@ -222,7 +220,6 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
         themes = {c: _theme([b for b in bodies.values() if b.get("cluster") == c]) for c in clusters}
         order = sorted((r["name"] for r in slots), key=lambda n: clusters.index(cluster[n]))
         fam = {n: _FAMILIES[themes[cluster[n]]] for n in order}
-        room = lambda loc: next((n for n in order if free.get((n, loc), 0) > 0), None)
 
         for n in order:  # Pass 1: one medium settlement of the theme per body
             place(fam[n][0], n)
@@ -265,12 +262,9 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
             next((n for n in order if cluster[n] == c and place(_FAMILIES[themes[c]][2], n)), None)
         for k in held:
             free[k] += 1
-        while True:  # Pass 4: Tier 3 ports, orbital first, then surface when no orbital slot is left
-            n = room("orbital")
-            key = "dodec_starport" if n else "large_planetary_port"
-            n = n or room("surface")
-            if not (n and place(key, n)):
-                break
+        # Pass 4: Tier 3 ports, orbital first, then surface when no orbital slot takes one
+        while any(place("dodec_starport", n) for n in order) or any(place("large_planetary_port", n) for n in order):
+            pass
         secure(order)
         # Pass 7 fallback: a zero-cost surface facility of the theme's economy, else civilian
         cheap = {c: next((k for k, f in fac.items() if f["location"] == "surface" and not f["port"]

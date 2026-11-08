@@ -306,3 +306,14 @@ def test_fixed_step_short_of_points_is_placed_with_error():
     p = _fixed(_item("dodec_starport", f"{DRM} 2", "orbital", 0))
     s = p["steps"][1]
     assert s["facility"] == "dodec_starport" and s["error"] == "not enough T3 points" and s["t3"] < 0
+
+
+def test_tier3_port_and_security_skip_a_clashing_body():
+    # G 2 already has three economies, so nothing fits there: the next body with room takes the port and security
+    sys = _system("G", [("1", "Rocky body", True, 1, ["Refinery"], True, 1, 6, 6),
+                        ("2", "Rocky body", True, 1, ["HighTech", "Agriculture", "Tourism"], False, 2, 0, 0),
+                        ("3", "Rocky body", True, 1, [], False, 6, 0, 0)])
+    p = plan(sys, slot_table(sys, None), "G 1", True, "full")
+    assert ("dodec_starport", "G 3") in [(s["facility"], s["body"]) for s in p["steps"]]
+    p = plan(sys, slot_table(sys, None), "G 1", True, "service")
+    assert ("relay_installation", "G 3") in [(s["facility"], s["body"]) for s in p["steps"]]
