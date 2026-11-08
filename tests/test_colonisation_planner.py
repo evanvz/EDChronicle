@@ -96,7 +96,11 @@ def test_refinery_low_sec_warns():
 
 
 def test_refinery_third_economy_warns():
-    p = _drm("refinery", system=_with(DRM_SYS, DRM_PRIMARY, economies=["HighTech", "Industrial"]))
+    # the planner no longer adds a third economy itself: a fixed step Evan chose still gets the warning
+    sys = _with(DRM_SYS, DRM_PRIMARY, economies=["HighTech", "Industrial"])
+    p = plan(sys, slot_table(sys, DRM_RAVEN), DRM_PRIMARY, False, "refinery",
+             [{"facility": "refinery_hub", "body": DRM_PRIMARY, "location": "surface", "slot_index": 0,
+               "status": "Planned"}])
     assert any(w.startswith("1 market: ") and "Refinery" in w and "cannibalised" in w for w in p["warnings"])
     assert not any("market:" in w for w in _drm("service")["warnings"])
 
@@ -145,13 +149,12 @@ def _check_full(p):
 
 
 def test_full_build_dr_m_shape():
-    _check_full(_drm("full"))
     assert len(_drm("full")["steps"]) == 23   # the real DR-M b7-1 build: 23 facilities incl. the primary
     _check_full(_drm("full", group=True))
 
 
 def test_full_build_places_cluster_hub():
-    p = _drm("full")
+    p = _drm("full", group=True)
     _check_full(p)
     assert any(s["facility"].endswith("_hub") for s in p["steps"])
     assert sum(FAC[s["facility"]]["port"] and FAC[s["facility"]]["tier"] == 3 for s in p["steps"][1:]) >= 2
@@ -167,7 +170,7 @@ def test_full_build_hightech_fills_surface():
 
 
 def test_full_build_lc_t_shape():
-    _check_full(plan(LCT_SYS, slot_table(LCT_SYS, None), LCT_PRIMARY, False, "full"))
+    _check_full(plan(LCT_SYS, slot_table(LCT_SYS, None), LCT_PRIMARY, True, "full"))
 
 
 def test_full_build_final_sec_warning_matches():
@@ -213,7 +216,93 @@ def test_refinery_takes_t2_point_from_a_surface_settlement_when_no_orbital_known
 
 
 def test_full_build_spends_t3_on_planetary_ports_when_no_orbital_known():
-    p = _py_r("full")
+    p = _py_r("full", group=True)
     ports = [s for s in p["steps"] if s["facility"] == "large_planetary_port"]
     assert len(ports) >= 2 and p["steps"][-1]["t3"] < 6
     assert all(s["t2"] >= 0 and s["t3"] >= 0 for s in p["steps"]) and p["unused"]["surface"] == 0
+
+
+def _fixed(*items):
+    return plan(DRM_SYS, slot_table(DRM_SYS, DRM_RAVEN), DRM_PRIMARY, False, "full", list(items))
+
+
+def _item(facility, body, location, slot_index, status="Planned"):
+    return {"facility": facility, "body": body, "location": location, "slot_index": slot_index, "status": status}
+
+
+def test_solo_full_plan_has_no_tier3_ports():
+    p = plan(LCT_SYS, slot_table(LCT_SYS, None), LCT_PRIMARY, False, "full")
+    assert not {s["facility"] for s in p["steps"][1:]} & {"dodec_starport", "large_planetary_port"}
+
+
+def test_group_full_plan_still_places_tier3_ports():
+    p = plan(LCT_SYS, slot_table(LCT_SYS, None), LCT_PRIMARY, True, "full")
+    assert {s["facility"] for s in p["steps"]} & {"dodec_starport", "large_planetary_port"}
+
+
+def test_no_step_gives_a_market_a_third_economy():
+    for g in (False, True):
+        for p in (plan(LCT_SYS, slot_table(LCT_SYS, None), LCT_PRIMARY, g, "full"), _drm("full", group=g)):
+            assert not any("a third economy gets cannibalised" in w for w in p["warnings"])
+            assert all(e["reason"].startswith("left empty: ") for e in p["empty"])
+
+
+def test_clashing_slot_left_empty_with_reason():
+    # the primary already has two economies: the Refinery Hub would add a third
+    p = _drm("refinery", system=_with(DRM_SYS, DRM_PRIMARY, economies=["HighTech", "Industrial"]))
+    assert all(s["facility"] != "refinery_hub" for s in p["steps"])
+    assert {"body": DRM_PRIMARY, "location": "surface",
+            "reason": "left empty: 1 market would get a third economy (HighTech, Industrial, Refinery)"} in p["empty"]
+
+
+def test_steps_are_numbered_in_order():
+    p = _drm("full")
+    assert [s["n"] for s in p["steps"]] == list(range(1, len(p["steps"]) + 1))
+    assert p["steps"][0]["facility"] == "coriolis_starport" and p["steps"][0]["n"] == 1
+    assert all(not s["fixed"] and s["status"] == "Planned" and s["error"] is None for s in p["steps"])
+    idx = [(s["body"], s["location"], s["slot_index"]) for s in p["steps"]]
+    assert len(set(idx)) == len(idx)
+
+
+def test_fixed_steps_placed_first_in_status_order():
+    p = _fixed(_item("mining_settlement_medium", f"{DRM} 2", "surface", 0),
+               _item("comms_installation", f"{DRM} 1", "orbital", 1, "Complete"))
+    assert [s["facility"] for s in p["steps"][1:3]] == ["comms_installation", "mining_settlement_medium"]
+    assert p["steps"][1]["fixed"] and p["steps"][1]["status"] == "Complete" and p["steps"][1]["error"] is None
+    assert all(not s["fixed"] for s in p["steps"][3:])
+    # auto steps skip the indices the fixed steps took
+    assert (f"{DRM} 2", "surface", 0) not in [(s["body"], s["location"], s["slot_index"]) for s in p["steps"][3:]]
+
+
+def test_fixed_primary_row_sets_primary_status_only():
+    p = _fixed(_item("coriolis_starport", DRM_PRIMARY, "orbital", 0, "Building"))
+    assert p["steps"][0]["status"] == "Building"
+    assert sum(s["facility"] == "coriolis_starport" for s in p["steps"]) == 1
+
+
+def test_fixed_step_on_missing_slot_is_red_and_takes_nothing():
+    p = _fixed(_item("comms_installation", f"{DRM} 9", "orbital", 0),
+               _item("comms_installation", f"{DRM} 2", "orbital", 5))
+    assert [s["error"] for s in p["steps"][1:3]] == ["slot no longer exists"] * 2
+    assert p["unused"] == _drm("full")["unused"]
+
+
+def test_fixed_unknown_facility_is_red_not_a_crash():
+    p = _fixed(_item("no_such_thing", f"{DRM} 2", "orbital", 0))
+    assert p["steps"][1]["error"] == "unknown facility: no_such_thing"
+    assert p["outcome"] == _drm("full")["outcome"]
+
+
+def test_fixed_step_missing_requirement_keeps_its_place_with_error():
+    p = _fixed(_item("extraction_hub", f"{DRM} 2", "surface", 0))
+    s, hub = p["steps"][1], FAC["extraction_hub"]
+    assert s["facility"] == "extraction_hub" and s["fixed"]
+    assert s["error"] == "needs Mining Settlement: Small or Mining Settlement: Medium or Mining Settlement: Large"
+    assert (s["t2"], s["t3"]) == (p["steps"][0]["t2"] - hub["cp_cost"]["t2"] + hub["cp_reward"]["t2"],
+                                  p["steps"][0]["t3"] - hub["cp_cost"]["t3"] + hub["cp_reward"]["t3"])
+
+
+def test_fixed_step_short_of_points_is_placed_with_error():
+    p = _fixed(_item("dodec_starport", f"{DRM} 2", "orbital", 0))
+    s = p["steps"][1]
+    assert s["facility"] == "dodec_starport" and s["error"] == "not enough T3 points" and s["t3"] < 0

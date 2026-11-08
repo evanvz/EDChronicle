@@ -65,13 +65,14 @@ def _theme(bodies: list[dict]) -> str:
     return max(_THEMES, key=lambda e: (counts.get(e, 0), -_THEMES.index(e)))
 
 
-def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: str) -> dict:
+def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: str,
+         fixed: list[dict] | None = None) -> dict:
     if kind not in TYPES:
         raise ValueError(f"unknown plan kind: {kind!r}")
     fac = colonisation_facilities.load()
     bodies = {b["name"]: b for b in system.get("bodies") or []}
     steps, warnings, note = [], [], None
-    free = {}
+    free, empty = {}, {}
     for r in slots:
         for loc in _LOCS:
             if r[loc] is None:
@@ -79,6 +80,31 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
             else:
                 free[(r["name"], loc)] = r[loc]
     unknown = [r["name"] for r in slots if r["orbital"] is None or r["surface"] is None]
+    original = dict(free)
+    short = lambda m: m.removeprefix(system.get("name") or "").strip() or m
+
+    def slot_error(i):
+        if i["facility"] not in fac:
+            return f"unknown facility: {i['facility']}"
+        if i["slot_index"] >= original.get((i["body"], i["location"]), 0):
+            return "slot no longer exists"
+
+    fixed = [dict(i, error=slot_error(i)) for i in fixed or []]
+    taken = {(i["body"], i["location"], i["slot_index"]) for i in fixed if not i["error"]}
+
+    def next_index(body, loc):
+        n = 0
+        while (body, loc, n) in taken:
+            n += 1
+        taken.add((body, loc, n))
+        return n
+
+    ignore = {"Colony", "Terraforming"}
+
+    def economies(m, extra=()):
+        return {e.replace("Hightech", "HighTech") for e in (bodies.get(m, {}).get("economies") or [])
+                + [fac[s["facility"]]["economy"] or _HUB_ECON.get(s["facility"])
+                   for s in steps if s["body"] == m and s["facility"] in fac] + list(extra) if e} - ignore
 
     # twin of colonisation_design.plan_system's primary rule (101): keep both in step
     # 101: solo Coriolis; group T3, Ocellus when the body has rings, else Orbis. Free, adds its reward.
@@ -90,27 +116,40 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
     elif (primary_body, "orbital") in free:
         free[(primary_body, "orbital")] -= 1
     bal = [pf["cp_reward"]["t2"], pf["cp_reward"]["t3"]]
+    prim = next((i for i in fixed if i["facility"] == pkey and i["body"] == primary_body), None)
+    fixed = [i for i in fixed if not (i["facility"] == pkey and i["body"] == primary_body)]
     steps.append({"title": f"Primary: {pf['name'].removesuffix(' Starport')}", "facility": pkey, "body": primary_body,
-                  "location": "orbital", "t2": bal[0], "t3": bal[1], "note": "free", "haul": pf["haul"]})
+                  "location": "orbital", "t2": bal[0], "t3": bal[1], "note": "free", "haul": pf["haul"],
+                  "slot_index": prim["slot_index"] if prim else next_index(primary_body, "orbital"),
+                  "fixed": bool(prim), "status": prim["status"] if prim else "Planned", "error": None})
     stats = dict(pf["effects"])
     total = {"haul": pf["haul"], "score": pf["score"]}
     built = {pkey}
     ports = [0]  # non-primary T2/T3 ports placed (Mega Guide: the primary doesn't count)
 
-    def place(key, body, note=None):
+    def place(key, body, note=None, item=None):
         f = fac[key]
-        loc = f["location"]
-        if free.get((body, loc), 0) < 1 or (f["requires"] and not built & set(f["requires"])):
+        loc = item["location"] if item else f["location"]
+        if not item and ((not group and key in ("dodec_starport", "large_planetary_port"))
+                         or free.get((body, loc), 0) < 1 or (f["requires"] and not built & set(f["requires"]))):
             return False
         cost = [f["cp_cost"]["t2"], f["cp_cost"]["t3"]]
         if f["port"]:
             c = port_cost(f["tier"], ports[0] + 1)
             cost = [c, 0] if f["tier"] == 2 else [0, c]
             note = f"port {ports[0] + 1}: {c} T{f['tier']} points"
-        if bal[0] < cost[0] or bal[1] < cost[1]:
-            return False
+        short_of = " and ".join(f"T{t}" for t, have, need in ((2, bal[0], cost[0]), (3, bal[1], cost[1])) if have < need)
+        if not item:
+            if short_of:
+                return False
+            econ = economies(body, [f["economy"] or _HUB_ECON.get(key)])
+            if _clash(econ):  # Spec: leave the slot empty rather than give a market a third economy
+                empty.setdefault((body, loc), f"left empty: {short(body)} market would get a third economy "
+                                              f"({', '.join(sorted(econ))})")
+                return False
         ports[0] += f["port"]
-        free[(body, loc)] -= 1
+        if not (item and item["error"] == "slot no longer exists"):
+            free[(body, loc)] -= 1
         bal[0] += f["cp_reward"]["t2"] - cost[0]
         bal[1] += f["cp_reward"]["t3"] - cost[1]
         for k, v in f["effects"].items():
@@ -119,8 +158,31 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
         total["score"] += f["score"]
         built.add(key)
         steps.append({"title": f["name"], "facility": key, "body": body, "location": loc,
-                      "t2": bal[0], "t3": bal[1], "note": note, "haul": f["haul"]})
+                      "t2": bal[0], "t3": bal[1], "note": note, "haul": f["haul"],
+                      "slot_index": item["slot_index"] if item else next_index(body, loc), "fixed": bool(item),
+                      "status": item["status"] if item else "Planned",
+                      "error": (item["error"] or (f"not enough {short_of} points" if short_of else None)) if item else None})
         return True
+
+    # Spec: Evan's fixed steps go first, Complete, then Building, then Planned; each waits for its requirement
+    for status in ("Complete", "Building", "Planned"):
+        todo = [i for i in fixed if i["status"] == status]
+        while todo:
+            ready = [i for i in todo if i["error"] or not fac[i["facility"]]["requires"]
+                     or built & set(fac[i["facility"]]["requires"])]
+            if not ready:  # no progress: the rest keep their place, marked with what they need
+                ready = list(todo)
+                for i in ready:
+                    i["error"] = "needs " + " or ".join(fac[r]["name"] for r in fac[i["facility"]]["requires"])
+            for i in ready:
+                todo.remove(i)
+                if i["facility"] in fac:
+                    place(i["facility"], i["body"], None, i)
+                else:
+                    steps.append({"title": i["facility"], "facility": i["facility"], "body": i["body"],
+                                  "location": i["location"], "t2": bal[0], "t3": bal[1], "note": None, "haul": 0,
+                                  "slot_index": i["slot_index"], "fixed": True, "status": i["status"],
+                                  "error": i["error"]})
 
     def secure(order):  # Pass 6: security
         room = lambda loc: next((n for n in order if free.get((n, loc), 0) > 0), None)
@@ -225,18 +287,17 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
     if stats["sec"] < 0:
         warnings.append("security below 0 after the plan")
     # Spec: keep each market (primary body, any placed port's body) to at most two economies (strong link: same body)
-    ignore = {"Colony", "Terraforming"}
-    for m in dict.fromkeys([primary_body] + [s["body"] for s in steps[1:] if fac[s["facility"]]["port"]]):
-        econ = {e.replace("Hightech", "HighTech") for e in (bodies.get(m, {}).get("economies") or [])
-                + [fac[s["facility"]]["economy"] or _HUB_ECON.get(s["facility"]) for s in steps if s["body"] == m]
-                if e} - ignore
+    for m in dict.fromkeys([primary_body] + [s["body"] for s in steps[1:] if fac.get(s["facility"], {}).get("port")]):
+        econ = economies(m)
         if _clash(econ):
-            short = m.removeprefix(system.get("name") or "").strip() or m
-            warnings.append(f"{short} market: {', '.join(sorted(econ))} — a third economy gets cannibalised")
+            warnings.append(f"{short(m)} market: {', '.join(sorted(econ))} — a third economy gets cannibalised")
     warnings.append(_FIVE)
     if pf["tier"] == 1 and stats["tech"] < 35:
         warnings.append(f"tech level {stats['tech']} below 35: Tier 1 port shipyard/outfitting need 35 "
                         "(unverified that this sum is the game's tech level)")
     unused = {loc: sum(v for (_, l), v in free.items() if l == loc) for loc in _LOCS}
+    for n, s in enumerate(steps, 1):
+        s["n"] = n
     return {"steps": steps, "warnings": warnings, "note": note, "unused": unused, "unknown": unknown,
-            "outcome": {"stats": stats, **total}}
+            "outcome": {"stats": stats, **total},
+            "empty": [{"body": b, "location": loc, "reason": r} for (b, loc), r in empty.items() if free[(b, loc)] > 0]}
