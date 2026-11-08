@@ -308,12 +308,19 @@ def test_fixed_step_short_of_points_is_placed_with_error():
     assert s["facility"] == "dodec_starport" and s["error"] == "not enough T3 points" and s["t3"] < 0
 
 
-def test_tier3_port_and_security_skip_a_clashing_body():
-    # G 2 already has three economies, so nothing fits there: the next body with room takes the port and security
-    sys = _system("G", [("1", "Rocky body", True, 1, ["Refinery"], True, 1, 6, 6),
-                        ("2", "Rocky body", True, 1, ["HighTech", "Agriculture", "Tourism"], False, 2, 0, 0),
-                        ("3", "Rocky body", True, 1, [], False, 6, 0, 0)])
-    p = plan(sys, slot_table(sys, None), "G 1", True, "full")
-    assert ("dodec_starport", "G 3") in [(s["facility"], s["body"]) for s in p["steps"]]
+def test_security_skips_a_clashing_body():
+    # no orbital room: the military settlement would give G 2 a third economy, so G 3 takes it
+    sys = _system("G", [("1", "Rocky body", True, 1, [], False, 1, 0, 0),
+                        ("2", "Rocky body", True, 1, ["HighTech", "Agriculture"], False, 0, 1, 1),
+                        ("3", "Rocky body", True, 1, [], False, 0, 1, 1)])
     p = plan(sys, slot_table(sys, None), "G 1", True, "service")
-    assert ("relay_installation", "G 3") in [(s["facility"], s["body"]) for s in p["steps"]]
+    assert ("military_settlement_medium", "G 3") in [(s["facility"], s["body"]) for s in p["steps"]]
+
+
+def test_body_with_three_economies_still_takes_a_no_economy_installation():
+    sys = _system("T", [("1", "Rocky body", True, 1, ["Refinery"], False, 1, 2, 2),
+                        ("2", "Rocky body", True, 1, ["HighTech", "Agriculture", "Tourism"], False, 2, 0, 0)])
+    p = plan(sys, slot_table(sys, None), "T 1", False, "full")
+    assert any(s["body"] == "T 2" and s["facility"] in ("satellite_installation", "comms_installation",
+                                                       "relay_installation") for s in p["steps"])
+    assert not any(e["body"] == "T 2" for e in p["empty"])
