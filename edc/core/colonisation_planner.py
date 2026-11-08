@@ -143,8 +143,9 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
             if short_of:
                 return False
             econ = economies(body, [f["economy"] or _HUB_ECON.get(key)])
-            # Spec: leave the slot empty rather than push a market past two economies; only a new economy counts
-            if econ != economies(body) and _clash(econ):
+            # Spec: leave the slot empty rather than push a market past two economies; only a new economy counts,
+            # except a port, which makes the body a market of its own
+            if (f["port"] or econ != economies(body)) and _clash(econ):
                 empty.setdefault((body, loc), f"left empty: {short(body)} market would get a third economy "
                                               f"({', '.join(sorted(econ))})")
                 return False

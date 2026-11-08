@@ -324,3 +324,14 @@ def test_body_with_three_economies_still_takes_a_no_economy_installation():
     assert any(s["body"] == "T 2" and s["facility"] in ("satellite_installation", "comms_installation",
                                                        "relay_installation") for s in p["steps"])
     assert not any(e["body"] == "T 2" for e in p["empty"])
+
+
+def test_tier3_port_skips_a_body_with_three_economies():
+    # G 2 comes first and has orbital room, but a port there makes a three-economy market: G 3 takes it
+    sys = _system("G", [("1", "Rocky body", True, 1, ["Refinery"], True, 1, 6, 6),
+                        ("2", "Rocky body", True, 1, ["HighTech", "Agriculture", "Tourism"], False, 2, 0, 0),
+                        ("3", "Rocky body", True, 1, [], False, 6, 0, 0)])
+    p = plan(sys, slot_table(sys, None), "G 1", True, "full")
+    dodecs = [s["body"] for s in p["steps"] if s["facility"] == "dodec_starport"]
+    assert "G 3" in dodecs and "G 2" not in dodecs
+    assert not any("market:" in w for w in p["warnings"])
