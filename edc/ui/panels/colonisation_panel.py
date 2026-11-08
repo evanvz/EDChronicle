@@ -807,12 +807,14 @@ class _ColonisationDetailDialog(QDialog):
         self._status_label.setText(status + self._dist_suffix)
         table = self._table
         table.clearContents()
-        resources = depot.get("resources") or []
+        # Only what's still outstanding; fully delivered commodities drop off.
+        resources = [r for r in (depot.get("resources") or [])
+                     if (r.get("required") or 0) > (r.get("provided") or 0)]
         table.setRowCount(len(resources))
         for row, r in enumerate(resources):
             required = r.get("required") or 0
             provided = r.get("provided") or 0
-            remaining = max(0, required - provided)
+            remaining = required - provided
 
             name_item = QTableWidgetItem(r.get("name") or "—")
             req_item = QTableWidgetItem(f"{required:,}")
@@ -820,24 +822,18 @@ class _ColonisationDetailDialog(QDialog):
             rem_item = QTableWidgetItem(f"{remaining:,}")
             for it in (req_item, prov_item, rem_item):
                 it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            if remaining <= 0:
-                rem_item.setForeground(QColor("#6BCB77"))
-            else:
-                rem_item.setForeground(QColor("#FF6B6B"))
+            rem_item.setForeground(QColor("#FF6B6B"))
 
             table.setItem(row, 0, name_item)
             table.setItem(row, 1, req_item)
             table.setItem(row, 2, prov_item)
             table.setItem(row, 3, rem_item)
 
-            if remaining > 0:
-                btn = QPushButton("Find Source")
-                btn.setStyleSheet(_BTN_STYLE)
-                name = r.get("name") or ""
-                btn.clicked.connect(lambda _checked=False, n=name: self._panel.buy_search_requested.emit(n))
-                table.setCellWidget(row, 4, btn)
-            else:
-                table.removeCellWidget(row, 4)
+            btn = QPushButton("Find Source")
+            btn.setStyleSheet(_BTN_STYLE)
+            name = r.get("name") or ""
+            btn.clicked.connect(lambda _checked=False, n=name: self._panel.buy_search_requested.emit(n))
+            table.setCellWidget(row, 4, btn)
 
     def _open_raven_for_station(self, system_address: int, market_id: int) -> None:
         self._panel._open_raven_dialog()
