@@ -743,14 +743,10 @@ class _ColonisationDetailDialog(QDialog):
             hdr_row.addWidget(raven_btn)
         layout.addLayout(hdr_row)
 
-        progress = depot.get("progress")
-        status = "Complete" if depot.get("complete") else (
-            f"{progress * 100:.1f}% complete" if isinstance(progress, (int, float)) else "Not yet visited"
-        )
-        dist_suffix = f" — {dist_text} ly from your current location" if dist_text and dist_text != "—" else ""
-        status_label = QLabel(status + dist_suffix)
-        status_label.setStyleSheet("color:#888888; background:transparent; border:none;")
-        layout.addWidget(status_label)
+        self._dist_suffix = f" — {dist_text} ly from your current location" if dist_text and dist_text != "—" else ""
+        self._status_label = QLabel()
+        self._status_label.setStyleSheet("color:#888888; background:transparent; border:none;")
+        layout.addWidget(self._status_label)
 
         trailblazer = self._find_closest_trailblazer(panel, depot.get("system_name"))
         trailblazer_row = QHBoxLayout()
@@ -781,7 +777,7 @@ class _ColonisationDetailDialog(QDialog):
         trailblazer_row.addWidget(copy_trailblazer_btn)
         layout.addLayout(trailblazer_row)
 
-        table = QTableWidget()
+        table = self._table = QTableWidget()
         table.setColumnCount(5)
         table.setHorizontalHeaderLabels(["Commodity", "Required", "Provided", "Still Needed", ""])
         table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -799,6 +795,18 @@ class _ColonisationDetailDialog(QDialog):
         for c in (1, 2, 3, 4):
             h.setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
 
+        layout.addWidget(table, 1)
+        self.update_depot(depot)
+
+    def update_depot(self, depot: dict) -> None:
+        """Re-fills status + resources; the panel calls this on every depot refresh so deliveries show live."""
+        progress = depot.get("progress")
+        status = "Complete" if depot.get("complete") else (
+            f"{progress * 100:.1f}% complete" if isinstance(progress, (int, float)) else "Not yet visited"
+        )
+        self._status_label.setText(status + self._dist_suffix)
+        table = self._table
+        table.clearContents()
         resources = depot.get("resources") or []
         table.setRowCount(len(resources))
         for row, r in enumerate(resources):
@@ -828,8 +836,8 @@ class _ColonisationDetailDialog(QDialog):
                 name = r.get("name") or ""
                 btn.clicked.connect(lambda _checked=False, n=name: self._panel.buy_search_requested.emit(n))
                 table.setCellWidget(row, 4, btn)
-
-        layout.addWidget(table, 1)
+            else:
+                table.removeCellWidget(row, 4)
 
     def _open_raven_for_station(self, system_address: int, market_id: int) -> None:
         self._panel._open_raven_dialog()
@@ -1334,6 +1342,10 @@ class ColonisationPanel(QWidget):
         except Exception:
             log.exception("Failed to load colonisation depots")
             self._depots = []
+        for d in self._depots:
+            dlg = self._depot_dialogs.get(d.get("id"))
+            if dlg is not None and dlg.isVisible():
+                dlg.update_depot(d)
 
         ref_x = getattr(state, "system_x", None) if state else None
         ref_y = getattr(state, "system_y", None) if state else None
