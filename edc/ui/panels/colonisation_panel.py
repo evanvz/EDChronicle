@@ -1074,6 +1074,7 @@ class ColonisationPanel(QWidget):
         self._detail_dialogs: dict = {}
         self._raven_dialog: Optional["_RavenColonialDialog"] = None
         self._finder_dialog = None
+        self._design_dialog = None
         self._eddatahub_url = ""
         self._known_sites: list = []
 
@@ -1175,6 +1176,10 @@ class ColonisationPanel(QWidget):
         self._find_btn.setStyleSheet(_BTN_STYLE)
         self._find_btn.clicked.connect(self._open_finder_dialog)
         add_row.addWidget(self._find_btn)
+        self._my_system_btn = QPushButton("Design My System…")
+        self._my_system_btn.setStyleSheet(_BTN_STYLE)
+        self._my_system_btn.clicked.connect(self._open_my_system_design)
+        add_row.addWidget(self._my_system_btn)
         self.eddatahub_url = ""
         colon_l.addLayout(add_row)
 
@@ -1310,6 +1315,7 @@ class ColonisationPanel(QWidget):
         system_name = getattr(state, "system", None)
         system_changed = system_name != getattr(self._last_state, "system", None)
         self._last_state = state
+        self._update_my_system_btn()
         self._refresh_current_system(state)
         self._refresh_depots(state)
         if system_changed:
@@ -1545,6 +1551,35 @@ class ColonisationPanel(QWidget):
             "Find claimable systems ranked by port types and economies (EDDataHub)." if self._eddatahub_url
             else "Needs EDDataHub (Settings → EDDataHub URL)"
         )
+        self._update_my_system_btn()
+
+    def _my_system(self):
+        s = self._last_state
+        name = getattr(s, "system", None)
+        addr = getattr(s, "system_address", None)
+        return (addr, name) if name and isinstance(addr, int) else None
+
+    def _update_my_system_btn(self) -> None:
+        ok = bool(self._eddatahub_url) and self._my_system() is not None
+        self._my_system_btn.setEnabled(ok)
+        self._my_system_btn.setToolTip(
+            "Plan a build for your current system (EDDataHub)." if ok
+            else "Needs EDDataHub (Settings → EDDataHub URL)" if not self._eddatahub_url
+            else "Waiting for current system…"
+        )
+
+    def _open_my_system_design(self) -> None:
+        target = self._my_system()
+        if not self._eddatahub_url or target is None:
+            return
+        from edc.ui.panels import colonisation_design_dialog as design_mod
+        if self._design_dialog is None:
+            self._design_dialog = design_mod.ColonisationDesignDialog(self, self._eddatahub_url, *target)
+        else:
+            self._design_dialog.load(*target)
+        self._design_dialog.show()
+        self._design_dialog.raise_()
+        self._design_dialog.activateWindow()
 
     def _open_finder_dialog(self) -> None:
         if not self._eddatahub_url:
@@ -1560,6 +1595,8 @@ class ColonisationPanel(QWidget):
     def stop_finder_dialog(self) -> None:
         if self._finder_dialog is not None:
             self._finder_dialog.stop()
+        if self._design_dialog is not None:
+            self._design_dialog.stop()
 
     def _open_raven_dialog(self) -> None:
         if self._raven_dialog is None:
