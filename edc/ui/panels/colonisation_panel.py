@@ -1574,8 +1574,9 @@ class ColonisationPanel(QWidget):
             return
         from edc.ui.panels import colonisation_design_dialog as design_mod
         if self._design_dialog is None:
-            self._design_dialog = design_mod.ColonisationDesignDialog(self, self._eddatahub_url, *target)
+            self._design_dialog = design_mod.ColonisationDesignDialog(self, self._eddatahub_url, *target, repo=self._repo)
         else:
+            self._design_dialog.hub_url = self._eddatahub_url
             self._design_dialog.load(*target)
         self._design_dialog.show()
         self._design_dialog.raise_()

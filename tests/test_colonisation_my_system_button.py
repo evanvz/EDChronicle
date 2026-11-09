@@ -26,11 +26,11 @@ def test_button_opens_design_for_current_system(monkeypatch):
     made, loads, stops = [], [], []
 
     class Rec:
-        def __init__(self, parent, hub_url, id64, name):
-            made.append((hub_url, id64, name))
+        def __init__(self, parent, hub_url, id64, name, repo=None):
+            made.append((hub_url, id64, name, repo))
 
         def load(self, id64, name):
-            loads.append((id64, name))
+            loads.append((id64, name, self.hub_url))
 
         def stop(self):
             stops.append(1)
@@ -45,14 +45,16 @@ def test_button_opens_design_for_current_system(monkeypatch):
             pass
 
     monkeypatch.setattr(design_mod, "ColonisationDesignDialog", Rec)
-    panel = ColonisationPanel(MagicMock())
+    repo = MagicMock()
+    panel = ColonisationPanel(repo)
     panel.eddatahub_url = "http://hub"
     panel.refresh(_state("HIP 109508", 79196785019))
     panel._my_system_btn.click()
-    assert made == [("http://hub", 79196785019, "HIP 109508")]
+    assert made == [("http://hub", 79196785019, "HIP 109508", repo)]
+    panel.eddatahub_url = "http://hub2"
     panel.refresh(_state("Sol", 10477373803))
     panel._my_system_btn.click()
     assert len(made) == 1
-    assert loads == [(10477373803, "Sol")]
+    assert loads == [(10477373803, "Sol", "http://hub2")]
     panel.stop_finder_dialog()
     assert stops == [1]

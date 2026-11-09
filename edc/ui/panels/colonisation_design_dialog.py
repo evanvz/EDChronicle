@@ -2,15 +2,19 @@
 The hub fetch runs on a worker thread; the plan itself is edc.core.colonisation_design.plan_system."""
 from __future__ import annotations
 
+from itertools import count
 from typing import Callable, Optional
 
 from PyQt6.QtCore import Qt, QThread
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
-    QComboBox, QDialog, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QPushButton, QRadioButton, QTableWidget,
-    QTableWidgetItem, QVBoxLayout,
+    QComboBox, QDialog, QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QPushButton,
+    QRadioButton, QTableWidget, QTableWidgetItem, QVBoxLayout,
 )
 
+from edc.core import colonisation_facilities
 from edc.core.colonisation_design import plan_system
+from edc.core.colonisation_plan_status import status_updates, unlinked_depots
 from edc.core.colonisation_planner import TYPE_NAMES, TYPES, plan as plan_by_type, slot_table
 from edc.core.eddatahub_client import fetch_colonisation_system, put_colonisation_mark, put_colonisation_slots
 from edc.core.raven_colonial import get_system_slots
@@ -34,12 +38,16 @@ _NO_SLOTS = ("Check every body's slots in Architect View, then Confirm and save 
 
 
 class ColonisationDesignDialog(QDialog):
-    def __init__(self, parent, hub_url: str, id64: int, name: str):
+    def __init__(self, parent, hub_url: str, id64: int, name: str, repo=None):
         super().__init__(parent)
         self.setStyleSheet("QDialog { background:#080f18; color:#c8c8c8; }")
         self.setWindowTitle(f"Colonisation — Design: {name}")
         self.resize(900, 820)
         self.hub_url, self.id64 = hub_url, id64
+        self._repo = repo  # None on the finder path: read-only plan
+        self._sync_depots = False  # apply depot statuses once per load, at the first typed plan
+        self._stored: dict = {}  # (body, location, slot_index): stored step
+        self._links: list = []  # (label, combo, button) per unlinked construction site
         self._threads: list = []  # (QThread, _Worker) pairs, kept referenced until finished
         self._system: Optional[dict] = None
         self._raven: Optional[dict] = None
@@ -54,13 +62,13 @@ class ColonisationDesignDialog(QDialog):
         self._combo.setToolTip(_HINT)
         self._combo.addItem("Pick the primary slot body…", None)
         self._combo.setEnabled(False)
-        self._combo.currentIndexChanged.connect(self._replan)
+        self._combo.currentIndexChanged.connect(self._on_setting)
         self._solo = QRadioButton("Solo")
         self._group = QRadioButton("Group")
         self._solo.setChecked(True)
         for r in (self._solo, self._group):
             r.setStyleSheet(_LABEL)
-            r.toggled.connect(self._replan)
+            r.toggled.connect(self._on_setting)
         row.addWidget(lbl)
         row.addWidget(self._combo, 1)
         self._kind = QComboBox()
@@ -68,7 +76,7 @@ class ColonisationDesignDialog(QDialog):
         self._kind.addItem("Template", None)
         for t in TYPES:
             self._kind.addItem(TYPE_NAMES[t], t)
-        self._kind.currentIndexChanged.connect(self._replan)
+        self._kind.currentIndexChanged.connect(self._on_setting)
         row.addWidget(self._solo)
         row.addWidget(self._group)
         row.addWidget(self._kind)
@@ -84,8 +92,8 @@ class ColonisationDesignDialog(QDialog):
         self._banner.setVisible(False)
         root.addWidget(self._banner)
 
-        self._table = QTableWidget(0, 5)
-        self._table.setHorizontalHeaderLabels(["Step", "Body", "Unlocks", "Needs", "Points"])
+        self._table = QTableWidget(0, 8)
+        self._table.setHorizontalHeaderLabels(["#", "Step", "Body", "Status", "Unlocks", "Needs", "Points", ""])
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.verticalHeader().setVisible(False)
         self._table.setAlternatingRowColors(True)
@@ -94,6 +102,12 @@ class ColonisationDesignDialog(QDialog):
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self._table.horizontalHeader().setStretchLastSection(True)
         root.addWidget(self._table, 1)
+
+        self._sites = QGroupBox("Construction sites")
+        self._sites.setStyleSheet(_LABEL)
+        self._sites_grid = QGridLayout(self._sites)
+        self._sites.setVisible(False)
+        root.addWidget(self._sites)
 
         self._outcome = QLabel("")
         self._outcome.setWordWrap(True)
@@ -236,7 +250,20 @@ class ColonisationDesignDialog(QDialog):
         self._combo.setEnabled(True)
         self._fill_slots()
         self._save_slots_btn.setEnabled(True)
+        widgets = (self._combo, self._kind, self._solo, self._group)
+        for w in widgets:  # restoring picks is not a change: no save, one re-plan below
+            w.blockSignals(True)
         self._show_mark(system.get("mark"))
+        s = self._repo.get_colonisation_plan(self.id64)["settings"] if self._repo else None
+        if s:
+            self._kind.setCurrentIndex(max(self._kind.findData(s["kind"]), 0) if s["kind"] else 0)
+            (self._group if s["group"] else self._solo).setChecked(True)
+            i = self._combo.findData(s["primary_body"]) if s["primary_body"] else -1
+            if i > 0:
+                self._combo.setCurrentIndex(i)
+        for w in widgets:
+            w.blockSignals(False)
+        self._sync_depots = self._repo is not None
         self._replan()
         id64 = self.id64
         self._start(lambda: (id64, get_system_slots(sysname)), self._on_raven)
@@ -347,11 +374,34 @@ class ColonisationDesignDialog(QDialog):
         self._slots_lbl.setText(f"Saved slots for {len(saved)} bodies")
         self._replan()
 
+    def _on_setting(self, *_) -> None:
+        if self._repo and self._system is not None:
+            self._repo.save_colonisation_plan_settings(self.id64, self._kind.currentData(), self._group.isChecked(),
+                                                       self._combo.currentData())
+        self._replan()
+
+    def _save_step(self, s: dict, **change) -> None:
+        old = self._stored.get((s["body"], s["location"], s["slot_index"]), {})
+        r = {"facility": s["facility"], "status": s["status"], "market_id": old.get("market_id"), **change}
+        if r["facility"] is None:  # "left empty" picked again
+            return
+        self._repo.save_colonisation_plan_step(self.id64, s["body"], s["location"], s["slot_index"],
+                                               r["facility"], r["status"], r["market_id"])
+        self._replan()
+
+    def _reset_step(self, s: dict) -> None:
+        self._repo.delete_colonisation_plan_step(self.id64, s["body"], s["location"], s["slot_index"])
+        self._replan()
+
     def _replan(self, *_) -> None:
         if self._system is None:
             return
         primary = self._combo.currentData()
         self._table.setRowCount(0)
+        self._links = []
+        while self._sites_grid.count():
+            self._sites_grid.takeAt(0).widget().deleteLater()  # a Link button may be the sender
+        self._sites.setVisible(False)
         self._warnings.setText("")
         self._outcome.setText("")
         if primary is None:
@@ -384,11 +434,27 @@ class ColonisationDesignDialog(QDialog):
                                      f" — hub service score {score if score is not None else '?'} ({band})")
                 self._banner.setStyleSheet(_AMBER)
         if typed:
-            p = plan_by_type(self._system, slots, primary, self._group.isChecked(), kind)
+            stored = self._repo.get_colonisation_plan(self.id64)["steps"] if self._repo else None
+            p = plan_by_type(self._system, slots, primary, self._group.isChecked(), kind, stored)
+            depots = self._repo.get_colonisation_depots() if self._repo else []
+            if self._sync_depots:
+                self._sync_depots = False
+                prim = {k: p["steps"][0][k] for k in ("facility", "body", "location", "slot_index")}
+                ups = status_updates(stored, depots, self.id64, prim)
+                for u in ups:
+                    self._repo.save_colonisation_plan_step(self.id64, u["body"], u["location"], u["slot_index"],
+                                                           u["facility"], u["status"], u["market_id"])
+                if ups:
+                    stored = self._repo.get_colonisation_plan(self.id64)["steps"]
+                    p = plan_by_type(self._system, slots, primary, self._group.isChecked(), kind, stored)
+            self._stored = {(r["body"], r["location"], r["slot_index"]): r for r in stored or []}
             sysname = self._system.get("name") or ""
             short = lambda n: (n or "").removeprefix(sysname).strip() or n
-            rows = [[s["title"], short(s["body"]), s["note"] or "", "", f"T2 {s['t2']}, T3 {s['t3']}; {s['haul']:,} t"]
-                    for s in p["steps"]]
+            rows = [[str(s["n"]), s["title"], short(s["body"]), "", s["note"] or "", s["error"] or "",
+                     f"T2 {s['t2']}, T3 {s['t3']}; {s['haul']:,} t"] for s in p["steps"]]
+            rows += [["", "left empty", short(e["body"]), "", "", e["reason"].removeprefix("left empty: "), ""]
+                     for e in p["empty"]]
+            colors = ["#ff6b6b" if s["error"] else None for s in p["steps"]] + ["#9aa4b0"] * len(p["empty"])
             lines = list(p["warnings"]) + ([p["note"]] if p.get("note") else [])
             lines.append(f"Slots left: {p['unused']['orbital']} orbital, {p['unused']['surface']} surface")
             o = p["outcome"]
@@ -396,14 +462,69 @@ class ColonisationDesignDialog(QDialog):
                                                             ("pop", "mpop", "sec", "wealth", "tech", "sol", "dev"))
                                   + f" — haul {o['haul']:,} t — score {o['score']} (Raven Colonial-style, for comparison only)")
         else:
-            rows = [[s["title"], s["body"], ", ".join(s["unlocks"]), s["needs"] or "", s["points"]] for s in plan["steps"]]
+            rows = [[str(n), s["title"], s["body"], "", ", ".join(s["unlocks"]), s["needs"] or "", s["points"]]
+                    for n, s in enumerate(plan["steps"], 1)]
+            colors = [None] * len(rows)
             lines = list(plan["warnings"]) + ([plan["note"]] if plan["note"] else []) + ([no_slots] if kind else [])
         self._table.setRowCount(len(rows))
         for r, row in enumerate(rows):
             for c, text in enumerate(row):
-                self._table.setItem(r, c, QTableWidgetItem(text))
+                it = QTableWidgetItem(text)
+                if colors[r]:
+                    it.setForeground(QColor(colors[r]))
+                self._table.setItem(r, c, it)
+        if typed and self._repo:
+            self._fill_selectors(p, depots, short)
         self._table.resizeRowsToContents()
         self._warnings.setText("\n".join(lines))
+
+    def _fill_selectors(self, p: dict, depots: list, short: Callable) -> None:
+        fac = colonisation_facilities.load()
+        steps = list(p["steps"])
+        for e in p["empty"]:  # a pick here becomes a Planned step in the next free slot of that body
+            used = {s["slot_index"] for s in p["steps"] if (s["body"], s["location"]) == (e["body"], e["location"])}
+            steps.append({"body": e["body"], "location": e["location"], "facility": None, "status": "Planned",
+                          "slot_index": next(i for i in count() if i not in used)})
+        for r, s in enumerate(steps):  # signals connected after filling, so filling never saves
+            step = QComboBox()
+            step.setStyleSheet(_INPUT_STYLE)
+            if s["facility"] is None:
+                step.addItem("left empty", None)
+            for k, f in fac.items():
+                if f["location"] == s["location"]:
+                    step.addItem(f["name"], k)
+            step.setCurrentIndex(max(step.findData(s["facility"]), 0) if s["facility"] else 0)
+            step.setEnabled(s.get("n") != 1)  # the primary follows Solo/Group
+            step.currentIndexChanged.connect(lambda _, s=s, c=step: self._save_step(s, facility=c.currentData()))
+            self._table.setCellWidget(r, 1, step)
+            if "n" not in s:
+                continue
+            st = QComboBox()
+            st.setStyleSheet(_INPUT_STYLE)
+            st.addItems(["Planned", "Building", "Complete"])
+            st.setCurrentText(s["status"])
+            st.currentTextChanged.connect(lambda t, s=s: self._save_step(s, status=t))
+            self._table.setCellWidget(r, 3, st)
+            if s["fixed"] and s["n"] != 1:
+                b = QPushButton("Reset")
+                b.setStyleSheet(_BTN_STYLE)
+                b.clicked.connect(lambda _, s=s: self._reset_step(s))
+                self._table.setCellWidget(r, 7, b)
+        targets = [s for s in p["steps"] if s["n"] != 1]
+        for i, d in enumerate(unlinked_depots(list(self._stored.values()), depots, self.id64)):
+            lbl = QLabel(f"{d['station_name']} — {(d['progress'] or 0) * 100:.1f}%")
+            c = QComboBox()
+            c.setStyleSheet(_INPUT_STYLE)
+            for s in targets:
+                c.addItem(f"#{s['n']} {s['title']} — {short(s['body'])}", s)
+            b = QPushButton("Link")
+            b.setStyleSheet(_BTN_STYLE)
+            b.clicked.connect(lambda _, c=c, d=d: c.currentData() and self._save_step(
+                c.currentData(), status="Building", market_id=d["market_id"]))
+            for col, w in enumerate((lbl, c, b)):
+                self._sites_grid.addWidget(w, i, col)
+            self._links.append((lbl, c, b))
+        self._sites.setVisible(bool(self._links))
 
     # ── squad mark ─────────────────────────────────────────────────────
     def _show_mark(self, mark: Optional[dict]) -> None:

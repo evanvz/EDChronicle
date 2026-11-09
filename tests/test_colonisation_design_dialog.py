@@ -11,12 +11,12 @@ from tests.test_colonisation_design import SYS, TUC  # noqa: E402
 _keep = []
 
 
-def _dialog(monkeypatch, system=TUC, raven=None):
+def _dialog(monkeypatch, system=TUC, raven=None, repo=None):
     monkeypatch.setattr(mod, "fetch_colonisation_system", lambda url, id64, faction=None: system)
     monkeypatch.setattr(mod, "get_system_slots", lambda name: raven)
     parent = QWidget()
     _keep.append(parent)
-    d = mod.ColonisationDesignDialog(parent, "http://hub", 1, SYS)
+    d = mod.ColonisationDesignDialog(parent, "http://hub", 1, SYS, repo=repo)
     _keep.append(d)
     deadline = time.time() + 5
     while not d._combo.isEnabled() and d._banner.text() == "Loading…" and time.time() < deadline:
@@ -32,7 +32,7 @@ def _pick(d, body):
 
 
 def _titles(d):
-    return [d._table.item(r, 0).text() for r in range(d._table.rowCount())]
+    return [d._table.item(r, 1).text() for r in range(d._table.rowCount())]
 
 
 def test_picking_gas_giant_3_renders_steps_in_order(monkeypatch):
@@ -245,8 +245,8 @@ def test_full_build_renders_plan_and_outcome(monkeypatch):
     _kind(d, "full")
     p = plan(s, slot_table(s, None), f"{SYS} 3", False, "full")
     assert p["steps"] and _titles(d) == [st["title"] for st in p["steps"]]
-    assert _titles(d)[0] == "Primary: Coriolis" and d._table.item(0, 2).text() == "free"
-    assert d._table.item(0, 4).text() == f"T2 {p['steps'][0]['t2']}, T3 {p['steps'][0]['t3']}; 63,001 t"
+    assert _titles(d)[0] == "Primary: Coriolis" and d._table.item(0, 4).text() == "free"
+    assert d._table.item(0, 6).text() == f"T2 {p['steps'][0]['t2']}, T3 {p['steps'][0]['t3']}; 63,001 t"
     text = d._outcome.text()
     assert "score" in text and "haul" in text and "sec" in text and d._outcome.isVisibleTo(d)
     assert "Up to 5 facilities can be under construction at once" in d._warnings.text()
@@ -425,3 +425,155 @@ def test_save_worker_error_reenables(monkeypatch):
     _wait_slots(d)
     assert d._slots_lbl.text() == "Slots not saved (error, see the log)"
     assert d._save_slots_btn.isEnabled() and d._slots.editTriggers() == d._edit_triggers
+
+
+# ── editable build order (Design My System) ─────────────────────────────
+def _repo(tmp_path):
+    from tests.test_colonisation_plan_repo import _repo as make
+    return make(tmp_path)
+
+
+def _typed(monkeypatch, repo=None):
+    d = _dialog(monkeypatch, _all_slotted(), repo=repo)
+    _pick(d, f"{SYS} 3")
+    _kind(d, "full")
+    return d
+
+
+def _cell(d, r, c):
+    return d._table.cellWidget(r, c)
+
+
+def _depot(repo, market_id, station, progress=0.5, complete=False):
+    repo.save_colonisation_depot_visit(market_id, 1, SYS, station, progress, complete, "[]", "2026-11-08T10:00:00Z")
+
+
+def test_hash_column_numbers_rows(monkeypatch):
+    d = _dialog(monkeypatch)
+    _pick(d, f"{SYS} 3")
+    n = d._table.rowCount()
+    assert n and [d._table.item(r, 0).text() for r in range(n)] == [str(i) for i in range(1, n + 1)]
+    assert all(d._table.item(r, 3).text() == "" and _cell(d, r, 1) is None for r in range(n))
+
+
+def test_typed_plan_with_repo_has_step_and_status_selectors(monkeypatch, tmp_path):
+    from edc.core import colonisation_facilities
+    fac = colonisation_facilities.load()
+    d = _typed(monkeypatch, _repo(tmp_path))
+    assert d._table.item(0, 0).text() == "1" and d._table.item(1, 0).text() == "2"
+    prim, step = _cell(d, 0, 1), _cell(d, 1, 1)
+    assert not prim.isEnabled() and prim.currentData() == "coriolis_starport"
+    assert step.isEnabled() and step.currentText() == _titles(d)[1]
+    loc = fac[step.currentData()]["location"]
+    assert all(fac[step.itemData(i)]["location"] == loc for i in range(step.count()))
+    st = _cell(d, 1, 3)
+    assert [st.itemText(i) for i in range(st.count())] == ["Planned", "Building", "Complete"]
+    assert st.currentText() == "Planned" and _cell(d, 1, 7) is None and not d._sites.isVisibleTo(d)
+
+
+def test_changing_status_persists_and_survives_reload(monkeypatch, tmp_path):
+    repo = _repo(tmp_path)
+    d = _typed(monkeypatch, repo)
+    title = _titles(d)[1]
+    _cell(d, 1, 3).setCurrentText("Complete")
+    steps = repo.get_colonisation_plan(1)["steps"]
+    assert len(steps) == 1 and steps[0]["status"] == "Complete"
+    d2 = _dialog(monkeypatch, _all_slotted(), repo=repo)
+    r = _titles(d2).index(title)
+    assert _cell(d2, r, 3).currentText() == "Complete"
+
+
+def test_reset_removes_fixed_row(monkeypatch, tmp_path):
+    repo = _repo(tmp_path)
+    d = _typed(monkeypatch, repo)
+    _cell(d, 1, 3).setCurrentText("Building")
+    assert _cell(d, 0, 7) is None
+    r = next(r for r in range(d._table.rowCount()) if _cell(d, r, 7) is not None)
+    _cell(d, r, 7).click()
+    assert repo.get_colonisation_plan(1)["steps"] == []
+    assert all(_cell(d, r, 7) is None for r in range(d._table.rowCount()))
+
+
+def test_changing_step_saves_planned_fixed_step(monkeypatch, tmp_path):
+    repo = _repo(tmp_path)
+    d = _typed(monkeypatch, repo)
+    c = _cell(d, 1, 1)
+    other = next(i for i in range(c.count()) if i != c.currentIndex())
+    key = c.itemData(other)
+    c.setCurrentIndex(other)
+    steps = repo.get_colonisation_plan(1)["steps"]
+    assert len(steps) == 1 and steps[0]["facility"] == key and steps[0]["status"] == "Planned"
+
+
+def test_switching_solo_group_keeps_stored_steps(monkeypatch, tmp_path):
+    repo = _repo(tmp_path)
+    d = _typed(monkeypatch, repo)
+    _cell(d, 1, 3).setCurrentText("Building")
+    d._group.setChecked(True)
+    d._solo.setChecked(True)
+    _kind(d, "service")
+    assert len(repo.get_colonisation_plan(1)["steps"]) == 1
+
+
+def test_settings_restored_on_reopen(monkeypatch, tmp_path):
+    repo = _repo(tmp_path)
+    d = _typed(monkeypatch, repo)
+    d._group.setChecked(True)
+    assert repo.get_colonisation_plan(1)["settings"] == {"kind": "full", "group": True, "primary_body": f"{SYS} 3"}
+    d2 = _dialog(monkeypatch, _all_slotted(), repo=repo)
+    assert d2._combo.currentData() == f"{SYS} 3" and d2._group.isChecked() and d2._kind.currentData() == "full"
+    assert _titles(d2) == _titles(d)
+    assert repo.get_colonisation_plan(1)["settings"]["group"] is True
+
+
+def test_unlinked_depot_listed_and_link_sets_building(monkeypatch, tmp_path):
+    repo = _repo(tmp_path)
+    _depot(repo, 100, "Primary site")
+    _depot(repo, 200, "Second site", 0.25)
+    d = _typed(monkeypatch, repo)
+    assert d._sites.isVisibleTo(d) and len(d._links) == 1
+    lbl, combo, btn = d._links[0]
+    assert lbl.text() == "Second site — 25.0%"
+    assert combo.itemText(0).startswith("#2 ") and combo.count() == d._table.rowCount() - 1 - sum(
+        d._table.item(r, 0).text() == "" for r in range(d._table.rowCount()))
+    s = combo.itemData(0)
+    btn.click()
+    stored = {(x["body"], x["slot_index"], x["location"]): x for x in repo.get_colonisation_plan(1)["steps"]}
+    row = stored[(s["body"], s["slot_index"], s["location"])]
+    assert row["market_id"] == 200 and row["status"] == "Building" and row["facility"] == s["facility"]
+    assert d._links == [] and not d._sites.isVisibleTo(d)
+
+
+def test_primary_depot_sets_primary_building(monkeypatch, tmp_path):
+    repo = _repo(tmp_path)
+    _depot(repo, 100, "Primary site")
+    d = _typed(monkeypatch, repo)
+    assert _cell(d, 0, 3).currentText() == "Building"
+    steps = repo.get_colonisation_plan(1)["steps"]
+    assert [(s["facility"], s["market_id"], s["status"]) for s in steps] == [("coriolis_starport", 100, "Building")]
+
+
+def test_finder_path_without_repo_has_no_selectors(monkeypatch):
+    d = _typed(monkeypatch)
+    assert d._outcome.text() and d._table.item(0, 0).text() == "1"
+    assert all(_cell(d, r, c) is None for r in range(d._table.rowCount()) for c in range(8))
+    assert not d._sites.isVisibleTo(d)
+
+
+def test_left_empty_row_pick_saves_planned_step(monkeypatch, tmp_path):
+    real = mod.plan_by_type
+    reason = "left empty: 3 market would get a third economy (A, B, C)"
+    monkeypatch.setattr(mod, "plan_by_type", lambda *a: {**real(*a), "empty": [
+        {"body": f"{SYS} 3", "location": "surface", "reason": reason}]})
+    repo = _repo(tmp_path)
+    d = _typed(monkeypatch, repo)
+    r = d._table.rowCount() - 1
+    assert d._table.item(r, 0).text() == "" and d._table.item(r, 1).text() == "left empty"
+    assert d._table.item(r, 5).text() == reason.removeprefix("left empty: ")
+    assert d._table.item(r, 5).foreground().color().name() == "#9aa4b0" and _cell(d, r, 3) is None
+    c = _cell(d, r, 1)
+    assert c.currentText() == "left empty"
+    c.setCurrentIndex(1)
+    steps = repo.get_colonisation_plan(1)["steps"]
+    assert [(s["body"], s["location"], s["facility"], s["status"]) for s in steps] == [
+        (f"{SYS} 3", "surface", c.itemData(1), "Planned")]
