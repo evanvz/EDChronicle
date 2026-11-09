@@ -143,15 +143,16 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
             cost = [c, 0] if f["tier"] == 2 else [0, c]
             note = f"port {ports[0] + 1}: {c} T{f['tier']} points"
         short_of = " and ".join(f"T{t}" for t, have, need in ((2, bal[0], cost[0]), (3, bal[1], cost[1])) if have < need)
+        econ = economies(body, [f["economy"] or _HUB_ECON.get(key)])
+        # Spec: leave the slot empty rather than push a market past two economies; only a new economy counts,
+        # except a port, which makes the body a market of its own
+        clash = (f["port"] or econ != economies(body)) and _clash(econ)
+        third = f"{short(body)} market would get a third economy ({', '.join(sorted(econ))})"
         if not item:
             if short_of:
                 return False
-            econ = economies(body, [f["economy"] or _HUB_ECON.get(key)])
-            # Spec: leave the slot empty rather than push a market past two economies; only a new economy counts,
-            # except a port, which makes the body a market of its own
-            if (f["port"] or econ != economies(body)) and _clash(econ):
-                empty.setdefault((body, loc), f"left empty: {short(body)} market would get a third economy "
-                                              f"({', '.join(sorted(econ))})")
+            if clash:
+                empty.setdefault((body, loc), f"left empty: {third}")
                 return False
         ports[0] += f["port"]
         if not (item and item["error"] == "slot no longer exists"):
@@ -167,7 +168,12 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
                       "t2": bal[0], "t3": bal[1], "note": note, "haul": f["haul"],
                       "slot_index": item["slot_index"] if item else next_index(body, loc), "fixed": bool(item),
                       "status": item["status"] if item else "Planned",
-                      "error": (item["error"] or (f"not enough {short_of} points" if short_of else None)) if item else None})
+                      # Evan 2026-11-09: a hand-picked step is placed anyway, but warned against what's built before it
+                      "error": (item["error"]
+                                or ("can't build solo" if not group and key in ("dodec_starport", "large_planetary_port")
+                                    else None)
+                                or (third if clash else None)
+                                or (f"not enough {short_of} points" if short_of else None)) if item else None})
         return True
 
     # Spec: Evan's fixed steps go first, Complete, then Building, then Planned; each waits for its requirement

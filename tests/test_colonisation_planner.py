@@ -222,8 +222,8 @@ def test_full_build_spends_t3_on_planetary_ports_when_no_orbital_known():
     assert all(s["t2"] >= 0 and s["t3"] >= 0 for s in p["steps"]) and p["unused"]["surface"] == 0
 
 
-def _fixed(*items):
-    return plan(DRM_SYS, slot_table(DRM_SYS, DRM_RAVEN), DRM_PRIMARY, False, "full", list(items))
+def _fixed(*items, group=False, system=DRM_SYS):
+    return plan(system, slot_table(system, DRM_RAVEN), DRM_PRIMARY, group, "full", list(items))
 
 
 def _item(facility, body, location, slot_index, status="Planned"):
@@ -303,9 +303,22 @@ def test_fixed_step_missing_requirement_keeps_its_place_with_error():
 
 
 def test_fixed_step_short_of_points_is_placed_with_error():
-    p = _fixed(_item("dodec_starport", f"{DRM} 2", "orbital", 0))
+    p = _fixed(_item("dodec_starport", f"{DRM} 2", "orbital", 0), group=True)
     s = p["steps"][1]
     assert s["facility"] == "dodec_starport" and s["error"] == "not enough T3 points" and s["t3"] < 0
+
+
+def test_fixed_solo_tier3_port_is_placed_with_warning():
+    # Evan 2026-11-09: a hand-picked bad option is kept, but warned
+    s = _fixed(_item("dodec_starport", f"{DRM} 2", "orbital", 0))["steps"][1]
+    assert s["facility"] == "dodec_starport" and s["error"] == "can't build solo"
+
+
+def test_fixed_step_giving_a_third_economy_is_placed_with_warning():
+    sys = _with(DRM_SYS, DRM_PRIMARY, economies=["HighTech", "Industrial"])
+    s = _fixed(_item("refinery_hub", DRM_PRIMARY, "surface", 0), system=sys)["steps"][1]
+    assert s["facility"] == "refinery_hub"
+    assert s["error"] == "1 market would get a third economy (HighTech, Industrial, Refinery)"
 
 
 def test_security_skips_a_clashing_body():
