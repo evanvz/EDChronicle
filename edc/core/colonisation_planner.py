@@ -108,7 +108,11 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
 
     # twin of colonisation_design.plan_system's primary rule (101): keep both in step
     # 101: solo Coriolis; group T3, Ocellus when the body has rings, else Orbis. Free, adds its reward.
-    pkey = ("ocellus_starport" if bodies.get(primary_body, {}).get("rings") else "orbis_starport") if group \
+    # a stored row at the primary's slot IS the primary: its facility wins over Solo/Group
+    prim = next((i for i in fixed if (i["body"], i["location"], i["slot_index"]) == (primary_body, "orbital", 0)
+                 and i["facility"] in fac), None)
+    pkey = prim["facility"] if prim else \
+        ("ocellus_starport" if bodies.get(primary_body, {}).get("rings") else "orbis_starport") if group \
         else "coriolis_starport"
     pf = fac[pkey]
     if free.get((primary_body, "orbital")) == 0:
@@ -116,12 +120,12 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
     elif (primary_body, "orbital") in free:
         free[(primary_body, "orbital")] -= 1
     bal = [pf["cp_reward"]["t2"], pf["cp_reward"]["t3"]]
-    prim = next((i for i in fixed if i["facility"] == pkey and i["body"] == primary_body), None)
-    fixed = [i for i in fixed if not (i["facility"] == pkey and i["body"] == primary_body)]
+    fixed = [i for i in fixed if i is not prim]
     steps.append({"title": f"Primary: {pf['name'].removesuffix(' Starport')}", "facility": pkey, "body": primary_body,
                   "location": "orbital", "t2": bal[0], "t3": bal[1], "note": "free", "haul": pf["haul"],
                   "slot_index": prim["slot_index"] if prim else next_index(primary_body, "orbital"),
-                  "fixed": bool(prim), "status": prim["status"] if prim else "Planned", "error": None})
+                  "fixed": bool(prim), "status": prim["status"] if prim else "Planned", "error": None,
+                  "market_id": prim.get("market_id") if prim else None})
     stats = dict(pf["effects"])
     total = {"haul": pf["haul"], "score": pf["score"]}
     built = {pkey}

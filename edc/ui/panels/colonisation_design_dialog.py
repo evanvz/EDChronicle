@@ -255,6 +255,8 @@ class ColonisationDesignDialog(QDialog):
             w.blockSignals(True)
         self._show_mark(system.get("mark"))
         s = self._repo.get_colonisation_plan(self.id64)["settings"] if self._repo else None
+        if self._repo and not s:  # defaults, so the previous system's picks don't carry over
+            s = {"kind": None, "group": False, "primary_body": None}
         if s:
             self._kind.setCurrentIndex(max(self._kind.findData(s["kind"]), 0) if s["kind"] else 0)
             (self._group if s["group"] else self._solo).setChecked(True)

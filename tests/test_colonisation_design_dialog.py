@@ -577,3 +577,29 @@ def test_left_empty_row_pick_saves_planned_step(monkeypatch, tmp_path):
     steps = repo.get_colonisation_plan(1)["steps"]
     assert [(s["body"], s["location"], s["facility"], s["status"]) for s in steps] == [
         (f"{SYS} 3", "surface", c.itemData(1), "Planned")]
+
+
+def test_switching_to_group_keeps_stored_primary(monkeypatch, tmp_path):
+    repo = _repo(tmp_path)
+    d = _typed(monkeypatch, repo)
+    _cell(d, 0, 3).setCurrentText("Building")
+    d._group.setChecked(True)
+    assert _titles(d)[0] == "Primary: Coriolis" and _cell(d, 0, 3).currentText() == "Building"
+    assert not any(t.startswith(("Primary: Ocellus", "Primary: Orbis")) for t in _titles(d))
+    assert sum(t in ("Coriolis", "Primary: Coriolis") for t in _titles(d)) == 1
+    assert [(s["facility"], s["slot_index"]) for s in repo.get_colonisation_plan(1)["steps"]] == [("coriolis_starport", 0)]
+
+
+def test_system_without_stored_settings_resets_picks(monkeypatch, tmp_path):
+    repo = _repo(tmp_path)
+    d = _typed(monkeypatch, repo)
+    d._group.setChecked(True)
+    d.load(2, "Other")
+    deadline = time.time() + 5
+    while not d._combo.isEnabled() and time.time() < deadline:
+        _app.processEvents()
+    d.stop()
+    _app.processEvents()
+    assert d._solo.isChecked() and d._kind.currentData() is None and d._combo.currentData() is None
+    assert repo.get_colonisation_plan(2)["settings"] is None
+    assert repo.get_colonisation_plan(1)["settings"] == {"kind": "full", "group": True, "primary_body": f"{SYS} 3"}

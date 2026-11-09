@@ -335,3 +335,14 @@ def test_tier3_port_skips_a_body_with_three_economies():
     dodecs = [s["body"] for s in p["steps"] if s["facility"] == "dodec_starport"]
     assert "G 3" in dodecs and "G 2" not in dodecs
     assert not any("market:" in w for w in p["warnings"])
+
+
+def test_stored_primary_row_wins_over_group_choice():
+    p = plan(DRM_SYS, slot_table(DRM_SYS, DRM_RAVEN), DRM_PRIMARY, True, "full",
+             [_item("coriolis_starport", DRM_PRIMARY, "orbital", 0, "Building")])
+    s = p["steps"][0]
+    assert (s["facility"], s["slot_index"], s["status"], s["fixed"]) == ("coriolis_starport", 0, "Building", True)
+    assert [x["facility"] for x in p["steps"] if (x["body"], x["location"], x["slot_index"]) == (DRM_PRIMARY, "orbital", 0)] \
+        == ["coriolis_starport"]
+    assert not {x["facility"] for x in p["steps"]} & {"ocellus_starport", "orbis_starport"}
+    assert sum(x["facility"] == "coriolis_starport" for x in p["steps"]) == 1
