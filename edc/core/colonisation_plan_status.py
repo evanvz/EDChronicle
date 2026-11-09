@@ -1,3 +1,9 @@
+def own_systems(depots):
+    """{system_address: system_name} of every system with a construction site, in depot order."""
+    return {d["system_address"]: d["system_name"] for d in depots
+            if isinstance(d.get("system_address"), int) and d.get("system_name")}
+
+
 def primary_depot(depots, system_address):
     mine = [d for d in depots if d["system_address"] == system_address]
     return min(mine, key=lambda d: d["id"]) if mine else None

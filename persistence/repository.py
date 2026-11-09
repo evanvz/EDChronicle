@@ -2790,6 +2790,8 @@ class Repository:
         brand new row was inserted) -- the caller uses this to fire a
         one-time "new site tracked" callout, distinct from the ordinary
         progress-update case."""
+        if station_name.startswith("$") and ";" in station_name:  # "$EXT_PANEL_ColonisationShip; Name"
+            station_name = station_name.split(";", 1)[1].strip()
         row = self.db.conn.execute(
             "SELECT id FROM colonisation_depots WHERE market_id = ?", (market_id,)
         ).fetchone()

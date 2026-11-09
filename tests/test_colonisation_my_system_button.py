@@ -13,16 +13,37 @@ def _state(system, addr):
     return SimpleNamespace(system=system, system_address=addr, system_x=None, system_y=None, system_z=None)
 
 
-def test_button_needs_hub_and_current_system():
-    panel = ColonisationPanel(MagicMock())
+def _repo(*systems):
+    repo = MagicMock()
+    repo.get_colonisation_depots.return_value = [
+        {"id": i, "market_id": i, "system_address": a, "system_name": n, "station_name": "Site",
+         "progress": 0.1, "complete": 0, "resources": []} for i, (n, a) in enumerate(systems, 1)]
+    repo.get_system_coords_for_names.return_value = {}
+    return repo
+
+
+def test_button_needs_hub_and_an_own_system():
+    panel = ColonisationPanel(_repo())
+    panel.eddatahub_url = "http://hub"
+    panel.refresh(_state("HIP 109508", 79196785019))
+    assert not panel._my_system_btn.isEnabled()  # no construction site anywhere yet
+    panel = ColonisationPanel(_repo(("HIP 109508", 79196785019)))
+    panel.refresh(_state("Synuefe KV-B d14-58", 2003342133627))
     assert not panel._my_system_btn.isEnabled()
     panel.eddatahub_url = "http://hub"
-    assert not panel._my_system_btn.isEnabled()
-    panel.refresh(_state("HIP 109508", 79196785019))
     assert panel._my_system_btn.isEnabled()
 
 
-def test_button_opens_design_for_current_system(monkeypatch):
+def test_opens_current_system_if_own_else_first_own():
+    # Live 2026-11-09: in Synuefe KV-B d14-58 (not a colonisation system) the window opened that system.
+    panel = ColonisationPanel(_repo(("HIP 109508", 79196785019), ("HIP 1", 11)))
+    panel.refresh(_state("Synuefe KV-B d14-58", 2003342133627))
+    assert panel._my_system() == (79196785019, "HIP 109508")
+    panel.refresh(_state("HIP 1", 11))
+    assert panel._my_system() == (11, "HIP 1")
+
+
+def test_button_opens_design_for_selected_system(monkeypatch):
     made, loads, stops = [], [], []
 
     class Rec:
@@ -45,10 +66,10 @@ def test_button_opens_design_for_current_system(monkeypatch):
             pass
 
     monkeypatch.setattr(design_mod, "ColonisationDesignDialog", Rec)
-    repo = MagicMock()
+    repo = _repo(("HIP 109508", 79196785019), ("Sol", 10477373803))
     panel = ColonisationPanel(repo)
     panel.eddatahub_url = "http://hub"
-    panel.refresh(_state("HIP 109508", 79196785019))
+    panel.refresh(_state("Synuefe KV-B d14-58", 2003342133627))
     panel._my_system_btn.click()
     assert made == [("http://hub", 79196785019, "HIP 109508", repo)]
     panel.eddatahub_url = "http://hub2"

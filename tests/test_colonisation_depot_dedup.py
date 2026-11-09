@@ -81,12 +81,19 @@ def test_docked_station_is_used_without_market_json():
     assert fake_self._saved[0]["station_name"] == "Planetary Construction Site: Test"
 
 
-def test_colonisation_ship_token_is_stripped_from_station_name():
+def test_colonisation_ship_token_is_stripped_from_station_name(tmp_path):
     # Live 2026-11-07: the claim's colonisation ship docks as "$EXT_PANEL_ColonisationShip; <name>".
-    fake_self = _fake_self(station=None)
-    fake_self.state.station_name = "$EXT_PANEL_ColonisationShip; Equiano Territory"
-    assert MainWindow._save_colonisation_depot(fake_self, _depot_event()) is True
-    assert fake_self._saved[0]["station_name"] == "Equiano Territory"
+    # Stripped in the repository: the live path and the startup journal import both save through it.
+    from persistence.database import Database
+    from persistence.repository import Repository
+    from persistence.schema import SCHEMA_SQL
+    db = Database(tmp_path / "t.db")
+    db.executescript(SCHEMA_SQL)
+    db.run_migrations()
+    repo = Repository(db)
+    repo.save_colonisation_depot_visit(1, 2, "HIP 109508", "$EXT_PANEL_ColonisationShip; Equiano Territory",
+                                       0.5, False, "[]", "2026-11-09T00:00:00+00:00")
+    assert [d["station_name"] for d in repo.get_colonisation_depots()] == ["Equiano Territory"]
 
 
 def test_missing_system_or_station_returns_false():

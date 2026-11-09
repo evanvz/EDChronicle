@@ -30,6 +30,7 @@ from edc.ui.style import (
 )
 from edc.core.spansh_client import SpanshClient
 from edc.core import raven_colonial
+from edc.core.colonisation_plan_status import own_systems
 from edc.ui.formatting import clean_token
 from edc.ui.style import bulk_table_fill as _bulk_fill
 
@@ -1315,7 +1316,6 @@ class ColonisationPanel(QWidget):
         system_name = getattr(state, "system", None)
         system_changed = system_name != getattr(self._last_state, "system", None)
         self._last_state = state
-        self._update_my_system_btn()
         self._refresh_current_system(state)
         self._refresh_depots(state)
         if system_changed:
@@ -1344,6 +1344,7 @@ class ColonisationPanel(QWidget):
         except Exception:
             log.exception("Failed to load colonisation depots")
             self._depots = []
+        self._update_my_system_btn()
         for d in self._depots:
             dlg = self._depot_dialogs.get(d.get("id"))
             if dlg is not None and dlg.isVisible():
@@ -1554,18 +1555,19 @@ class ColonisationPanel(QWidget):
         self._update_my_system_btn()
 
     def _my_system(self):
-        s = self._last_state
-        name = getattr(s, "system", None)
-        addr = getattr(s, "system_address", None)
-        return (addr, name) if name and isinstance(addr, int) else None
+        """The current system if it's one of yours (has a construction site), else your first one; the Design
+        window switches between them."""
+        own = own_systems(self._depots)
+        cur = getattr(self._last_state, "system_address", None)
+        return (cur, own[cur]) if cur in own else next(iter(own.items()), None)
 
     def _update_my_system_btn(self) -> None:
         ok = bool(self._eddatahub_url) and self._my_system() is not None
         self._my_system_btn.setEnabled(ok)
         self._my_system_btn.setToolTip(
-            "Plan a build for your current system (EDDataHub)." if ok
+            "Plan the build for your colonisation systems (EDDataHub)." if ok
             else "Needs EDDataHub (Settings → EDDataHub URL)" if not self._eddatahub_url
-            else "Waiting for current system…"
+            else "No colonisation system yet: dock at your claim's construction site first"
         )
 
     def _open_my_system_design(self) -> None:

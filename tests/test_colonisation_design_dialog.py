@@ -86,7 +86,7 @@ def test_combo_groups_cluster_root_before_moons(monkeypatch):
 
 def test_hub_unreachable(monkeypatch):
     d = _dialog(monkeypatch, None)
-    assert d._banner.text() == "EDDataHub not reachable" and not d._combo.isEnabled()
+    assert d._banner.text().startswith("EDDataHub not reachable") and not d._combo.isEnabled()
 
 
 def _blocked(monkeypatch, gate):
@@ -604,3 +604,19 @@ def test_system_without_stored_settings_resets_picks(monkeypatch, tmp_path):
     assert d._solo.isChecked() and d._kind.currentData() is None and d._combo.currentData() is None
     assert repo.get_colonisation_plan(2)["settings"] is None
     assert repo.get_colonisation_plan(1)["settings"] == {"kind": "full", "group": True, "primary_body": f"{SYS} 3"}
+
+
+def test_system_selector_lists_own_systems_and_switches(monkeypatch, tmp_path):
+    # Evan 2026-11-09: pick the colonisation system inside the Design window.
+    repo = _repo(tmp_path)
+    repo.save_colonisation_depot_visit(7, 2, "HIP 2", "Site", 0.1, False, "[]", "2026-11-08T10:00:00Z")
+    d = _dialog(monkeypatch, repo=repo)
+    assert [(d._sys.itemText(i), d._sys.itemData(i)) for i in range(d._sys.count())] == [("HIP 2", 2), (SYS, 1)]
+    assert d._sys.currentData() == 1
+    d._sys.activated.emit(0)
+    assert d.id64 == 2 and d._sys.currentData() == 2 and d.windowTitle().endswith("HIP 2")
+
+
+def test_finder_path_has_no_system_selector(monkeypatch):
+    d = _dialog(monkeypatch)
+    assert not d._sys.isVisibleTo(d)

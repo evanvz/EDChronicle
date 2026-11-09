@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
 
 from edc.core import colonisation_facilities
 from edc.core.colonisation_design import plan_system
-from edc.core.colonisation_plan_status import status_updates, unlinked_depots
+from edc.core.colonisation_plan_status import own_systems, status_updates, unlinked_depots
 from edc.core.colonisation_planner import TYPE_NAMES, TYPES, plan as plan_by_type, slot_table
 from edc.core.eddatahub_client import fetch_colonisation_system, put_colonisation_mark, put_colonisation_slots
 from edc.core.raven_colonial import get_system_slots
@@ -54,6 +54,16 @@ class ColonisationDesignDialog(QDialog):
         self._loaded_slots: dict = {}  # body_id: (orbital, surface) as last filled, so Save sends only changed rows
 
         root = QVBoxLayout(self)
+        self._sys = QComboBox()  # your colonisation systems (every system with a construction site)
+        self._sys.setStyleSheet(_INPUT_STYLE)
+        self._sys.activated.connect(lambda i: self.load(self._sys.itemData(i), self._sys.itemText(i)))
+        if repo is not None:
+            sys_row = QHBoxLayout()
+            sys_lbl = QLabel("System")
+            sys_lbl.setStyleSheet(_LABEL)
+            sys_row.addWidget(sys_lbl)
+            sys_row.addWidget(self._sys, 1)
+            root.addLayout(sys_row)
         row = QHBoxLayout()
         lbl = QLabel("Primary slot body")
         lbl.setStyleSheet(_LABEL)
@@ -174,6 +184,11 @@ class ColonisationDesignDialog(QDialog):
         """Point the window at a system; a still-running fetch for the previous one is ignored when it lands."""
         self.id64, self._system, self._raven = id64, None, None
         self.setWindowTitle(f"Colonisation — Design: {name}")
+        if self._repo is not None:
+            self._sys.clear()
+            for addr, n in {**own_systems(self._repo.get_colonisation_depots()), id64: name}.items():
+                self._sys.addItem(n, addr)
+            self._sys.setCurrentIndex(self._sys.findData(id64))
         while self._combo.count() > 1:
             self._combo.removeItem(1)
         self._combo.setCurrentIndex(0)
@@ -224,7 +239,7 @@ class ColonisationDesignDialog(QDialog):
             return
         system = result[1]
         if not system:
-            self._banner.setText("EDDataHub not reachable")
+            self._banner.setText("EDDataHub not reachable, or this system isn't on its colonisation list")
             self._banner.setStyleSheet(_RED)
             return
         self._system = system
