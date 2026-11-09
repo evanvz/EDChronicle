@@ -246,7 +246,15 @@ def test_full_build_renders_plan_and_outcome(monkeypatch):
     p = plan(s, slot_table(s, None), f"{SYS} 3", False, "full")
     assert p["steps"] and _titles(d) == [st["title"] for st in p["steps"]]
     assert _titles(d)[0] == "Primary: Coriolis" and d._table.item(0, 4).text() == "free"
-    assert d._table.item(0, 6).text() == f"T2 {p['steps'][0]['t2']}, T3 {p['steps'][0]['t3']}; 63,001 t"
+    row = [d._table.item(0, c).text() for c in range(6, 10)]
+    assert row == ["free", "T3 1", f"T2 {p['steps'][0]['t2']} · T3 {p['steps'][0]['t3']}", "63,001 t"]
+    # Evan 2026-11-09: cost and earnings per step, not just the running balance
+    from edc.core import colonisation_facilities
+    fac = colonisation_facilities.load()
+    r, st = next((r, st) for r, st in enumerate(p["steps"]) if r and any(fac[st["facility"]]["cp_cost"].values()))
+    want = [" · ".join(f"T{t} {fac[st['facility']][k][f't{t}']}" for t in (2, 3) if fac[st["facility"]][k][f"t{t}"])
+            or "—" for k in ("cp_cost", "cp_reward")]
+    assert [d._table.item(r, c).text() for c in (6, 7)] == want
     text = d._outcome.text()
     assert "score" in text and "haul" in text and "sec" in text and d._outcome.isVisibleTo(d)
     assert "Up to 5 facilities can be under construction at once" in d._warnings.text()
@@ -468,7 +476,7 @@ def test_typed_plan_with_repo_has_step_and_status_selectors(monkeypatch, tmp_pat
     assert all(fac[step.itemData(i)]["location"] == loc for i in range(step.count()))
     st = _cell(d, 1, 3)
     assert [st.itemText(i) for i in range(st.count())] == ["Planned", "Building", "Complete"]
-    assert st.currentText() == "Planned" and _cell(d, 1, 7) is None and not d._sites.isVisibleTo(d)
+    assert st.currentText() == "Planned" and _cell(d, 1, 10) is None and not d._sites.isVisibleTo(d)
 
 
 def test_changing_status_persists_and_survives_reload(monkeypatch, tmp_path):
@@ -487,11 +495,11 @@ def test_reset_removes_fixed_row(monkeypatch, tmp_path):
     repo = _repo(tmp_path)
     d = _typed(monkeypatch, repo)
     _cell(d, 1, 3).setCurrentText("Building")
-    assert _cell(d, 0, 7) is None
-    r = next(r for r in range(d._table.rowCount()) if _cell(d, r, 7) is not None)
-    _cell(d, r, 7).click()
+    assert _cell(d, 0, 10) is None
+    r = next(r for r in range(d._table.rowCount()) if _cell(d, r, 10) is not None)
+    _cell(d, r, 10).click()
     assert repo.get_colonisation_plan(1)["steps"] == []
-    assert all(_cell(d, r, 7) is None for r in range(d._table.rowCount()))
+    assert all(_cell(d, r, 10) is None for r in range(d._table.rowCount()))
 
 
 def test_changing_step_saves_planned_fixed_step(monkeypatch, tmp_path):
@@ -557,7 +565,7 @@ def test_primary_depot_sets_primary_building(monkeypatch, tmp_path):
 def test_finder_path_without_repo_has_no_selectors(monkeypatch):
     d = _typed(monkeypatch)
     assert d._outcome.text() and d._table.item(0, 0).text() == "1"
-    assert all(_cell(d, r, c) is None for r in range(d._table.rowCount()) for c in range(8))
+    assert all(_cell(d, r, c) is None for r in range(d._table.rowCount()) for c in range(11))
     assert not d._sites.isVisibleTo(d)
 
 

@@ -102,8 +102,14 @@ class ColonisationDesignDialog(QDialog):
         self._banner.setVisible(False)
         root.addWidget(self._banner)
 
-        self._table = QTableWidget(0, 8)
-        self._table.setHorizontalHeaderLabels(["#", "Step", "Body", "Status", "Unlocks", "Needs", "Points", ""])
+        self._table = QTableWidget(0, 11)
+        self._table.setHorizontalHeaderLabels(["#", "Step", "Body", "Status", "Unlocks", "Needs",
+                                               "Cost", "Earns", "Points after", "Haul", ""])
+        for c, tip in ((6, "Construction points this build uses up (from your system's T2/T3 balance)"),
+                       (7, "Construction points you get once this build completes"),
+                       (8, "Your T2/T3 balance once this step completes, if every step above it is done"),
+                       (9, "Commodities to deliver for this build")):
+            self._table.horizontalHeaderItem(c).setToolTip(tip)
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.verticalHeader().setVisible(False)
         self._table.setAlternatingRowColors(True)
@@ -467,11 +473,21 @@ class ColonisationDesignDialog(QDialog):
             self._stored = {(r["body"], r["location"], r["slot_index"]): r for r in stored or []}
             sysname = self._system.get("name") or ""
             short = lambda n: (n or "").removeprefix(sysname).strip() or n
+            fac = colonisation_facilities.load()
+
+            def cp(s, kind):  # "T2 1 · T3 2"; the primary is free
+                f = fac.get(s["facility"])
+                if f is None or (kind == "cp_cost" and s["n"] == 1):
+                    return "free" if f else ""
+                return " · ".join(f"T{t} {f[kind][f't{t}']}" for t in (2, 3) if f[kind][f"t{t}"]) or "—"
+
             rows = [[str(s["n"]), s["title"], short(s["body"]), "", s["note"] or "", s["error"] or "",
-                     f"T2 {s['t2']}, T3 {s['t3']}; {s['haul']:,} t"] for s in p["steps"]]
-            rows += [["", "left empty", short(e["body"]), "", "", e["reason"].removeprefix("left empty: "), ""]
+                     cp(s, "cp_cost"), cp(s, "cp_reward"), f"T2 {s['t2']} · T3 {s['t3']}", f"{s['haul']:,} t"]
+                    for s in p["steps"]]
+            rows += [["", "left empty", short(e["body"]), "", "", e["reason"].removeprefix("left empty: "), "", "", "", ""]
                      for e in p["empty"]]
-            colors = ["#ff6b6b" if s["error"] else None for s in p["steps"]] + ["#9aa4b0"] * len(p["empty"])
+            colors = ["#ff6b6b" if s["error"] or s["t2"] < 0 or s["t3"] < 0 else None for s in p["steps"]] \
+                + ["#9aa4b0"] * len(p["empty"])
             lines = list(p["warnings"]) + ([p["note"]] if p.get("note") else [])
             lines.append(f"Slots left: {p['unused']['orbital']} orbital, {p['unused']['surface']} surface")
             o = p["outcome"]
@@ -479,7 +495,7 @@ class ColonisationDesignDialog(QDialog):
                                                             ("pop", "mpop", "sec", "wealth", "tech", "sol", "dev"))
                                   + f" — haul {o['haul']:,} t — score {o['score']} (Raven Colonial-style, for comparison only)")
         else:
-            rows = [[str(n), s["title"], s["body"], "", ", ".join(s["unlocks"]), s["needs"] or "", s["points"]]
+            rows = [[str(n), s["title"], s["body"], "", ", ".join(s["unlocks"]), s["needs"] or "", "", "", s["points"], ""]
                     for n, s in enumerate(plan["steps"], 1)]
             colors = [None] * len(rows)
             lines = list(plan["warnings"]) + ([plan["note"]] if plan["note"] else []) + ([no_slots] if kind else [])
@@ -526,7 +542,7 @@ class ColonisationDesignDialog(QDialog):
                 b = QPushButton("Reset")
                 b.setStyleSheet(_BTN_STYLE)
                 b.clicked.connect(lambda _, s=s: self._reset_step(s))
-                self._table.setCellWidget(r, 7, b)
+                self._table.setCellWidget(r, 10, b)
         targets = [s for s in p["steps"] if s["n"] != 1]
         for i, d in enumerate(unlinked_depots(list(self._stored.values()), depots, self.id64)):
             lbl = QLabel(f"{d['station_name']} — {(d['progress'] or 0) * 100:.1f}%")

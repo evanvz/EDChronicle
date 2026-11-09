@@ -331,7 +331,7 @@ def run():
         text-decoration: underline;
     }
 
-    QCheckBox {
+    QCheckBox, QRadioButton {
         color: #E6E6E6;
         font-size: 13px;
         font-weight: 600;
@@ -339,7 +339,7 @@ def run():
         padding: 4px 0px;
     }
 
-    QCheckBox::indicator {
+    QCheckBox::indicator, QRadioButton::indicator {
         width: 18px;
         height: 18px;
         border-radius: 4px;
@@ -347,18 +347,22 @@ def run():
         background-color: #151515;
     }
 
-    QCheckBox::indicator:checked {
+    QCheckBox::indicator:checked, QRadioButton::indicator:checked {
         background-color: #FF8C00;
         border-color: #FF8C00;
     }
 
-    QCheckBox::indicator:unchecked:hover {
+    QCheckBox::indicator:unchecked:hover, QRadioButton::indicator:unchecked:hover {
         border-color: #FFA733;
     }
 
-    QCheckBox::indicator:checked:hover {
+    QCheckBox::indicator:checked:hover, QRadioButton::indicator:checked:hover {
         background-color: #FFA733;
         border-color: #FFA733;
+    }
+
+    QRadioButton::indicator {
+        border-radius: 11px;
     }
 
     """)
