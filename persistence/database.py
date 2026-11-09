@@ -168,6 +168,14 @@ class Database:
         db-split-design.md). Each entry is idempotent (IF NOT EXISTS /
         best-effort ALTER), so running this on every startup is safe."""
         personal_migrations = [
+            """CREATE TABLE IF NOT EXISTS colonisation_plan_steps (
+                system_address INTEGER NOT NULL, body_name TEXT NOT NULL, location TEXT NOT NULL,
+                slot_index INTEGER NOT NULL, facility TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'Planned',
+                market_id INTEGER, updated_at TEXT NOT NULL,
+                PRIMARY KEY (system_address, body_name, location, slot_index))""",
+            """CREATE TABLE IF NOT EXISTS colonisation_plan_settings (
+                system_address INTEGER PRIMARY KEY, kind TEXT, grp INTEGER NOT NULL DEFAULT 0,
+                primary_body TEXT, updated_at TEXT NOT NULL)""",
             "ALTER TABLE bodies ADD COLUMN first_footfall INTEGER DEFAULT 0",
             "ALTER TABLE bodies ADD COLUMN has_footfall    INTEGER DEFAULT 0",
             "ALTER TABLE bodies ADD COLUMN mass_em REAL",

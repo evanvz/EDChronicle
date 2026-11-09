@@ -2888,6 +2888,65 @@ class Repository:
             out.append(d)
         return out
 
+    def get_colonisation_plan(self, system_address: int) -> dict:
+        s = self.db.conn.execute(
+            "SELECT kind, grp, primary_body FROM colonisation_plan_settings WHERE system_address = ?",
+            (system_address,),
+        ).fetchone()
+        rows = self.db.conn.execute(
+            """SELECT facility, body_name, location, slot_index, status, market_id
+               FROM colonisation_plan_steps WHERE system_address = ?
+               ORDER BY body_name, location, slot_index""",
+            (system_address,),
+        ).fetchall()
+        return {
+            "settings": None if s is None else {
+                "kind": s["kind"], "group": bool(s["grp"]), "primary_body": s["primary_body"]},
+            "steps": [{"facility": r["facility"], "body": r["body_name"], "location": r["location"],
+                       "slot_index": r["slot_index"], "status": r["status"],
+                       "market_id": r["market_id"]} for r in rows],
+        }
+
+    def save_colonisation_plan_step(
+        self, system_address: int, body: str, location: str, slot_index: int,
+        facility: str, status: str, market_id: int | None = None,
+    ) -> None:
+        self.db.conn.execute(
+            """INSERT INTO colonisation_plan_steps
+                   (system_address, body_name, location, slot_index, facility, status, market_id, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(system_address, body_name, location, slot_index) DO UPDATE SET
+                   facility = excluded.facility, status = excluded.status,
+                   market_id = excluded.market_id, updated_at = excluded.updated_at""",
+            (system_address, body, location, slot_index, facility, status, market_id,
+             datetime.now(timezone.utc).isoformat()),
+        )
+        self.db.conn.commit()
+
+    def delete_colonisation_plan_step(
+        self, system_address: int, body: str, location: str, slot_index: int,
+    ) -> None:
+        self.db.conn.execute(
+            "DELETE FROM colonisation_plan_steps "
+            "WHERE system_address = ? AND body_name = ? AND location = ? AND slot_index = ?",
+            (system_address, body, location, slot_index),
+        )
+        self.db.conn.commit()
+
+    def save_colonisation_plan_settings(
+        self, system_address: int, kind: str | None, group: bool, primary_body: str | None,
+    ) -> None:
+        self.db.conn.execute(
+            """INSERT INTO colonisation_plan_settings (system_address, kind, grp, primary_body, updated_at)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(system_address) DO UPDATE SET
+                   kind = excluded.kind, grp = excluded.grp,
+                   primary_body = excluded.primary_body, updated_at = excluded.updated_at""",
+            (system_address, kind, int(bool(group)), primary_body,
+             datetime.now(timezone.utc).isoformat()),
+        )
+        self.db.conn.commit()
+
     def remove_colonisation_depot(self, depot_id: int) -> None:
         self.db.conn.execute("DELETE FROM colonisation_depots WHERE id = ?", (depot_id,))
         self.db.conn.commit()
