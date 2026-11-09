@@ -100,6 +100,7 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
         return n
 
     ignore = {"Colony", "Terraforming"}
+    belt = lambda m: bodies.get(m, {}).get("sub_type") == "Asteroid belt"  # EDDataHub's belt rows
 
     def economies(m, extra=()):
         return {e.replace("Hightech", "HighTech") for e in (bodies.get(m, {}).get("economies") or [])
@@ -134,7 +135,8 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
     def place(key, body, note=None, item=None):
         f = fac[key]
         loc = item["location"] if item else f["location"]
-        if not item and ((not group and key in ("dodec_starport", "large_planetary_port"))
+        belt_misfit = belt(body) != (key == "asteroid_starport")
+        if not item and (belt_misfit or (not group and key in ("dodec_starport", "large_planetary_port"))
                          or free.get((body, loc), 0) < 1 or (f["requires"] and not built & set(f["requires"]))):
             return False
         cost = [f["cp_cost"]["t2"], f["cp_cost"]["t3"]]
@@ -170,6 +172,8 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
                       "status": item["status"] if item else "Planned",
                       # Evan 2026-11-09: a hand-picked step is placed anyway, but warned against what's built before it
                       "error": (item["error"]
+                                or (("a belt takes only an Asteroid Starport" if belt(body)
+                                     else "an Asteroid Starport needs an asteroid belt") if belt_misfit else None)
                                 or ("can't build solo" if not group and key in ("dodec_starport", "large_planetary_port")
                                     else None)
                                 or (third if clash else None)
@@ -247,6 +251,9 @@ def plan(system: dict, slots: list[dict], primary_body: str, group: bool, kind: 
                     key, i = _T1_ORBITAL[i % 3], i + 1
                 if not place(key, n):
                     break
+        for n in order:  # a belt's slot: an Asteroid Starport (T2 port), before the held slots and large settlements
+            if belt(n) and not place("asteroid_starport", n) and free.get((n, "orbital"), 0):
+                empty.setdefault((n, "orbital"), "left empty: not enough T2 points for an Asteroid Starport")
         # Pass 2's kept orbital slot per body stays held for a Tier 3 port until Pass 4
         held = [k for k, v in free.items() if k[1] == "orbital" and v > 0]
         for k in held:

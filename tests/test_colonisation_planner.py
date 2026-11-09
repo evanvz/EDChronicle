@@ -359,3 +359,25 @@ def test_stored_primary_row_wins_over_group_choice():
         == ["coriolis_starport"]
     assert not {x["facility"] for x in p["steps"]} & {"ocellus_starport", "orbis_starport"}
     assert sum(x["facility"] == "coriolis_starport" for x in p["steps"]) == 1
+
+
+def _belted():
+    return {**DRM_SYS, "bodies": DRM_SYS["bodies"] + [
+        {"name": f"{DRM} A A Belt", "sub_type": "Asteroid belt", "landable": False, "cluster": None,
+         "economies": ["Extraction"], "rings": False, "orbital_slots": 1, "surface_slots": 0, "ground_slots": 0,
+         "body_id": 512}]}
+
+
+def test_belt_slot_gets_an_asteroid_starport_and_nothing_else():
+    # Evan 2026-11-09: HIP 109508's belt has an open slot; only an Asteroid Starport fits it
+    p = _drm("full", system=_belted())
+    on_belt = [s["facility"] for s in p["steps"] if s["body"] == f"{DRM} A A Belt"]
+    assert on_belt == ["asteroid_starport"]
+    assert "asteroid_starport" not in [s["facility"] for s in p["steps"] if s["body"] != f"{DRM} A A Belt"]
+
+
+def test_hand_picked_misfits_on_a_belt_are_warned():
+    s = _fixed(_item("comms_installation", f"{DRM} A A Belt", "orbital", 0), system=_belted())["steps"][1]
+    assert s["error"] == "a belt takes only an Asteroid Starport"
+    s = _fixed(_item("asteroid_starport", f"{DRM} 2", "orbital", 0), system=_belted())["steps"][1]
+    assert s["error"] == "an Asteroid Starport needs an asteroid belt"
