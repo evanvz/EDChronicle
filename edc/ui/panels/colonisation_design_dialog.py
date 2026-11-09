@@ -496,7 +496,7 @@ class ColonisationDesignDialog(QDialog):
                 if f["location"] == s["location"]:
                     step.addItem(f["name"], k)
             step.setCurrentIndex(max(step.findData(s["facility"]), 0) if s["facility"] else 0)
-            step.setEnabled(s.get("n") != 1)  # the primary follows Solo/Group
+            step.setEnabled(s.get("n") != 1 or bool(s.get("fixed")))  # an unstored primary follows Solo/Group
             step.currentIndexChanged.connect(lambda _, s=s, c=step: self._save_step(s, facility=c.currentData()))
             self._table.setCellWidget(r, 1, step)
             if "n" not in s:
@@ -522,7 +522,7 @@ class ColonisationDesignDialog(QDialog):
             b = QPushButton("Link")
             b.setStyleSheet(_BTN_STYLE)
             b.clicked.connect(lambda _, c=c, d=d: c.currentData() and self._save_step(
-                c.currentData(), status="Building", market_id=d["market_id"]))
+                c.currentData(), status="Complete" if d["complete"] else "Building", market_id=d["market_id"]))
             for col, w in enumerate((lbl, c, b)):
                 self._sites_grid.addWidget(w, i, col)
             self._links.append((lbl, c, b))

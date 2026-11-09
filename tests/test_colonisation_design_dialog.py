@@ -551,6 +551,7 @@ def test_primary_depot_sets_primary_building(monkeypatch, tmp_path):
     assert _cell(d, 0, 3).currentText() == "Building"
     steps = repo.get_colonisation_plan(1)["steps"]
     assert [(s["facility"], s["market_id"], s["status"]) for s in steps] == [("coriolis_starport", 100, "Building")]
+    assert _cell(d, 0, 1).isEnabled()  # a stored primary can be corrected; it no longer follows Solo/Group
 
 
 def test_finder_path_without_repo_has_no_selectors(monkeypatch):
