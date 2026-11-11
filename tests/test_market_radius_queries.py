@@ -207,3 +207,20 @@ def test_prune_stale_market_prices_batches_across_boundary(repo):
     assert deleted == 5
     remaining = repo.db.conn.execute("SELECT commodity_name FROM market_prices").fetchall()
     assert [r["commodity_name"] for r in remaining] == ["gold"]
+
+
+def test_prune_scans_outside_the_write_lock(repo):
+    # Live 2026-11-10: the unindexed scan ran inside every batch's DELETE, holding
+    # the write lock ~4s per batch, and the UI thread's journal save waited 37s.
+    _seed_coords(repo, "Sol", 0.0, 0.0, 0.0)
+    for i in range(3):
+        _seed_market_row(repo, 1001, f"stale{i}", "Sol", last_updated="2026-01-01T00:00:00Z")
+    conn = repo.db.conn
+    seen = []
+    conn.set_trace_callback(lambda sql: seen.append((sql, conn.in_transaction)))
+    try:
+        assert repo.prune_stale_market_prices(batch_size=2) == 3
+    finally:
+        conn.set_trace_callback(None)
+    assert not any("DELETE" in sql and "SELECT" in sql for sql, _ in seen)
+    assert all(not tx for sql, tx in seen if "SELECT" in sql)

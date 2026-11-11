@@ -1623,7 +1623,7 @@ class Repository:
         )
         self.db.conn.commit()
 
-    def prune_stale_market_prices(self, batch_size: int = 20_000) -> int:
+    def prune_stale_market_prices(self, batch_size: int = 2_000) -> int:
         """
         Deletes rows already excluded from search results by
         _market_data_cutoff() — a stale row is dead weight once nothing
@@ -1643,23 +1643,28 @@ class Repository:
         the lock repeatedly, giving other writers a real chance to
         interleave instead of one long exclusive hold.
         """
-        cutoff = _market_data_cutoff()
-        total_deleted = 0
-        while True:
-            cur = self.db.conn.execute(
-                "DELETE FROM net.market_prices WHERE rowid IN "
-                "(SELECT rowid FROM net.market_prices WHERE last_updated < ? LIMIT ?)",
-                (cutoff, batch_size),
-            )
-            self.db.conn.commit()
-            deleted = cur.rowcount
-            total_deleted += deleted
-            if deleted < batch_size:
-                break
-            time.sleep(0.05)
-        return total_deleted
+        return self._prune_net(batch_size, "market_prices", "last_updated", _market_data_cutoff())
 
-    def prune_stale_fleet_carrier_materials(self, batch_size: int = 20_000) -> int:
+    def _prune_net(self, batch_size: int, table: str, column: str, cutoff: str) -> int:
+        """Shared by the prune_stale_* methods. The stale rows are found by
+        one plain read first: column has no index, so finding them scans the
+        whole table (14.4M market_prices rows, 2026-11-10). A read holds no
+        write lock in WAL mode. The old DELETE ... rowid IN (SELECT ... LIMIT)
+        rescanned inside the write lock on every batch (about 4s each), and
+        the UI thread's journal saves waited up to 37s behind it at startup.
+        Each delete re-checks the cutoff, so a row refreshed after the scan stays."""
+        rowids = [(r[0], cutoff) for r in self.db.conn.execute(
+            f"SELECT rowid FROM net.{table} WHERE {column} < ?", (cutoff,))]
+        deleted = 0
+        for i in range(0, len(rowids), batch_size):
+            cur = self.db.conn.executemany(
+                f"DELETE FROM net.{table} WHERE rowid = ? AND {column} < ?", rowids[i:i + batch_size])
+            self.db.conn.commit()
+            deleted += cur.rowcount
+            time.sleep(0.05)
+        return deleted
+
+    def prune_stale_fleet_carrier_materials(self, batch_size: int = 2_000) -> int:
         """
         Deletes rows already excluded from search results by
         _fleet_carrier_cutoff() — same reasoning as prune_stale_market_prices():
@@ -1668,23 +1673,9 @@ class Repository:
         doesn't change what search can find, only what's still sitting on
         disk. Call from a worker thread only. Batched the same way and for
         the same reason as prune_stale_market_prices()."""
-        cutoff = _fleet_carrier_cutoff()
-        total_deleted = 0
-        while True:
-            cur = self.db.conn.execute(
-                "DELETE FROM net.fleet_carrier_materials WHERE rowid IN "
-                "(SELECT rowid FROM net.fleet_carrier_materials WHERE last_updated < ? LIMIT ?)",
-                (cutoff, batch_size),
-            )
-            self.db.conn.commit()
-            deleted = cur.rowcount
-            total_deleted += deleted
-            if deleted < batch_size:
-                break
-            time.sleep(0.05)
-        return total_deleted
+        return self._prune_net(batch_size, "fleet_carrier_materials", "last_updated", _fleet_carrier_cutoff())
 
-    def prune_stale_system_bgs_status(self, batch_size: int = 20_000) -> int:
+    def prune_stale_system_bgs_status(self, batch_size: int = 2_000) -> int:
         """
         Deletes rows already excluded from search results by
         _bgs_status_cutoff() -- same reasoning as prune_stale_market_prices(),
@@ -1694,40 +1685,12 @@ class Repository:
         is fed unconditionally by EDDN network-wide, so it's genuinely
         unbounded without this. Batched the same way and for the same
         reason as prune_stale_market_prices()."""
-        cutoff = _bgs_status_cutoff()
-        total_deleted = 0
-        while True:
-            cur = self.db.conn.execute(
-                "DELETE FROM net.system_bgs_status WHERE rowid IN "
-                "(SELECT rowid FROM net.system_bgs_status WHERE data_timestamp < ? LIMIT ?)",
-                (cutoff, batch_size),
-            )
-            self.db.conn.commit()
-            deleted = cur.rowcount
-            total_deleted += deleted
-            if deleted < batch_size:
-                break
-            time.sleep(0.05)
-        return total_deleted
+        return self._prune_net(batch_size, "system_bgs_status", "data_timestamp", _bgs_status_cutoff())
 
-    def prune_stale_system_res_sites(self, batch_size: int = 20_000) -> int:
+    def prune_stale_system_res_sites(self, batch_size: int = 2_000) -> int:
         """Same reasoning/cutoff/batching as prune_stale_system_bgs_status(),
         for system_res_sites."""
-        cutoff = _market_data_cutoff()
-        total_deleted = 0
-        while True:
-            cur = self.db.conn.execute(
-                "DELETE FROM net.system_res_sites WHERE rowid IN "
-                "(SELECT rowid FROM net.system_res_sites WHERE data_timestamp < ? LIMIT ?)",
-                (cutoff, batch_size),
-            )
-            self.db.conn.commit()
-            deleted = cur.rowcount
-            total_deleted += deleted
-            if deleted < batch_size:
-                break
-            time.sleep(0.05)
-        return total_deleted
+        return self._prune_net(batch_size, "system_res_sites", "data_timestamp", _market_data_cutoff())
 
     def save_commodity_names_batch(self, pairs: list[tuple[str, str]]):
         """
