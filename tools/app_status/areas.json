@@ -466,6 +466,7 @@
    "tests/test_close_stops_background_workers.py",
    "tests/test_config_bgs_limits.py",
    "tests/test_database_deferred_commit.py",
+   "tests/test_interrupt_reads.py",
    "tests/test_docked_station_state.py",
    "tests/test_edsm_flight_log_import.py",
    "tests/test_fdevids_names.py",

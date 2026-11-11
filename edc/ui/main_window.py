@@ -145,7 +145,7 @@ from edc.audio.handlers.status import StatusPhrases
 from edc.audio.handlers.powerplay import PowerPlayPhrases
 from typing import Any, Dict, List, Optional
 
-from persistence.database import Database
+from persistence.database import Database, interrupt_reads
 from persistence.schema import SCHEMA_SQL
 from persistence.repository import Repository
 
@@ -4376,6 +4376,7 @@ class MainWindow(QMainWindow):
                 w.cancel()
             except RuntimeError:
                 pass  # C++ object already gone
+        interrupt_reads()  # a worker mid-query can't see its cancel flag; this ends the query
         deadline = time.monotonic() + _CLOSE_WAIT_SECONDS
         for t in threads:
             try:

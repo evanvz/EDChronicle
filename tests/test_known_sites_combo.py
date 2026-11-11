@@ -81,12 +81,16 @@ def test_selecting_the_placeholder_row_does_nothing():
     assert calls == []
 
 
+def _with_repo(**kw):
+    """Fake self whose repo answers get_known_construction_sites(system) by exact name, like the DB index."""
+    fs = SimpleNamespace(_repo=SimpleNamespace(get_known_construction_sites=lambda name: [
+        s for s in _SITES if s["system_name"] == name]), **kw)
+    fs._sites_in = lambda name: ColonisationPanel._sites_in(fs, name)
+    return fs
+
+
 def _fake_panel(system=None):
-    return SimpleNamespace(
-        _known_sites=_SITES,
-        _known_sites_combo=_FakeComboBox(),
-        _last_state=SimpleNamespace(system=system),
-    )
+    return _with_repo(_known_sites_combo=_FakeComboBox(), _last_state=SimpleNamespace(system=system))
 
 
 def test_combo_scoped_to_current_system_only():
@@ -122,7 +126,7 @@ def test_combo_placeholder_when_no_system_yet():
 
 
 def test_station_completer_narrows_to_typed_systems_sites():
-    fs = SimpleNamespace(_known_sites=_SITES, _depot_station_completer=_FakeCompleter())
+    fs = _with_repo(_depot_station_completer=_FakeCompleter())
     ColonisationPanel._on_depot_system_text_changed(fs, "HIP 105879")
     assert sorted(fs._depot_station_completer.model_names) == [
         "Orbital Construction Site: Asling's Gift",
@@ -130,19 +134,30 @@ def test_station_completer_narrows_to_typed_systems_sites():
     ]
 
 
-def test_station_completer_case_insensitive():
-    fs = SimpleNamespace(_known_sites=_SITES, _depot_station_completer=_FakeCompleter())
+def test_station_completer_needs_exact_system_name():
+    # exact match is the price of the indexed per-system query (Evan OK'd, 2026-11-11)
+    fs = _with_repo(_depot_station_completer=_FakeCompleter())
     ColonisationPanel._on_depot_system_text_changed(fs, "hip 105879")
-    assert len(fs._depot_station_completer.model_names) == 2
+    assert fs._depot_station_completer.model_names == []
 
 
 def test_station_completer_empty_for_unknown_system():
-    fs = SimpleNamespace(_known_sites=_SITES, _depot_station_completer=_FakeCompleter())
+    fs = _with_repo(_depot_station_completer=_FakeCompleter())
     ColonisationPanel._on_depot_system_text_changed(fs, "Deciat")
     assert fs._depot_station_completer.model_names == []
 
 
 def test_station_completer_cleared_when_system_text_empty():
-    fs = SimpleNamespace(_known_sites=_SITES, _depot_station_completer=_FakeCompleter())
+    fs = _with_repo(_depot_station_completer=_FakeCompleter())
     ColonisationPanel._on_depot_system_text_changed(fs, "")
     assert fs._depot_station_completer.model_names is None
+
+
+def test_building_the_panel_queries_no_sites():
+    # 2026-11-11: the all-systems query ran here on the UI thread, a 38s startup freeze
+    from unittest.mock import MagicMock
+    from PyQt6.QtWidgets import QApplication
+    _app = QApplication.instance() or QApplication([])
+    repo = MagicMock()
+    ColonisationPanel(repo)
+    repo.get_known_construction_sites.assert_not_called()

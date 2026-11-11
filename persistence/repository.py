@@ -2787,8 +2787,11 @@ class Repository:
         self.db.conn.commit()
         return is_new
 
-    def get_known_construction_sites(self) -> list[dict]:
-        """Distinct (system_name, station_name) pairs for stations we've
+    def get_known_construction_sites(self, system_name: str) -> list[dict]:
+        """One system's sites only, by exact name: the system_name index makes it
+        instant. All systems at once scanned station_info on the UI thread at startup,
+        38s on a cold disk cache (2026-11-11).
+        Distinct (system_name, station_name) pairs for stations we've
         personally docked at whose name marks them as a colonisation
         construction site -- sourced from our own station_info (written on
         every Docked event regardless of EDDN), since Frontier's
@@ -2801,9 +2804,10 @@ class Repository:
             """
             SELECT DISTINCT system_name, station_name
             FROM net.station_info
-            WHERE station_name LIKE '%Construction Site%'
+            WHERE system_name = ? AND station_name LIKE '%Construction Site%'
             ORDER BY system_name, station_name
-            """
+            """,
+            (system_name,),
         ).fetchall()
         return [{"system_name": r["system_name"], "station_name": r["station_name"]} for r in rows]
 

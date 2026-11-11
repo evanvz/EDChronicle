@@ -28,7 +28,9 @@ def test_returns_only_construction_sites(tmp_path):
     repo = _repo(tmp_path)
     _seed_station(repo, "HIP 105879", "Orbital Construction Site: Asling's Gift")
     _seed_station(repo, "Sol", "Abraham Lincoln")  # ordinary station -- not a construction site
-    sites = repo.get_known_construction_sites()
+    _seed_station(repo, "Sol", "Orbital Construction Site: Elsewhere")  # another system's site
+    _seed_station(repo, "HIP 105879", "Ordinary Port")  # same system, not a construction site
+    sites = repo.get_known_construction_sites("HIP 105879")
     assert sites == [{"system_name": "HIP 105879", "station_name": "Orbital Construction Site: Asling's Gift"}]
 
 
@@ -39,16 +41,16 @@ def test_returns_distinct_pairs(tmp_path):
         "UPDATE net.station_info SET last_visited = ? WHERE market_id = ?",
         ("2026-09-22T00:00:00Z", hash(("HIP 105879", "Orbital Construction Site: Asling's Gift")) % 2_000_000_000),
     )
-    sites = repo.get_known_construction_sites()
+    sites = repo.get_known_construction_sites("HIP 105879")
     assert len(sites) == 1
 
 
 def test_no_construction_sites_returns_empty_list(tmp_path):
     repo = _repo(tmp_path)
     _seed_station(repo, "Sol", "Abraham Lincoln")
-    assert repo.get_known_construction_sites() == []
+    assert repo.get_known_construction_sites("Sol") == []
 
 
 def test_empty_database_returns_empty_list(tmp_path):
     repo = _repo(tmp_path)
-    assert repo.get_known_construction_sites() == []
+    assert repo.get_known_construction_sites("Sol") == []

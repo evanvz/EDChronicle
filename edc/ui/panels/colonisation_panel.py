@@ -1077,7 +1077,6 @@ class ColonisationPanel(QWidget):
         self._finder_dialog = None
         self._design_dialog = None
         self._eddatahub_url = ""
-        self._known_sites: list = []
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 6, 8, 8)
@@ -1319,9 +1318,7 @@ class ColonisationPanel(QWidget):
         self._refresh_current_system(state)
         self._refresh_depots(state)
         if system_changed:
-            # Cheap in-memory re-filter of the already-fetched known-sites
-            # cache -- no DB hit, safe to run on every system change even
-            # though refresh() itself can fire often.
+            # One indexed query, only on a system change -- refresh() itself can fire often.
             self._rebuild_known_sites_combo_for_system(system_name)
 
     def _refresh_current_system(self, state) -> None:
@@ -1463,25 +1460,23 @@ class ColonisationPanel(QWidget):
         self._refresh_depots(self._last_state)
 
     def _refresh_known_sites_combo(self) -> None:
-        """Re-fetches the full (all-systems) known-sites list from the DB
-        -- the ⟳ button's job, and once at construction. Cheap enough to
-        call from refresh() too (guarded so it only re-queries on an
-        actual system change, see refresh())."""
-        try:
-            self._known_sites = self._repo.get_known_construction_sites()
-        except Exception:
-            log.exception("Failed to load known construction sites")
-            self._known_sites = []
+        """The ⟳ button's job, and once at construction (no system yet: no DB hit)."""
         self._rebuild_known_sites_combo_for_system(getattr(self._last_state, "system", None))
 
+    def _sites_in(self, system_name: str) -> list:
+        try:
+            return self._repo.get_known_construction_sites(system_name)
+        except Exception:
+            log.exception("Failed to load known construction sites")
+            return []
+
     def _rebuild_known_sites_combo_for_system(self, system_name) -> None:
-        """Filters the cached (already-fetched) known-sites list down to
-        the current system only -- a squad tracking sites across many
+        """Only the current system's sites -- a squad tracking sites across many
         systems doesn't need every one of them cluttering this combo when
         only the current system's sites are ever relevant to "add a site
-        here". Pure in-memory filter, no DB hit."""
-        system_key = (system_name or "").strip().lower()
-        matches = [s for s in self._known_sites if s["system_name"].strip().lower() == system_key] if system_key else []
+        here". One indexed query."""
+        system_key = (system_name or "").strip()
+        matches = self._sites_in(system_key) if system_key else []
 
         self._known_sites_combo.blockSignals(True)
         self._known_sites_combo.clear()
@@ -1506,14 +1501,11 @@ class ColonisationPanel(QWidget):
         construction site (multiple ports being built at once), so this
         narrows the picker instead of leaving it to a full free-text
         guess."""
-        system_key = text.strip().lower()
+        system_key = text.strip()  # exact name: the index lookup is case-sensitive
         if not system_key:
             self._depot_station_completer.setModel(None)
             return
-        names = sorted({
-            s["station_name"] for s in self._known_sites
-            if s["system_name"].strip().lower() == system_key
-        })
+        names = sorted({s["station_name"] for s in self._sites_in(system_key)})
         self._depot_station_completer.setModel(QStringListModel(names))
 
     def _on_depot_cell_clicked(self, row: int, column: int) -> None:

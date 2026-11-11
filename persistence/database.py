@@ -3,8 +3,24 @@
 # See the LICENSE file in the project root for full terms.
 
 import sqlite3
+import weakref
 from contextlib import contextmanager
 from pathlib import Path
+
+_open = weakref.WeakSet()  # every Database, so app close can stop their reads
+
+
+def interrupt_reads() -> None:
+    """Stops every running read so app close needn't wait on it. A worker's long
+    search can't see a cancel flag mid-query: 2026-11-11 close waited the full
+    25s on two. A connection inside a write transaction is left alone, so no
+    save is cut short. sqlite3_interrupt is safe from another thread."""
+    for db in list(_open):
+        try:
+            if not db.conn.in_transaction:
+                db.conn.interrupt()
+        except sqlite3.ProgrammingError:
+            pass  # connection already closed
 
 
 class Database:
@@ -37,6 +53,7 @@ class Database:
         else:
             self.cache_db_path = Path(db_path).parent / "network_cache.db"
         self._attach_cache_db()
+        _open.add(self)
 
     def _attach_cache_db(self) -> None:
         from persistence.schema import CACHE_SCHEMA_SQL
