@@ -521,6 +521,7 @@ class ColonisationDesignDialog(QDialog):
         for r, s in enumerate(steps):  # signals connected after filling, so filling never saves
             step = QComboBox()
             step.setStyleSheet(_INPUT_STYLE)
+            step.wheelEvent = lambda e: e.ignore()  # the wheel scrolls the table, never changes a step
             if s["facility"] is None:
                 step.addItem("left empty", None)
             for k, f in fac.items():
@@ -534,6 +535,7 @@ class ColonisationDesignDialog(QDialog):
                 continue
             st = QComboBox()
             st.setStyleSheet(_INPUT_STYLE)
+            st.wheelEvent = lambda e: e.ignore()
             st.addItems(["Planned", "Building", "Complete"])
             st.setCurrentText(s["status"])
             st.currentTextChanged.connect(lambda t, s=s: self._save_step(s, status=t))

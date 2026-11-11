@@ -502,6 +502,20 @@ def test_reset_removes_fixed_row(monkeypatch, tmp_path):
     assert all(_cell(d, r, 10) is None for r in range(d._table.rowCount()))
 
 
+def test_mouse_wheel_over_selectors_changes_nothing(monkeypatch, tmp_path):
+    from PyQt6.QtCore import QPoint, QPointF, Qt
+    from PyQt6.QtGui import QWheelEvent
+    repo = _repo(tmp_path)
+    d = _typed(monkeypatch, repo)
+    for c in (_cell(d, 1, 1), _cell(d, 1, 3)):
+        before = c.currentIndex()
+        QApplication.sendEvent(c, QWheelEvent(QPointF(5, 5), QPointF(5, 5), QPoint(), QPoint(0, -120),
+                                              Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier,
+                                              Qt.ScrollPhase.NoScrollPhase, False))
+        assert c.currentIndex() == before
+    assert repo.get_colonisation_plan(1)["steps"] == []
+
+
 def test_changing_step_saves_planned_fixed_step(monkeypatch, tmp_path):
     repo = _repo(tmp_path)
     d = _typed(monkeypatch, repo)
