@@ -292,6 +292,7 @@ class CombatPanel(QWidget):
 
         content_l.addWidget(self.cz_card)
         self.cz_card.setVisible(False)
+        self.cz_card.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
 
         # ── Combat contacts card ──────────────────────────────────────────
         card = QFrame()
@@ -707,6 +708,9 @@ class CombatPanel(QWidget):
             self.cz_table.setItem(r, 1, QTableWidgetItem(ground))
             self.cz_table.setItem(r, 2, QTableWidgetItem(space))
             self.cz_table.setItem(r, 3, QTableWidgetItem(str(total)))
+        # same sizing as the massacre table above: fit the rows, not the table's stale sizeHint
+        self.cz_table.setFixedHeight(self.cz_table.horizontalHeader().height()
+                                     + self.cz_table.verticalHeader().defaultSectionSize() * len(rows) + 4)
 
         squadron_faction = squadron_faction_name(getattr(state, "factions", None))
         active_bonds = getattr(state, "active_combat_bonds", None) or {}

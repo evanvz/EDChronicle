@@ -329,6 +329,7 @@
   ],
   "tests": [
    "tests/test_combat_bond_scanner.py",
+   "tests/test_combat_panel_cz_card.py",
    "tests/test_active_combat_bonds.py",
    "tests/test_res_signal*.py",
    "tests/test_ship_loadout.py",
