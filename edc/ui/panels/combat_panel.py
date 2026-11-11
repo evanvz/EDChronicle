@@ -26,15 +26,16 @@ from edc.ui.panels.combat_bgs_status_panel import CombatBgsStatusPanel
 log = logging.getLogger(__name__)
 
 
-def _cz_station_note_text(squadron_faction, controlling_faction, bonds_txt, station):
-    """Where to redeem CZ combat bonds -- prefers the current system if its
-    controlling faction already matches the squadron faction (no travel
-    needed), else falls back to the closest known controlled station from
-    past Docked visits."""
-    if squadron_faction and controlling_faction and controlling_faction == squadron_faction:
-        return f"Redeem bonds here —{bonds_txt}this system's controlling faction is your squadron faction."
+def _cz_station_note_text(cz_factions, controlling_faction, bonds_txt, station, squadron_faction):
+    """Where to redeem CZ combat bonds: at a station the faction fought for
+    controls (not necessarily the squadron's). Prefers the current system if
+    that faction controls it (no travel needed). The closest known station
+    is only looked up for the squadron faction, so it's shown only when
+    that is the faction fought for."""
+    if controlling_faction and controlling_faction in cz_factions:
+        return f"Redeem bonds here —{bonds_txt}this system's controlling faction is the faction you fought for."
 
-    if isinstance(station, dict):
+    if isinstance(station, dict) and squadron_faction in cz_factions:
         dist = station.get("distance_ly")
         dist_txt = f"{dist:.1f} ly" if isinstance(dist, (int, float)) else "? ly"
         visited_txt, _ = fmt.relative_time(station.get("last_visited") or "")
@@ -44,10 +45,8 @@ def _cz_station_note_text(squadron_faction, controlling_faction, bonds_txt, stat
             f"Confirmed {visited_txt} — control can shift with BGS."
         )
 
-    return (
-        f"Redeem bonds at a station your squadron faction controls to count toward the war —{bonds_txt}"
-        "no confirmed station known yet (dock somewhere it controls to record it)."
-    )
+    who = "this faction" if len(cz_factions) == 1 else "each faction"
+    return f"Redeem bonds at a station {who} controls to count towards the war —{bonds_txt}".rstrip(" —") + "."
 
 
 class CombatPanel(QWidget):
@@ -712,13 +711,14 @@ class CombatPanel(QWidget):
         self.cz_table.setFixedHeight(self.cz_table.horizontalHeader().height()
                                      + self.cz_table.verticalHeader().defaultSectionSize() * len(rows) + 4)
 
-        squadron_faction = squadron_faction_name(getattr(state, "factions", None))
+        cz_factions = [faction for faction, _ in rows]
         active_bonds = getattr(state, "active_combat_bonds", None) or {}
-        outstanding = active_bonds.get(squadron_faction, 0) if squadron_faction else 0
+        outstanding = sum(active_bonds.get(f, 0) for f in cz_factions)
         bonds_txt = f" {outstanding:,} Cr in unredeemed combat bonds — " if outstanding else " "
 
         controlling_faction = getattr(state, "controlling_faction", None)
         station = getattr(state, "closest_squadron_station", None)
+        squadron_faction = squadron_faction_name(getattr(state, "factions", None))
         self.cz_station_note.setText(
-            _cz_station_note_text(squadron_faction, controlling_faction, bonds_txt, station)
+            _cz_station_note_text(cz_factions, controlling_faction, bonds_txt, station, squadron_faction)
         )
