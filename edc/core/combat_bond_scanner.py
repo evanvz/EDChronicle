@@ -37,12 +37,14 @@ def scan_unredeemed_combat_total(journal_dir: Path) -> Tuple[int, Dict[str, int]
         return 0, {}
 
     total = 0
+    bounties = 0  # bounty-voucher part of total: lost on Died, bonds kept (event_engine.py's Died)
     bonds: Dict[str, int] = {}
     for path in sorted(journal_dir.glob("Journal.*.log")):
         try:
             with path.open("r", encoding="utf-8", errors="replace") as f:
                 for line in f:
-                    if '"Bounty"' not in line and '"FactionKillBond"' not in line and '"RedeemVoucher"' not in line:
+                    if ('"Bounty"' not in line and '"FactionKillBond"' not in line
+                            and '"RedeemVoucher"' not in line and '"Died"' not in line):
                         continue
                     try:
                         event = json.loads(line)
@@ -53,6 +55,9 @@ def scan_unredeemed_combat_total(journal_dir: Path) -> Tuple[int, Dict[str, int]
                         reward = event.get("TotalReward")
                         if isinstance(reward, int):
                             total += reward
+                            bounties += reward
+                    elif name == "Died":
+                        total, bounties = max(0, total - bounties), 0
                     elif name == "FactionKillBond":
                         reward = event.get("Reward")
                         if isinstance(reward, int):
@@ -61,7 +66,7 @@ def scan_unredeemed_combat_total(journal_dir: Path) -> Tuple[int, Dict[str, int]
                             if isinstance(faction, str) and faction:
                                 bonds[faction] = bonds.get(faction, 0) + reward
                     elif name == "RedeemVoucher" and event.get("Type") in ("bounty", "CombatBond"):
-                        total = 0
+                        total = bounties = 0
                         if event.get("Type") == "CombatBond":
                             redeemed_faction = event.get("Faction")
                             if isinstance(redeemed_faction, str) and redeemed_faction:

@@ -244,6 +244,9 @@ class GameState:
     combat_unsold_total: int = 0
     exploration_unsold_total_est: int = 0
     exobiology_unsold_total_est: int = 0
+    # bounty-voucher part of combat_unsold_total, lost on Died (bonds are kept). Not persisted:
+    # the startup scan rebuilds combat_unsold_total with deaths applied.
+    combat_unsold_bounties: int = 0
 
     # Unredeemed combat bond total per AwardingFaction (FactionKillBond) --
     # unlike combat_unsold_total above, kept per-faction since a combat

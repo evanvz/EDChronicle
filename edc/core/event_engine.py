@@ -1078,6 +1078,7 @@ class EventEngine:
                     self.state.counted_combat_keys.add(reward_key)
                     self.state.combat_session_collected += reward
                     self.state.combat_unsold_total += reward
+                    self.state.combat_unsold_bounties += reward
                     try:
                         self.state.session_bounties += reward
                     except Exception:
@@ -1331,6 +1332,15 @@ class EventEngine:
             except Exception:
                 pass
 
+        elif name == "Died":
+            # Lost on death: unsold exploration and exobiology data, bounty vouchers
+            # (community reports, Frontier forums, read 2026-11-11). Combat bonds stay:
+            # Evan's game still showed his pre-death bonds after the 2026-11-11 rebuy.
+            self.state.exploration_unsold_total_est = 0
+            self.state.exobiology_unsold_total_est = 0
+            self.state.combat_unsold_total = max(0, self.state.combat_unsold_total - self.state.combat_unsold_bounties)
+            self.state.combat_unsold_bounties = 0
+
         elif name == "Resurrect":
             # Dying on foot (or in an SRV) while wanted sends you to the
             # nearest Detention Centre, which forcibly pays off every
@@ -1359,6 +1369,7 @@ class EventEngine:
                     self.state.session_kills = 0
                     self.state.combat_session_collected = 0
                     self.state.combat_unsold_total = 0
+                    self.state.combat_unsold_bounties = 0
                     self.state.counted_combat_keys.clear()
                 except Exception:
                     pass

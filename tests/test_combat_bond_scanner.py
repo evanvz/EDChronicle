@@ -71,3 +71,16 @@ def test_replays_multiple_files_in_chronological_order(tmp_path):
     ])
     total, bonds = scan_unredeemed_combat_total(tmp_path)
     assert bonds == {"Faction A": 5000}
+
+
+def test_died_drops_bounty_vouchers_but_keeps_bonds(tmp_path):
+    # 2026-11-11: after a rebuy the game still held the pre-death bonds
+    _write_journal(tmp_path, "Journal.01.log", [
+        {"event": "Bounty", "TotalReward": 5000},
+        {"event": "FactionKillBond", "Reward": 10000, "AwardingFaction": "Faction A"},
+        {"event": "Died", "KillerName": "Khan Port"},
+        {"event": "Bounty", "TotalReward": 700},
+    ])
+    total, bonds = scan_unredeemed_combat_total(tmp_path)
+    assert total == 10700
+    assert bonds == {"Faction A": 10000}
