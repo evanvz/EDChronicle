@@ -1978,7 +1978,7 @@ class Repository:
         return best
 
     def find_closest_station_for_faction(
-        self, x: float, y: float, z: float, faction_name: str,
+        self, x: float, y: float, z: float, faction_name: str, bonds: bool = False,
     ) -> Optional[dict]:
         """
         Closest known station (galaxy-wide EDDN-reported station data, not
@@ -1987,6 +1987,8 @@ class Repository:
         wrongly assumed to be visit-only) controlled by faction_name —
         e.g. for redeeming combat bonds/bounty vouchers somewhere that
         actually credits that faction's BGS influence.
+        bonds=True: only stations with Contacts (where bonds are handed in),
+        no on-foot settlements (Evan's call 2026-11-11: not confirmed they redeem bonds).
         """
         target = (faction_name or "").strip().lower()
         if not target:
@@ -2000,7 +2002,8 @@ class Repository:
             FROM net.station_info si
             JOIN system_coords c ON c.system_name = si.system_name
             WHERE LOWER(si.station_faction) = ?
-            """,
+            """ + (" AND si.station_type != 'OnFootSettlement' AND si.station_services LIKE '%contacts%'"
+                   if bonds else ""),
             (target,),
         ).fetchall()
 

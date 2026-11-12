@@ -95,3 +95,20 @@ def test_bulk_table_fill_restores_auto_columns_and_fills_fast():
     assert h.sectionResizeMode(0) == QHeaderView.ResizeMode.Stretch
     assert h.sectionResizeMode(1) == QHeaderView.ResizeMode.ResizeToContents
     assert h.sectionResizeMode(2) == QHeaderView.ResizeMode.ResizeToContents
+
+
+def test_bond_station_follows_the_cz_faction_and_looks_up_once_per_change():
+    calls = []
+    fake = SimpleNamespace(
+        state=SimpleNamespace(cz_kills={"SMMI": {"space_l": 1}, "Idle": {"space_l": 0}}, system_x=1.0,
+                              system_y=2.0, system_z=3.0, system_address=1, closest_squadron_station=None),
+        repo=SimpleNamespace(find_closest_station_for_faction=lambda x, y, z, f, bonds=False:
+                             calls.append((f, bonds)) or {"station_faction": f, "distance_ly": 4.0}),
+    )
+    for _ in range(5):
+        MainWindow._refresh_squadron_station(fake)
+    assert calls == [("SMMI", True)]
+    assert fake.state.closest_squadron_station == {"station_faction": "SMMI", "distance_ly": 4.0}
+    fake.state.cz_kills = {}
+    MainWindow._refresh_squadron_station(fake)
+    assert fake.state.closest_squadron_station is None

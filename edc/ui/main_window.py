@@ -7341,21 +7341,34 @@ class MainWindow(QMainWindow):
 
     def _refresh_squadron_station(self):
         """
-        Closest known station controlled by the squadron-aligned faction —
-        combat bonds/bounty vouchers only credit that faction's BGS
-        influence when redeemed at a station it actually controls.
+        Closest known station to redeem bonds at — combat bonds/bounty
+        vouchers only credit a faction's BGS influence when redeemed at a
+        station it actually controls: the faction fought for in this
+        session's conflict zones (the Combat tab's CZ card is the only reader).
+        Looked up once per system/faction change (~126ms per faction),
+        not on every HUD refresh.
         """
-        faction = squadron_faction_name(getattr(self.state, "factions", None))
-        if not faction:
+        factions = sorted(f for f, t in (getattr(self.state, "cz_kills", None) or {}).items() if any(t.values()))
+        if not factions:
             self.state.closest_squadron_station = None
             return
         x, y, z = self.state.system_x, self.state.system_y, self.state.system_z
         if not all(isinstance(v, (int, float)) for v in (x, y, z)):
             return
-        try:
-            self.state.closest_squadron_station = self.repo.find_closest_station_for_faction(x, y, z, faction)
-        except Exception:
-            log.exception("Failed to find closest squadron-faction station")
+        key = (getattr(self.state, "system_address", None), tuple(factions))
+        if key == getattr(self, "_squadron_station_key", None):
+            return
+        self._squadron_station_key = key
+        found = []
+        for faction in factions:
+            try:
+                s = self.repo.find_closest_station_for_faction(x, y, z, faction, bonds=True)
+            except Exception:
+                log.exception("Failed to find closest station for %s", faction)
+                continue
+            if s:
+                found.append(s)
+        self.state.closest_squadron_station = min(found, key=lambda s: s["distance_ly"]) if found else None
 
     def _refresh_powerplay(self):
         self.powerplay_panel.refresh(self.state, self.pp_activities)

@@ -93,3 +93,17 @@ def test_candidates_can_be_cached_and_reused_for_closest_pick(repo):
 
     far = repo.closest_facilitator_from_candidates(candidates, 500.0, 0.0, 0.0)
     assert far["station_name"] == "Far"
+
+
+def test_bond_station_skips_settlements_and_stations_without_contacts(repo):
+    # 2026-11-11, Evan's call: bonds go to a station with Contacts; settlements left out
+    for mid, name, typ, services, x in [(1, "Farrow Hub", "OnFootSettlement", '["contacts"]', 1.0),
+                                        (2, "Ostrander Works", "CraterOutpost", '["dock"]', 2.0),
+                                        (3, "Rankin Terminal", "Outpost", '["dock", "contacts"]', 5.0)]:
+        repo.db.execute(
+            """INSERT INTO station_info (market_id, station_name, system_name, station_type, station_faction,
+               station_services, last_visited) VALUES (?, ?, ?, ?, 'SMMI', ?, '2026-11-11T00:00:00Z')""",
+            (mid, name, f"Sys{mid}", typ, services))
+        repo.db.execute("INSERT INTO system_coords (system_name, x, y, z) VALUES (?, ?, 0, 0)", (f"Sys{mid}", x))
+    assert repo.find_closest_station_for_faction(0, 0, 0, "SMMI")["station_name"] == "Farrow Hub"
+    assert repo.find_closest_station_for_faction(0, 0, 0, "SMMI", bonds=True)["station_name"] == "Rankin Terminal"
