@@ -1,6 +1,7 @@
 """EDDataHub (the squadron's 24/7 LAN service) as the BGS tick source: its
 ticks replace our own detections, our EDDN detector stands by while it answers,
 and the status bar shows which one is in use."""
+from datetime import date, timedelta
 from types import SimpleNamespace
 from unittest import mock
 
@@ -11,10 +12,12 @@ from edc.ui.main_window import MainWindow
 def test_hub_ticks_parsed_and_offline_is_none():
     resp = mock.Mock(status_code=200)
     resp.raise_for_status.return_value = None
-    resp.json.return_value = [{"tick": "2026-10-22T17:02:11+00:00", "source": "feed"},
-                              {"tick": "2026-10-23T16:10:36.120+00:00", "source": "inferred"}]
+    # recent days: fetch_ticks drops anything outside its 14-day window
+    d1, d2 = ((date.today() - timedelta(days=n)).isoformat() for n in (3, 2))
+    resp.json.return_value = [{"tick": f"{d1}T17:02:11+00:00", "source": "feed"},
+                              {"tick": f"{d2}T16:10:36.120+00:00", "source": "inferred"}]
     with mock.patch.object(eddatahub_client.requests, "get", return_value=resp):
-        assert eddatahub_client.fetch_ticks("http://hub:8080") == ["2026-10-22T17:02:11Z", "2026-10-23T16:10:36Z"]
+        assert eddatahub_client.fetch_ticks("http://hub:8080") == [f"{d1}T17:02:11Z", f"{d2}T16:10:36Z"]
     with mock.patch.object(eddatahub_client.requests, "get", side_effect=OSError("no route")):
         assert eddatahub_client.fetch_ticks("http://hub:8080") is None
     assert eddatahub_client.fetch_ticks("") is None

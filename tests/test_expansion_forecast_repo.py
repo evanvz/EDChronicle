@@ -1,10 +1,17 @@
 """Repository side of the Expansion Forecast: faction presence summary,
 cube systems with population, and the candidate cache."""
+from datetime import date, timedelta
+
 from persistence.database import Database
 from persistence.repository import Repository
 from persistence.schema import SCHEMA_SQL
 
 EUW = "Elite United Worlds"
+
+
+def _ago(days):
+    """A recent day: save_faction_snapshot prunes rows older than 30 days."""
+    return (date.today() - timedelta(days=days)).isoformat()
 
 
 def _repo(tmp_path):
@@ -24,14 +31,14 @@ def _snap(repo, addr, date_, inf, rec=None):
 def test_presence_has_first_and_latest_reading(tmp_path):
     repo = _repo(tmp_path)
     repo.db.execute("INSERT INTO systems (system_address, system_name) VALUES (1, 'Ekono'), (2, 'YF-W')")
-    _snap(repo, 1, "2026-10-06", 0.7895)
-    _snap(repo, 1, "2026-10-07", 0.6789, [{"State": "Expansion", "Trend": 0}])
-    _snap(repo, 2, "2026-10-07", 0.091)
+    _snap(repo, 1, _ago(3), 0.7895)
+    _snap(repo, 1, _ago(2), 0.6789, [{"State": "Expansion", "Trend": 0}])
+    _snap(repo, 2, _ago(2), 0.091)
     rows = {r["system_name"]: r for r in repo.get_squadron_presence(EUW)}
-    assert rows["Ekono"]["first_seen"] == "2026-10-06" and rows["Ekono"]["last_seen"] == "2026-10-07"
+    assert rows["Ekono"]["first_seen"] == _ago(3) and rows["Ekono"]["last_seen"] == _ago(2)
     assert round(rows["Ekono"]["influence"], 4) == 0.6789
     assert "Expansion" in rows["Ekono"]["recovering_states"]
-    assert rows["YF-W"]["first_seen"] == "2026-10-07"
+    assert rows["YF-W"]["first_seen"] == _ago(2)
     assert repo.get_squadron_presence("Nobody") == []
 
 
@@ -65,7 +72,7 @@ def test_first_seen_uses_the_data_date_not_the_store_date(tmp_path):
     but EDSM's data dates from 2026-10-03 -- not a new arrival this week."""
     repo = _repo(tmp_path)
     repo.db.execute("INSERT INTO systems (system_address, system_name) VALUES (5, 'Traikaae HL-P d5-105')")
-    repo.save_faction_snapshot(5, {"Name": EUW, "Influence": 0.13}, "2026-10-08", False,
-                               "2026-10-03T21:55:09Z", "edsm")
+    repo.save_faction_snapshot(5, {"Name": EUW, "Influence": 0.13}, _ago(2), False,
+                               f"{_ago(7)}T21:55:09Z", "edsm")
     row = repo.get_squadron_presence(EUW)[0]
-    assert row["first_seen"] == "2026-10-03" and row["last_seen"] == "2026-10-08"
+    assert row["first_seen"] == _ago(7) and row["last_seen"] == _ago(2)

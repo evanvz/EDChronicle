@@ -39,8 +39,6 @@ logging.getLogger("phonemizer").setLevel(logging.ERROR)
 # global stream). Synthesis still runs outside this lock.
 _AUDIO_LOCK = threading.Lock()
 
-_ducking_opted_out = False  # only need to do this once per process
-
 
 async def _windows_wav(text: str, speed: float) -> bytes:
     from winrt.windows.media.speechsynthesis import SpeechSynthesizer

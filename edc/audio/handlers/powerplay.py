@@ -94,26 +94,6 @@ class PowerPlayPhrases:
         "{power} is in range, Commander. No control yet.",
     ]
 
-    PP_UNDERMINING_PRESENT = [
-        "{power} is present. Undermining possible.",
-        "Our power has presence here. Undermining viable.",
-        "{power} active in this system. Undermining target.",
-        "{power}'s in this system. Undermining's on the table.",
-        "We've got presence here — {power}, undermining possible.",
-        "{power} can undermine here, Commander.",
-        "In range for undermining. {power} is present.",
-    ]
-
-    PP_NOT_PRESENT = [
-        "{power} has no presence in this system.",
-        "Our power is not active here.",
-        "{power} not present. No undermining opportunity.",
-        "Nothing of ours here, Commander. {power} isn't present.",
-        "{power} has no foothold in this system.",
-        "{power} has no reach here, Commander.",
-        "Outside {power}'s range. Nothing to do here for PowerPlay.",
-    ]
-
     @staticmethod
     def pp_space(power: str, pp_state: str, pledged: str) -> str:
         """Generate PP arrival phrase based on controlling power, state and allegiance."""
