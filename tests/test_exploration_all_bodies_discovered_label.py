@@ -20,7 +20,7 @@ class _FakeLabel:
 
 
 def _fake_self():
-    return SimpleNamespace(system_signals_box=_FakeLabel())
+    return SimpleNamespace(system_signals_box=_FakeLabel(), _fill_signal_cards=lambda groups: None)
 
 
 def test_honk_complete_but_no_bodies_scanned_shows_remaining_not_all_discovered():

@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
     QFrame,
     QSizePolicy,
     QPushButton,
+    QGridLayout,
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
@@ -22,6 +23,37 @@ from edc.ui import formatting as fmt
 from edc.ui.style import CARD_STYLE, HDR_STYLE
 
 log = logging.getLogger(__name__)
+
+# System signal cards, always shown in this order on a fixed 4-column grid so the
+# layout doesn't jump between systems (Evan's design, 2026-11-12).
+SIGNAL_CARDS = ("STATIONS", "OUTPOSTS", "INSTALLATIONS", "COMBAT SITES",
+                "CAPITAL SHIPS & MEGASHIPS", "BEACONS", "USS / WRECKAGE", "PHENOMENA / OTHER")
+
+
+def signal_card(s: dict):
+    """Which card a state.system_signals entry goes on, or None to hide it (carriers).
+    SignalType "Generic" covers many things (CAPITAL SHIP, Checkpoint, Debris field,
+    Pirate Activity Detected...: Evan's journals 2026-11-12), so the name decides those."""
+    cat = s.get("Category") or ""
+    st = str(s.get("SignalType") or "").lower()
+    name = str(s.get("SignalName") or "").lower()
+    if cat == "FleetCarrier" or st in ("fleetcarrier", "squadroncarrier"):
+        return None
+    if st in ("megaship", "stationmegaship", "titan") or cat == "Megaship" or "capital ship" in name:
+        return "CAPITAL SHIPS & MEGASHIPS"
+    if st == "outpost":
+        return "OUTPOSTS"
+    if cat == "Station":
+        return "STATIONS"
+    if cat == "Installation":
+        return "INSTALLATIONS"
+    if st in ("combat", "resourceextraction") or cat == "RES" or "pirate activity" in name:
+        return "COMBAT SITES"
+    if cat in ("NavBeacon", "CompromisedNavBeacon", "TouristBeacon"):
+        return "BEACONS"
+    if cat in ("USS", "NHSS", "Wreckage") or "debris" in name:
+        return "USS / WRECKAGE"
+    return "PHENOMENA / OTHER"
 
 
 class ExplorationPanel(QWidget):
@@ -84,26 +116,21 @@ class ExplorationPanel(QWidget):
 
         # ── Signals box (always visible at top) ───────────────────────────
         sig_frame = QFrame()
-        sig_frame.setStyleSheet(
-            CARD_STYLE
-        )
+        # violet theme so the signals stand out on an otherwise blue tab (Evan, 2026-11-12)
+        sig_frame.setStyleSheet("QFrame { background: #140f1f; border: 1px solid #3e2e5c; border-radius: 5px; }")
         sig_l = QVBoxLayout(sig_frame)
         sig_l.setContentsMargins(8, 6, 8, 6)
         sig_l.setSpacing(2)
         self._signals_expanded = True
-        self._signals_summary_html = ""
-        self._signals_full_html = ""
 
         sig_hdr_row = QHBoxLayout()
         sig_hdr_lbl = QLabel("SYSTEM SIGNALS (FSS)")
-        sig_hdr_lbl.setStyleSheet(
-            HDR_STYLE
-        )
-        self._sig_toggle_btn = QPushButton("Show detail ▼")
+        sig_hdr_lbl.setStyleSheet(HDR_STYLE.replace("#4da3ff", "#B388FF"))
+        self._sig_toggle_btn = QPushButton("Hide detail ▲")
         self._sig_toggle_btn.setStyleSheet(
             "QPushButton { background: transparent; border: none; "
-            "color: #FFB347; font-size:12px; padding: 0px; }"
-            "QPushButton:hover { color: #FF8C00; }"
+            "color: #B388FF; font-size:12px; padding: 0px; }"
+            "QPushButton:hover { color: #D1B3FF; }"
         )
         self._sig_toggle_btn.setVisible(False)
         self._sig_toggle_btn.clicked.connect(self._toggle_signals)
@@ -117,6 +144,34 @@ class ExplorationPanel(QWidget):
         self.system_signals_box.setStyleSheet("background: transparent; border: none;")
         sig_l.addLayout(sig_hdr_row)
         sig_l.addWidget(self.system_signals_box)
+
+        # One card per signal category, Scanned Bodies card style, fixed 4x2 grid.
+        self._sig_grid = QWidget()
+        grid = QGridLayout(self._sig_grid)
+        grid.setContentsMargins(0, 4, 0, 0)
+        grid.setSpacing(6)
+        self._sig_cards = {}
+        for i, title in enumerate(SIGNAL_CARDS):
+            card = QFrame()
+            card.setStyleSheet("QFrame { background: #0d0a15; border: 1px solid #2f2347; border-radius: 5px; }")
+            card.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)  # no stretching into spare space
+            card_l = QVBoxLayout(card)
+            card_l.setContentsMargins(10, 7, 10, 7)
+            card_l.setSpacing(2)
+            title_lbl = QLabel(title)
+            title_lbl.setStyleSheet("color:#D1B3FF; font-size:12px; font-weight:bold; border:none; background:transparent;")
+            body = QLabel("")
+            body.setTextFormat(Qt.TextFormat.RichText)
+            body.setWordWrap(True)
+            body.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+            body.setStyleSheet("border:none; background:transparent;")
+            body.setMinimumHeight(body.fontMetrics().lineSpacing() * 3)  # 3 lines: little jumping
+            card_l.addWidget(title_lbl)
+            card_l.addWidget(body, 1)
+            grid.addWidget(card, i // 4, i % 4)
+            grid.setColumnStretch(i % 4, 1)
+            self._sig_cards[title] = (title_lbl, body)
+        sig_l.addWidget(self._sig_grid)
         self._content_layout.addWidget(sig_frame)
 
         # ── Nearest notable POI (EDAstro's community-curated catalog) ──────
@@ -372,6 +427,7 @@ class ExplorationPanel(QWidget):
         sigs = getattr(state, "system_signals", None) or []
 
         if not isinstance(sigs, list) or not sigs:
+            self._fill_signal_cards({})
             # Show body count hint instead
             total    = getattr(state, "system_body_count", None)
             resolved = len(getattr(state, "resolved_body_ids", set()) or set())
@@ -399,102 +455,58 @@ class ExplorationPanel(QWidget):
                 )
             return
 
-        cat_order  = ["Phenomena", "Megaship", "Station", "Installation",
-                      "NavBeacon", "TouristBeacon", "USS", "Wreckage", "Other"]
-        hidden     = {"FleetCarrier"}
-        cats       = {k: [] for k in cat_order}
-        cat_counts = {k: 0 for k in cat_order}
-        uss_counts = {}
-
+        groups = {t: [] for t in SIGNAL_CARDS}
+        wreckage = False
         for s in sigs:
             if not isinstance(s, dict):
                 continue
-            cat_raw = s.get("Category") if isinstance(s.get("Category"), str) else "Other"
-            if cat_raw in hidden:
+            card = signal_card(s)
+            if card is None:
                 continue
-            cat = self._norm_token(cat_raw) or "Other"
-            if cat not in cats:
-                cat = "Other"
-            cats[cat].append(s)
-            cat_counts[cat] += 1
-            if cat == "USS":
-                u = self._norm_token(s.get("USSType") or "")
-                if u:
-                    uss_counts[u] = uss_counts.get(u, 0) + 1
+            cat   = s.get("Category") or ""
+            nm    = self._norm_token(s.get("SignalName") or "Signal") or "Signal"
+            stype = self._norm_token(s.get("SignalType") or "")
+            uss   = self._norm_token(s.get("USSType") or "")
+            tl    = s.get("ThreatLevel")
+            tr    = s.get("TimeRemaining")
+            bits  = [f'<span style="color:#CCCCCC;">{self._esc(nm)}</span>']
+            if card == "USS / WRECKAGE" and uss:
+                bits.append(f'<span style="color:#888888;">({self._esc(uss)})</span>')
+            if card == "PHENOMENA / OTHER" and stype:
+                bits.append(f'<span style="color:#888888;">[{self._esc(stype)}]</span>')
+            if isinstance(tl, int):
+                bits.append(f'<span style="color:#FF6B6B;">Threat {tl}</span>')
+            if isinstance(tr, (int, float)):
+                bits.append(f'<span style="color:#888888;">TR {int(tr)}s</span>')
+            if cat == "Megaship" and s.get("AlreadySeen"):
+                # Re-scanning within 14 days grants no further merits -- flag
+                # it so it doesn't look identical to a fresh, unscanned one.
+                bits.append('<span style="color:#666666;">(scanned, under 14 days ago)</span>')
+            wreckage = wreckage or cat == "Wreckage"
+            groups[card].append(" ".join(bits))
+        if wreckage:
+            groups["USS / WRECKAGE"].append(
+                '<span style="color:#666666;font-size:11px;">scan skimmers first, attack only if Wanted</span>')
 
-        # Summary line
-        summary_parts = []
-        for k in cat_order:
-            if cat_counts.get(k, 0):
-                summary_parts.append(
-                    f'<span style="color:#4D96FF;font-weight:700;">{k}</span>'
-                    f'&nbsp;<span style="color:#CCCCCC;">x{cat_counts[k]}</span>'
-                )
+        total = sum(map(len, groups.values())) - int(wreckage)  # minus the skimmer hint line
+        self.system_signals_box.setText(f'<span style="color:#CCCCCC;">{total} signals</span>')
+        self._fill_signal_cards(groups)
+        self._sig_grid.setVisible(self._signals_expanded)
+        self._sig_toggle_btn.setVisible(True)
 
-        html = []
-        if summary_parts:
-            html.append(" &nbsp;|&nbsp; ".join(summary_parts))
-
-        # Detail lines per category — max 3 per cat to avoid crowding
-        for cat in cat_order:
-            if not cats[cat]:
-                continue
-            cat_suffix = (
-                f' <span style="color:#444444;font-size:11px;">'
-                f'— scan skimmers first, attack only if Wanted</span>'
-                if cat == "Wreckage" else ""
-            )
-            html.append(
-                f'<br><span style="color:#9aa4b0;font-size:12px;">'
-                f'{cat.upper()}</span>{cat_suffix}'
-            )
-            shown_in_cat = 0
-            for s in cats[cat]:
-                shown_in_cat += 1
-                nm    = self._norm_token(s.get("SignalName") or "Signal") or "Signal"
-                stype = self._norm_token(s.get("SignalType") or "")
-                uss   = self._norm_token(s.get("USSType") or "")
-                tl    = s.get("ThreatLevel")
-                tr    = s.get("TimeRemaining")
-                bits  = [f'<span style="color:#CCCCCC;">{self._esc(nm)}</span>']
-                if cat == "USS" and uss:
-                    bits.append(f'<span style="color:#888888;">({self._esc(uss)})</span>')
-                if cat == "Other" and stype:
-                    bits.append(f'<span style="color:#888888;">[{self._esc(stype)}]</span>')
-                if isinstance(tl, int):
-                    bits.append(f'<span style="color:#FF6B6B;">Threat {tl}</span>')
-                if isinstance(tr, (int, float)):
-                    bits.append(f'<span style="color:#888888;">TR {int(tr)}s</span>')
-                if cat == "Megaship" and s.get("AlreadySeen"):
-                    # Re-scanning within 14 days grants no further merits -- flag
-                    # it so it doesn't look identical to a fresh, unscanned one.
-                    bits.append('<span style="color:#666666;">(scanned, under 14 days ago)</span>')
-                html.append(" ".join(bits))
-            pass
-
-        # Summary only — first line
-        self._signals_summary_html = html[0] if html else ""
-        self._signals_full_html    = "<br>".join(html)
-
-        # Default to expanded, show full detail
-        self._signals_expanded = True
-        self._sig_toggle_btn.setText("Hide detail ▲")
-
-        self.system_signals_box.setText(self._signals_full_html)
-
-        # Show toggle button only if there is detail beyond summary
-        has_detail = len(html) > 1
-        self._sig_toggle_btn.setVisible(has_detail)
-
+    def _fill_signal_cards(self, groups: dict) -> None:
+        """Every card always shown (count in the title, grey dash when empty) so the
+        grid keeps its place from one system to the next."""
+        for title, (title_lbl, body) in self._sig_cards.items():
+            rows = groups.get(title) or []
+            n = sum(1 for r in rows if "scan skimmers first" not in r)
+            title_lbl.setText(f"{title}  {n}" if n else title)
+            body.setText("<br>".join(rows) if rows else '<span style="color:#444444;">—</span>')
 
     def _toggle_signals(self):
         self._signals_expanded = not self._signals_expanded
-        if self._signals_expanded:
-            self.system_signals_box.setText(self._signals_full_html)
-            self._sig_toggle_btn.setText("Hide detail ▲")
-        else:
-            self.system_signals_box.setText(self._signals_summary_html)
-            self._sig_toggle_btn.setText("Show detail ▼")
+        self._sig_grid.setVisible(self._signals_expanded)
+        self._sig_toggle_btn.setText("Hide detail ▲" if self._signals_expanded else "Show detail ▼")
 
     # ── Body cards ────────────────────────────────────────────────────────────
     def _refresh_bodies(self, state, min_value, planet_values, exo_predictions=None):
