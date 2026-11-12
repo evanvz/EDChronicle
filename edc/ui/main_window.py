@@ -1249,7 +1249,7 @@ class MainWindow(QMainWindow):
                     )
                     rec["DBSaved"] = True
         except Exception:
-            pass
+            log.exception("Completed exobiology not saved")
 
     def _save_session_ledger(self):
         try:
@@ -1261,7 +1261,7 @@ class MainWindow(QMainWindow):
                 }
             )
         except Exception:
-            pass
+            log.exception("Session ledger not saved")
 
     def _save_faction_snapshots(self, event_timestamp: str = ""):
         system_address = getattr(self.state, "system_address", None)
@@ -4270,7 +4270,7 @@ class MainWindow(QMainWindow):
             self.cfg.min_planet_value_100k = int(v)
             self.cfg_store.save(self.cfg)
         except Exception:
-            pass
+            log.exception("Setting not saved")
         self.status.setText("Status: settings saved")
         self._refresh_exploration()
 
@@ -4279,7 +4279,7 @@ class MainWindow(QMainWindow):
             self.cfg.exo_overview_alert_m = int(v)
             self.cfg_store.save(self.cfg)
         except Exception:
-            pass
+            log.exception("Setting not saved")
         self.exo_alert_label.setText(f"{int(v)}M")
         self._refresh_hud()
 
@@ -4289,7 +4289,7 @@ class MainWindow(QMainWindow):
             self.cfg.exo_high_value_m = int(v)
             self.cfg_store.save(self.cfg)
         except Exception:
-            pass
+            log.exception("Setting not saved")
         self.status.setText("Status: settings saved")
         self._refresh_hud()
         self._refresh_exobiology()
@@ -4306,7 +4306,7 @@ class MainWindow(QMainWindow):
         try:
             self.cfg_store.save(self.cfg)
         except Exception:
-            pass
+            log.exception("Setting not saved")
         self.status.setText("Status: settings saved")
 
     def _on_overview_action_link(self, link: str):
@@ -5829,14 +5829,14 @@ class MainWindow(QMainWindow):
             self.tts.load_from_config(self.cfg)
             self.cfg_store.save(self.cfg)
         except Exception:
-            pass
+            log.exception("Setting not saved")
 
     def _on_main_voice_changed(self, idx: int):
         try:
             self.cfg.tts_voice_index = idx
             self.cfg_store.save(self.cfg)
         except Exception:
-            pass
+            log.exception("Setting not saved")
 
     def _test_main_voice(self):
         idx = self.voice_combo.currentIndex()
@@ -5849,7 +5849,7 @@ class MainWindow(QMainWindow):
             self.tts.load_from_config(self.cfg)
             self.cfg_store.save(self.cfg)
         except Exception:
-            pass
+            log.exception("Setting not saved")
 
     def _on_comms_volume_changed(self, val: int):
         try:
@@ -5858,7 +5858,7 @@ class MainWindow(QMainWindow):
             self.tts.load_from_config(self.cfg)
             self.cfg_store.save(self.cfg)
         except Exception:
-            pass
+            log.exception("Setting not saved")
 
     def _on_comms_enabled_changed(self, checked: bool):
         try:
@@ -5866,7 +5866,7 @@ class MainWindow(QMainWindow):
             self.tts.load_from_config(self.cfg)
             self.cfg_store.save(self.cfg)
         except Exception:
-            pass
+            log.exception("Setting not saved")
 
     def _handle_combat_quip(self, event_type: str, evt: dict):
         if not getattr(self.cfg, "tts_enabled", False):
@@ -7438,35 +7438,35 @@ class MainWindow(QMainWindow):
         try:
             self.overview_panel.refresh(self.state)
         except Exception:
-            pass
+            log.exception("Panel refresh failed: overview")
         try:
             self.exploration_panel.refresh(
                 self.state, self.cfg, self.planet_values,
                 exo_predictions=self._exo_predictions(),
             )
         except Exception:
-            pass
+            log.exception("Panel refresh failed: exploration")
         try:
             self.exobiology_panel.refresh(
                 self.state, self.cfg, self.exo_values, canonn_poi=self._canonn_poi,
                 exo_predictions=self._exo_predictions(),
             )
         except Exception:
-            pass
+            log.exception("Panel refresh failed: exobiology")
         try:
             self.combat_panel.refresh(self.state)
         except Exception:
-            pass
+            log.exception("Panel refresh failed: combat")
         try:
             self.powerplay_panel.refresh(self.state, self.pp_activities)
         except Exception:
-            pass
+            log.exception("Panel refresh failed: powerplay")
         try:
             self.intel_panel.refresh(
                 self.state, self.farming_locations
             )
         except Exception:
-            pass
+            log.exception("Panel refresh failed: intel")
 
     def _compute_action_state(self):
         """

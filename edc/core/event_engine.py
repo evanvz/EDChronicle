@@ -1073,14 +1073,14 @@ class EventEngine:
                     try:
                         self.state.session_bounties += reward
                     except Exception:
-                        pass
+                        log.exception("Combat state update failed: session bounties")
                 kill_key = f"kill|{ts}|{cur_key}"
                 if kill_key not in self.state.counted_combat_keys:
                     self.state.counted_combat_keys.add(kill_key)
                     try:
                         self.state.session_kills += 1
                     except Exception:
-                        pass
+                        log.exception("Combat state update failed: session kills")
 
             try:
                 cur_key = (getattr(self.state, "combat_current_key", "") or
@@ -1090,7 +1090,7 @@ class EventEngine:
                     contacts[cur_key]["Destroyed"] = True
                     self.state.combat_contacts = contacts
             except Exception:
-                pass
+                log.exception("Combat state update failed: contact destroyed")
 
         elif name == "FactionKillBond":
             self.state.last_cz_credit = None
@@ -1109,7 +1109,7 @@ class EventEngine:
                     try:
                         self.state.session_bounties += reward
                     except Exception:
-                        pass
+                        log.exception("Combat state update failed: session bounties")
                     # Per-faction, unlike combat_unsold_total above (which
                     # lumps every combat reward -- bounty vouchers and
                     # combat bonds alike -- into one running number). A
@@ -1131,7 +1131,7 @@ class EventEngine:
                     try:
                         self.state.session_kills += 1
                     except Exception:
-                        pass
+                        log.exception("Combat state update failed: session kills")
 
             try:
                 cur_key = (getattr(self.state, "combat_current_key", "") or
@@ -1141,7 +1141,7 @@ class EventEngine:
                     contacts[cur_key]["Destroyed"] = True
                     self.state.combat_contacts = contacts
             except Exception:
-                pass
+                log.exception("Combat state update failed: contact destroyed")
 
             self._credit_cz_kill(event)
 
@@ -1217,7 +1217,7 @@ class EventEngine:
                     last[faction] = event.get("timestamp") or ""
                     self.state.bounty_last_commit = last
                 except Exception:
-                    pass
+                    log.exception("Combat state update failed: active bounties")
 
             if isinstance(fine, int) and isinstance(faction, str) and faction:
                 try:
@@ -1225,7 +1225,7 @@ class EventEngine:
                     active_fines[faction] = active_fines.get(faction, 0) + fine
                     self.state.active_fines = active_fines
                 except Exception:
-                    pass
+                    log.exception("Combat state update failed: active fines")
 
             crime_type = event.get("CrimeType") or ""
             if crime_type == "murder" or crime_type.endswith("_murder"):
@@ -1240,7 +1240,7 @@ class EventEngine:
                         getattr(self.state, "notoriety_est_pending_murders", 0) + 1
                     )
                 except Exception:
-                    pass
+                    log.exception("Combat state update failed: pending murders")
                 ts = event.get("timestamp") or ""
                 cur_key = (getattr(self.state, "combat_current_key", "") or
                            getattr(self.state, "combat_last_key", "")) or ""
@@ -1250,7 +1250,7 @@ class EventEngine:
                     try:
                         self.state.session_kills += 1
                     except Exception:
-                        pass
+                        log.exception("Combat state update failed: session kills")
                 try:
                     cur_key = (getattr(self.state, "combat_current_key", "") or
                                getattr(self.state, "combat_last_key", "")) or ""
@@ -1259,7 +1259,7 @@ class EventEngine:
                         contacts[cur_key]["Destroyed"] = True
                         self.state.combat_contacts = contacts
                 except Exception:
-                    pass
+                    log.exception("Combat state update failed: contact destroyed")
 
         elif name in SQUADRON_EVENT_NAMES:
             current = {
@@ -1309,7 +1309,7 @@ class EventEngine:
                     last.clear()
                 self.state.bounty_last_commit = last
             except Exception:
-                pass
+                log.exception("Combat state update failed: bounties cleared")
 
         elif name == "PayFines":
             try:
@@ -1321,7 +1321,7 @@ class EventEngine:
                     active_fines.clear()
                 self.state.active_fines = active_fines
             except Exception:
-                pass
+                log.exception("Combat state update failed: fines cleared")
 
         elif name == "Died":
             # Lost on death: unsold exploration and exobiology data, bounty vouchers
@@ -1348,7 +1348,7 @@ class EventEngine:
                 self.state.bounty_last_commit = {}
                 self.state.active_fines = {}
             except Exception:
-                pass
+                log.exception("Combat state update failed: bounties and fines reset")
 
         elif name == "RedeemVoucher":
             if event.get("Type") in ("bounty", "CombatBond"):
@@ -1363,7 +1363,7 @@ class EventEngine:
                     self.state.combat_unsold_bounties = 0
                     self.state.counted_combat_keys.clear()
                 except Exception:
-                    pass
+                    log.exception("Combat state update failed: session reset")
 
                 # active_combat_bonds only clears the specific faction just
                 # redeemed -- a real RedeemVoucher(Type="CombatBond") names
