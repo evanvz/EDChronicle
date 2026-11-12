@@ -3741,8 +3741,7 @@ class MainWindow(QMainWindow):
             log.exception("Failed to load squadron faction name for EDDN watch list")
 
         self._eddn_worker = EddnPowerPlayWorker(watched_factions=watched_factions,
-                                                relay_url=getattr(self.cfg, "eddn_relay_url", "") or "",
-                                                direct=bool(getattr(self.cfg, "eddn_direct_fallback", False)))
+                                                relay_url=getattr(self.cfg, "eddn_relay_url", "") or "")
         self._eddn_thread = QThread()
         self._eddn_worker.moveToThread(self._eddn_thread)
         self._eddn_thread.started.connect(self._eddn_worker.run)
@@ -7154,9 +7153,9 @@ class MainWindow(QMainWindow):
         if self._eddn_off:
             self._service_health_labels["EDDN"].setStyleSheet("color: #555555; font-size: 10px;")
             self._service_health_labels["EDDN"].setToolTip(
-                "No EDDN data: EDDataHub's relay is silent and direct EDDN is off (eddn_direct_fallback)"
+                "No EDDN data: EDDataHub's relay is silent"
                 if src == "hub_silent" else
-                "Not listening: no EDDataHub relay (eddn_relay_url) and direct EDDN is off (eddn_direct_fallback)")
+                "Not listening: no EDDataHub relay set (eddn_relay_url)")
         else:
             self._on_service_health_tick()
 

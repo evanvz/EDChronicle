@@ -1,6 +1,6 @@
-"""EDDataHub's EDDN pass-through (eddn_relay_url) is read first; when it stays
-silent the listener falls back to the EDDN relay directly and says which feed
-it is on (feed_source), for the status bar."""
+"""EDDataHub's EDDN pass-through (eddn_relay_url) is the only feed: the listener
+never connects to EDDN itself, and says what it is on (feed_source: hub,
+hub_silent or off) for the status bar."""
 import json
 import threading
 import time
@@ -37,24 +37,9 @@ def _run_until_source(worker, timeout=15):
     return seen
 
 
-def test_silent_hub_falls_back_to_eddn_direct(monkeypatch):
-    stop = threading.Event()
-    threading.Thread(target=_publisher, args=("tcp://127.0.0.1:59501", stop), daemon=True).start()
-    monkeypatch.setattr(eddn_listener, "_RELAY_URL", "tcp://127.0.0.1:59501")
-    monkeypatch.setattr(eddn_listener, "_HUB_SILENT_S", 0.5)
-    monkeypatch.setattr(eddn_listener, "_RECV_TIMEOUT_MS", 200)
-    monkeypatch.setattr(eddn_listener, "_RECONNECT_DELAY_S", 0)
-    try:
-        # nothing listens on 59502: the hub stays silent
-        assert _run_until_source(EddnPowerPlayWorker(relay_url="tcp://127.0.0.1:59502", direct=True)) == ["direct"]
-    finally:
-        stop.set()
-
-
 def test_live_hub_is_used(monkeypatch):
     stop = threading.Event()
     threading.Thread(target=_publisher, args=("tcp://127.0.0.1:59503", stop), daemon=True).start()
-    monkeypatch.setattr(eddn_listener, "_RELAY_URL", "tcp://127.0.0.1:1")   # never reached
     monkeypatch.setattr(eddn_listener, "_RECV_TIMEOUT_MS", 200)
     try:
         assert _run_until_source(EddnPowerPlayWorker(relay_url="tcp://127.0.0.1:59503")) == ["hub"]
@@ -62,20 +47,14 @@ def test_live_hub_is_used(monkeypatch):
         stop.set()
 
 
-def test_silent_hub_never_goes_direct_when_direct_is_off(monkeypatch):
-    stop = threading.Event()
-    threading.Thread(target=_publisher, args=("tcp://127.0.0.1:59505", stop), daemon=True).start()
-    monkeypatch.setattr(eddn_listener, "_RELAY_URL", "tcp://127.0.0.1:59505")   # would answer if tried
-    monkeypatch.setattr(eddn_listener, "_HUB_SILENT_S", 0.3)
-    monkeypatch.setattr(eddn_listener, "_RECV_TIMEOUT_MS", 100)
-    monkeypatch.setattr(eddn_listener, "_RECONNECT_DELAY_S", 0)
-    try:
-        assert _run_until_source(EddnPowerPlayWorker(relay_url="tcp://127.0.0.1:59506"), timeout=3) == []
-    finally:
-        stop.set()
+def test_no_public_eddn_address_in_the_listener():
+    """Evan/Artie: the app never listens to EDDN itself, only to EDDataHub's relay."""
+    import inspect
+    assert "tcp://eddn.edcd.io" not in inspect.getsource(eddn_listener)
+    assert "direct" not in inspect.signature(EddnPowerPlayWorker.__init__).parameters
 
 
-def test_silent_hub_with_direct_off_says_hub_silent(monkeypatch):
+def test_silent_hub_says_hub_silent(monkeypatch):
     """2026-11-03: the hub went offline, the status bar kept "EDDN via EDDataHub"."""
     monkeypatch.setattr(eddn_listener, "_STALE_CONNECTION_TIMEOUT_S", 0.3)
     monkeypatch.setattr(eddn_listener, "_RECV_TIMEOUT_MS", 100)
@@ -84,7 +63,7 @@ def test_silent_hub_with_direct_off_says_hub_silent(monkeypatch):
     assert _run_until_source(EddnPowerPlayWorker(relay_url="tcp://127.0.0.1:59509"), timeout=5) == ["hub_silent"]
 
 
-def test_no_hub_and_direct_off_does_not_listen():
+def test_no_hub_does_not_listen():
     w = EddnPowerPlayWorker()
     done = []
     w.finished.connect(lambda: done.append(1), type=Qt.ConnectionType.DirectConnection)
@@ -95,25 +74,13 @@ def test_no_hub_and_direct_off_does_not_listen():
     assert done == [1] and not t.is_alive()
 
 
-def test_no_hub_and_direct_off_says_off():
+def test_no_hub_says_off():
     w = EddnPowerPlayWorker()
     seen = []
     w.feed_source.connect(seen.append, type=Qt.ConnectionType.DirectConnection)
     w.tick_detector.save = lambda: None
     w.run()
     assert seen == ["off"]
-
-
-def test_hub_silence_limit_is_short_only_when_direct_can_take_over():
-    """2026-10-29: EDDN trickled for 2 h; with direct off the app dropped and re-joined the hub
-    every 35 s for nothing (201 reconnects) and could miss messages in each 5 s gap."""
-    for direct, want in ((False, eddn_listener._STALE_CONNECTION_TIMEOUT_S), (True, eddn_listener._HUB_SILENT_S)):
-        w = EddnPowerPlayWorker(relay_url="tcp://127.0.0.1:59507", direct=direct)
-        seen = []
-        w._pump = lambda sub, stale_s=None, **kw: (seen.append(stale_s), setattr(w, "_stop", True))[-1] or True
-        w.tick_detector.save = lambda: None
-        w.run()
-        assert seen == [want]
 
 
 def test_stop_ends_the_listener_quickly(monkeypatch):

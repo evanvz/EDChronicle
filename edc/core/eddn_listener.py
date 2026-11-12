@@ -17,14 +17,12 @@ import logging
 import time
 import zlib
 import json
-from typing import Optional
 
 from PyQt6.QtCore import QObject, pyqtSignal
 import zmq
 
 log = logging.getLogger(__name__)
 
-_RELAY_URL = "tcp://eddn.edcd.io:9500"
 _JOURNAL_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/journal/"
 _COMMODITY_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/commodity/"
 _FCMATERIALS_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/fcmaterials_journal/"
@@ -48,10 +46,8 @@ _RECONNECT_DELAY_S = 5
 _STALE_CONNECTION_TIMEOUT_S = 300
 # EDDataHub's LAN pass-through (config eddn_relay_url): the squadron's server reads
 # EDDN once and passes every raw message on, so this app isn't another listener on
-# the EDDN relay (which is limiting non-server listeners, 2026-10). Silent this long
-# (direct EDDN on only): fall back to EDDN directly, and try the hub again after _HUB_RETRY_S.
-_HUB_SILENT_S = 30
-_HUB_RETRY_S = 600
+# the EDDN relay (which is limiting non-server listeners, 2026-10). The hub is the
+# only feed: this app never connects to EDDN itself (Evan, 2026-11-12).
 
 # EDDN is public/unmoderated at the transport level — zlib.decompress() has
 # no built-in size cap, so a corrupted or oversized message could decompress
@@ -175,17 +171,15 @@ class EddnPowerPlayWorker(QObject):
     # A BGS tick spotted in the feed (many systems' influence changing at once),
     # our second tick source next to tick.edcd.io -- see edc.core.tick_detector.
     tick_detected = pyqtSignal(str)
-    feed_source = pyqtSignal(str)      # "hub" (EDDataHub pass-through), "direct" (EDDN relay), "hub_silent" or "off"
+    feed_source = pyqtSignal(str)      # "hub" (EDDataHub pass-through), "hub_silent" or "off"
     finished = pyqtSignal()
 
-    def __init__(self, watched_factions=None, relay_url: str = "", direct: bool = False):
+    def __init__(self, watched_factions=None, relay_url: str = ""):
         super().__init__()
         self._stop = False
         self.relay_url = relay_url
-        # Connecting to the EDDN relay itself is opt-in (config eddn_direct_fallback):
-        # EDDN is limiting non-server listeners (Artie, 2026-10), so by default the
-        # app only reads EDDataHub's pass-through, and nothing without one.
-        self.direct = direct
+        # EDDN is limiting non-server listeners (Artie, 2026-10): the app only reads
+        # EDDataHub's pass-through, and nothing without one.
         # Fixed at construction (squadron-aligned faction rarely changes) —
         # a set of faction names to watch for in EDDN's Factions array, so
         # we can build presence data for systems the player never personally
@@ -242,35 +236,24 @@ class EddnPowerPlayWorker(QObject):
     def run(self):
         ctx = zmq.Context()
         hub = self.relay_url
-        hub_retry_at = 0.0
         silent_logged = False
-        if not hub and not self.direct:
-            log.info("EDDN listener off: no EDDataHub relay (eddn_relay_url) and direct EDDN is off "
-                     "(eddn_direct_fallback)")
+        if not hub:
+            log.info("EDDN listener off: no EDDataHub relay (eddn_relay_url)")
             self.feed_source.emit("off")
-        while not self._stop and (hub or self.direct):
-            use_hub = bool(hub) and (not self.direct or time.monotonic() >= hub_retry_at)
-            url = hub if use_hub else _RELAY_URL
+        while not self._stop and hub:
             sub = ctx.socket(zmq.SUB)
             try:
                 sub.setsockopt(zmq.SUBSCRIBE, b"")
                 sub.setsockopt(zmq.RCVTIMEO, _RECV_TIMEOUT_MS)
-                sub.connect(url)
-                log.info("EDDN listener connected to %s", url)
-                # short hub limit only to fall back fast; with direct off a reconnect gains nothing
-                # and drops what arrives in its gap (EDDN trickle 2026-10-29: 201 reconnects in 2 h)
-                got = self._pump(sub, stale_s=_HUB_SILENT_S if use_hub and self.direct else _STALE_CONNECTION_TIMEOUT_S,
-                                 source="hub" if use_hub else "direct",
-                                 max_s=_HUB_RETRY_S if hub and not use_hub else None)
-                if use_hub and not got and self.direct:
-                    log.warning("EDDataHub's EDDN feed silent -- listening to EDDN directly, retrying in %ds",
-                                _HUB_RETRY_S)
-                    hub_retry_at = time.monotonic() + _HUB_RETRY_S
-                    continue
-                if use_hub and not got and not silent_logged:
-                    log.warning("EDDataHub's EDDN feed silent -- direct EDDN is off, waiting for the hub")
+                sub.connect(hub)
+                log.info("EDDN listener connected to %s", hub)
+                # a reconnect gains nothing and drops what arrives in its gap, so the
+                # silence limit is long (EDDN trickle 2026-10-29: 201 reconnects in 2 h)
+                got = self._pump(sub)
+                if not got and not silent_logged:
+                    log.warning("EDDataHub's EDDN feed silent -- waiting for the hub")
                     self.feed_source.emit("hub_silent")
-                silent_logged = use_hub and not got
+                silent_logged = not got
             except Exception:
                 log.exception("EDDN listener error — reconnecting in %ss", _RECONNECT_DELAY_S)
             finally:
@@ -282,17 +265,12 @@ class EddnPowerPlayWorker(QObject):
         ctx.term()
         self.finished.emit()
 
-    def _pump(self, sub, stale_s: Optional[float] = None, source: str = "direct",
-              max_s: Optional[float] = None) -> bool:
-        """Read until stopped, silent for stale_s, or (direct while a hub is set)
-        max_s has passed so the hub is tried again. True if anything arrived."""
-        if stale_s is None:
-            stale_s = _STALE_CONNECTION_TIMEOUT_S
-        started = last_message_time = time.monotonic()
+    def _pump(self, sub) -> bool:
+        """Read until stopped or silent for _STALE_CONNECTION_TIMEOUT_S. True if anything arrived."""
+        stale_s = _STALE_CONNECTION_TIMEOUT_S
+        last_message_time = time.monotonic()
         got = False
         while not self._stop:
-            if max_s is not None and time.monotonic() - started > max_s:
-                return got
             try:
                 raw = sub.recv()
             except zmq.error.Again:
@@ -311,7 +289,7 @@ class EddnPowerPlayWorker(QObject):
             last_message_time = time.monotonic()
             if not got:
                 got = True
-                self.feed_source.emit(source)
+                self.feed_source.emit("hub")
             decompressed = _safe_decompress(raw)
             if decompressed is None:
                 continue
