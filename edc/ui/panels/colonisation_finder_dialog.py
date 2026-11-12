@@ -97,7 +97,28 @@ def _mark_item(mark: Optional[dict]) -> QTableWidgetItem:
     return item
 
 
-class ColonisationFinderDialog(QDialog):
+class _WorkerThreads:
+    """Runs callables on worker threads for a dialog that keeps self._threads."""
+
+    def _start(self, fn: Callable, slot: Callable) -> None:
+        self._threads = [p for p in self._threads if not p[0].isFinished()]  # never wait on the GUI thread
+        thread, worker = QThread(), _Worker(fn)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.finished.connect(slot)
+        worker.finished.connect(thread.quit, Qt.ConnectionType.DirectConnection)
+        self._threads.append((thread, worker))
+        thread.start()
+
+    def stop(self) -> None:
+        """App shutdown only (blocks): a QThread destroyed while running is a Qt fatal."""
+        for thread, _ in self._threads:
+            thread.quit()
+        for thread, _ in self._threads:
+            thread.wait(10000)
+
+
+class ColonisationFinderDialog(_WorkerThreads, QDialog):
     def __init__(self, panel, hub_url: str):
         super().__init__(panel)
         self.setStyleSheet("QDialog { background:#080f18; color:#c8c8c8; }")
@@ -217,22 +238,8 @@ class ColonisationFinderDialog(QDialog):
         root.addWidget(self._bodies, 2)
 
     # ── threading ──────────────────────────────────────────────────────
-    def _start(self, fn: Callable, slot: Callable) -> None:
-        self._threads = [p for p in self._threads if not p[0].isFinished()]  # never wait on the GUI thread
-        thread, worker = QThread(), _Worker(fn)
-        worker.moveToThread(thread)
-        thread.started.connect(worker.run)
-        worker.finished.connect(slot)
-        worker.finished.connect(thread.quit, Qt.ConnectionType.DirectConnection)
-        self._threads.append((thread, worker))
-        thread.start()
-
     def stop(self) -> None:
-        """App shutdown: a QThread destroyed while running is a Qt fatal."""
-        for thread, _ in self._threads:
-            thread.quit()
-        for thread, _ in self._threads:
-            thread.wait(10000)
+        super().stop()
         if self._design is not None:
             self._design.stop()
 

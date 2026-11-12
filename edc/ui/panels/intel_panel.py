@@ -869,7 +869,7 @@ class IntelPanel(QWidget):
                     str(r.get("system") or "").lower()
                     for r in guardian_entries if r.get("system")
                 }
-                known_thargoid_systems = {
+                {
                     str(r.get("system") or "").lower()
                     for r in thargoid_entries if r.get("system")
                 }

@@ -8,7 +8,6 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QLabel,
-    QTextEdit,
     QListWidget,
     QListWidgetItem,
     QStyledItemDelegate,
@@ -657,10 +656,7 @@ class OverviewPanel(QWidget):
             self.overview_actions.setText(html)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
-    def _norm_token(self, val):
-        if not isinstance(val, str):
-            return ""
-        return val.replace("$","").replace(";","").replace("_"," ").strip().title()
+    _norm_token = staticmethod(fmt.token_title)
 
     def _esc(self, t):
         return str(t or "").replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
@@ -982,19 +978,16 @@ class OverviewPanel(QWidget):
 
             if war_type == "election":
                 label     = "ELECTION"
-                tip       = "Complete non-combat missions, trade, exploration data"
                 hdr_color = "#FFD93D"
                 bg_color  = "#1e1800"
                 bdr_color = "#FFD93D"
             elif war_type == "civilwar":
                 label     = "CIVIL WAR"
-                tip       = "Fight in Conflict Zones, hand in combat bonds"
                 hdr_color = "#FF6B6B"
                 bg_color  = "#2a0a0a"
                 bdr_color = "#FF4444"
             else:
                 label     = "WAR"
-                tip       = "Fight in Conflict Zones, hand in combat bonds"
                 hdr_color = "#FF6B6B"
                 bg_color  = "#2a0a0a"
                 bdr_color = "#FF4444"

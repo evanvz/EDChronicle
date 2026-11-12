@@ -7,6 +7,7 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+from edc.utils.files import write_text_atomic
 
 log = logging.getLogger("edc.faction_expansion_pin")
 
@@ -44,7 +45,7 @@ class FactionExpansionPinStore:
     def save(self, system_name: str) -> None:
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            self.path.write_text(
+            write_text_atomic(self.path,
                 json.dumps({
                     "system_name": system_name,
                     "pinned_at": datetime.now(timezone.utc).isoformat(),

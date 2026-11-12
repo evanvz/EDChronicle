@@ -24,6 +24,7 @@ def clean_mission_type(raw) -> Optional[str]:
     cleaned = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", cleaned)
     return " ".join(cleaned.split()) or None
 from edc.core.station_pads import effective_pad_size
+from edc.core.expansion_forecast import parse_states as _parse_states
 from edc.core.bgs_conflicts import has_raid_opportunity_state, is_multistate_faction
 
 # 21 days, not the original 14 -- this data now lives in the disposable
@@ -101,27 +102,6 @@ def _normalize_data_timestamp(value) -> str:
     if dt is None:
         dt = datetime.now(timezone.utc)
     return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def _parse_states(raw) -> List[str]:
-    """Parses a faction_snapshots active_states/pending_states/recovering_states
-    JSON column (a list of {"State": ..., "Trend": ...} dicts) into a flat
-    list of State strings. Mirrors player_faction_panel.py's identical
-    helper -- duplicated here rather than imported, since persistence must
-    not depend on the UI layer."""
-    if not raw:
-        return []
-    try:
-        data = json.loads(raw) if isinstance(raw, str) else raw
-    except (TypeError, ValueError):
-        return []
-    if not isinstance(data, list):
-        return []
-    return [
-        str(s.get("State"))
-        for s in data
-        if isinstance(s, dict) and s.get("State")
-    ]
 
 
 _CONFLICT_STATES = {"war", "civilwar", "civil war", "election"}
@@ -4098,13 +4078,6 @@ class Repository:
             (system_address,),
         ).fetchone()
         return int(row["cnt"] or 0) if row else 0
-
-    def get_real_body_names(self, system_address: int) -> set:
-        rows = self.db.execute(
-            "SELECT body_name FROM bodies WHERE system_address = ?",
-            (system_address,),
-        ).fetchall()
-        return {r["body_name"] for r in rows if r["body_name"]}
 
     def get_exobiology(self, system_address: int):
         return self.db.execute(

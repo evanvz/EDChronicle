@@ -119,7 +119,7 @@ def _silence(sr: int, ms: int) -> "np.ndarray":
 
 def _configure_audio_session():
     """Restore Windows audio session volume and opt out of comms ducking."""
-    import os, time
+    import time
     pid = os.getpid()
     for _ in range(5):
         try:
@@ -143,7 +143,6 @@ def _configure_audio_session():
 
 def _dsp_and_play(pcm_bytes: bytes, sample_rate: int, volume: float, pan: float, interrupt=None, device_id=None):
     import threading as _threading
-    import time as _time
     import numpy as np
     import miniaudio
     from scipy.io import wavfile

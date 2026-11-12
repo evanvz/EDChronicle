@@ -132,3 +132,10 @@ def pct_1(value: Any, default: str = "") -> str:
         return f"{x:.1f}%"
     except Exception:
         return default
+
+
+def token_title(val: Any) -> str:
+    """'$economy_Extraction;' -> 'Economy Extraction': a Frontier token as Title Case words."""
+    if not isinstance(val, str):
+        return ""
+    return val.replace("$", "").replace(";", "").replace("_", " ").strip().title()

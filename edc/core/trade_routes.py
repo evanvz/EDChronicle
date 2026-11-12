@@ -36,10 +36,9 @@ def _parse_ts(ts: Optional[str]) -> Optional[datetime]:
 
 
 def _normalize_commodity_name(name: str) -> str:
-    """Duplicated from edc/ui/panels/market_panel.py's identical function
-    rather than imported -- this module is deliberately Qt/DB-free (see
-    module docstring), and importing from a UI-layer module would run
-    the dependency the wrong direction for two lines of regex."""
+    """EDDN/journal commodity symbols are lowercase with no spaces or punctuation
+    ("Low Temperature Diamonds" -> "lowtemperaturediamonds"). market_panel.py
+    imports this as normalize_commodity_name."""
     return re.sub(r"[^a-z0-9]", "", (name or "").lower())
 
 

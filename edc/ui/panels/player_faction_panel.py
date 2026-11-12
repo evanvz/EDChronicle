@@ -12,7 +12,6 @@ minor faction, and that's a legitimate, permanent empty state, not a bug.
 from __future__ import annotations
 
 import html
-import json
 import logging
 import time
 from datetime import date, datetime, timezone
@@ -26,7 +25,7 @@ from PyQt6.QtGui import QColor, QFontMetrics
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QFrame, QFileDialog, QDialog,
-    QApplication, QCompleter, QSizePolicy,
+    QApplication, QCompleter,
 )
 from edc.ui.influence_chart import InfluenceChart
 
@@ -35,6 +34,7 @@ from edc.core.edsm_faction_lookup import (
     derive_conflicts_from_factions_states,
 )
 from edc.core.inara_faction_csv import parse_inara_faction_csv
+from edc.core.expansion_forecast import parse_states as _parse_states
 from edc.ui import formatting as fmt
 from edc.ui.panels.combat_bgs_status_panel import _conflicts_text, _faction_states_text
 from edc.ui.panels.faction_expansion_dialog import FactionExpansionDialog
@@ -108,22 +108,6 @@ class _NumericTableWidgetItem(QTableWidgetItem):
         if isinstance(other, _NumericTableWidgetItem):
             return self._sort_value < other._sort_value
         return super().__lt__(other)
-
-
-def _parse_states(raw) -> List[str]:
-    if not raw:
-        return []
-    try:
-        data = json.loads(raw) if isinstance(raw, str) else raw
-    except (TypeError, ValueError):
-        return []
-    if not isinstance(data, list):
-        return []
-    return [
-        str(s.get("State"))
-        for s in data
-        if isinstance(s, dict) and s.get("State")
-    ]
 
 
 def _days_fought(readings, ticks) -> Optional[Tuple[int, bool]]:
@@ -2438,7 +2422,7 @@ class _FactionHistoryDialog(QDialog):
         tracked_name = getattr(self._panel, "_faction_name", None)
         tracked_rows = [h for h in history if h.get("faction_name") == tracked_name]
         latest_tracked = max(tracked_rows, key=lambda h: h.get("snapshot_date") or "", default=None)
-        tracked_state = (latest_tracked.get("faction_state") or "").strip().lower() if latest_tracked else ""
+        (latest_tracked.get("faction_state") or "").strip().lower() if latest_tracked else ""
         tracked_active = {s.lower() for s in _parse_states(latest_tracked.get("active_states"))} if latest_tracked else set()
         state_suggests_war = bool(tracked_active & {"war", "civilwar"})   # FactionState is faction-wide
 

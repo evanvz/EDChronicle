@@ -5,7 +5,7 @@ from __future__ import annotations
 from itertools import count
 from typing import Callable, Optional
 
-from PyQt6.QtCore import Qt, QThread
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QComboBox, QDialog, QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QPushButton,
@@ -18,7 +18,7 @@ from edc.core.colonisation_plan_status import own_systems, status_updates, unlin
 from edc.core.colonisation_planner import TYPE_NAMES, TYPES, plan as plan_by_type, slot_table
 from edc.core.eddatahub_client import fetch_colonisation_system, put_colonisation_mark, put_colonisation_slots
 from edc.core.raven_colonial import get_system_slots
-from edc.ui.panels.colonisation_finder_dialog import _BTN_STYLE, _INPUT_STYLE, _TABLE_STYLE, _Worker, mark_text
+from edc.ui.panels.colonisation_finder_dialog import _BTN_STYLE, _INPUT_STYLE, _TABLE_STYLE, _WorkerThreads, mark_text
 
 _HINT = "Find the flag in the system map's Architect View"
 _FOOTER = ("Sources (community-reported, not official): CMDR Dubior's Advanced ED Colonization Guide (ref. 2026-08-11, read 2026-10-30); "
@@ -37,7 +37,7 @@ _NO_SLOTS = ("Check every body's slots in Architect View, then Confirm and save 
              " {} of {} bodies not confirmed")
 
 
-class ColonisationDesignDialog(QDialog):
+class ColonisationDesignDialog(_WorkerThreads, QDialog):
     def __init__(self, parent, hub_url: str, id64: int, name: str, repo=None):
         super().__init__(parent)
         self.setStyleSheet("QDialog { background:#080f18; color:#c8c8c8; }")
@@ -217,23 +217,6 @@ class ColonisationDesignDialog(QDialog):
         self._start(lambda: (id64, fetch_colonisation_system(url, id64)), self._on_loaded)
 
     # ── threading (same pattern as the finder) ─────────────────────────
-    def _start(self, fn: Callable, slot: Callable) -> None:
-        self._threads = [p for p in self._threads if not p[0].isFinished()]
-        thread, worker = QThread(), _Worker(fn)
-        worker.moveToThread(thread)
-        thread.started.connect(worker.run)
-        worker.finished.connect(slot)
-        worker.finished.connect(thread.quit, Qt.ConnectionType.DirectConnection)
-        self._threads.append((thread, worker))
-        thread.start()
-
-    def stop(self) -> None:
-        """App shutdown only (blocks): a QThread destroyed while running is a Qt fatal."""
-        for thread, _ in self._threads:
-            thread.quit()
-        for thread, _ in self._threads:
-            thread.wait(10000)
-
     def closeEvent(self, event) -> None:
         for thread, _ in self._threads:  # never wait on the GUI thread; the threads stay referenced until finished
             thread.quit()

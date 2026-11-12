@@ -21,6 +21,7 @@ from typing import Dict, Optional
 import requests
 
 from edc.version import USER_AGENT
+from edc.utils.files import write_text_atomic
 
 log = logging.getLogger(__name__)
 
@@ -96,7 +97,7 @@ class GuardianRuinsCache:
 
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            self.path.write_text(
+            write_text_atomic(self.path,
                 json.dumps({"fetched_date": self.fetched_date, "systems": systems}, ensure_ascii=False),
                 encoding="utf-8",
             )

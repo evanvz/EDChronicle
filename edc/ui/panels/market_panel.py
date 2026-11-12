@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import logging
-import re
 from typing import Dict, Optional
 
 from PyQt6.QtCore import Qt, QObject, QThread, QStringListModel, pyqtSignal
@@ -19,6 +18,7 @@ from PyQt6.QtWidgets import (
 )
 
 from edc.core.station_pads import pad_size_hint
+from edc.core.trade_routes import _normalize_commodity_name as normalize_commodity_name
 from edc.core.bgs_tasks import is_rival_power
 from edc.ui import formatting as fmt
 from edc.ui.busy_spinner import BusySpinner
@@ -40,15 +40,6 @@ _CONCOURSE_SERVICES = [
     (["materialtrader"], "Material Trader", ("#2a1a3a", "#C89CFF")),
     (["techBroker"], "Technology Broker", ("#1a3a30", "#6BFFB3")),
 ]
-
-
-def normalize_commodity_name(name: str) -> str:
-    """
-    EDDN/journal commodity symbols are lowercase, no spaces/punctuation
-    (e.g. "Low Temperature Diamonds" -> "lowtemperaturediamonds"). Applied
-    to whatever the user types so free-text search matches stored data.
-    """
-    return re.sub(r"[^a-z0-9]", "", (name or "").lower())
 
 
 _format_relative_time = fmt.relative_time

@@ -101,7 +101,7 @@ class RavenColonialPusher:
     def _worker_loop(self) -> None:
         while not self._stop.is_set():
             try:
-                item = self._queue.get(timeout=0.5)
+                item = self._queue.get(timeout=0.1)   # short: stop() joins this loop at app close
             except queue.Empty:
                 continue
             self._handle(*item)

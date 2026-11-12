@@ -6,6 +6,7 @@ import logging
 import math
 from datetime import datetime
 from typing import Any, Dict, List, Tuple
+from edc.utils.text import norm_text
 from .state import GameState
 from pathlib import Path
 from .planet_values import PlanetValueTable
@@ -313,17 +314,7 @@ class EventEngine:
             pass
         return "Other"
 
-    def _norm_text(self, v: Any) -> str:
-        """
-        Normalize journal-provided strings for stable dict keys and dedupe.
-        Collapses internal whitespace and strips leading/trailing spaces.
-        """
-        if not isinstance(v, str):
-            return ""
-        try:
-            return " ".join(v.split())
-        except Exception:
-            return v.strip()
+    _norm_text = staticmethod(norm_text)
 
     def _parse_materials_category(self, items: Any) -> tuple[Dict[str, int], Dict[str, str]]:
         """
@@ -2445,7 +2436,6 @@ class EventEngine:
                 rec["CompletionAnnounced"] = True
 
         # Dispatch order matters slightly: inventory first, then exploration/exobio, then PP, then misc.
-        handled = False
         for fn in (
             inventory.handle,
             exploration.handle,
@@ -2458,11 +2448,9 @@ class EventEngine:
         ):
             try:
                 if fn(self, name, event, msgs):
-                    handled = True
                     break
             except Exception:
                 log.exception("Handler error for event=%s in %s", name, getattr(fn, "__module__", "handler"))
-                handled = True
                 break
 
         # ---- DEBUG TRACE: Event end snapshot ----

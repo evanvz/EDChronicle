@@ -331,14 +331,6 @@ def _hhmm(iso: str) -> str:
         return ""
 
 
-def _seconds_ago(when: str, now: Optional[datetime] = None) -> Optional[float]:
-    try:
-        then = datetime.fromisoformat(str(when).replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    return ((now or datetime.now(timezone.utc)) - then).total_seconds()
-
-
 def commodity_lines(mode: str, pledged: str, cargo: Optional[dict] = None,
                     last_collect: Optional[dict] = None, now: Optional[datetime] = None,
                     supporting: Optional[list] = None, collect_system: Optional[dict] = None,
@@ -1483,7 +1475,7 @@ def _add_progress_trend(view: dict, repo, addr: int, pledged: str) -> None:
     hist = getter(addr, pledged) if getter else []
     if len(hist) < 2 or "chips" not in view:
         return
-    (new_at, new_p, _s), (old_at, old_p, _s2) = hist[0], hist[-1]
+    (_new_at, new_p, _s), (old_at, old_p, _s2) = hist[0], hist[-1]
     delta = (new_p - old_p) * 100
     tips = []
     for (b_at, b_p, b_src), (a_at, a_p, _x) in zip(hist, hist[1:]):

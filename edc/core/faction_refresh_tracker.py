@@ -7,6 +7,7 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+from edc.utils.files import write_text_atomic
 
 log = logging.getLogger("edc.faction_refresh_tracker")
 
@@ -57,7 +58,7 @@ class FactionRefreshTracker:
             data = self._read()
             data[key] = datetime.now(timezone.utc).isoformat()
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            self.path.write_text(json.dumps(data), encoding="utf-8")
+            write_text_atomic(self.path, json.dumps(data), encoding="utf-8")
         except Exception:
             log.exception("Failed to save faction refresh tracker")
 
@@ -82,6 +83,6 @@ class FactionRefreshTracker:
             data = self._read()
             data["last_refreshed_tick"] = tick_iso
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            self.path.write_text(json.dumps(data), encoding="utf-8")
+            write_text_atomic(self.path, json.dumps(data), encoding="utf-8")
         except Exception:
             log.exception("Failed to save last_refreshed_tick")

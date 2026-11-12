@@ -11,6 +11,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Optional
+from edc.utils.files import write_text_atomic
 
 log = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ def note_game_version(path: Path, version: object) -> Optional[str]:
     if previous == version:
         return None
     try:
-        path.write_text(json.dumps({"gameversion": version}), encoding="utf-8")
+        write_text_atomic(path, json.dumps({"gameversion": version}), encoding="utf-8")
     except OSError:
         log.exception("Failed to save %s", path)
     return previous

@@ -7,6 +7,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Optional
+from edc.utils.files import write_text_atomic
 
 log = logging.getLogger("edc.megaship_tracker")
 
@@ -47,7 +48,7 @@ class MegashipTracker:
     def _save(self) -> None:
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            self.path.write_text(
+            write_text_atomic(self.path,
                 json.dumps({"visits": dict(sorted(self._visits.items()))}, indent=2, ensure_ascii=False),
                 encoding="utf-8",
             )

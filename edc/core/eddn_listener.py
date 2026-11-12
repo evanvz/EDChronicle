@@ -33,7 +33,7 @@ _CODEXENTRY_SCHEMA_PREFIX = "https://eddn.edcd.io/schemas/codexentry/"
 # this subcategory is exobiology species (Canonn codex ref, 2026-10-17).
 _SPECIES_SUBCATEGORY = "$Codex_SubCategory_Organic_Structures;"
 _RELEVANT_EVENTS = {"FSDJump", "Location", "CarrierJump", "Docked", "CodexEntry", "Scan"}
-_RECV_TIMEOUT_MS = 1000   # also how fast stop() is seen: closing waits on this thread
+_RECV_TIMEOUT_MS = 250    # also how fast stop() is seen: closing waits on this thread
 _RECONNECT_DELAY_S = 5
 
 # A ZMQ SUB socket has no built-in way to detect a peer that's silently

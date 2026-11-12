@@ -3,11 +3,11 @@
 # See the LICENSE file in the project root for full terms.
 
 import json
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 import logging
+from edc.utils.files import write_text_atomic
 
 log = logging.getLogger("edc.config")
 
@@ -178,7 +178,7 @@ class ConfigStore:
             if changed or (read_path == self.legacy_path):
                 try:
                     self.ensure_dirs()
-                    self.path.write_text(json.dumps(migrated, indent=2), encoding="utf-8")
+                    write_text_atomic(self.path, json.dumps(migrated, indent=2), encoding="utf-8")
                     log.info("Migrated settings written to %s (loaded from %s)", str(self.path), str(read_path))
                     read_path = self.path
                     data = migrated
@@ -244,7 +244,7 @@ class ConfigStore:
     def save(self, cfg: AppConfig) -> None:
         try:
             self.ensure_dirs()
-            self.path.write_text(
+            write_text_atomic(self.path,
                 json.dumps(
                     {
                         "schema_version": SCHEMA_VERSION,

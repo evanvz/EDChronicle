@@ -6,6 +6,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, List
+from edc.utils.files import write_text_atomic
 
 log = logging.getLogger("edc.engineering_wishlist")
 
@@ -74,6 +75,6 @@ class EngineeringWishlist:
                     if isinstance(it, dict) and isinstance(it.get("fdname"), str) and isinstance(it.get("grade"), int)
                 ]
             }
-            self.path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+            write_text_atomic(self.path, json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
         except Exception:
             log.exception("Failed to save engineering_wishlist.json")

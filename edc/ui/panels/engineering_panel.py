@@ -151,7 +151,31 @@ class EngineeringPanel(QWidget):
         self._engineers_tab.refresh(state)
 
 
-class _ShipEngineeringTab(QWidget):
+class _WishlistTableMixin:
+    """Selection and removal for a tab with _wl_table, _wishlist, _store and _refresh_wishlist_table()."""
+
+    def _selected_wishlist_entry(self) -> Optional[Dict[str, Any]]:
+        item = self._wl_table.currentItem()
+        if item is None:
+            return None
+        # Any column's item on the selected row carries the same UserRole
+        # data (only column 0 is explicitly set) -- currentItem() can
+        # return any column depending on which cell was clicked, so look
+        # up column 0 of that row explicitly rather than assuming.
+        row = item.row()
+        col0 = self._wl_table.item(row, 0)
+        return col0.data(Qt.ItemDataRole.UserRole) if col0 else None
+
+    def _remove_selected(self):
+        entry = self._selected_wishlist_entry()
+        if entry is None or entry not in self._wishlist:
+            return
+        self._wishlist.remove(entry)
+        self._store.save(self._wishlist)
+        self._refresh_wishlist_table()
+
+
+class _ShipEngineeringTab(_WishlistTableMixin, QWidget):
     def __init__(
         self,
         blueprint_table: EngineeringBlueprintTable,
@@ -420,26 +444,6 @@ class _ShipEngineeringTab(QWidget):
             "fdname": fdname, "grade": grade,
             "experimental": experimental, "weapon_type": weapon_type,
         })
-        self._store.save(self._wishlist)
-        self._refresh_wishlist_table()
-
-    def _selected_wishlist_entry(self) -> Optional[Dict[str, Any]]:
-        item = self._wl_table.currentItem()
-        if item is None:
-            return None
-        # Any column's item on the selected row carries the same UserRole
-        # data (only column 0 is explicitly set) -- currentItem() can
-        # return any column depending on which cell was clicked, so look
-        # up column 0 of that row explicitly rather than assuming.
-        row = item.row()
-        col0 = self._wl_table.item(row, 0)
-        return col0.data(Qt.ItemDataRole.UserRole) if col0 else None
-
-    def _remove_selected(self):
-        entry = self._selected_wishlist_entry()
-        if entry is None or entry not in self._wishlist:
-            return
-        self._wishlist.remove(entry)
         self._store.save(self._wishlist)
         self._refresh_wishlist_table()
 
@@ -734,7 +738,7 @@ _KIND_LABELS = {
 }
 
 
-class _OdysseyEngineeringTab(QWidget):
+class _OdysseyEngineeringTab(_WishlistTableMixin, QWidget):
     """
     Suit/weapon grade upgrades cost materials at every step 1->5 and can be
     performed at any on-foot Engineer terminal. Modules (mod slots) are a
@@ -950,26 +954,6 @@ class _OdysseyEngineeringTab(QWidget):
         if any(e == entry for e in self._wishlist):
             return
         self._wishlist.append(entry)
-        self._store.save(self._wishlist)
-        self._refresh_wishlist_table()
-
-    def _selected_wishlist_entry(self) -> Optional[Dict[str, Any]]:
-        item = self._wl_table.currentItem()
-        if item is None:
-            return None
-        # Any column's item on the selected row carries the same UserRole
-        # data (only column 0 is explicitly set) -- currentItem() can
-        # return any column depending on which cell was clicked, so look
-        # up column 0 of that row explicitly rather than assuming.
-        row = item.row()
-        col0 = self._wl_table.item(row, 0)
-        return col0.data(Qt.ItemDataRole.UserRole) if col0 else None
-
-    def _remove_selected(self):
-        entry = self._selected_wishlist_entry()
-        if entry is None or entry not in self._wishlist:
-            return
-        self._wishlist.remove(entry)
         self._store.save(self._wishlist)
         self._refresh_wishlist_table()
 

@@ -25,7 +25,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from edc.utils.dates import utc_today
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from PyQt6.QtCore import Qt, QObject, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QPainter, QPen

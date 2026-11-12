@@ -36,6 +36,7 @@ import logging
 import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from edc.utils.files import write_text_atomic
 
 log = logging.getLogger(__name__)
 
@@ -69,12 +70,10 @@ class EddnPowerPlayCache:
     def save(self) -> None:
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            with self._lock:
-                self.path.write_text(
-                    json.dumps({"systems": self._systems, "conflict_progress": self._progress},
-                               ensure_ascii=False),
-                    encoding="utf-8",
-                )
+            with self._lock:   # only the dump needs it: ingest() on the UI thread waits on this lock
+                text = json.dumps({"systems": self._systems, "conflict_progress": self._progress},
+                                  ensure_ascii=False)
+            write_text_atomic(self.path, text)
         except Exception:
             log.exception("Failed to write eddn_powerplay_cache.json")
 

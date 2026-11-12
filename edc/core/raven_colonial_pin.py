@@ -7,6 +7,7 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+from edc.utils.files import write_text_atomic
 
 log = logging.getLogger("edc.raven_colonial_pin")
 
@@ -44,7 +45,7 @@ class RavenColonialPinStore:
     def save(self, build_id: str) -> None:
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            self.path.write_text(
+            write_text_atomic(self.path,
                 json.dumps({
                     "build_id": build_id,
                     "pinned_at": datetime.now(timezone.utc).isoformat(),

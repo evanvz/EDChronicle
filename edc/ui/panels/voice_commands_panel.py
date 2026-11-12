@@ -21,12 +21,13 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QComboBox,
     QLineEdit, QCheckBox, QMessageBox, QDialog, QDialogButtonBox,
-    QFrame, QSizePolicy,
+    QSizePolicy,
     QListWidget, QListWidgetItem, QSlider,
 )
 
 from edc.core.binds_reader import ActionBinding, get_binds_status, load_bindings
 from edc.ui.style import DANGER_BUTTON_STYLE as _DANGER_BUTTON_STYLE
+from edc.utils.files import write_text_atomic
 
 log = logging.getLogger(__name__)
 
@@ -395,7 +396,7 @@ class VoiceCommandsPanel(QWidget):
         self._data["feedback_volume"]   = self._volume_slider.value() / 100.0
         try:
             self._config_path.parent.mkdir(parents=True, exist_ok=True)
-            self._config_path.write_text(
+            write_text_atomic(self._config_path,
                 json.dumps(self._data, indent=2, ensure_ascii=False), encoding="utf-8"
             )
         except Exception as exc:

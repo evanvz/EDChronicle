@@ -6,6 +6,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from edc.utils.text import norm_text
 
 log = logging.getLogger("edc.farming_locations")
 
@@ -48,13 +49,7 @@ class FarmingLocations:
 
         self._load(force=True)
 
-    def _norm(self, v: Any) -> str:
-        if not isinstance(v, str):
-            return ""
-        try:
-            return " ".join(v.split()).strip()
-        except Exception:
-            return v.strip()
+    _norm = staticmethod(norm_text)
 
     def _load(self, force: bool = False) -> None:
         try:

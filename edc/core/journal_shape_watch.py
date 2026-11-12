@@ -18,6 +18,7 @@ import logging
 import threading
 from pathlib import Path
 from typing import Dict, Optional, Set
+from edc.utils.files import write_text_atomic
 
 log = logging.getLogger(__name__)
 
@@ -59,7 +60,7 @@ class JournalShapeWatch:
 
     def _save(self) -> None:
         try:
-            self._path.write_text(json.dumps({n: sorted(k) for n, k in sorted(self._shapes.items())}),
+            write_text_atomic(self._path, json.dumps({n: sorted(k) for n, k in sorted(self._shapes.items())}),
                                   encoding="utf-8")
         except OSError:
             log.exception("Failed to save %s", self._path)

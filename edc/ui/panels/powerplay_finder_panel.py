@@ -10,7 +10,6 @@ import math
 from typing import List, Optional
 
 from PyQt6.QtCore import Qt, QObject, QThread, pyqtSignal
-from PyQt6.QtGui import QClipboard
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QComboBox, QSpinBox, QTableWidget, QTableWidgetItem,
@@ -29,10 +28,8 @@ log = logging.getLogger(__name__)
 
 def _tier_label(edsm_powerplay, system_name: str) -> str:
     """Fortified/Stronghold/etc, sourced from EDSM's cache since Frontier's
-    own feed doesn't name the tier directly (see fdev_powerplay.py). Same
-    helper as powerplay_system_status_panel.py's -- kept separate to avoid
-    a circular import (that module already imports _STATE_COLORS from
-    here)."""
+    own feed doesn't name the tier directly (see fdev_powerplay.py). Also used by
+    powerplay_system_status_panel.py."""
     if edsm_powerplay is None:
         return ""
     rec = edsm_powerplay.get_controller_by_name(system_name)

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from edc.utils.text import norm_text as _norm_text
 import logging
 
 from edc.core.station_pads import extract_station_info
@@ -25,12 +26,6 @@ def _parse_journal_timestamp(value: Any) -> str | None:
         return dt.astimezone(timezone.utc).isoformat()
     except Exception:
         return None
-
-
-def _norm_text(value: Any) -> str:
-    if not isinstance(value, str):
-        return ""
-    return " ".join(value.strip().split())
 
 
 def _terraformable_from_state(terraform_state: Any) -> int | None:

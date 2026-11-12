@@ -37,7 +37,7 @@ from PyQt6.QtWidgets import (
 )
 
 from edc.ui.style import CARD_STYLE, HDR_STYLE, LABEL_STYLE
-from edc.ui.panels.powerplay_finder_panel import _STATE_COLORS
+from edc.ui.panels.powerplay_finder_panel import _STATE_COLORS, _tier_label
 from edc.ui.panels.market_panel import _NumericTableWidgetItem
 
 log = logging.getLogger(__name__)
@@ -100,15 +100,6 @@ def _is_decay_risk(state: str, is_reinforcement_direction: bool, cp_frac: Option
         and cp_frac is not None
         and cp_frac > _DECAY_RISK_THRESHOLD
     )
-
-
-def _tier_label(edsm_powerplay, system_name: str) -> str:
-    if edsm_powerplay is None:
-        return "—"
-    rec = edsm_powerplay.get_controller_by_name(system_name)
-    if not rec:
-        return "—"
-    return rec.get("power_state") or "—"
 
 
 class PowerplaySystemStatusPanel(QWidget):
@@ -252,7 +243,7 @@ class PowerplaySystemStatusPanel(QWidget):
         table.setRowCount(len(entries))
         for i, (dist, row) in enumerate(entries):
             name = row["system"]
-            tier = _tier_label(self._edsm_powerplay, name)
+            tier = _tier_label(self._edsm_powerplay, name) or "—"
             prediction = row.get("prediction") or "—"
             pred_color = _prediction_color(row.get("prediction") or "")
 

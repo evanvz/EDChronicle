@@ -6,6 +6,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, List
+from edc.utils.files import write_text_atomic
 
 log = logging.getLogger("edc.odyssey_wishlist")
 
@@ -60,6 +61,6 @@ class OdysseyWishlist:
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             payload = {"items": items}
-            self.path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+            write_text_atomic(self.path, json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
         except Exception:
             log.exception("Failed to save odyssey_engineering_wishlist.json")

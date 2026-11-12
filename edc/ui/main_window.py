@@ -19,9 +19,6 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QSlider,
     QHBoxLayout,
-    QTableWidget,
-    QTableWidgetItem,
-    QHeaderView,
     QScrollArea,
     QLineEdit,
     QComboBox,
@@ -29,22 +26,18 @@ from PyQt6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QFileDialog,
-    QSplitter,
     QStackedWidget,
-    QGraphicsOpacityEffect,
     QFrame,
-    QAbstractScrollArea,
     QSizePolicy,
     QGroupBox,
 )
-from PyQt6.QtCore import QThread, QObject, pyqtSignal, Qt, QTimer, QSettings, QPropertyAnimation, QEasingCurve, QSize, QEvent
-from PyQt6.QtGui import QTextCursor, QColor, QIcon, QKeySequence
+from PyQt6.QtCore import QThread, QObject, pyqtSignal, Qt, QTimer, QSize, QEvent
+from PyQt6.QtGui import QTextCursor, QIcon, QKeySequence
 from pathlib import Path
 
 from edc.core.state import GameState
 from edc.core.event_engine import EventEngine, _engage_risk, _callout_reason, in_my_pp_space
 from edc.core.ring_signals import RING_NAME_RE
-from edc.core.journal_watcher import JournalWatcher
 from edc.ui.watcher_controller import WatcherController
 from edc.ui.system_data_loader import SystemDataLoader
 from edc.ui.style import CARD_STYLE, CG_COLOUR, POWER_COLOURS
@@ -55,7 +48,6 @@ from edc.ui.panels.overview_panel import OverviewPanel
 from edc.ui.panels.exploration_panel import ExplorationPanel
 from edc.ui.panels.exobiology_panel import ExobiologyPanel
 from edc.ui.panels.intel_panel import IntelPanel
-from edc.core.status_watcher import StatusWatcher
 from edc.core.planet_values import PlanetValueTable
 from edc.core.exo_predictor import high_value_line, load_rules, predict_system
 from edc.core.exo_values import ExoValueTable
@@ -4414,7 +4406,7 @@ class MainWindow(QMainWindow):
         _t0 = time.perf_counter()
         self.eddn_powerplay.save()
         _elapsed_ms = (time.perf_counter() - _t0) * 1000
-        if _elapsed_ms > 50:
+        if _elapsed_ms > 1000:   # ~270ms is normal at 57k systems (2026-11-12): only log a real slowdown
             log.warning(
                 "eddn_powerplay.save() took %.0fms in the background (%d systems tracked)",
                 _elapsed_ms, self.eddn_powerplay.system_count(),
@@ -6253,9 +6245,9 @@ class MainWindow(QMainWindow):
             pledged = getattr(self.state, "pp_power", None)
             ctrl = getattr(self.state, "system_controlling_power", None)
             pp_state = getattr(self.state, "system_powerplay_state", None) or ""
-            reinforce = getattr(self.state, "system_powerplay_reinforcement", None)
-            undermine = getattr(self.state, "system_powerplay_undermining", None)
-            progress = getattr(self.state, "system_powerplay_control_progress", None)
+            getattr(self.state, "system_powerplay_reinforcement", None)
+            getattr(self.state, "system_powerplay_undermining", None)
+            getattr(self.state, "system_powerplay_control_progress", None)
             powers = getattr(self.state, "system_powers", None) or []
 
             action = self._derive_pp_action(pledged, ctrl, pp_state, powers)
@@ -6411,7 +6403,7 @@ class MainWindow(QMainWindow):
             pc = chosen.get("PlayerContribution")
 
             loc = " — ".join([x for x in [sysn, mkt] if x])
-            tier_txt = "/".join([x for x in [tier, top] if x])
+            "/".join([x for x in [tier, top] if x])
             pc_txt = f"{pc:,}" if isinstance(pc, int) else "?"
 
             # Convert expiry timestamp to "Ends in Xd Yh"
@@ -6454,7 +6446,7 @@ class MainWindow(QMainWindow):
         except Exception:
             min_100k = 5
         min_value = min_100k * 100_000
-        fss_value = max(300_000, int(min_value * 0.20))
+        max(300_000, int(min_value * 0.20))
 
         try:
             exo_m = int(getattr(self.cfg, "exo_high_value_m", 2) or 2)
@@ -6689,7 +6681,6 @@ class MainWindow(QMainWindow):
             contact_lines = []
             action_lines = []
             intel_lines = []
-            poi_lines = []
             seen = set()
             has_pp_action = False
             # PP enemy scan alerts (Overview only)
@@ -7436,35 +7427,6 @@ class MainWindow(QMainWindow):
 
     def _refresh_materials_shortlist(self):
         self.exploration_panel._refresh_materials_shortlist(self.state)
-
-    def _norm_token(self, value):
-        """Normalize Frontier-style token strings for display.
-
-        Examples:
-        '$SYSTEM_SECURITY_low;' -> 'Low'
-        '$economy_Extraction;'  -> 'Extraction'
-        '$government_Corporate;' -> 'Corporate'
-        """
-        s = fmt.text(value)
-        if not s:
-            return ""
-        s = s.strip()
-        if s.endswith(";"):
-            s = s[:-1].strip()
-        if s.startswith("$"):
-            s = s[1:]
-        # Drop common token prefixes, keep the meaningful tail
-        if "_" in s:
-            parts = [p for p in s.split("_") if p]
-            if parts:
-                s = parts[-1]
-        s = s.replace("_", " ").strip()
-        if not s:
-            return ""
-        # Preserve ALLCAPS abbreviations, otherwise Title-case first letter only
-        if s.isupper():
-            return s
-        return s[:1].upper() + s[1:]
 
     def _refresh_system_card(self):
         self.overview_panel.refresh(self.state)

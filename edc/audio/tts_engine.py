@@ -25,7 +25,6 @@ import logging
 import queue
 import random
 import threading
-import time
 from pathlib import Path
 
 from PyQt6.QtCore import QThread, QObject, pyqtSlot
@@ -159,31 +158,6 @@ def _synth_wav(loop, text: str, voice: str, speed: float = 1.0) -> tuple[bytes, 
     wav_bytes = loop.run_until_complete(_windows_wav(text, speed))
     with wave.open(io.BytesIO(wav_bytes)) as wf:
         return wav_bytes, wf.getframerate()
-
-
-def _opt_out_of_ducking():
-    """Tell Windows not to duck other apps' audio when our WASAPI session is active."""
-    global _ducking_opted_out
-    if _ducking_opted_out:
-        return
-    import os
-    pid = os.getpid()
-    for _ in range(5):
-        try:
-            from pycaw.pycaw import AudioUtilities, IAudioSessionControl2
-            for session in AudioUtilities.GetAllSessions():
-                try:
-                    ctrl2 = session._ctl.QueryInterface(IAudioSessionControl2)
-                    if ctrl2.GetProcessId() != pid:
-                        continue
-                    ctrl2.SetDuckingPreference(True)
-                    _ducking_opted_out = True
-                    return
-                except Exception:
-                    continue
-        except Exception:
-            pass
-        time.sleep(0.05)
 
 
 _ALERT_VOICE_POOL = [

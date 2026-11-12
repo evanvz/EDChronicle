@@ -5,7 +5,8 @@
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
+from edc.utils.text import norm_text
 
 log = logging.getLogger("edc.item_catalog")
 
@@ -49,13 +50,7 @@ class ItemCatalog:
 
         self._load(force=True)
 
-    def _norm(self, v: Any) -> str:
-        if not isinstance(v, str):
-            return ""
-        try:
-            return " ".join(v.split()).strip()
-        except Exception:
-            return v.strip()
+    _norm = staticmethod(norm_text)
 
     def _key(self, name: Any) -> str:
         return self._norm(name).lower()

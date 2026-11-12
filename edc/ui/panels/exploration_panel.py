@@ -9,7 +9,6 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QLabel,
-    QTextEdit,
     QScrollArea,
     QFrame,
     QSizePolicy,
@@ -261,13 +260,7 @@ class ExplorationPanel(QWidget):
         self._content_layout.addWidget(mat_frame)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
-    def _norm_token(self, val):
-        if not isinstance(val, str):
-            return ""
-        return (
-            val.replace("$", "").replace(";", "")
-            .replace("_", " ").strip().title()
-        )
+    _norm_token = staticmethod(fmt.token_title)
 
     def _esc(self, t):
         return str(t or "").replace(

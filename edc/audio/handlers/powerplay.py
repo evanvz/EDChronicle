@@ -152,11 +152,3 @@ class PowerPlayPhrases:
     def pp_present(power: str) -> str:
         """Pledged power is active in system but does not control it."""
         return pick(PowerPlayPhrases.PP_POWER_PRESENT, power=power)
-
-    @staticmethod
-    def pp_undermining_present(power: str) -> str:
-        return pick(PowerPlayPhrases.PP_UNDERMINING_PRESENT, power=power)
-
-    @staticmethod
-    def pp_not_present(power: str) -> str:
-        return pick(PowerPlayPhrases.PP_NOT_PRESENT, power=power)

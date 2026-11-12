@@ -6,6 +6,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Any, Dict
+from edc.utils.files import write_text_atomic
 
 log = logging.getLogger("edc.engineer_progress_store")
 
@@ -47,7 +48,7 @@ class EngineerProgressStore:
     def save(self, engineers: Dict[str, Dict[str, Any]]) -> None:
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            self.path.write_text(
+            write_text_atomic(self.path,
                 json.dumps({"engineers": engineers}, ensure_ascii=False),
                 encoding="utf-8",
             )
