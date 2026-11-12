@@ -47,7 +47,7 @@ from edc.core.ring_signals import RING_NAME_RE
 from edc.core.journal_watcher import JournalWatcher
 from edc.ui.watcher_controller import WatcherController
 from edc.ui.system_data_loader import SystemDataLoader
-from edc.ui.style import CARD_STYLE
+from edc.ui.style import CARD_STYLE, CG_COLOUR, POWER_COLOURS
 from edc.ui.panels.combat_panel import CombatPanel
 from edc.ui.panels.inventory_panel import MaterialsPanel
 from edc.ui.panels.powerplay_panel import PowerplayPanel
@@ -2942,6 +2942,7 @@ class MainWindow(QMainWindow):
 
         # ---- Header layout (title left, session tracker right) ----
         self.hud = QLabel("Not connected")
+        self.hud.setTextFormat(Qt.TextFormat.RichText)  # CG and PP lines get their own colour
         self.status = QLabel("Status: idle")
 
         left_header = QVBoxLayout()
@@ -6209,6 +6210,7 @@ class MainWindow(QMainWindow):
             self._refresh_allies_field()
         parts = []
         lines = []
+        hud_colours = {}  # line -> colour: the CG and PP lines stand out from the rest
         self._pp_action_text = ""
         action_state = self._compute_action_state()
         if (
@@ -6356,6 +6358,7 @@ class MainWindow(QMainWindow):
                     ptxt = ", ".join([p for p in pw[:3] if isinstance(p, str)])
                     extra = f" | Powers: {ptxt}" if ptxt else ""
                     lines.append(f"🟡 PP: {pp_state or 'Active'}{extra}")
+                hud_colours[lines[-1]] = POWER_COLOURS.get(ctrl, "#E0E0E0")
 
                 # --- Action hint (Overview only) ---
                 s = str(pp_state or "").lower()
@@ -6443,6 +6446,7 @@ class MainWindow(QMainWindow):
             if ends_txt:
                 bits.append(f"Ends in {ends_txt}")
             lines.append(" | ".join(bits))
+            hud_colours[lines[-1]] = CG_COLOUR
 
         # One-line "action hints" (what's worth doing in THIS system)
         try:
@@ -6746,7 +6750,9 @@ class MainWindow(QMainWindow):
             ln for ln in lines
             if "Action:" not in ln and "Intel:" not in ln and "POI:" not in ln
         ]
-        self.hud.setText("\n".join(clean_lines) if clean_lines else "Not connected")
+        self.hud.setText("<br>".join(
+            f'<span style="color:{hud_colours[ln]}; font-weight:bold;">{html.escape(ln)}</span>'
+            if ln in hud_colours else html.escape(ln) for ln in clean_lines) if clean_lines else "Not connected")
         self._refresh_system_card()
         self._refresh_exploration()
         self._refresh_exobiology()

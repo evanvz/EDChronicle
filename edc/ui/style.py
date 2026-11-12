@@ -220,3 +220,23 @@ def set_table_rows(table, row_count: int) -> None:
     set_table_empty_message() for its no-data state."""
     table.clearSpans()
     table.setRowCount(row_count)
+
+
+# Overview HUD: a Community Goal line, and the system's PowerPlay line coloured by the
+# controlling power. Colours are our own picks to tell the powers apart, not Frontier's.
+CG_COLOUR = "#FFB347"
+POWER_COLOURS = {
+    "Aisling Duval": "#4FC3F7",
+    "A. Lavigny-Duval": "#B388FF",
+    "Arissa Lavigny-Duval": "#B388FF",
+    "Archon Delaine": "#FF5252",
+    "Denton Patreus": "#FF9E40",
+    "Edmund Mahon": "#69F0AE",
+    "Felicia Winters": "#FFD740",
+    "Jerome Archer": "#FF80AB",
+    "Li Yong-Rui": "#18FFFF",
+    "Nakato Kaine": "#B2FF59",
+    "Pranav Antal": "#EA80FC",
+    "Yuri Grom": "#FF6E40",
+    "Zemina Torval": "#40C4FF",
+}
