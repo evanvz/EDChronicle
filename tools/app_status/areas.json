@@ -369,8 +369,7 @@
  },
  "Squadron": {
   "modules": [
-   "edc/core/squadron_*.py",
-   "edc/ui/panels/squadron_panel.py"
+   "edc/core/squadron_*.py"
   ],
   "tests": [
    "tests/test_squadron_*.py"

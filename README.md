@@ -40,7 +40,6 @@ Full feature list, architecture, and database schema: see [ARCHITECTURE.md](ARCH
 ![PowerPlay](docs/screenshots/PowerPlay.png)
 ![PowerPlay - System Status](docs/screenshots/PowerPlay-System%20Status.png)
 ![PowerPlay - Target Finder](docs/screenshots/PowerPlay-Target%20Finder.png)
-![Squadron](docs/screenshots/Squadron.png)
 
 **Trade**
 

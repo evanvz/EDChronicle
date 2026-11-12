@@ -119,7 +119,6 @@ from edc.core.squadron_events import SQUADRON_EVENT_NAMES, membership_since
 from persistence.repository import set_squadron_membership_since
 from edc.core.carrier_scanner import scan_carrier_status
 from edc.core.mission_scanner import scan_active_missions
-from edc.ui.panels.squadron_panel import SquadronPanel
 from edc.ui.panels.colonisation_panel import ColonisationPanel
 from edc.ui.panels.mining_panel import MiningPanel
 from edc.ui.panels.market_panel import MarketPanel, normalize_commodity_name
@@ -3108,9 +3107,6 @@ class MainWindow(QMainWindow):
         self.player_faction_panel.pp_watch_view = PowerPlayWatchPanel(self.player_faction_panel)
         self.powerplay_panel.add_tab(self.player_faction_panel.pp_watch_view, "Watch List")
 
-        # Squadron tab
-        self.squadron_panel = SquadronPanel(self.repo)
-
         # Colonisation tab
         self.colonisation_panel = ColonisationPanel(
             self.repo, ship_pad_table=self.ship_pad_sizes, commodity_categories=self.commodity_categories,
@@ -3465,7 +3461,6 @@ class MainWindow(QMainWindow):
         _add_header("Combat & PP")
         _add_panel(self.combat_panel, "Combat")
         _add_panel(self.powerplay_panel, "PowerPlay")
-        _add_panel(self.squadron_panel, "Squadron")
 
         _add_header("Trade")
         _add_panel(self.market_panel, "Market")
@@ -6828,7 +6823,6 @@ class MainWindow(QMainWindow):
         self.combat_panel.refresh(self.state)
 
     def _refresh_squadron(self):
-        self.squadron_panel.refresh(self.state)
         self.colonisation_panel.refresh(self.state)
 
     def _start_if_candidates_load(self, key) -> None:

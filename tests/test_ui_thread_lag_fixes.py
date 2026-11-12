@@ -9,7 +9,6 @@ from types import SimpleNamespace
 from PyQt6.QtWidgets import QApplication
 
 from edc.ui.main_window import MainWindow, _UiStallWatchdog
-from edc.ui.panels.squadron_panel import SquadronPanel
 
 _app = QApplication.instance() or QApplication(sys.argv)
 
@@ -29,18 +28,6 @@ def test_fine_status_recomputes_only_when_system_or_fines_change():
     fake.state.active_fines = {"A": 1000, "B": 50}
     MainWindow._refresh_fine_status(fake)
     assert calls == ["A", "A", "A", "B"]
-
-
-def test_squadron_panel_reads_the_faction_name_at_most_once_a_minute():
-    calls = []
-    repo = SimpleNamespace(get_squadron_faction_name=lambda: calls.append(1) or "Elite United Worlds")
-    panel = SquadronPanel(repo)
-    state = SimpleNamespace(squadron_name="EUW", squadron_rank=3, squadron_trophies=0, squadron_status=None,
-                            squadron_status_timestamp=None, squadron_rank_history=[])
-    for _ in range(10):
-        panel.refresh(state)
-    assert calls == [1]
-    assert "Elite United Worlds" in panel._bgs_label.text()
 
 
 def test_watchdog_logs_where_the_ui_thread_is_stuck(caplog):

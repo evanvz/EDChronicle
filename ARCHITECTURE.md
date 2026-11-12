@@ -195,7 +195,6 @@ Notable files:
 - `expansion_forecast_panel.py` — Faction Expansion Tracker's Forecast tab; `_ForecastWorker` runs the cube query and EDSM lookups on its own DB connection
 - `session_activity_dialog.py` — Session BGS Activity Report: whole-session, all-faction mission/combat/CZ/trade activity grouped by day, since the last detected BGS tick; a header row with PowerPlay merits since the tick and this week (≈CP), lifetime total and rank, plus a warning for any watched system whose undermining grew since the tick and leads reinforcement
 - `bgs_tasks_dialog.py` — BGS Tasks window (from the Player Faction panel) — add/remove/reorder tasks, live progress cards; the current system's task(s) also show as a line on the Overview HUD
-- `squadron_panel.py`
 - `intel_panel.py`
 - `inventory_panel.py` — `ShiplockerPanel` (Odyssey) and `MaterialsPanel`
 - `voice_commands_panel.py`

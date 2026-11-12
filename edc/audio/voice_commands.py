@@ -44,7 +44,6 @@ TAB_PHRASES: dict[str, str] = {
     "materials":    "Materials",
     "mining":       "Mining",
     "faction":      "Player Faction",
-    "squadron":     "Squadron",
     "trade":        "Trade Routes",
 }
 
