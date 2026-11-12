@@ -24,3 +24,4 @@ def test_failed_swap_keeps_the_old_file(tmp_path, monkeypatch):
     with pytest.raises(OSError):
         write_text_atomic(p, "new")
     assert p.read_text(encoding="utf-8") == "old"
+    assert not (tmp_path / "settings.json.tmp").exists()   # no stray copy of the keys

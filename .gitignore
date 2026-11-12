@@ -7,6 +7,7 @@ settings/*.bak
 venv/
 .env
 settings.json
+*.tmp
 .aider*
 *.yml
 !.github/**

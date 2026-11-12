@@ -10,5 +10,9 @@ def write_text_atomic(path, text: str, encoding: str = "utf-8") -> None:
     """Writes beside the file, then swaps it in: a crash mid-write leaves the
     old file whole instead of a truncated one (settings.json holds API keys)."""
     tmp = Path(str(path) + ".tmp")
-    tmp.write_text(text, encoding=encoding)
-    os.replace(tmp, path)
+    try:
+        tmp.write_text(text, encoding=encoding)
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)   # never leave a copy of the keys lying beside the real file
+        raise
