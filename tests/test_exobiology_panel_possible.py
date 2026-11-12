@@ -5,7 +5,8 @@
 import sys
 from types import SimpleNamespace
 
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtGui import QTextDocumentFragment
+from PyQt6.QtWidgets import QApplication, QLabel
 
 from edc.core.exo_predictor import BodyPrediction
 from edc.ui.panels.exobiology_panel import ExobiologyPanel, _row_sort_key
@@ -26,10 +27,16 @@ def _state(bodies, exo=None):
     )
 
 
+def _cards(p, html=False):
+    """Every body card's text, one label per line, card header first."""
+    return "\n".join(lbl.text() if html else QTextDocumentFragment.fromHtml(lbl.text()).toPlainText()
+                     for lbl in p._cards_widget.findChildren(QLabel))
+
+
 def _text(state, preds, canonn_poi=None):
     p = ExobiologyPanel()
     p.refresh(state, SimpleNamespace(exo_high_value_m=2), VALUES, canonn_poi=canonn_poi, exo_predictions=preds)
-    return p.exo_display.toPlainText()
+    return _cards(p)
 
 
 def _pred(possible, up_to):
@@ -49,9 +56,9 @@ def test_body_header_shows_total_once_dimmed():
     preds = {"Sys 1": _pred({"Bacterium": [("Bacterium Aurasus", 1_000_000)]}, 20_000_000)}
     p = ExobiologyPanel()
     p.refresh(st, SimpleNamespace(exo_high_value_m=2), VALUES, exo_predictions=preds)
-    t = p.exo_display.toPlainText()
+    t = _cards(p)
     assert "up to 20.0M" in t.splitlines()[0] and t.count("up to 20.0M") == 1
-    assert "#888888" in p.exo_display.toHtml().lower()
+    assert "#888888" in _cards(p, html=True).lower()
 
 
 def test_body_header_shows_total_after_dss_and_with_canonn_hint():
@@ -117,7 +124,7 @@ def test_codex_hint_keeps_genus_max_not_fit_top():
     preds = {"Sys 1": _pred({"Bacterium": [("Bacterium Aurasus", 1)]}, 1)}
     p = ExobiologyPanel()
     p.refresh(st, SimpleNamespace(exo_high_value_m=1), VALUES, exo_predictions=preds)
-    assert "possible:" not in p.exo_display.toPlainText()
+    assert "possible:" not in _cards(p)
     assert "1 high-value" in p.exo_action.text()
 
 
@@ -149,7 +156,7 @@ def test_sighted_after_dss_is_dim_not_gold():
     p = ExobiologyPanel()
     p.refresh(st, SimpleNamespace(exo_high_value_m=2), VALUES,
               exo_predictions={"Sys 1": BodyPrediction({}, 1_000_000, known=SIGHTED)})
-    h = p.exo_display.toHtml().lower()
+    h = _cards(p, html=True).lower()
     assert "#ffd93d" not in h and "#888888" in h
 
 

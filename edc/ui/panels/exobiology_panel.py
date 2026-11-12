@@ -8,7 +8,6 @@ from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QLabel,
-    QTextEdit,
     QScrollArea,
     QFrame,
 )
@@ -85,41 +84,41 @@ class ExobiologyPanel(QWidget):
         content_l.setAlignment(Qt.AlignmentFlag.AlignTop)
         scroll.setWidget(content)
 
-        # ── Exobiology display card ───────────────────────────────────────
-        exo_frame = QFrame()
-        exo_frame.setStyleSheet(
-            "QFrame { background: #0d1a0d; border: 1px solid #1e3a1e;"
-            "border-radius: 5px; }"
+        # ── Section label + one card per body (same layout as Exploration) ─
+        self._bodies_label = QLabel("BIOLOGICAL CONTACTS")
+        self._bodies_label.setStyleSheet(
+            "color: #4da3ff; font-size:12px; font-weight: bold;"
+            "letter-spacing: 1px; padding: 4px 0px 2px 2px;"
         )
-        exo_frame_l = QVBoxLayout(exo_frame)
-        exo_frame_l.setContentsMargins(8, 6, 8, 6)
-        exo_frame_l.setSpacing(2)
+        content_l.addWidget(self._bodies_label)
 
-        exo_hdr = QLabel("BIOLOGICAL CONTACTS")
-        exo_hdr.setStyleSheet(
-            "color: #4da3ff; font-size:12px; font-weight: bold; "
-            "letter-spacing: 1px; background: transparent; border: none;"
-        )
-        exo_frame_l.addWidget(exo_hdr)
+        self._cards_widget = QWidget()
+        self._cards_widget.setStyleSheet("background: transparent;")
+        self._cards_layout = QVBoxLayout(self._cards_widget)
+        self._cards_layout.setSpacing(5)
+        self._cards_layout.setContentsMargins(0, 0, 0, 0)
+        content_l.addWidget(self._cards_widget)
+        self._body_cards: dict = {}   # body -> (card, the signature that built it)
 
-        self.exo_display = QTextEdit()
-        self.exo_display.setReadOnly(True)
-        self.exo_display.setMinimumHeight(120)
-        self.exo_display.setStyleSheet(
-            "QTextEdit { background: transparent; border: none; }"
-        )
-        exo_frame_l.addWidget(self.exo_display)
-
-        content_l.addWidget(exo_frame)
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        try:
-            self.exo_display.document().setTextWidth(
-                self.exo_display.viewport().width()
+    def _build_body_card(self, head, lines):
+        """One body's card: name (+ predicted total) on top, one line per genus."""
+        card = QFrame()
+        card.setStyleSheet("QFrame { background: #0a1a0a; border: 1px solid #6BCB77; border-radius: 5px; }")
+        card_l = QVBoxLayout(card)
+        card_l.setContentsMargins(10, 7, 10, 7)
+        card_l.setSpacing(4)
+        for html, is_active in [(head, False)] + list(lines):
+            lbl = QLabel(html)
+            lbl.setTextFormat(Qt.TextFormat.RichText)
+            lbl.setWordWrap(True)
+            lbl.setStyleSheet(
+                # the genus being sampled right now stands out
+                "background: #1a3a5c; border: none; border-left: 3px solid #4D96FF;"
+                "border-radius: 4px; padding: 3px 6px;"
+                if is_active else "background: transparent; border: none;"
             )
-        except Exception:
-            pass
+            card_l.addWidget(lbl)
+        return card
 
     def _norm_text(self, v):
         try:
@@ -192,7 +191,10 @@ class ExobiologyPanel(QWidget):
                 break
 
         if not state.exo and not has_bio_targets:
-            self.exo_display.setHtml("")
+            for card, _sig in self._body_cards.values():
+                card.deleteLater()
+            self._body_cards.clear()
+            self._bodies_label.setVisible(False)
             self.exo_action.setText(
                 "🔬 Exobiology: no biological signals detected "
                 "in this system yet."
@@ -203,6 +205,7 @@ class ExobiologyPanel(QWidget):
             )
             return
 
+        self._bodies_label.setVisible(True)
         rows = []
         try:
             exo_m = int(getattr(cfg, "exo_high_value_m", 2) or 2)
@@ -740,28 +743,15 @@ class ExobiologyPanel(QWidget):
                 "&", "&amp;"
             ).replace("<", "&lt;").replace(">", "&gt;")
 
-        html = []
-        html.append(
-            '<style>'
-            '.bh { color: #4D96FF; font-weight: 700; '
-            'font-size: 13px; margin-top: 10px; '
-            'border-bottom: 1px solid #1e3a5a; padding-bottom: 3px; }'
-            '.gr { margin-left: 12px; margin-top: 5px; padding: 2px 4px; }'
-            '.st { font-weight: 700; }'
-            '.dm { color: #888888; }'
-            '</style>'
-        )
-
+        DIM = "color:#888888;"
+        seen_bodies = set()
         for body_txt in bodies_order:
             entries = bodies_data[body_txt]
             up_to = up_to_by_body.get(body_txt, 0)
-            total = (
-                f' &nbsp;<span style="color:#888888;font-weight:400;">up to {up_to / 1e6:.1f}M</span>'
-                if up_to > 0 else ""
-            )
-            html.append(
-                f'<div class="bh">🪐 {_esc(body_txt)}{total}</div>'
-            )
+            head = f'<span style="color:#9fe3a9;font-weight:700;">{_esc(body_txt)}</span>'
+            if up_to > 0:
+                head += f' &nbsp;<span style="{DIM}">up to {up_to / 1e6:.1f}M</span>'
+            lines = []
             for e in entries:
                 sc = _status_color(e["status"])
                 is_active = (
@@ -769,19 +759,8 @@ class ExobiologyPanel(QWidget):
                     and e["samples"] > 0
                     and e["status"] != "COMPLETE"
                 )
-                if is_active:
-                    line = (
-                        '<div class="gr" style="'
-                        'background-color:#1a3a5c;'
-                        'border-left:3px solid #4D96FF;'
-                        'padding:4px 8px;'
-                        'border-radius:4px;'
-                        'margin-top:4px;">'
-                    )
-                else:
-                    line = '<div class="gr">'
-                line += (
-                    f'<span class="st" style="color:{sc};">'
+                line = (
+                    f'<span style="color:{sc};font-weight:700;">'
                     f'{_esc(e["status"])}</span> '
                     f'<b>{_esc(e["genus"])}</b>'
                 )
@@ -789,18 +768,18 @@ class ExobiologyPanel(QWidget):
                 if e["species"]:
                     if e["species"].startswith(("possible:", "sighted:")):
                         line += (
-                            f' — <span style="color:#888888;">'
+                            f' — <span style="{DIM}">'
                             f'{_esc(e["species"])}</span>'
                         )
                     else:
                         line += f' — {_esc(e["species"])}'
                 if e["variant"]:
                     line += (
-                        f' <span class="dm">'
+                        f' <span style="{DIM}">'
                         f'({_esc(e["variant"])})</span>'
                     )
                 line += (
-                    f' &nbsp;<span class="dm">'
+                    f' &nbsp;<span style="{DIM}">'
                     f'{_esc(e["progress"])}</span>'
                 )
                 if e["base"]:
@@ -819,10 +798,24 @@ class ExobiologyPanel(QWidget):
                         f'font-weight:700;">'
                         f'CCR:{_esc(e["ccr"])}</span>'
                     )
-                line += '</div>'
-                html.append(line)
+                lines.append((line, is_active))
 
-        self.exo_display.setHtml("".join(html))
+            # same reuse as the Exploration body cards: an unchanged card is only
+            # repositioned, never rebuilt, so it does not flicker on refresh
+            signature = (head, tuple(lines))
+            existing = self._body_cards.get(body_txt)
+            if existing is not None and existing[1] == signature:
+                card = existing[0]
+            else:
+                if existing is not None:
+                    existing[0].deleteLater()
+                card = self._build_body_card(head, lines)
+                self._body_cards[body_txt] = (card, signature)
+            self._cards_layout.addWidget(card)
+            seen_bodies.add(body_txt)
+
+        for stale_body in set(self._body_cards) - seen_bodies:
+            self._body_cards.pop(stale_body)[0].deleteLater()
 
         if has_bio_targets:
             self.exo_action.setText(
