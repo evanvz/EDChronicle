@@ -556,9 +556,13 @@ class _LocalStationsWorker(QObject):
 
 
 class _OverviewLoadWorker(QObject):
-    """Loads get_player_faction_overview() off the UI thread. It's ~95ms
-    alone, but measured 526-584ms in the running app (waiting on EDDN
-    writes), every 20 minutes -- a visible UI freeze (2026-10-01 log)."""
+    """Loads get_player_faction_overview() off the UI thread. It's ~110ms
+    alone, but measured 512-937ms in the running app, every 20 minutes -- a
+    visible UI freeze when it ran on the UI thread (2026-10-01 log).
+    The extra time is this thread waiting its turn behind a busy UI thread
+    (Python runs one thread at a time), not the database: a test with a busy
+    main thread and no other DB user gave 512-650ms (2026-11-13). So only a
+    load over 2s, which no busy UI thread explains, is logged."""
     finished = pyqtSignal(object)  # overview dict or None
 
     def __init__(self, db_path):
@@ -575,7 +579,7 @@ class _OverviewLoadWorker(QObject):
             _t0 = time.perf_counter()
             overview = Repository(db).get_player_faction_overview()
             _elapsed_ms = (time.perf_counter() - _t0) * 1000
-            if _elapsed_ms > 500:
+            if _elapsed_ms > 2000:
                 log.warning("get_player_faction_overview() took %.0fms in the background", _elapsed_ms)
         except Exception:
             log.exception("Failed to load player faction overview")

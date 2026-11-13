@@ -90,7 +90,7 @@ class CanonnClient:
     def get_nearest_challenge(self, cmdr: str, x: float, y: float, z: float) -> Tuple[Dict[str, Any], str]:
         """Returns ({system, english_name, distance}, error). error is "" on success."""
         if not cmdr:
-            return {}, "No commander name"
+            return {}, ""  # startup, before the journal names the commander; refetched after replay
 
         params = {"cmdr": cmdr, "x": x, "y": y, "z": z}
         try:
