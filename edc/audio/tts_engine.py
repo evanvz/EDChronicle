@@ -222,7 +222,6 @@ class TTSWorker(QObject):
         self._running          = True
         self._interrupt        = threading.Event()
         self._loop             = None  # created once in run()
-        self._playback_device  = None  # current miniaudio PlaybackDevice
         self._output_device_name: str | None = None
 
     def set_output_device(self, device_name: str | None):
@@ -231,17 +230,10 @@ class TTSWorker(QObject):
     def interrupt(self):
         """Stop the currently playing phrase so a higher-priority one can play."""
         self._interrupt.set()
-        device = self._playback_device
-        if device is not None:
-            try:
-                device.stop()
-            except Exception:
-                pass
 
     def _speak(self, text: str, voice: str | None = None, vol_scale: float = 1.0):
         import io
         import numpy as np
-        import miniaudio
         from scipy.io import wavfile
 
         voice = voice or self._voice_name
@@ -269,45 +261,10 @@ class TTSWorker(QObject):
             data = _ship_computer_fx(data, sr)
             pcm = (np.clip(data * float(self._volume) * float(vol_scale), -1.0, 1.0) * 32767).astype("int16").tobytes()
 
-            interrupt = self._interrupt
-            done = threading.Event()
-
-            def _gen():
-                pos = 0
-                try:
-                    num_frames = yield b""
-                    while pos < len(pcm):
-                        if interrupt.is_set():
-                            return
-                        end = min(pos + num_frames * 2, len(pcm))  # SIGNED16 mono = 2 bytes/frame
-                        chunk = pcm[pos:end]
-                        pos = end
-                        num_frames = yield chunk
-                except Exception:
-                    pass
-                finally:
-                    done.set()
-
-            from edc.audio.audio_devices import resolve_playback_device_id
-            device = miniaudio.PlaybackDevice(
-                output_format=miniaudio.SampleFormat.SIGNED16,
-                nchannels=1,
-                sample_rate=sr,
-                buffersize_msec=100,
-                device_id=resolve_playback_device_id(self._output_device_name),
-            )
-            self._playback_device = device
-            gen = _gen()
-            next(gen)
-            device.start(gen)
+            from edc.audio.play_proc import play
             log.info("TTS _speak: device started sr=%d pcm=%d bytes", sr, len(pcm))
-            try:
-                while not done.is_set() and not interrupt.is_set():
-                    done.wait(timeout=0.1)
-            finally:
-                device.stop()
-                self._playback_device = None
-            log.info("TTS _speak: device stopped")
+            if play(pcm, "SIGNED16", 1, sr, self._output_device_name, self._interrupt):
+                log.info("TTS _speak: device stopped")
         except Exception as e:
             log.error("TTS alert speak error: %s", e, exc_info=True)
 
@@ -378,7 +335,6 @@ class CommsWorker(QObject):
     def _speak_one(self, text: str, voice_id: str | None):
         import random as _random
         from edc.audio._comms_edge_proc import _dsp_and_play
-        from edc.audio.audio_devices import resolve_playback_device_id
 
         pan = _random.uniform(-0.7, 0.7)
         voice = voice_id or "en-US-GuyNeural"
@@ -395,8 +351,7 @@ class CommsWorker(QObject):
         self._interrupt.clear()
         wav_bytes, sr = _synth_wav(self._loop, text, voice)
         if wav_bytes and not self._interrupt.is_set():
-            device_id = resolve_playback_device_id(self._output_device_name)
-            _dsp_and_play(wav_bytes, sr, self._volume, pan, self._interrupt, device_id)
+            _dsp_and_play(wav_bytes, sr, self._volume, pan, self._interrupt, self._output_device_name)
 
     @pyqtSlot()
     def run(self):
@@ -483,6 +438,8 @@ class TTSEngine:
         if self._thread and self._thread.isRunning():
             return
         threading.Thread(target=_preload_kokoro, name="kokoro-preload", daemon=True).start()
+        from edc.audio.play_proc import warm
+        warm()
         voice_name = _ALERT_VOICE_POOL[self._voice_index] if self._voice_index < len(_ALERT_VOICE_POOL) else _ALERT_VOICE_POOL[0]
         self._worker = TTSWorker(
             self._queue, self._rate, self._volume,

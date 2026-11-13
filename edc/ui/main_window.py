@@ -5643,10 +5643,8 @@ class MainWindow(QMainWindow):
         def _worker():
             try:
                 import numpy as np
-                import miniaudio
-                import threading as _threading
                 from scipy.signal import butter, sosfilt
-                from edc.audio.audio_devices import resolve_playback_device_id
+                from edc.audio.play_proc import play
 
                 sr  = 22050
                 vol = self._feedback_volume()
@@ -5683,36 +5681,7 @@ class MainWindow(QMainWindow):
 
                 pcm = (np.clip(click, -1.0, 1.0) * 32767).astype(np.int16).tobytes()
 
-                done = _threading.Event()
-
-                def _gen():
-                    pos = 0
-                    try:
-                        num_frames = yield b""
-                        while pos < len(pcm):
-                            chunk = pcm[pos:pos + num_frames * 2]
-                            pos += num_frames * 2
-                            num_frames = yield chunk
-                    except Exception:
-                        pass
-                    finally:
-                        done.set()
-
-                device = miniaudio.PlaybackDevice(
-                    output_format=miniaudio.SampleFormat.SIGNED16,
-                    nchannels=1,
-                    sample_rate=sr,
-                    buffersize_msec=40,
-                    device_id=resolve_playback_device_id(
-                        self.voice_commands_panel.output_device()),
-                )
-                gen = _gen()
-                next(gen)
-                device.start(gen)
-                try:
-                    done.wait(timeout=len(click) / sr + 0.5)
-                finally:
-                    device.stop()
+                play(pcm, "SIGNED16", 1, sr, self.voice_commands_panel.output_device(), buffer_ms=40)
             except Exception:
                 log.exception("_play_radio_click failed")
 

@@ -141,10 +141,9 @@ def _configure_audio_session():
         time.sleep(0.05)
 
 
-def _dsp_and_play(pcm_bytes: bytes, sample_rate: int, volume: float, pan: float, interrupt=None, device_id=None):
-    import threading as _threading
+def _dsp_and_play(pcm_bytes: bytes, sample_rate: int, volume: float, pan: float, interrupt=None, device_name=None):
     import numpy as np
-    import miniaudio
+    from edc.audio.play_proc import play
     from scipy.io import wavfile
     from scipy.signal import butter, sosfilt
 
@@ -200,40 +199,5 @@ def _dsp_and_play(pcm_bytes: bytes, sample_rate: int, volume: float, pan: float,
 
     pcm = full.astype("float32").tobytes()
 
-    done = _threading.Event()
-
-    def _gen():
-        pos = 0
-        try:
-            num_frames = yield b""
-            while pos < len(pcm):
-                if interrupt is not None and interrupt.is_set():
-                    return
-                end = min(pos + num_frames * 8, len(pcm))  # FLOAT32 stereo = 8 bytes/frame
-                chunk = pcm[pos:end]
-                pos = end
-                num_frames = yield chunk
-        except Exception:
-            pass
-        finally:
-            done.set()
-
-    device = miniaudio.PlaybackDevice(
-        output_format=miniaudio.SampleFormat.FLOAT32,
-        nchannels=2,
-        sample_rate=sr,
-        buffersize_msec=100,
-        device_id=device_id,
-    )
-    gen = _gen()
-    next(gen)
-    device.start(gen)
-    _configure_audio_session()
-    try:
-        while not done.is_set():
-            if interrupt is not None and interrupt.is_set():
-                break
-            done.wait(timeout=0.1)
-    finally:
-        device.stop()
+    play(pcm, "FLOAT32", 2, sr, device_name, interrupt, unduck=True)
 

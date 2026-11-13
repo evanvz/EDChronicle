@@ -4,6 +4,7 @@
 
 import argparse
 import ctypes
+import os
 import sys
 import traceback
 from PyQt6.QtCore import QTimer
@@ -446,3 +447,8 @@ def run():
     splash.show()
 
     app.exec()
+    # A thread stuck inside a Windows call kept the closed app alive with no window for
+    # 6 minutes and blocked the Bluetooth earphones PC-wide (2026-11-12). Everything is
+    # saved in closeEvent, so end the process here whatever the threads are doing.
+    logging.shutdown()
+    os._exit(0)
