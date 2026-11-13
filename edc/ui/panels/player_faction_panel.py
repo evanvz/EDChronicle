@@ -561,8 +561,10 @@ class _OverviewLoadWorker(QObject):
     visible UI freeze when it ran on the UI thread (2026-10-01 log).
     The extra time is this thread waiting its turn behind a busy UI thread
     (Python runs one thread at a time), not the database: a test with a busy
-    main thread and no other DB user gave 512-650ms (2026-11-13). So only a
-    load over 2s, which no busy UI thread explains, is logged."""
+    main thread and no other DB user gave 512-650ms (2026-11-13). At startup
+    it took 3056ms next to the first voice synthesis, with 0ms waiting on the
+    database and 656ms of its own CPU. So the warning measures this thread's
+    own CPU time (188ms when nothing else runs), which waiting cannot inflate."""
     finished = pyqtSignal(object)  # overview dict or None
 
     def __init__(self, db_path):
@@ -576,11 +578,11 @@ class _OverviewLoadWorker(QObject):
         overview = None
         db = Database(self._db_path)
         try:
-            _t0 = time.perf_counter()
+            _cpu0 = time.thread_time()
             overview = Repository(db).get_player_faction_overview()
-            _elapsed_ms = (time.perf_counter() - _t0) * 1000
-            if _elapsed_ms > 2000:
-                log.warning("get_player_faction_overview() took %.0fms in the background", _elapsed_ms)
+            _cpu_ms = (time.thread_time() - _cpu0) * 1000
+            if _cpu_ms > 1000:
+                log.warning("get_player_faction_overview() used %.0fms of CPU in the background", _cpu_ms)
         except Exception:
             log.exception("Failed to load player faction overview")
         finally:
