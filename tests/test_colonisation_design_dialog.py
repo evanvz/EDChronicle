@@ -471,7 +471,7 @@ def test_typed_plan_with_repo_has_step_and_status_selectors(monkeypatch, tmp_pat
     assert d._table.item(0, 0).text() == "1" and d._table.item(1, 0).text() == "2"
     prim, step = _cell(d, 0, 1), _cell(d, 1, 1)
     assert not prim.isEnabled() and prim.currentData() == "coriolis_starport"
-    assert step.isEnabled() and step.currentText() == _titles(d)[1]
+    assert step.isEnabled() and step.currentText().startswith(_titles(d)[1])  # settlements add layout names
     loc = fac[step.currentData()]["location"]
     assert all(fac[step.itemData(i)]["location"] == loc for i in range(step.count()))
     st = _cell(d, 1, 3)

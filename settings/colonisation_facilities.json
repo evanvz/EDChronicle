@@ -1242,7 +1242,7 @@
    }
   },
   "mining_settlement_small": {
-   "name": "Mining Settlement: Small",
+   "name": "Extraction Settlement: Small",
    "rc_types": [
     "ourea"
    ],
@@ -1286,7 +1286,7 @@
    }
   },
   "mining_settlement_medium": {
-   "name": "Mining Settlement: Medium",
+   "name": "Extraction Settlement: Medium",
    "rc_types": [
     "mantus",
     "orcus"
@@ -1327,7 +1327,7 @@
    }
   },
   "mining_settlement_large": {
-   "name": "Mining Settlement: Large",
+   "name": "Extraction Settlement: Large",
    "rc_types": [
     "aerecura",
     "erebus"
@@ -1644,7 +1644,7 @@
    }
   },
   "bio_settlement_small": {
-   "name": "Bio Settlement: Small",
+   "name": "Research Bio Settlement: Small",
    "rc_types": [
     "pheobe"
    ],
@@ -1684,7 +1684,7 @@
    }
   },
   "bio_settlement_medium": {
-   "name": "Bio Settlement: Medium",
+   "name": "Research Bio Settlement: Medium",
    "rc_types": [
     "asteria",
     "caerus"
@@ -1729,7 +1729,7 @@
    }
   },
   "bio_settlement_large": {
-   "name": "Bio Settlement: Large",
+   "name": "Research Bio Settlement: Large",
    "rc_types": [
     "chronos"
    ],
@@ -1773,7 +1773,7 @@
    }
   },
   "tourist_settlement_small": {
-   "name": "Tourist Settlement: Small",
+   "name": "Tourism Settlement: Small",
    "rc_types": [
     "aergia"
    ],
@@ -1813,7 +1813,7 @@
    }
   },
   "tourist_settlement_medium": {
-   "name": "Tourist Settlement: Medium",
+   "name": "Tourism Settlement: Medium",
    "rc_types": [
     "comus",
     "gelos",
@@ -1859,7 +1859,7 @@
    }
   },
   "tourist_settlement_large": {
-   "name": "Tourist Settlement: Large",
+   "name": "Tourism Settlement: Large",
    "rc_types": [
     "fufluns"
    ],

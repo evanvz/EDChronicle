@@ -137,7 +137,9 @@ def main():
     out = {}
     for r in rc:
         n = r["displayName2"]
-        rec = {"name": n, "rc_types": r["subTypes"] + r.get("altTypes", []), "tier": r["tier"],
+        # The game's build menu says Extraction / Research Bio / Tourism where Raven says Mining / Bio / Tourist (Evan, in-game 2026-11-14)
+        game = n.replace("Mining Settlement", "Extraction Settlement").replace("Bio Settlement", "Research Bio Settlement").replace("Tourist Settlement", "Tourism Settlement")
+        rec = {"name": game, "rc_types": r["subTypes"] + r.get("altTypes", []), "tier": r["tier"],
                "location": "orbital" if r["orbital"] else "surface", "economy": None, "requires": [],
                "cp_cost": {"t2": 0, "t3": 0}, "cp_reward": {"t2": 0, "t3": 0}}
         rec["cp_cost"]["t%d" % r["needs"]["tier"]] = r["needs"]["count"] if r["needs"]["tier"] else 0

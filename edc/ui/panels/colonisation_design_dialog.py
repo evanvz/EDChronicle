@@ -509,7 +509,9 @@ class ColonisationDesignDialog(_WorkerThreads, QDialog):
                 step.addItem("left empty", None)
             for k, f in fac.items():
                 if f["location"] == s["location"]:
-                    step.addItem(f["name"], k)
+                    # settlements: the game makes you pick a layout by name (Mantus, Orcus), same facility
+                    layouts = f" ({', '.join(x.title() for x in f['rc_types'])})" if "_settlement_" in k else ""
+                    step.addItem(f["name"] + layouts, k)
             step.setCurrentIndex(max(step.findData(s["facility"]), 0) if s["facility"] else 0)
             step.setEnabled(s.get("n") != 1 or bool(s.get("fixed")))  # an unstored primary follows Solo/Group
             step.currentIndexChanged.connect(lambda _, s=s, c=step: self._save_step(s, facility=c.currentData()))
