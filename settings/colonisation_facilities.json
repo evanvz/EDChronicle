@@ -950,7 +950,7 @@
    }
   },
   "civilian_surface_outpost": {
-   "name": "Civilian Surface Outpost",
+   "name": "Planetary Port > Outpost > Civilian",
    "rc_types": [
     "atropos",
     "clotho",
@@ -991,7 +991,7 @@
    }
   },
   "industrial_surface_outpost": {
-   "name": "Industrial Surface Outpost",
+   "name": "Planetary Port > Outpost > Industrial",
    "rc_types": [
     "bia",
     "hephaestus",
@@ -1036,7 +1036,7 @@
    }
   },
   "scientific_surface_outpost": {
-   "name": "Scientific Surface Outpost",
+   "name": "Planetary Port > Outpost > Scientific",
    "rc_types": [
     "ananke",
     "antevorta",
@@ -1077,7 +1077,7 @@
    }
   },
   "large_planetary_port": {
-   "name": "Large Planetary Port",
+   "name": "Planetary Port > Port",
    "rc_types": [
     "aphrodite",
     "hera",
@@ -1116,7 +1116,7 @@
    }
   },
   "agriculture_settlement_small": {
-   "name": "Agriculture Settlement: Small",
+   "name": "Settlement > Agriculture > Small",
    "rc_types": [
     "consus"
    ],
@@ -1156,7 +1156,7 @@
    }
   },
   "agriculture_settlement_medium": {
-   "name": "Agriculture Settlement: Medium",
+   "name": "Settlement > Agriculture > Medium",
    "rc_types": [
     "annona",
     "picumnus"
@@ -1201,7 +1201,7 @@
    }
   },
   "agriculture_settlement_large": {
-   "name": "Agriculture Settlement: Large",
+   "name": "Settlement > Agriculture > Large",
    "rc_types": [
     "ceres",
     "fornax"
@@ -1242,7 +1242,7 @@
    }
   },
   "mining_settlement_small": {
-   "name": "Extraction Settlement: Small",
+   "name": "Settlement > Extraction > Small",
    "rc_types": [
     "ourea"
    ],
@@ -1286,7 +1286,7 @@
    }
   },
   "mining_settlement_medium": {
-   "name": "Extraction Settlement: Medium",
+   "name": "Settlement > Extraction > Medium",
    "rc_types": [
     "mantus",
     "orcus"
@@ -1327,7 +1327,7 @@
    }
   },
   "mining_settlement_large": {
-   "name": "Extraction Settlement: Large",
+   "name": "Settlement > Extraction > Large",
    "rc_types": [
     "aerecura",
     "erebus"
@@ -1376,7 +1376,7 @@
    }
   },
   "industrial_settlement_small": {
-   "name": "Industrial Settlement: Small",
+   "name": "Settlement > Industrial > Small",
    "rc_types": [
     "fontus"
    ],
@@ -1420,7 +1420,7 @@
    }
   },
   "industrial_settlement_medium": {
-   "name": "Industrial Settlement: Medium",
+   "name": "Settlement > Industrial > Medium",
    "rc_types": [
     "meteope",
     "minthe",
@@ -1466,7 +1466,7 @@
    }
   },
   "industrial_settlement_large": {
-   "name": "Industrial Settlement: Large",
+   "name": "Settlement > Industrial > Large",
    "rc_types": [
     "gaea"
    ],
@@ -1514,7 +1514,7 @@
    }
   },
   "military_settlement_small": {
-   "name": "Military Settlement: Small",
+   "name": "Settlement > Military > Small",
    "rc_types": [
     "ioke"
    ],
@@ -1554,7 +1554,7 @@
    }
   },
   "military_settlement_medium": {
-   "name": "Military Settlement: Medium",
+   "name": "Settlement > Military > Medium",
    "rc_types": [
     "bellona",
     "enyo",
@@ -1596,7 +1596,7 @@
    }
   },
   "military_settlement_large": {
-   "name": "Military Settlement: Large",
+   "name": "Settlement > Military > Large",
    "rc_types": [
     "minerva"
    ],
@@ -1644,7 +1644,7 @@
    }
   },
   "bio_settlement_small": {
-   "name": "Research Bio Settlement: Small",
+   "name": "Settlement > Research Bio > Small",
    "rc_types": [
     "pheobe"
    ],
@@ -1684,7 +1684,7 @@
    }
   },
   "bio_settlement_medium": {
-   "name": "Research Bio Settlement: Medium",
+   "name": "Settlement > Research Bio > Medium",
    "rc_types": [
     "asteria",
     "caerus"
@@ -1729,7 +1729,7 @@
    }
   },
   "bio_settlement_large": {
-   "name": "Research Bio Settlement: Large",
+   "name": "Settlement > Research Bio > Large",
    "rc_types": [
     "chronos"
    ],
@@ -1773,7 +1773,7 @@
    }
   },
   "tourist_settlement_small": {
-   "name": "Tourism Settlement: Small",
+   "name": "Settlement > Tourism > Small",
    "rc_types": [
     "aergia"
    ],
@@ -1813,7 +1813,7 @@
    }
   },
   "tourist_settlement_medium": {
-   "name": "Tourism Settlement: Medium",
+   "name": "Settlement > Tourism > Medium",
    "rc_types": [
     "comus",
     "gelos",
@@ -1859,7 +1859,7 @@
    }
   },
   "tourist_settlement_large": {
-   "name": "Tourism Settlement: Large",
+   "name": "Settlement > Tourism > Large",
    "rc_types": [
     "fufluns"
    ],
@@ -1903,7 +1903,7 @@
    }
   },
   "extraction_hub": {
-   "name": "Extraction Hub",
+   "name": "Hub > Extraction",
    "rc_types": [
     "tartarus"
    ],
@@ -1943,7 +1943,7 @@
    }
   },
   "civilian_hub": {
-   "name": "Civilian Hub",
+   "name": "Hub > Civilian",
    "rc_types": [
     "aegle"
    ],
@@ -1983,7 +1983,7 @@
    }
   },
   "exploration_hub": {
-   "name": "Exploration Hub",
+   "name": "Hub > Exploration",
    "rc_types": [
     "tellus_e"
    ],
@@ -2025,7 +2025,7 @@
    }
   },
   "outpost_hub": {
-   "name": "Outpost Hub",
+   "name": "Hub > Outpost",
    "rc_types": [
     "io"
    ],
@@ -2063,7 +2063,7 @@
    }
   },
   "scientific_hub": {
-   "name": "Scientific Hub",
+   "name": "Hub > Scientific",
    "rc_types": [
     "athena",
     "caelus"
@@ -2095,7 +2095,7 @@
    "wiki_differs": {}
   },
   "military_hub": {
-   "name": "Military Hub",
+   "name": "Hub > Military",
    "rc_types": [
     "alala",
     "ares"
@@ -2129,7 +2129,7 @@
    "wiki_differs": {}
   },
   "refinery_hub": {
-   "name": "Refinery Hub",
+   "name": "Hub > Refinery",
    "rc_types": [
     "silenus"
    ],
@@ -2160,7 +2160,7 @@
    "wiki_differs": {}
   },
   "high_tech_hub": {
-   "name": "High Tech Hub",
+   "name": "Hub > High Tech",
    "rc_types": [
     "janus"
    ],
@@ -2196,7 +2196,7 @@
    }
   },
   "industrial_hub": {
-   "name": "Industrial Hub",
+   "name": "Hub > Industrial",
    "rc_types": [
     "eunostus",
     "molae",

@@ -58,6 +58,25 @@ def key(name):
     return ALIAS.get(name) or re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
 
 
+def game_name(name, surface):
+    """Raven Colonial's facility name, reworded to the click path of the game's surface build menu:
+    Planetary Port > Outpost | Port, Settlement > category > size, Hub > kind (Evan, in-game 2026-11-14).
+    The game says Extraction / Research Bio / Tourism where Raven says Mining / Bio / Tourist."""
+    if not surface:
+        return name
+    m = re.fullmatch(r"(\w+) Surface Outpost", name)
+    if m:
+        return f"Planetary Port > Outpost > {m[1]}"
+    if name == "Large Planetary Port":
+        return "Planetary Port > Port"
+    m = re.fullmatch(r"(\w+) Settlement: (\w+)", name)
+    if m:
+        kind = {"Mining": "Extraction", "Bio": "Research Bio", "Tourist": "Tourism"}.get(m[1], m[1])
+        return f"Settlement > {kind} > {m[2]}"
+    m = re.fullmatch(r"(.+) Hub", name)
+    return f"Hub > {m[1]}" if m else name
+
+
 def fetch_rc():
     html = requests.get(RC, headers=UA, timeout=30).text
     js = re.search(r"/static/js/main\.\w+\.js", html).group(0)
@@ -137,9 +156,7 @@ def main():
     out = {}
     for r in rc:
         n = r["displayName2"]
-        # The game's build menu says Extraction / Research Bio / Tourism where Raven says Mining / Bio / Tourist (Evan, in-game 2026-11-14)
-        game = n.replace("Mining Settlement", "Extraction Settlement").replace("Bio Settlement", "Research Bio Settlement").replace("Tourist Settlement", "Tourism Settlement")
-        rec = {"name": game, "rc_types": r["subTypes"] + r.get("altTypes", []), "tier": r["tier"],
+        rec = {"name": game_name(n, not r["orbital"]), "rc_types": r["subTypes"] + r.get("altTypes", []), "tier": r["tier"],
                "location": "orbital" if r["orbital"] else "surface", "economy": None, "requires": [],
                "cp_cost": {"t2": 0, "t3": 0}, "cp_reward": {"t2": 0, "t3": 0}}
         rec["cp_cost"]["t%d" % r["needs"]["tier"]] = r["needs"]["count"] if r["needs"]["tier"] else 0

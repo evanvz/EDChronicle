@@ -12,7 +12,7 @@ def test_known_values():
 
 def test_every_rc_type_maps():
     assert by_rc_type("dual_truss")["name"] == "Coriolis Starport"
-    assert by_rc_type("silenus")["name"] == "Refinery Hub"
+    assert by_rc_type("silenus")["name"] == "Hub > Refinery"
     assert by_rc_type("nope") is None
 
 
