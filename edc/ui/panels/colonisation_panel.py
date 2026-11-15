@@ -759,6 +759,7 @@ class _ColonisationDetailDialog(QDialog):
         self._depot = depot
         self._stations: Optional[dict] = None   # None until the background lookup returns
         self._sources_done = False
+        self._sources_shown = None               # what the where-to-buy list was last drawn from
 
         layout = QVBoxLayout(self)
         hdr_row = QHBoxLayout()
@@ -813,8 +814,9 @@ class _ColonisationDetailDialog(QDialog):
         layout.addLayout(trailblazer_row)
 
         table = self._table = QTableWidget()
-        table.setColumnCount(5)
-        table.setHorizontalHeaderLabels(["Commodity", "Required", "Provided", "Still Needed", ""])
+        table.setColumnCount(7)
+        table.setHorizontalHeaderLabels(
+            ["Commodity", "Required", "Provided", "Still Needed", "In Cargo", "To Buy", ""])
         table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         table.verticalHeader().setVisible(False)
@@ -827,7 +829,7 @@ class _ColonisationDetailDialog(QDialog):
         )
         h = table.horizontalHeader()
         h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        for c in (1, 2, 3, 4):
+        for c in (1, 2, 3, 4, 5, 6):
             h.setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
 
         layout.addWidget(table, 1)
@@ -893,24 +895,48 @@ class _ColonisationDetailDialog(QDialog):
         self._copy_trailblazer_btn.setEnabled(bool(self._trailblazer_system))
         self._render_sources()
 
+    def _key(self, name: str) -> str:
+        """Market symbol for a resource's in-game name ('Muon Imager' -> 'mutomimager')."""
+        cats = self._panel._commodity_categories
+        return (cats.symbol_for_name(name) if cats else None) or commodity_key(name)
+
+    def _in_cargo(self) -> Dict[str, int]:
+        """Tonnes of each commodity in the ship's hold, by market symbol."""
+        held: Dict[str, int] = {}
+        for c in getattr(self._panel._last_state, "cargo_inventory", None) or []:
+            if isinstance(c, dict) and isinstance(c.get("Count"), int):
+                key = commodity_key(c.get("Name") or "")
+                held[key] = held.get(key, 0) + c["Count"]
+        return held
+
     def _render_sources(self) -> None:
         tree = self._sources_tree
-        tree.clear()
-        cats = self._panel._commodity_categories
-        needs, names = {}, {}
+        held = self._in_cargo()
+        outstanding, needs, names = False, {}, {}
         for r in (self._depot.get("resources") or []):
             left = (r.get("required") or 0) - (r.get("provided") or 0)
             name = r.get("name") or ""
             if left > 0 and name:
-                key = (cats.symbol_for_name(name) if cats else None) or commodity_key(name)
-                needs[key], names[key] = left, name
-        if not needs:
-            self._sources_label.setText("WHERE TO BUY — nothing left to deliver")
-            return
+                outstanding = True
+                key = self._key(name)
+                if left > held.get(key, 0):     # what is in the hold does not need buying
+                    needs[key], names[key] = left - held.get(key, 0), name
 
         state = self._panel._last_state
         pads = self._panel._ship_pad_table
         min_pad = pads.pad_size_for(getattr(state, "ship", None)) if pads else None
+        docked_id = getattr(state, "current_market_id", None) if getattr(state, "station_name", None) else None
+        here = docked_supply(needs, getattr(state, "current_market_items", None) or []) if docked_id else []
+        # refresh() fires often; redrawing an unchanged list would drop the selected row.
+        shown = (needs, min_pad, docked_id, here, self._sources_done, id(self._stations))
+        if shown == self._sources_shown:
+            return
+        self._sources_shown = shown
+        tree.clear()
+        if not needs:
+            self._sources_label.setText("WHERE TO BUY — " + (
+                "everything still needed is in the cargo hold" if outstanding else "nothing left to deliver"))
+            return
         where = f"WHERE TO BUY — from {self._depot.get('system_name')}, " + (
             f"{_PAD_WORD[min_pad]} pad or bigger (current ship)" if min_pad
             else "any pad (current ship's pad size unknown)")
@@ -938,9 +964,10 @@ class _ColonisationDetailDialog(QDialog):
             tree.addTopLevelItem(top)
             top.setExpanded(True)
 
-        # Docked: the live market file beats the cached data.
-        here = docked_supply(needs, getattr(state, "current_market_items", None) or [])
-        if here and getattr(state, "station_name", None):
+        # Docked: the live market file beats the cached data, and the stops below
+        # then cover only what this station cannot supply.
+        stations = self._stations
+        if here:
             add(f"DOCKED HERE — {state.station_name}: buy now", here, "#6BCB77",
                 system=getattr(state, "current_market_system", None) or "")
 
@@ -951,7 +978,12 @@ class _ColonisationDetailDialog(QDialog):
             self._sources_label.setText("WHERE TO BUY — no coordinates known for this system yet")
             return
         self._sources_label.setText(where)
-        stops, unmet = plan_supply_stops(needs, self._stations, min_pad)
+        rest = dict(needs)
+        for key, qty, _stock in here:
+            rest[key] -= qty
+        rest = {k: q for k, q in rest.items() if q > 0}
+        stops, unmet = plan_supply_stops(
+            rest, {mid: s for mid, s in stations.items() if mid != docked_id}, min_pad)
         for n, s in enumerate(stops, 1):
             wanted = {key for key, _qty, _stock in s["items"]}
             oldest = min((u for name, (_p, _q, u) in s["buys"].items()
@@ -973,6 +1005,7 @@ class _ColonisationDetailDialog(QDialog):
         self._status_label.setText(status + self._dist_suffix)
         table = self._table
         table.clearContents()
+        held = self._in_cargo()
         # Only what's still outstanding; fully delivered commodities drop off.
         resources = [r for r in (depot.get("resources") or [])
                      if (r.get("required") or 0) > (r.get("provided") or 0)]
@@ -986,9 +1019,17 @@ class _ColonisationDetailDialog(QDialog):
             req_item = QTableWidgetItem(f"{required:,}")
             prov_item = QTableWidgetItem(f"{provided:,}")
             rem_item = QTableWidgetItem(f"{remaining:,}")
-            for it in (req_item, prov_item, rem_item):
+            in_cargo = held.get(self._key(r.get("name") or ""), 0)
+            to_buy = max(0, remaining - in_cargo)
+            cargo_item = QTableWidgetItem(f"{in_cargo:,}")
+            buy_item = QTableWidgetItem(f"{to_buy:,}")
+            for it in (req_item, prov_item, rem_item, cargo_item, buy_item):
                 it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             rem_item.setForeground(QColor("#FF6B6B"))
+            cargo_item.setForeground(QColor("#6BCB77" if in_cargo else "#888888"))
+            buy_item.setForeground(QColor("#FF6B6B" if to_buy else "#6BCB77"))
+            table.setItem(row, 4, cargo_item)
+            table.setItem(row, 5, buy_item)
 
             table.setItem(row, 0, name_item)
             table.setItem(row, 1, req_item)
@@ -999,7 +1040,7 @@ class _ColonisationDetailDialog(QDialog):
             btn.setStyleSheet(_BTN_STYLE)
             name = r.get("name") or ""
             btn.clicked.connect(lambda _checked=False, n=name: self._panel.buy_search_requested.emit(n))
-            table.setCellWidget(row, 4, btn)
+            table.setCellWidget(row, 6, btn)
 
     def _open_raven_for_station(self, system_address: int, market_id: int) -> None:
         self._panel._open_raven_dialog()
