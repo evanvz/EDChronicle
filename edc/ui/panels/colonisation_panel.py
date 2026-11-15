@@ -20,6 +20,7 @@ from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QComboBox, QCompleter,
     QTableWidget, QTableWidgetItem, QHeaderView, QFrame, QDialog, QApplication,
+    QTreeWidget, QTreeWidgetItem,
 )
 
 from edc.ui.style import (
@@ -31,7 +32,8 @@ from edc.ui.style import (
 from edc.core.spansh_client import SpanshClient
 from edc.core import raven_colonial
 from edc.core.colonisation_plan_status import own_systems
-from edc.ui.formatting import clean_token
+from edc.ui.formatting import clean_token, relative_time
+from edc.core.trade_routes import commodity_key, plan_supply_stops, docked_supply
 from edc.ui.style import bulk_table_fill as _bulk_fill
 
 log = logging.getLogger(__name__)
@@ -704,10 +706,48 @@ class _RavenColonialDialog(QDialog):
             QApplication.clipboard().setText(item.text())
 
 
+_SOURCE_RADIUS_LY = 150
+_PAD_WORD = {"S": "small", "M": "medium", "L": "large"}
+
+
+class _DepotSourcesWorker(QObject):
+    """Background lookup for one construction site: every market within
+    _SOURCE_RADIUS_LY of the construction system (local database, no network)
+    and the nearest Trailblazer ship. The Trailblazer query froze the window
+    for 2.7 s when it ran on the UI thread (log 2026-11-14 20:59)."""
+    finished = pyqtSignal(object, object)  # stations (None if the system has no coordinates), trailblazer
+
+    def __init__(self, db_path, system_name: str):
+        super().__init__()
+        self._db_path = db_path
+        self._system_name = system_name
+
+    def run(self):
+        from persistence.database import Database
+        from persistence.repository import Repository
+
+        stations, trailblazer = None, None
+        try:
+            db = Database(self._db_path)
+            try:
+                repo = Repository(db)
+                here = repo.get_system_coords_for_names([self._system_name]).get(self._system_name)
+                if here:
+                    trailblazer = repo.find_closest_trailblazer(here[0], here[1], here[2])
+                    stations = repo.get_market_snapshot_in_radius(here[0], here[1], here[2], _SOURCE_RADIUS_LY)
+            finally:
+                db.close()
+        except Exception:
+            log.exception("Source lookup failed for %s", self._system_name)
+        self.finished.emit(stations, trailblazer)
+
+
 class _ColonisationDetailDialog(QDialog):
     """Non-modal detail window for one construction site — full resource
     breakdown, with a per-commodity button to jump to Market tab and search
-    for the nearest place to buy whatever's still needed."""
+    for the nearest place to buy whatever's still needed, and a "where to
+    buy" list: the fewest stations that cover what is still needed, measured
+    from the construction system, for the pad size of the ship being flown."""
 
     def __init__(self, panel: "ColonisationPanel", depot: dict, dist_text: str = "—"):
         super().__init__(None)
@@ -715,7 +755,10 @@ class _ColonisationDetailDialog(QDialog):
         self._panel = panel
         title = f"{depot.get('station_name')} — {depot.get('system_name')}"
         self.setWindowTitle(f"Colonisation Construction — {title}")
-        self.resize(700, 420)
+        self.resize(760, 680)
+        self._depot = depot
+        self._stations: Optional[dict] = None   # None until the background lookup returns
+        self._sources_done = False
 
         layout = QVBoxLayout(self)
         hdr_row = QHBoxLayout()
@@ -749,18 +792,9 @@ class _ColonisationDetailDialog(QDialog):
         self._status_label.setStyleSheet("color:#888888; background:transparent; border:none;")
         layout.addWidget(self._status_label)
 
-        trailblazer = self._find_closest_trailblazer(panel, depot.get("system_name"))
         trailblazer_row = QHBoxLayout()
-        if trailblazer:
-            text = (
-                f"Nearest Trailblazer supply ship: {trailblazer['station_name']} "
-                f"({trailblazer['system_name']}) — {trailblazer['distance_ly']:.1f} ly"
-            )
-            trailblazer_system = trailblazer["system_name"]
-        else:
-            text = "Nearest Trailblazer supply ship: none known yet."
-            trailblazer_system = ""
-        trailblazer_label = QLabel(text)
+        self._trailblazer_system = ""
+        trailblazer_label = self._trailblazer_label = QLabel("Nearest Trailblazer supply ship: looking…")
         trailblazer_label.setWordWrap(True)
         trailblazer_label.setToolTip(
             "Brewer Corporation's colonisation-materials supply ships — best-effort only. "
@@ -769,11 +803,11 @@ class _ColonisationDetailDialog(QDialog):
         )
         trailblazer_label.setStyleSheet("color:#4D96FF; background:transparent; border:none;")
         trailblazer_row.addWidget(trailblazer_label, 1)
-        copy_trailblazer_btn = QPushButton("Copy System")
+        copy_trailblazer_btn = self._copy_trailblazer_btn = QPushButton("Copy System")
         copy_trailblazer_btn.setStyleSheet(_BTN_STYLE)
-        copy_trailblazer_btn.setEnabled(bool(trailblazer_system))
+        copy_trailblazer_btn.setEnabled(False)
         copy_trailblazer_btn.clicked.connect(
-            lambda: QApplication.clipboard().setText(trailblazer_system)
+            lambda: QApplication.clipboard().setText(self._trailblazer_system)
         )
         trailblazer_row.addWidget(copy_trailblazer_btn)
         layout.addLayout(trailblazer_row)
@@ -797,10 +831,141 @@ class _ColonisationDetailDialog(QDialog):
             h.setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
 
         layout.addWidget(table, 1)
+
+        self._sources_label = QLabel()
+        self._sources_label.setStyleSheet("color:#FFB347; font-weight:bold; background:transparent; border:none;")
+        layout.addWidget(self._sources_label)
+        tree = self._sources_tree = QTreeWidget()
+        tree.setHeaderLabels(["Station / Commodity", "Buy (t)", "Stock", "Pad", "Dist (ly)", "Updated"])
+        tree.setRootIsDecorated(False)
+        tree.setIndentation(0)
+        tree.setAlternatingRowColors(True)
+        tree.setToolTip("Double-click a station to copy its system name.")
+        tree.setStyleSheet(
+            "QTreeWidget { background:#080f18; alternate-background-color:#0a1520; border:1px solid #1e3a5a; outline:0; }"
+            "QTreeWidget::item { padding:5px 4px; border-right:1px solid #1e3a5a; border-bottom:1px solid #1e3a5a; }"
+            "QTreeWidget::item:selected { background:#FF8C00; color:#000000; }"
+            "QHeaderView::section { background:#0d1a2a; color:#888888; border:none;"
+            " padding:3px; font-size:12px; font-weight:bold; letter-spacing:1px; }"
+        )
+        th = tree.header()
+        th.setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
+        th.setStretchLastSection(False)
+        th.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        for c in (1, 2, 3, 4, 5):
+            th.setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
+        tree.itemDoubleClicked.connect(
+            lambda item, _col: QApplication.clipboard().setText((item.parent() or item).data(0, Qt.ItemDataRole.UserRole) or "")
+        )
+        layout.addWidget(tree, 1)
+
         self.update_depot(depot)
+        self._start_sources_fetch()
+
+    def _start_sources_fetch(self) -> None:
+        system_name = self._depot.get("system_name")
+        if not system_name:
+            self._on_sources(None, None)
+            return
+        worker = _DepotSourcesWorker(self._panel._repo.db.db_path, system_name)
+        thread = QThread()
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.finished.connect(self._on_sources)
+        worker.finished.connect(thread.quit, Qt.ConnectionType.DirectConnection)
+        # Held by the panel, not this window: the window can be closed and dropped
+        # while the lookup is still running, and a QThread must outlive its run.
+        jobs = self._panel._depot_source_jobs
+        jobs[:] = [j for j in jobs if j[0].isRunning()]
+        jobs.append((thread, worker))
+        thread.start()
+
+    def _on_sources(self, stations, trailblazer) -> None:
+        self._stations, self._sources_done = stations, True
+        if trailblazer:
+            self._trailblazer_system = trailblazer["system_name"]
+            self._trailblazer_label.setText(
+                f"Nearest Trailblazer supply ship: {trailblazer['station_name']} "
+                f"({trailblazer['system_name']}) — {trailblazer['distance_ly']:.1f} ly"
+            )
+        else:
+            self._trailblazer_label.setText("Nearest Trailblazer supply ship: none known yet.")
+        self._copy_trailblazer_btn.setEnabled(bool(self._trailblazer_system))
+        self._render_sources()
+
+    def _render_sources(self) -> None:
+        tree = self._sources_tree
+        tree.clear()
+        cats = self._panel._commodity_categories
+        needs, names = {}, {}
+        for r in (self._depot.get("resources") or []):
+            left = (r.get("required") or 0) - (r.get("provided") or 0)
+            name = r.get("name") or ""
+            if left > 0 and name:
+                key = (cats.symbol_for_name(name) if cats else None) or commodity_key(name)
+                needs[key], names[key] = left, name
+        if not needs:
+            self._sources_label.setText("WHERE TO BUY — nothing left to deliver")
+            return
+
+        state = self._panel._last_state
+        pads = self._panel._ship_pad_table
+        min_pad = pads.pad_size_for(getattr(state, "ship", None)) if pads else None
+        where = f"WHERE TO BUY — from {self._depot.get('system_name')}, " + (
+            f"{_PAD_WORD[min_pad]} pad or bigger (current ship)" if min_pad
+            else "any pad (current ship's pad size unknown)")
+
+        def add(title, items, color, system="", pad="", dist="", updated=""):
+            top = QTreeWidgetItem([title, "", "", pad, dist, updated])
+            top.setData(0, Qt.ItemDataRole.UserRole, system)
+            bold = top.font(0)
+            bold.setBold(True)
+            for c in range(6):
+                top.setForeground(c, QColor(color))
+                top.setBackground(c, QColor("#0d1a2a"))
+                top.setFont(c, bold)
+                if c:
+                    top.setTextAlignment(c, Qt.AlignmentFlag.AlignCenter)
+            for key, qty, stock in items:
+                child = QTreeWidgetItem(["      " + names[key], f"{qty:,}", "" if stock is None else f"{stock:,}"])
+                child.setForeground(0, QColor("#ffffff"))
+                child.setTextAlignment(1, Qt.AlignmentFlag.AlignCenter)
+                child.setTextAlignment(2, Qt.AlignmentFlag.AlignCenter)
+                if stock is not None and stock < needs[key]:
+                    child.setForeground(2, QColor("#FF6B6B"))
+                    child.setToolTip(2, f"Stock does not cover the {needs[key]:,} t still needed.")
+                top.addChild(child)
+            tree.addTopLevelItem(top)
+            top.setExpanded(True)
+
+        # Docked: the live market file beats the cached data.
+        here = docked_supply(needs, getattr(state, "current_market_items", None) or [])
+        if here and getattr(state, "station_name", None):
+            add(f"DOCKED HERE — {state.station_name}: buy now", here, "#6BCB77",
+                system=getattr(state, "current_market_system", None) or "")
+
+        if not self._sources_done:
+            self._sources_label.setText(where + " — looking…")
+            return
+        if self._stations is None:
+            self._sources_label.setText("WHERE TO BUY — no coordinates known for this system yet")
+            return
+        self._sources_label.setText(where)
+        stops, unmet = plan_supply_stops(needs, self._stations, min_pad)
+        for n, s in enumerate(stops, 1):
+            wanted = {key for key, _qty, _stock in s["items"]}
+            oldest = min((u for name, (_p, _q, u) in s["buys"].items()
+                          if commodity_key(name) in wanted and u), default="")
+            add(f"Stop {n}: {s['station_name']} — {s['system_name']}", s["items"], "#4D96FF",
+                system=s["system_name"], pad=s.get("pad_size") or "?",
+                dist=f"{s['distance_ly']:.1f}", updated=relative_time(oldest)[0] if oldest else "")
+        if unmet:
+            add(f"No seller within {_SOURCE_RADIUS_LY} ly", [(k, q, None) for k, q in sorted(unmet.items())], "#FF6B6B")
 
     def update_depot(self, depot: dict) -> None:
         """Re-fills status + resources; the panel calls this on every depot refresh so deliveries show live."""
+        self._depot = depot
+        self._render_sources()
         progress = depot.get("progress")
         status = "Complete" if depot.get("complete") else (
             f"{progress * 100:.1f}% complete" if isinstance(progress, (int, float)) else "Not yet visited"
@@ -839,20 +1004,6 @@ class _ColonisationDetailDialog(QDialog):
     def _open_raven_for_station(self, system_address: int, market_id: int) -> None:
         self._panel._open_raven_dialog()
         self._panel._raven_dialog.load_for_station(system_address, market_id)
-
-    @staticmethod
-    def _find_closest_trailblazer(panel: "ColonisationPanel", system_name: Optional[str]) -> Optional[dict]:
-        if not system_name:
-            return None
-        try:
-            coords = panel._repo.get_system_coords_for_names([system_name])
-            here = coords.get(system_name)
-            if not here:
-                return None
-            return panel._repo.find_closest_trailblazer(here[0], here[1], here[2])
-        except Exception:
-            log.exception("Failed to look up closest Trailblazer for %s", system_name)
-            return None
 
 
 class _SystemDetailDialog(QDialog):
@@ -1069,6 +1220,7 @@ class ColonisationPanel(QWidget):
         self._raven_pin_store = raven_pin_store
         self._depots: list = []
         self._depot_dialogs: dict = {}
+        self._depot_source_jobs: list = []   # (QThread, worker) of open construction windows' lookups
         self._last_state = None
         self._colonisation_candidates: list = []
         self._colonisation_candidates_system: Optional[str] = None
@@ -1184,8 +1336,8 @@ class ColonisationPanel(QWidget):
         colon_l.addLayout(add_row)
 
         self._depot_table = QTableWidget()
-        self._depot_table.setColumnCount(6)
-        self._depot_table.setHorizontalHeaderLabels(["System", "Station", "Dist (ly)", "Progress", "Status", ""])
+        self._depot_table.setColumnCount(7)
+        self._depot_table.setHorizontalHeaderLabels(["System", "Station", "Dist (ly)", "Progress", "Status", "", ""])
         self._depot_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._depot_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._depot_table.verticalHeader().setVisible(False)
@@ -1195,7 +1347,7 @@ class ColonisationPanel(QWidget):
         dh = self._depot_table.horizontalHeader()
         dh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         dh.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        for c in (2, 3, 4, 5):
+        for c in (2, 3, 4, 5, 6):
             dh.setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
         self._depot_table.cellClicked.connect(self._on_depot_cell_clicked)
         self._depot_table.setMaximumHeight(160)
@@ -1390,7 +1542,10 @@ class ColonisationPanel(QWidget):
             status_item.setForeground(QColor(status_color))
             remove_item = QTableWidgetItem("✕ Remove")
             remove_item.setForeground(QColor("#d06060"))
-            for it in (dist_item, progress_item, status_item, remove_item):
+            materials_item = QTableWidgetItem("▤ Materials")
+            materials_item.setForeground(QColor("#FFB347"))
+            materials_item.setToolTip("Open the construction window: what is still needed and where to buy it.")
+            for it in (dist_item, progress_item, status_item, materials_item, remove_item):
                 it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
             self._depot_table.setItem(row, 0, sys_item)
@@ -1398,7 +1553,8 @@ class ColonisationPanel(QWidget):
             self._depot_table.setItem(row, 2, dist_item)
             self._depot_table.setItem(row, 3, progress_item)
             self._depot_table.setItem(row, 4, status_item)
-            self._depot_table.setItem(row, 5, remove_item)
+            self._depot_table.setItem(row, 5, materials_item)
+            self._depot_table.setItem(row, 6, remove_item)
 
         row_h = self._depot_table.verticalHeader().defaultSectionSize()
         content_h = self._depot_table.horizontalHeader().height() + len(self._depots) * row_h + 4
@@ -1512,7 +1668,7 @@ class ColonisationPanel(QWidget):
         if row < 0 or row >= len(self._depots):
             return
         depot = self._depots[row]
-        if column == 5:  # Remove
+        if column == 6:  # Remove
             try:
                 self._repo.remove_colonisation_depot(depot["id"])
             except Exception:

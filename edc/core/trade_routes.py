@@ -477,3 +477,69 @@ def find_supply_for_destination(
         reverse=True,
     )
     return results[:max_results]
+
+
+_PAD_RANK = {"S": 1, "M": 2, "L": 3}
+
+
+def plan_supply_stops(needs: Dict[str, int], stations: Dict[int, Dict[str, Any]], min_pad: Optional[str] = None,
+                      radii: tuple = (50, 100, 150)) -> tuple:
+    """Where to buy a construction site's outstanding commodities, in as few stops as possible.
+
+    needs: {commodity_key: tonnes still needed}. stations: get_market_snapshot_in_radius()
+    measured from the construction system. min_pad "S"/"M"/"L" keeps only stations the ship
+    can land at (unknown pad size is left out, as in the Raven Colonial dialog).
+
+    Each stop is the station that fills the most commodities in full, then the most in part,
+    then the nearest. The search widens ring by ring (radii, in ly) and stops at the first
+    ring that covers everything, so a far station is used only when the near ones fall short.
+
+    Returns (stops, unmet): stops are station dicts plus "items" [(key, tonnes to buy, stock)];
+    unmet is {key: tonnes} nobody in range sells.
+    """
+    usable = []
+    for s in stations.values():
+        if min_pad and _PAD_RANK.get(s.get("pad_size"), 0) < _PAD_RANK[min_pad]:
+            continue
+        stock = {}
+        for name, (_price, qty, _updated) in s["buys"].items():
+            key = commodity_key(name)
+            if key in needs:
+                stock[key] = max(stock.get(key, 0), qty or 0)
+        if stock:
+            usable.append((s, stock))
+
+    stops, left = [], dict(needs)
+    for radius in radii:
+        stops, left = [], dict(needs)
+        ring = [u for u in usable if u[0]["distance_ly"] <= radius]
+        while left and ring:
+            def score(u):
+                have = [k for k in left if u[1].get(k)]
+                return sum(u[1][k] >= left[k] for k in have), len(have), -u[0]["distance_ly"]
+            best = max(ring, key=score)
+            if not score(best)[1]:
+                break
+            ring.remove(best)
+            station, stock = best
+            items = sorted((k, min(stock[k], left[k]), stock[k]) for k in left if stock.get(k))
+            for k, qty, _stock in items:
+                left[k] -= qty
+                if not left[k]:
+                    del left[k]
+            stops.append({**station, "items": items})
+        if not left:
+            break
+    return stops, left
+
+
+def docked_supply(needs: Dict[str, int], market_items: List[Dict[str, Any]]) -> list:
+    """What the docked station's live market (state.current_market_items) sells of `needs`:
+    [(key, tonnes to buy, stock)]."""
+    out = []
+    for it in market_items:
+        key = commodity_key(it.get("symbol") or it.get("name") or "")
+        stock = it.get("stock") or 0
+        if key in needs and (it.get("buy_price") or 0) > 0 and stock > 0:
+            out.append((key, min(stock, needs[key]), stock))
+    return sorted(out)

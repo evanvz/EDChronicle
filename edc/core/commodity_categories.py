@@ -35,3 +35,9 @@ class CommodityCategoryTable:
     def display_name_for(self, symbol: str) -> Optional[str]:
         rec = self._commodities.get((symbol or "").strip().lower())
         return rec.get("name") if rec else None
+
+    def symbol_for_name(self, name: str) -> Optional[str]:
+        """The market symbol behind an in-game name ('Muon Imager' -> 'mutomimager')."""
+        wanted = (name or "").strip().lower()
+        return next((sym for sym, rec in self._commodities.items()
+                     if (rec.get("name") or "").lower() == wanted), None)
