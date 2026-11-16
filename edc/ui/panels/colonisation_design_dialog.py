@@ -192,7 +192,8 @@ class ColonisationDesignDialog(_WorkerThreads, QDialog):
         self.setWindowTitle(f"Colonisation — Design: {name}")
         if self._repo is not None:
             self._sys.clear()
-            for addr, n in {**own_systems(self._repo.get_colonisation_depots()), id64: name}.items():
+            for addr, n in {**own_systems([*self._repo.get_colonisation_depots(),
+                                           *self._repo.get_colonisation_plan_systems()]), id64: name}.items():
                 self._sys.addItem(n, addr)
             self._sys.setCurrentIndex(self._sys.findData(id64))
         while self._combo.count() > 1:

@@ -2899,6 +2899,16 @@ class Repository:
         )
         self.db.conn.commit()
 
+    def get_colonisation_plan_systems(self) -> list[dict]:
+        """Systems with a saved build plan: still yours after the finished construction sites are removed."""
+        rows = self.db.conn.execute(
+            """SELECT p.system_address, s.system_name FROM
+                   (SELECT system_address FROM colonisation_plan_settings
+                    UNION SELECT system_address FROM colonisation_plan_steps) p
+               JOIN systems s ON s.system_address = p.system_address ORDER BY s.system_name"""
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def remove_colonisation_depot(self, depot_id: int) -> None:
         self.db.conn.execute("DELETE FROM colonisation_depots WHERE id = ?", (depot_id,))
         self.db.conn.commit()

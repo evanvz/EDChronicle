@@ -1746,7 +1746,7 @@ class ColonisationPanel(QWidget):
     def _my_system(self):
         """The current system if it's one of yours (has a construction site), else your first one; the Design
         window switches between them."""
-        own = own_systems(self._depots)
+        own = own_systems([*self._depots, *self._repo.get_colonisation_plan_systems()])
         cur = getattr(self._last_state, "system_address", None)
         return (cur, own[cur]) if cur in own else next(iter(own.items()), None)
 

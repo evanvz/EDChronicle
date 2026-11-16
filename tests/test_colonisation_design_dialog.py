@@ -642,3 +642,17 @@ def test_system_selector_lists_own_systems_and_switches(monkeypatch, tmp_path):
 def test_finder_path_has_no_system_selector(monkeypatch):
     d = _dialog(monkeypatch)
     assert not d._sys.isVisibleTo(d)
+
+
+def test_planned_system_stays_selectable_after_its_sites_are_removed(monkeypatch, tmp_path):
+    # Evan 2026-11-15: finished sites removed from the list, Design My System lost the system.
+    from unittest.mock import MagicMock
+    from edc.ui.panels.colonisation_panel import ColonisationPanel
+    repo = _repo(tmp_path)
+    repo.save_system_name_if_missing(2, "HIP 2")
+    repo.save_colonisation_plan_settings(2, "full", False, "HIP 2 1")
+    assert repo.get_colonisation_depots() == []
+    d = _dialog(monkeypatch, repo=repo)
+    assert [(d._sys.itemText(i), d._sys.itemData(i)) for i in range(d._sys.count())] == [("HIP 2", 2), (SYS, 1)]
+    panel = MagicMock(_depots=[], _repo=repo, _last_state=None)
+    assert ColonisationPanel._my_system(panel) == (2, "HIP 2")
