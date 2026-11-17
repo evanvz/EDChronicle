@@ -656,3 +656,20 @@ def test_planned_system_stays_selectable_after_its_sites_are_removed(monkeypatch
     assert [(d._sys.itemText(i), d._sys.itemData(i)) for i in range(d._sys.count())] == [("HIP 2", 2), (SYS, 1)]
     panel = MagicMock(_depots=[], _repo=repo, _last_state=None)
     assert ColonisationPanel._my_system(panel) == (2, "HIP 2")
+
+
+def test_site_links_to_its_bodys_step_even_after_removal(monkeypatch, tmp_path):
+    # Evan 2026-11-16: the plan knows the body, so a finished site marks its step with no clicks.
+    repo = _repo(tmp_path)
+    _depot(repo, 100, "Primary site")
+    plain = _typed(monkeypatch, repo)  # find a surface step in the untouched plan
+    row = next(r for r in range(1, plain._table.rowCount()) if _cell(plain, r, 3) is not None
+               and any(s["location"] == "surface" and str(s["n"]) == plain._table.item(r, 0).text()
+                       for s in mod.plan_by_type(plain._system, plain._grid_slots(), f"{SYS} 3", False, "full",
+                                                 repo.get_colonisation_plan(1)["steps"])["steps"]))
+    body = f"{SYS} {plain._table.item(row, 2).text()}"
+    repo.save_colonisation_depot_visit(200, 1, SYS, "Surface site", 1.0, True, "[]", "t", body_name=body.upper())
+    repo.remove_colonisation_depot(next(d["id"] for d in repo.get_colonisation_depots() if d["market_id"] == 200))
+    _typed(monkeypatch, repo)
+    linked = [s for s in repo.get_colonisation_plan(1)["steps"] if s["market_id"] == 200]
+    assert [(s["body"], s["location"], s["status"]) for s in linked] == [(body, "surface", "Complete")]

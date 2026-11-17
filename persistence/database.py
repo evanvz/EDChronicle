@@ -260,6 +260,8 @@ class Database:
                 last_updated   TEXT
             )""",
             "ALTER TABLE bodies ADD COLUMN was_footfalled INTEGER DEFAULT 0",
+            "ALTER TABLE colonisation_depots ADD COLUMN body_name TEXT",
+            "ALTER TABLE colonisation_depots ADD COLUMN removed INTEGER DEFAULT 0",
             """CREATE TABLE IF NOT EXISTS resolved_bodies (
                 system_address INTEGER NOT NULL,
                 body_id        INTEGER NOT NULL,

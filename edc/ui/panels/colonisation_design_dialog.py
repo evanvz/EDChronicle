@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
 
 from edc.core import colonisation_facilities
 from edc.core.colonisation_design import plan_system
-from edc.core.colonisation_plan_status import own_systems, status_updates, unlinked_depots
+from edc.core.colonisation_plan_status import body_links, own_systems, status_updates, unlinked_depots
 from edc.core.colonisation_planner import TYPE_NAMES, TYPES, plan as plan_by_type, slot_table
 from edc.core.eddatahub_client import fetch_colonisation_system, put_colonisation_mark, put_colonisation_slots
 from edc.core.raven_colonial import get_system_slots
@@ -443,17 +443,20 @@ class ColonisationDesignDialog(_WorkerThreads, QDialog):
         if typed:
             stored = self._repo.get_colonisation_plan(self.id64)["steps"] if self._repo else None
             p = plan_by_type(self._system, slots, primary, self._group.isChecked(), kind, stored)
-            depots = self._repo.get_colonisation_depots() if self._repo else []
+            depots = self._repo.get_colonisation_depots(include_removed=True) if self._repo else []
             if self._sync_depots:
                 self._sync_depots = False
                 prim = {k: p["steps"][0][k] for k in ("facility", "body", "location", "slot_index")}
-                ups = status_updates(stored, depots, self.id64, prim)
-                for u in ups:
-                    self._repo.save_colonisation_plan_step(self.id64, u["body"], u["location"], u["slot_index"],
-                                                           u["facility"], u["status"], u["market_id"])
-                if ups:
-                    stored = self._repo.get_colonisation_plan(self.id64)["steps"]
-                    p = plan_by_type(self._system, slots, primary, self._group.isChecked(), kind, stored)
+                # the primary and linked sites first; then sites matched to a step by their body
+                for find in (lambda: status_updates(stored, depots, self.id64, prim),
+                             lambda: body_links(p["steps"], stored, depots, self.id64)):
+                    ups = find()
+                    for u in ups:
+                        self._repo.save_colonisation_plan_step(self.id64, u["body"], u["location"], u["slot_index"],
+                                                               u["facility"], u["status"], u["market_id"])
+                    if ups:
+                        stored = self._repo.get_colonisation_plan(self.id64)["steps"]
+                        p = plan_by_type(self._system, slots, primary, self._group.isChecked(), kind, stored)
             self._stored = {(r["body"], r["location"], r["slot_index"]): r for r in stored or []}
             sysname = self._system.get("name") or ""
             short = lambda n: (n or "").removeprefix(sysname).strip() or n

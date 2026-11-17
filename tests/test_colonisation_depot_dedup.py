@@ -119,3 +119,18 @@ def test_existing_site_update_does_not_trigger_callout():
     fake_self = _fake_self(is_new=False)
     MainWindow._save_colonisation_depot(fake_self, _depot_event())
     assert fake_self._spoken == []
+
+
+def test_removed_site_with_a_body_is_hidden_not_lost(tmp_path):
+    from tests.test_colonisation_plan_repo import _repo
+    repo = _repo(tmp_path)
+    assert repo.save_colonisation_depot_visit(7, 2, "HIP 2", "Site", 1.0, True, "[]", "t", body_name="HIP 2 A 1")
+    repo.save_colonisation_depot_visit(8, 2, "HIP 2", "Other", 0.1, False, "[]", "t")
+    assert not repo.save_colonisation_depot_visit(7, 2, "HIP 2", "Site", 1.0, True, "[]", "t")  # body kept
+    for d in repo.get_colonisation_depots():
+        repo.remove_colonisation_depot(d["id"])
+    assert repo.get_colonisation_depots() == []
+    assert [(d["market_id"], d["body_name"], d["removed"]) for d in repo.get_colonisation_depots(True)] == [
+        (7, "HIP 2 A 1", 1)]
+    assert repo.save_colonisation_depot_visit(7, 2, "HIP 2", "Site", 1.0, True, "[]", "t")  # back on the list
+    assert len(repo.get_colonisation_depots()) == 1

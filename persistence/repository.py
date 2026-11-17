@@ -2725,7 +2725,7 @@ class Repository:
 
     def save_colonisation_depot_visit(
         self, market_id: int, system_address, system_name: str, station_name: str,
-        progress, complete: bool, resources_json: str, timestamp: str,
+        progress, complete: bool, resources_json: str, timestamp: str, body_name: Optional[str] = None,
     ) -> bool:
         """Upserts real visit data — matches an existing row by market_id
         first (a revisit), then by system+station name for a manually-added
@@ -2739,9 +2739,9 @@ class Repository:
         if station_name.startswith("$") and ";" in station_name:  # "$EXT_PANEL_ColonisationShip; Name"
             station_name = station_name.split(";", 1)[1].strip()
         row = self.db.conn.execute(
-            "SELECT id FROM colonisation_depots WHERE market_id = ?", (market_id,)
+            "SELECT id, removed FROM colonisation_depots WHERE market_id = ?", (market_id,)
         ).fetchone()
-        is_new = row is None
+        is_new = row is None or bool(row["removed"])  # a removed site visited again is tracked again
         if row is None:
             row = self.db.conn.execute(
                 "SELECT id FROM colonisation_depots WHERE market_id IS NULL "
@@ -2753,19 +2753,20 @@ class Repository:
             self.db.conn.execute(
                 """UPDATE colonisation_depots SET
                        market_id = ?, system_address = ?, system_name = ?, station_name = ?,
-                       progress = ?, complete = ?, resources = ?, last_updated = ?
+                       progress = ?, complete = ?, resources = ?, last_updated = ?,
+                       body_name = COALESCE(?, body_name), removed = 0
                    WHERE id = ?""",
                 (market_id, system_address, system_name, station_name,
-                 progress, int(bool(complete)), resources_json, timestamp, row["id"]),
+                 progress, int(bool(complete)), resources_json, timestamp, body_name, row["id"]),
             )
         else:
             self.db.conn.execute(
                 """INSERT INTO colonisation_depots
                        (market_id, system_address, system_name, station_name,
-                        progress, complete, resources, last_updated)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                        progress, complete, resources, last_updated, body_name)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (market_id, system_address, system_name, station_name,
-                 progress, int(bool(complete)), resources_json, timestamp),
+                 progress, int(bool(complete)), resources_json, timestamp, body_name),
             )
         self.db.conn.commit()
         return is_new
@@ -2826,9 +2827,11 @@ class Repository:
                 best = {"station_name": r["station_name"], "system_name": r["system_name"], "distance_ly": dist}
         return best
 
-    def get_colonisation_depots(self) -> list[dict]:
+    def get_colonisation_depots(self, include_removed: bool = False) -> list[dict]:
+        """include_removed: also the sites taken off the list, which the build plan still links by body."""
         rows = self.db.conn.execute(
-            "SELECT * FROM colonisation_depots ORDER BY system_name, station_name"
+            "SELECT * FROM colonisation_depots WHERE ? OR NOT COALESCE(removed, 0) ORDER BY system_name, station_name",
+            (int(include_removed),),
         ).fetchall()
         out = []
         for r in rows:
@@ -2910,7 +2913,9 @@ class Repository:
         return [dict(r) for r in rows]
 
     def remove_colonisation_depot(self, depot_id: int) -> None:
-        self.db.conn.execute("DELETE FROM colonisation_depots WHERE id = ?", (depot_id,))
+        # A site with a known body is only hidden: the build plan links it to its step on the next open.
+        self.db.conn.execute("DELETE FROM colonisation_depots WHERE id = ? AND body_name IS NULL", (depot_id,))
+        self.db.conn.execute("UPDATE colonisation_depots SET removed = 1 WHERE id = ?", (depot_id,))
         self.db.conn.commit()
 
     def get_squadron_presence(self, faction: str) -> list[dict]:

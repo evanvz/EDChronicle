@@ -55,3 +55,24 @@ def test_stored_primary_without_depot_gets_linked():
     assert out == [{**stored[0], "market_id": 11, "status": "Building"}]
     out = status_updates(stored, [depot(1, 11, 1)], SA, PRIMARY)
     assert out[0]["status"] == "Complete" and out[0]["facility"] == "Planetary Port"
+
+
+def test_body_links_take_the_first_open_surface_step_on_the_sites_body():
+    # Evan 2026-11-16: the plan knows the body, so a docked site links to its step by itself.
+    from edc.core.colonisation_plan_status import body_links
+    step = lambda n, body, slot, status="Planned", loc="surface": {
+        "n": n, "facility": "mining", "body": body, "location": loc, "slot_index": slot, "status": status}
+    steps = [step(1, "HIP 1 A 1", 0, loc="orbital"), step(2, "HIP 1 A 4 a", 0, "Complete"),
+             step(3, "HIP 1 A 4 a", 1), step(4, "HIP 1 A 3 b", 0)]
+    site = lambda id_, market, body, complete=0, removed=0: {
+        **depot(id_, market, complete), "body_name": body, "removed": removed}
+    depots = [site(1, 10, None), site(2, 20, "hip 1 a 4 a"), site(3, 30, "HIP 1 A 3 b", 1, 1),
+              site(4, 40, "HIP 1 A 3 b", 0, 1), site(5, 50, "HIP 1 A 9")]
+    out = body_links(steps, [], depots, SA)
+    assert [(u["body"], u["slot_index"], u["status"], u["market_id"]) for u in out] == [
+        ("HIP 1 A 4 a", 1, "Building", 20),   # the finished slot 0 is skipped
+        ("HIP 1 A 3 b", 0, "Complete", 30)]   # removed but complete still counts; removed unfinished does not
+    # Linked sites and taken steps are left alone.
+    stored = [row(20, "Building", "HIP 1 A 4 a", "surface", 1)]
+    assert [u["market_id"] for u in body_links(steps, stored, depots, SA)] == [30]
+    assert [d["market_id"] for d in unlinked_depots(stored, depots, SA)] == [10, 50]

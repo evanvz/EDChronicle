@@ -32,8 +32,31 @@ def status_updates(stored, depots, system_address, primary):
     return out
 
 
-def unlinked_depots(stored, depots, system_address):
+def body_links(steps, stored, depots, system_address):
+    """Surface sites whose body is known and that no step is linked to: each takes the first unfinished,
+    unlinked planned step on that body. A removed site only counts once it is complete.
+    Call with the primary already linked (status_updates saved): the primary's site is then in `stored`."""
     linked = {r["market_id"] for r in stored if r["market_id"] is not None}
-    pd = primary_depot(depots, system_address)
+    taken = {(r["body"], r["location"], r["slot_index"]) for r in stored if r["market_id"] is not None}
+    out = []
+    for d in sorted(depots, key=lambda d: d["id"]):
+        body = (d.get("body_name") or "").casefold()
+        if (d["system_address"] != system_address or not body or d["market_id"] in linked
+                or (d.get("removed") and not d["complete"])):
+            continue
+        s = next((s for s in steps if s["n"] != 1 and s["location"] == "surface" and s["status"] != "Complete"
+                  and (s["body"] or "").casefold() == body
+                  and (s["body"], s["location"], s["slot_index"]) not in taken), None)
+        if s:
+            taken.add((s["body"], s["location"], s["slot_index"]))
+            out.append({"facility": s["facility"], "body": s["body"], "location": s["location"],
+                        "slot_index": s["slot_index"], "status": "Complete" if d["complete"] else "Building",
+                        "market_id": d["market_id"]})
+    return out
+
+
+def unlinked_depots(stored, depots, system_address):
+    # The primary's site is linked by status_updates, so it is in `stored` like any other linked site.
+    linked = {r["market_id"] for r in stored if r["market_id"] is not None}
     return [d for d in depots if d["system_address"] == system_address
-            and d["market_id"] not in linked and d is not pd]
+            and d["market_id"] not in linked and not d.get("removed")]

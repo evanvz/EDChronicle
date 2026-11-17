@@ -1725,7 +1725,10 @@ class MainWindow(QMainWindow):
         progress = evt.get("ConstructionProgress")
         complete = bool(evt.get("ConstructionComplete"))
         resources_json = json.dumps(resources)
-        signature = (progress, complete, resources_json)
+        # The planet a surface site stands on (Status.json): the build plan links the site to its step by body.
+        body_name = (getattr(self.state, "surface_body_name", None)
+                     if getattr(self.state, "station_type", None) == "PlanetaryConstructionDepot" else None)
+        signature = (progress, complete, resources_json, body_name)
         if self._colonisation_depot_last_seen.get(market_id) == signature:
             return False
         self._colonisation_depot_last_seen[market_id] = signature
@@ -1741,6 +1744,7 @@ class MainWindow(QMainWindow):
                 complete=complete,
                 resources_json=resources_json,
                 timestamp=evt.get("timestamp") or datetime.now(timezone.utc).isoformat(),
+                body_name=body_name,
             )
             if is_new:
                 # First time we've ever seen this market_id -- no manual
