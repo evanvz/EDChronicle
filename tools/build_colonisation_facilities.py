@@ -58,9 +58,11 @@ def key(name):
     return ALIAS.get(name) or re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
 
 
-def game_name(name, surface):
+def game_name(name, surface, layouts=()):
     """Raven Colonial's facility name, reworded to the click path of the game's surface build menu:
-    Planetary Port > Outpost | Port, Settlement > category > size, Hub > kind (Evan, in-game 2026-11-14).
+    Planetary Port > Outpost | Port, Settlement > category > layout, Hub > kind (Evan, in-game 2026-11-14).
+    A settlement's last click is its layout, listed with its size ("Ourea, Small Mining Settlement"):
+    there is no size step (Evan's screenshots 2026-11-17).
     The game says Extraction / Research Bio / Tourism where Raven says Mining / Bio / Tourist."""
     if not surface:
         return name
@@ -72,7 +74,7 @@ def game_name(name, surface):
     m = re.fullmatch(r"(\w+) Settlement: (\w+)", name)
     if m:
         kind = {"Mining": "Extraction", "Bio": "Research Bio", "Tourist": "Tourism"}.get(m[1], m[1])
-        return f"Settlement > {kind} > {m[2]}"
+        return f"Settlement > {kind} > {' / '.join(x.title() for x in layouts)} ({m[2].lower()})"
     m = re.fullmatch(r"(.+) Hub", name)
     return f"Hub > {m[1]}" if m else name
 
@@ -156,7 +158,7 @@ def main():
     out = {}
     for r in rc:
         n = r["displayName2"]
-        rec = {"name": game_name(n, not r["orbital"]), "rc_types": r["subTypes"] + r.get("altTypes", []), "tier": r["tier"],
+        rec = {"name": game_name(n, not r["orbital"], r["subTypes"] + r.get("altTypes", [])), "rc_types": r["subTypes"] + r.get("altTypes", []), "tier": r["tier"],
                "location": "orbital" if r["orbital"] else "surface", "economy": None, "requires": [],
                "cp_cost": {"t2": 0, "t3": 0}, "cp_reward": {"t2": 0, "t3": 0}}
         rec["cp_cost"]["t%d" % r["needs"]["tier"]] = r["needs"]["count"] if r["needs"]["tier"] else 0

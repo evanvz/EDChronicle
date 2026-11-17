@@ -297,7 +297,8 @@ def test_fixed_step_missing_requirement_keeps_its_place_with_error():
     p = _fixed(_item("extraction_hub", f"{DRM} 2", "surface", 0))
     s, hub = p["steps"][1], FAC["extraction_hub"]
     assert s["facility"] == "extraction_hub" and s["fixed"]
-    assert s["error"] == "needs Settlement > Extraction > Small or Settlement > Extraction > Medium or Settlement > Extraction > Large"
+    assert s["error"] == ("needs Settlement > Extraction > Ourea (small) or Settlement > Extraction > Mantus / Orcus (medium)"
+                          " or Settlement > Extraction > Aerecura / Erebus (large)")
     assert (s["t2"], s["t3"]) == (p["steps"][0]["t2"] - hub["cp_cost"]["t2"] + hub["cp_reward"]["t2"],
                                   p["steps"][0]["t3"] - hub["cp_cost"]["t3"] + hub["cp_reward"]["t3"])
 

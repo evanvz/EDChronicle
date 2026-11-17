@@ -1116,7 +1116,7 @@
    }
   },
   "agriculture_settlement_small": {
-   "name": "Settlement > Agriculture > Small",
+   "name": "Settlement > Agriculture > Consus (small)",
    "rc_types": [
     "consus"
    ],
@@ -1156,7 +1156,7 @@
    }
   },
   "agriculture_settlement_medium": {
-   "name": "Settlement > Agriculture > Medium",
+   "name": "Settlement > Agriculture > Annona / Picumnus (medium)",
    "rc_types": [
     "annona",
     "picumnus"
@@ -1201,7 +1201,7 @@
    }
   },
   "agriculture_settlement_large": {
-   "name": "Settlement > Agriculture > Large",
+   "name": "Settlement > Agriculture > Ceres / Fornax (large)",
    "rc_types": [
     "ceres",
     "fornax"
@@ -1242,7 +1242,7 @@
    }
   },
   "mining_settlement_small": {
-   "name": "Settlement > Extraction > Small",
+   "name": "Settlement > Extraction > Ourea (small)",
    "rc_types": [
     "ourea"
    ],
@@ -1286,7 +1286,7 @@
    }
   },
   "mining_settlement_medium": {
-   "name": "Settlement > Extraction > Medium",
+   "name": "Settlement > Extraction > Mantus / Orcus (medium)",
    "rc_types": [
     "mantus",
     "orcus"
@@ -1327,7 +1327,7 @@
    }
   },
   "mining_settlement_large": {
-   "name": "Settlement > Extraction > Large",
+   "name": "Settlement > Extraction > Aerecura / Erebus (large)",
    "rc_types": [
     "aerecura",
     "erebus"
@@ -1376,7 +1376,7 @@
    }
   },
   "industrial_settlement_small": {
-   "name": "Settlement > Industrial > Small",
+   "name": "Settlement > Industrial > Fontus (small)",
    "rc_types": [
     "fontus"
    ],
@@ -1420,7 +1420,7 @@
    }
   },
   "industrial_settlement_medium": {
-   "name": "Settlement > Industrial > Medium",
+   "name": "Settlement > Industrial > Meteope / Minthe / Palici (medium)",
    "rc_types": [
     "meteope",
     "minthe",
@@ -1466,7 +1466,7 @@
    }
   },
   "industrial_settlement_large": {
-   "name": "Settlement > Industrial > Large",
+   "name": "Settlement > Industrial > Gaea (large)",
    "rc_types": [
     "gaea"
    ],
@@ -1514,7 +1514,7 @@
    }
   },
   "military_settlement_small": {
-   "name": "Settlement > Military > Small",
+   "name": "Settlement > Military > Ioke (small)",
    "rc_types": [
     "ioke"
    ],
@@ -1554,7 +1554,7 @@
    }
   },
   "military_settlement_medium": {
-   "name": "Settlement > Military > Medium",
+   "name": "Settlement > Military > Bellona / Enyo / Polemos (medium)",
    "rc_types": [
     "bellona",
     "enyo",
@@ -1596,7 +1596,7 @@
    }
   },
   "military_settlement_large": {
-   "name": "Settlement > Military > Large",
+   "name": "Settlement > Military > Minerva (large)",
    "rc_types": [
     "minerva"
    ],
@@ -1644,7 +1644,7 @@
    }
   },
   "bio_settlement_small": {
-   "name": "Settlement > Research Bio > Small",
+   "name": "Settlement > Research Bio > Pheobe (small)",
    "rc_types": [
     "pheobe"
    ],
@@ -1684,7 +1684,7 @@
    }
   },
   "bio_settlement_medium": {
-   "name": "Settlement > Research Bio > Medium",
+   "name": "Settlement > Research Bio > Asteria / Caerus (medium)",
    "rc_types": [
     "asteria",
     "caerus"
@@ -1729,7 +1729,7 @@
    }
   },
   "bio_settlement_large": {
-   "name": "Settlement > Research Bio > Large",
+   "name": "Settlement > Research Bio > Chronos (large)",
    "rc_types": [
     "chronos"
    ],
@@ -1773,7 +1773,7 @@
    }
   },
   "tourist_settlement_small": {
-   "name": "Settlement > Tourism > Small",
+   "name": "Settlement > Tourism > Aergia (small)",
    "rc_types": [
     "aergia"
    ],
@@ -1813,7 +1813,7 @@
    }
   },
   "tourist_settlement_medium": {
-   "name": "Settlement > Tourism > Medium",
+   "name": "Settlement > Tourism > Comus / Gelos / Comos (medium)",
    "rc_types": [
     "comus",
     "gelos",
@@ -1859,7 +1859,7 @@
    }
   },
   "tourist_settlement_large": {
-   "name": "Settlement > Tourism > Large",
+   "name": "Settlement > Tourism > Fufluns (large)",
    "rc_types": [
     "fufluns"
    ],
